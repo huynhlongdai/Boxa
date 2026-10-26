@@ -352,13 +352,19 @@ func (m *Manager) boxURL(ctx context.Context, b *model.Box, h *model.Host) strin
 		return ""
 	}
 	s := m.Settings(ctx)
+	var u string
 	if s.BaseDomain == "" || s.BaseDomain == "sslip.io" {
 		if h.IP == "" {
 			return ""
 		}
-		return "https://" + b.Slug + "-" + strings.ReplaceAll(h.IP, ".", "-") + ".sslip.io"
+		u = "https://" + b.Slug + "-" + strings.ReplaceAll(h.IP, ".", "-") + ".sslip.io/"
+	} else {
+		u = "https://" + b.Slug + ".box." + s.BaseDomain + "/"
 	}
-	return "https://" + b.Slug + ".box." + s.BaseDomain
+	if s.URLTokenProtect {
+		u += "?boxa_token=" + m.URLToken(b.ID)
+	}
+	return u
 }
 
 func (m *Manager) agentsMD(ctx context.Context, b *model.Box, a *model.Agent) string {

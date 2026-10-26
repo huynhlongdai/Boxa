@@ -30,6 +30,8 @@ type Driver interface {
 	Snapshot(ctx context.Context, id, snapID string) (location string, sizeBytes int64, err error)
 	// ShellCmd returns an interactive shell command for PTY sessions.
 	ShellCmd(ctx context.Context, id string) (*exec.Cmd, error)
+	// Addr returns host:port reachable from the host for a port inside the box.
+	Addr(ctx context.Context, id string, port int) (string, error)
 }
 
 // boxErr builds a protocol error.

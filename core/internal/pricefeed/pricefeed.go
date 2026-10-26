@@ -193,6 +193,13 @@ func Convert(bsID string, pf *providerFile, now time.Time) Result {
 			if pm == 0 {
 				pm = s.Month
 			}
+			mins := minMin
+			// Monthly-only providers (netcup, contabo terms) are encoded with
+			// hour == month_cap: treat the value as a month price billed per month.
+			if ph > 0 && ph == pm {
+				ph = pm / 730
+				mins = 30 * 24 * 60
+			}
 			if ph == 0 && pm > 0 {
 				ph = pm / 730
 			}
@@ -203,7 +210,7 @@ func Convert(bsID string, pf *providerFile, now time.Time) Result {
 				r.Offers = append(r.Offers, model.Offer{
 					Provider: r.Provider, SKU: strings.ToLower(s.Name), Region: reg,
 					CPU: s.VCPU, RAMMB: int(s.RAMGiB * 1024), DiskGB: int(s.DiskGiB),
-					PriceHour: round6(ph), PriceMonth: round6(pm), MinBillingMinutes: minMin,
+					PriceHour: round6(ph), PriceMonth: round6(pm), MinBillingMinutes: mins,
 					Source: "battleships", FetchedAt: now, Confidence: conf,
 				})
 			}

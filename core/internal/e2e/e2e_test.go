@@ -62,7 +62,7 @@ func setup(t *testing.T) *env {
 	}
 	agent, err := boxd.NewAgent(boxd.Config{
 		CoreURL: "ws" + strings.TrimPrefix(srv.URL, "http") + "/v1/hosts/connect", BootstrapToken: "boot-token",
-		StateDir: filepath.Join(dir, "boxd-state"), Provider: "local", MetricsEvery: time.Second, Version: "test",
+		StateDir: filepath.Join(dir, "boxd-state"), Provider: "local", IP: "127.0.0.1", MetricsEvery: time.Second, Version: "test",
 	}, drv)
 	if err != nil {
 		t.Fatal(err)
@@ -390,5 +390,52 @@ func TestTemplatesAndSettings(t *testing.T) {
 	e.must(e.admin, "GET", "/agents/"+agents.Items[0].ID+"/snippet?kind=claude-code", nil, &snip)
 	if !strings.Contains(snip["snippet"], "claude mcp add") {
 		t.Fatalf("snippet: %+v", snip)
+	}
+}
+
+func TestIngress(t *testing.T) {
+	e := setup(t)
+	var b model.Box
+	e.must(e.admin, "POST", "/boxes", map[string]any{"template": "base", "slug": "web", "ports": []int{18931}, "spec": map[string]any{"ram_mb": 256}}, &b)
+	if !strings.HasPrefix(b.URL, "https://web-127-0-0-1.sslip.io/?boxa_token=") {
+		t.Fatalf("url: %q", b.URL)
+	}
+	var res model.ExecResult
+	e.must(e.admin, "POST", "/boxes/"+b.ID+"/exec", map[string]any{"command": "echo hello-ingress > index.html; (python3 -m http.server 18931 >/dev/null 2>&1 &) ; sleep 0.7"}, &res)
+	defer e.admin.JSON(e.ctx, "DELETE", "/boxes/"+b.ID, nil, nil)
+	noRedirect := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	get := func(path string, cookie *http.Cookie) *http.Response {
+		req, _ := http.NewRequest("GET", e.srv.URL+path, nil)
+		req.Host = "web-127-0-0-1.sslip.io"
+		if cookie != nil {
+			req.AddCookie(cookie)
+		}
+		resp, err := noRedirect.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+	if r := get("/index.html", nil); r.StatusCode != 401 {
+		t.Fatalf("unprotected: %d", r.StatusCode)
+	}
+	tok := strings.SplitN(b.URL, "boxa_token=", 2)[1]
+	r := get("/?boxa_token="+tok, nil)
+	if r.StatusCode != 302 || len(r.Cookies()) == 0 {
+		t.Fatalf("token redirect: %d", r.StatusCode)
+	}
+	r = get("/index.html", r.Cookies()[0])
+	body := make([]byte, 100)
+	n, _ := r.Body.Read(body)
+	if r.StatusCode != 200 || !strings.Contains(string(body[:n]), "hello-ingress") {
+		t.Fatalf("proxy: %d %q", r.StatusCode, body[:n])
+	}
+	resp, _ := http.Get(e.srv.URL + "/v1/internal/tls-ask?domain=web-127-0-0-1.sslip.io")
+	if resp.StatusCode != 200 {
+		t.Fatalf("tls-ask: %d", resp.StatusCode)
+	}
+	resp, _ = http.Get(e.srv.URL + "/v1/internal/tls-ask?domain=evil.example.com")
+	if resp.StatusCode != 404 {
+		t.Fatalf("tls-ask evil: %d", resp.StatusCode)
 	}
 }

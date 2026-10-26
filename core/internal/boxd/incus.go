@@ -424,3 +424,17 @@ func (d *IncusDriver) Snapshot(ctx context.Context, id, snapID string) (string, 
 func (d *IncusDriver) ShellCmd(ctx context.Context, id string) (*exec.Cmd, error) {
 	return exec.Command(d.Bin, "exec", cname(id), "--cwd", "/work", "-t", "--", "bash", "-l"), nil
 }
+
+// Addr returns the container's IPv4 on the incus bridge.
+func (d *IncusDriver) Addr(ctx context.Context, id string, port int) (string, error) {
+	out, err := d.incus(ctx, "list", cname(id), "--format", "csv", "-c", "4")
+	if err != nil {
+		return "", err
+	}
+	for _, f := range strings.Fields(strings.ReplaceAll(out, ",", " ")) {
+		if strings.Count(f, ".") == 3 {
+			return fmt.Sprintf("%s:%d", f, port), nil
+		}
+	}
+	return "", boxErr("NOT_FOUND", "container has no IPv4 (is it running?)")
+}

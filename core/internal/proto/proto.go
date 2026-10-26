@@ -40,6 +40,7 @@ const (
 	MPtyResize = "pty.resize"
 	MPtyClose = "pty.close"
 	MList     = "box.list"
+	MHTTP     = "http.do"
 )
 
 type Frame struct {
@@ -199,4 +200,20 @@ type PtyResizeParams struct {
 
 type ListResult struct {
 	Boxes []string `json:"boxes"`
+}
+
+// HTTPParams proxies one HTTP request to a port inside a box (ingress).
+type HTTPParams struct {
+	BoxID   string              `json:"box_id"`
+	Port    int                 `json:"port"`
+	Method  string              `json:"method"`
+	Path    string              `json:"path"`
+	Headers map[string][]string `json:"headers"`
+	Body    []byte              `json:"body"`
+}
+
+type HTTPResult struct {
+	Status  int                 `json:"status"`
+	Headers map[string][]string `json:"headers"`
+	Body    []byte              `json:"body"`
 }

@@ -106,6 +106,7 @@ func main() {
 		BurstEmptyAfter:    envDur("BOXA_BURST_EMPTY_AFTER", 10*time.Minute),
 		HostDownAfter:      envDur("BOXA_HOST_DOWN_AFTER", 2*time.Minute),
 		CreateWait:         envDur("BOXA_CREATE_WAIT", 120*time.Second),
+		URLKey:             secret.Hash("url:" + master),
 	}
 	m := manager.New(st, provider.Default(nil), crypt, cfg)
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

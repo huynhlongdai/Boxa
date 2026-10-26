@@ -2,6 +2,8 @@ package boxd
 
 import (
 	"bufio"
+	"bytes"
+	"io"
 	"context"
 	"encoding/json"
 	"errors"
@@ -315,6 +317,12 @@ func (a *Agent) handle(ctx context.Context, f proto.Frame) (any, error) {
 			return nil, boxErr("NOT_FOUND", "log not found")
 		}
 		return proto.LogReadResult{Content: string(b)}, nil
+	case proto.MHTTP:
+		p, err := decode[proto.HTTPParams](f)
+		if err != nil {
+			return nil, err
+		}
+		return a.httpDo(ctx, p)
 	case proto.MPtyOpen:
 		p, err := decode[proto.PtyOpenParams](f)
 		if err != nil {
@@ -563,4 +571,30 @@ func (a *Agent) closeAllPTY() {
 	for _, id := range ids {
 		a.closePTY(id)
 	}
+}
+
+var ingressClient = &http.Client{Timeout: 60 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+
+// httpDo performs one buffered HTTP request against a port in the box.
+func (a *Agent) httpDo(ctx context.Context, p proto.HTTPParams) (*proto.HTTPResult, error) {
+	addr, err := a.drv.Addr(ctx, p.BoxID, p.Port)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, p.Method, "http://"+addr+p.Path, bytes.NewReader(p.Body))
+	if err != nil {
+		return nil, err
+	}
+	for k, vs := range p.Headers {
+		for _, v := range vs {
+			req.Header.Add(k, v)
+		}
+	}
+	resp, err := ingressClient.Do(req)
+	if err != nil {
+		return &proto.HTTPResult{Status: 502, Headers: map[string][]string{"Content-Type": {"text/plain"}}, Body: []byte("boxa: upstream error: " + err.Error())}, nil
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
+	return &proto.HTTPResult{Status: resp.StatusCode, Headers: resp.Header, Body: body}, nil
 }

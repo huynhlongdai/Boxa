@@ -43,6 +43,7 @@ type Config struct {
 	BurstEmptyAfter    time.Duration
 	HostDownAfter      time.Duration
 	CreateWait         time.Duration
+	URLKey             string // HMAC key for box URL tokens (defaults to a random per-process key)
 }
 
 func (c *Config) defaults() {
@@ -68,6 +69,9 @@ func (c *Config) defaults() {
 		c.CreateWait = 120 * time.Second
 	}
 	c.PublicURL = strings.TrimRight(c.PublicURL, "/")
+	if c.URLKey == "" {
+		c.URLKey = secret.RandHex(16)
+	}
 }
 
 // SysJob tracks a background loop for /admin/jobs and /health.

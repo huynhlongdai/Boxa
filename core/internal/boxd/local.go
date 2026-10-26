@@ -522,3 +522,11 @@ func (d *LocalDriver) ShellCmd(ctx context.Context, id string) (*exec.Cmd, error
 	cmd.Env = append(d.env(id, m, nil), "PS1=box:\\w$ ")
 	return cmd, nil
 }
+
+// Addr: local boxes share the host network namespace.
+func (d *LocalDriver) Addr(ctx context.Context, id string, port int) (string, error) {
+	if _, err := d.meta(id); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("127.0.0.1:%d", port), nil
+}
