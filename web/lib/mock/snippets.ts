@@ -2,7 +2,7 @@ import type { AgentKind, Snippet } from "../types";
 
 export const KEY_PLACEHOLDER = "<BOXA_API_KEY>";
 
-/** Đoạn cấu hình sinh sẵn theo kind. Chuỗi KEY_PLACEHOLDER được UI thay bằng key thật (chỉ hiện 1 lần). */
+/** Đoạn cấu hình sinh sẵn theo kind — giống Core: tham chiếu biến môi trường BOXA_API_KEY thay vì nhúng key. */
 export function makeSnippet(kind: AgentKind, agentName: string, apiBase: string): Snippet {
   const mcpUrl = apiBase.replace(/\/v1\/?$/, "") + "/mcp";
   switch (kind) {
@@ -16,7 +16,7 @@ export function makeSnippet(kind: AgentKind, agentName: string, apiBase: string)
               boxa: {
                 type: "http",
                 url: mcpUrl,
-                headers: { Authorization: `Bearer ${KEY_PLACEHOLDER}` },
+                headers: { Authorization: "Bearer ${BOXA_API_KEY}" },
               },
             },
           },
@@ -29,6 +29,7 @@ export function makeSnippet(kind: AgentKind, agentName: string, apiBase: string)
         kind,
         language: "python",
         snippet: `# pip install openai-agents
+import os
 from agents import Agent, Runner
 from agents.mcp import MCPServerStreamableHttp
 
@@ -36,7 +37,7 @@ boxa = MCPServerStreamableHttp(
     name="boxa",
     params={
         "url": "${mcpUrl}",
-        "headers": {"Authorization": "Bearer ${KEY_PLACEHOLDER}"},
+        "headers": {"Authorization": f"Bearer {os.environ['BOXA_API_KEY']}"},
     },
 )
 
@@ -66,7 +67,7 @@ async def main():
                   method: "POST",
                   url: `${apiBase}/boxes/{{$json.box_id}}/exec`,
                   sendHeaders: true,
-                  headerParameters: { parameters: [{ name: "Authorization", value: `Bearer ${KEY_PLACEHOLDER}` }] },
+                  headerParameters: { parameters: [{ name: "Authorization", value: "Bearer {{$env.BOXA_API_KEY}}" }] },
                   sendBody: true,
                   contentType: "json",
                   jsonBody: '={ "command": "{{$json.command}}", "tail_lines": 50 }',
@@ -87,7 +88,7 @@ name: boxa
 transport: http
 url: ${mcpUrl}
 headers:
-  Authorization: "Bearer ${KEY_PLACEHOLDER}"
+  Authorization: "Bearer \${BOXA_API_KEY}"
 tools: [box_up, box_exec, box_read, box_write, box_snapshot, box_sleep, box_down, box_cost]
 `,
       };
@@ -96,18 +97,18 @@ tools: [box_up, box_exec, box_read, box_write, box_snapshot, box_sleep, box_down
         kind,
         language: "bash",
         snippet: `export BOXA_API=${apiBase}
-export BOXA_KEY=${KEY_PLACEHOLDER}
+# export BOXA_API_KEY=… (key hiện một lần khi tạo)
 
 # Tạo box
 curl -s -X POST $BOXA_API/boxes \\
-  -H "Authorization: Bearer $BOXA_KEY" \\
+  -H "Authorization: Bearer $BOXA_API_KEY" \\
   -H "Idempotency-Key: $(uuidgen)" \\
   -H "Content-Type: application/json" \\
   -d '{"template":"python","lifecycle":"task","spec":{"cpu":2,"ram_mb":2048,"disk_gb":20}}'
 
 # Chạy lệnh
 curl -s -X POST $BOXA_API/boxes/<box_id>/exec \\
-  -H "Authorization: Bearer $BOXA_KEY" \\
+  -H "Authorization: Bearer $BOXA_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"command":"python -V","tail_lines":20}'
 `,

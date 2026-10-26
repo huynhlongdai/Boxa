@@ -168,7 +168,11 @@ export function AgentWizard({ onDone, defaultName = "", compact }: { onDone?: (r
             </div>
           </div>
           <div className="flex flex-col gap-2">
-            <span className="text-[13px] font-medium">Đoạn cấu hình sinh sẵn</span>
+            <span className="text-[13px] font-medium">1. Đặt biến môi trường trên máy chạy agent</span>
+            <CodeBlock code={`export BOXA_API_KEY=${result.key.key ?? "<key>"}\nexport BOXA_URL=${(process.env.NEXT_PUBLIC_BOXA_API || "http://localhost:8080/v1").replace(/\/v1\/?$/, "")}`} language="bash" maxHeight={120} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <span className="text-[13px] font-medium">2. Dán đoạn cấu hình sinh sẵn</span>
             <div className="no-scrollbar flex gap-1 overflow-x-auto">
               {KINDS.map((k) => (
                 <Button key={k.id} size="xs" variant={snippetKind === k.id ? "secondary" : "ghost"} onClick={() => setSnippetKind(k.id)}>{k.label}</Button>

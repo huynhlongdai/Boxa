@@ -11,14 +11,16 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MoneyBudget, BudgetBar } from "@/components/boxa/budget";
 import { ErrorBox, PageHeader } from "@/components/boxa/page";
+import { cn } from "@/lib/utils";
 
+// Tên sự kiện theo Core (model.Settings.Notify.Events)
 const EVENTS: [string, string][] = [
-  ["budget.warning", "Agent vượt 80% ngân sách"],
-  ["approval.created", "Có yêu cầu cần anh duyệt"],
-  ["box.failed", "Box lỗi"],
-  ["host.down", "Host mất kết nối"],
-  ["box.sleeping", "Box bị Reaper cho ngủ"],
-  ["emergency.stop", "Dừng khẩn cấp"],
+  ["budget", "Agent vượt 80% ngân sách"],
+  ["approval", "Có yêu cầu cần anh duyệt"],
+  ["box_failed", "Box lỗi"],
+  ["host_down", "Host mất kết nối"],
+  ["reaper", "Box bị Reaper cho ngủ / xoá"],
+  ["emergency_stop", "Dừng khẩn cấp"],
 ];
 
 function Form({ initial }: { initial: Settings }) {
@@ -91,7 +93,7 @@ function Form({ initial }: { initial: Settings }) {
       </Card>
 
       <div className="sticky bottom-20 z-10 flex justify-end md:bottom-4">
-        <Button disabled={!dirty || !!pending} className="shadow-lg" onClick={() => run("save", () => api.saveSettings(s), { success: "Đã lưu cài đặt", revalidate: [paths.settings, paths.overview] })}>
+        <Button disabled={!dirty || !!pending} className={cn("shadow-lg", !dirty && "hidden md:inline-flex")} onClick={() => run("save", () => api.saveSettings(s), { success: "Đã lưu cài đặt", revalidate: [paths.settings, paths.overview] })}>
           <Save /> {dirty ? "Lưu cài đặt" : "Đã lưu"}
         </Button>
       </div>

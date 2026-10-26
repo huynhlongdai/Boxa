@@ -82,14 +82,14 @@ export default function CostsPage() {
         <Card className="lg:col-span-2">
           <CardHeader><CardTitle className="flex items-center gap-2"><Lightbulb className="size-4 text-st-warning" /> Gợi ý tiết kiệm</CardTitle></CardHeader>
           <CardContent className="flex flex-col gap-2.5">
-            {!sugg ? <LoadingRows rows={3} /> : !sugg.items.length ? <p className="text-sm text-muted-foreground">Chưa có gợi ý — mọi thứ đang tối ưu.</p> : sugg.items.map((s) => (
-              <div key={s.id} className="flex items-start gap-3 rounded-lg border border-border bg-background p-3">
+            {!sugg ? <LoadingRows rows={3} /> : !sugg.items.length ? <p className="text-sm text-muted-foreground">Chưa có gợi ý — mọi thứ đang tối ưu.</p> : sugg.items.map((s, i) => (
+              <div key={`${s.kind}-${i}`} className="flex items-start gap-3 rounded-lg border border-border bg-background p-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">{s.title}</p>
                   <p className="mt-0.5 text-[13px] text-muted-foreground">{s.detail}</p>
                   {s.box_id && <Link href={`/boxes/${s.box_id}`} className="mt-1 inline-block text-[12.5px] text-primary hover:underline">Mở box →</Link>}
                 </div>
-                <Badge variant="green" className="shrink-0 font-mono">−{usd(s.saving_month_usd, 2)}/tháng</Badge>
+                <Badge variant="green" className="shrink-0 font-mono" title="Ước tính tiết kiệm">−{usd(s.saving_usd, 2)}</Badge>
               </div>
             ))}
           </CardContent>

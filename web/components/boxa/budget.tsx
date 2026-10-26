@@ -42,7 +42,7 @@ export function KpiCard({
         <span>{label}</span>
         <span className="text-muted-foreground/70 [&_svg]:size-4">{icon}</span>
       </div>
-      <div className={cn("tabular text-2xl font-semibold tracking-tight", tone === "green" && "text-st-running")}>{value}</div>
+      <div className={cn("tabular text-xl font-semibold tracking-tight sm:text-2xl", tone === "green" && "text-st-running")}>{value}</div>
       {p !== null && <Progress value={p} />}
       {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
     </Card>

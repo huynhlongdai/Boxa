@@ -122,8 +122,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <Link href="/onboarding" className="hidden items-center gap-2 text-[13px] text-muted-foreground hover:text-foreground lg:flex">
             <Rocket className="size-4" /> Khởi động lần đầu
           </Link>
-          <div className="flex items-center justify-between">
-            <LiveIndicator />
+          <div className="flex items-center justify-center lg:justify-between">
+            <span className="lg:hidden"><LiveIndicator compact /></span>
+            <span className="hidden lg:block"><LiveIndicator /></span>
             <button onClick={logout} className="hidden text-muted-foreground hover:text-foreground lg:block" title="Đăng xuất" aria-label="Đăng xuất">
               <LogOut className="size-4" />
             </button>

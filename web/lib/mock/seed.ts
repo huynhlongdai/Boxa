@@ -384,18 +384,27 @@ export function makeSeed(): MockState {
   ev(300, "agent:shopee-crawler", "box_7f3a91", "agt_shopee", "box.created", "Tạo box shopee-crawl-01 (python-browser, 2 vCPU/4 GB) tại hetzner/fsn1");
   ev(298, "scheduler", "box_7f3a91", "agt_shopee", "box.placed", "Đặt vào hst_fsn1_01: pool còn trống, chi phí biên ≈ $0");
   ev(296, "system", "box_7f3a91", "agt_shopee", "box.running", "Box sẵn sàng sau 41s");
-  ev(240, "agent:shopee-crawler", "box_7f3a91", "agt_shopee", "exec", "python crawl.py --cat dien-thoai-phu-kien");
-  ev(130, "agent:hark-main", "box_b18f6e", "agt_hark", "exec.failed", "apt-get install thất bại (exit 100) — dpkg lock");
   ev(128, "system", "box_b18f6e", "agt_hark", "box.failed", "Box chuyển sang failed sau 3 lần thử");
   ev(120, "reaper", "box_2c81e4", "agt_shopee", "box.sleeping", "Ngủ sau 15 phút rảnh, snapshot snp_sc02 (1.4 GB)", 0.0021);
   ev(55, "scheduler", null, null, "approval.created", "Đề xuất thêm host pool Hetzner CX42 (fsn1)");
-  ev(35, "agent:hark-main", "box_3f0c88", "agt_hark", "exec", "python research.py --topic 'giá VPS châu Á 2026'");
-  ev(20, "agent:shopee-crawler", "box_7f3a91", "agt_shopee", "exec", "python dedupe.py out/*.jsonl");
   ev(9, "budget", null, "agt_shopee", "budget.warning", "shopee-crawler đạt 85% ngân sách ngày");
-  ev(8, "agent:kecon-writer", "box_a9d054", "agt_kecon", "exec", "node scripts/gen-story.mjs --theme 'chú mèo đi học'");
   ev(4, "user:anh", null, null, "settings.updated", "Đổi giờ gửi báo cáo ngày sang 21:00");
-  ev(3, "agent:shopee-crawler", "box_7f3a91", "agt_shopee", "exec.failed", "crawl nha-cua-doi-song thất bại (exit 1) — Timeout selector");
   ev(1, "agent:replingo-bot", "box_e07b22", "agt_replingo", "box.created", "Tạo box replingo-eval (python) — đang dựng tại vultr/sgp");
+
+  // Sự kiện box.exec theo đúng format của Core: "exit=<code> <ms>ms: <command>" (+ phần mở rộng tokens_saved/log)
+  for (const j of jobs) {
+    const r = j.result!;
+    events.push({
+      id: `evt_${String(eid++).padStart(5, "0")}`,
+      ts: j.finished_at ?? j.created_at,
+      actor: `agent:${boxes.find((b) => b.id === j.box_id)?.agent_name ?? "?"}`,
+      box_id: j.box_id,
+      agent_id: boxes.find((b) => b.id === j.box_id)?.agent_id ?? null,
+      type: "box.exec",
+      message: `exit=${r.exit_code} ${r.duration_ms}ms: ${j.command} tokens_saved=${r.tokens_saved} log=${r.log_id}`,
+      cost_usd: null,
+    });
+  }
 
   // Files theo box
   const files: Record<string, Record<string, string>> = {};
@@ -425,7 +434,7 @@ export function makeSeed(): MockState {
   }
 
   const settings: Settings = {
-    notify: { telegram_chat_id: "-1002233445566", email: "itroot2015@gmail.com", events: ["budget.warning", "box.failed", "approval.created", "host.down"], daily_report_hour: 21 },
+    notify: { telegram_chat_id: "-1002233445566", email: "itroot2015@gmail.com", events: ["budget", "approval", "box_failed", "host_down"], daily_report_hour: 21 },
     reaper: { idle_minutes: 15, default_ttl_seconds: 14400, keep_snapshots: 3 },
     base_domain: "sslip.io",
     url_token_protect: true,
@@ -434,11 +443,10 @@ export function makeSeed(): MockState {
     features: { gpu: false },
   };
 
-  const quotas: Quotas = { max_boxes_per_agent: 5, max_concurrent_boxes: 20, max_box_cpu: 8, max_box_ram_mb: 16384, max_spend_day_usd: 5, exec_rate_per_min: 120 };
+  const quotas: Quotas = { max_boxes_per_agent: 5, max_cpu_per_box: 8, max_ram_mb_per_box: 16384, max_disk_gb_per_box: 100, rate_limit_per_minute: 600 };
 
   const users: AdminUser[] = [
-    { id: "usr_owner", email: "itroot2015@gmail.com", name: "Caca Long", role: "owner", created_at: ago(40 * DAY), last_login_at: ago(20 * MIN) },
-    { id: "usr_viewer", email: "khankingko845@gmail.com", name: "Khan", role: "viewer", created_at: ago(10 * DAY), last_login_at: ago(3 * DAY) },
+    { id: "owner", name: "owner", role: "admin", admin_keys: 1, note: "Boxa v1 chỉ có một người vận hành; agent xác thực bằng key riêng." },
   ];
 
   return {

@@ -1,11 +1,12 @@
 "use client";
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronRight, Download, FileText, Folder, GitFork, History, Save, Sparkles, Terminal as TermIcon, Zap } from "lucide-react";
 import { api, paths } from "@/lib/api";
 import { useAction, useApi } from "@/lib/hooks";
 import { boxToTemplateYaml, boxToYaml } from "@/lib/box-yaml";
-import type { Box, BoxaEvent, FilesResponse, Job, List, Observe, Snapshot } from "@/lib/types";
+import type { Box, BoxaEvent, FilesResponse, List, Observe, Snapshot } from "@/lib/types";
+import { parseExecEvent } from "@/lib/exec-event";
 import { bytes, cn, compact, dateTime, mb, ms, relTime, usd } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -55,6 +56,12 @@ export function OverviewTab({ box }: { box: Box }) {
           <Row k="Secrets">{box.secrets.length ? <span className="flex flex-wrap justify-end gap-1">{box.secrets.map((s) => <Badge key={s} variant="outline" className="font-mono">{s}</Badge>)}</span> : "—"}</Row>
           <Row k="TTL / tự ngủ sau">{box.ttl_seconds ? `${Math.round(box.ttl_seconds / 3600)} giờ` : "không giới hạn"} · {box.idle_minutes ? `${box.idle_minutes} phút rảnh` : "không tự ngủ"}</Row>
           <Row k="Tạo lúc">{dateTime(box.created_at)} · hoạt động {relTime(box.last_active_at)}</Row>
+          {box.error && (
+            <div className="mt-3 rounded-md border border-st-error/30 bg-st-error/5 p-3 text-[13px]">
+              <p className="font-medium text-st-error">Lỗi{box.retries ? ` (đã thử ${box.retries} lần)` : ""}</p>
+              <p className="mt-0.5 font-mono text-[12.5px]">{box.error}</p>
+            </div>
+          )}
           <div className="mt-3 rounded-md border border-primary/25 bg-primary/5 p-3">
             <p className="flex items-center gap-1.5 text-[12px] font-medium text-primary"><Sparkles className="size-3.5" /> Vì sao Scheduler chọn nơi này</p>
             <p className="mt-1 text-[13px]">{box.placement_reason || "—"}</p>
@@ -76,21 +83,27 @@ export function OverviewTab({ box }: { box: Box }) {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader><CardTitle>Tài nguyên</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Đang chạy trong box</CardTitle></CardHeader>
           <CardContent className="flex flex-col gap-3 text-[13px]">
             {obs ? (
               <>
-                {([["CPU", obs.cpu_pct], ["RAM", obs.ram_pct], ["Đĩa", obs.disk_pct]] as const).map(([k, v]) => (
+                {([["CPU", obs.cpu_pct], ["RAM", obs.ram_pct], ["Đĩa", obs.disk_pct]] as const).filter(([, v]) => typeof v === "number").map(([k, v]) => (
                   <div key={k}>
                     <div className="mb-1 flex justify-between"><span className="text-muted-foreground">{k}</span><Mono>{v}%</Mono></div>
-                    <Progress value={v} warnAt={75} dangerAt={92} />
+                    <Progress value={v as number} warnAt={75} dangerAt={92} />
                   </div>
                 ))}
-                {obs.processes.length > 0 && (
-                  <div className="mt-1 border-t border-border pt-2">
-                    {obs.processes.map((p) => (
-                      <div key={p.pid} className="flex justify-between gap-2 py-0.5"><Mono className="truncate">{p.command}</Mono><Mono className="text-muted-foreground">{p.cpu_pct}%</Mono></div>
-                    ))}
+                <div>
+                  <p className="mb-1 text-xs text-muted-foreground">Tiến trình</p>
+                  {obs.processes.length ? obs.processes.map((p) => (
+                    <div key={p.pid} className="flex justify-between gap-2 py-0.5"><Mono className="truncate">{p.cmd}</Mono><Mono className="text-muted-foreground">{p.pid}</Mono></div>
+                  )) : <p className="text-muted-foreground">—</p>}
+                </div>
+                <Row k="Cổng đang nghe"><Mono>{obs.ports?.length ? obs.ports.join(", ") : "—"}</Mono></Row>
+                {obs.files_changed?.length > 0 && (
+                  <div>
+                    <p className="mb-1 text-xs text-muted-foreground">File đổi từ {dateTime(obs.since)}</p>
+                    {obs.files_changed.slice(0, 8).map((f) => <Mono key={f} className="block truncate">{f}</Mono>)}
                   </div>
                 )}
               </>
@@ -107,61 +120,46 @@ export function OverviewTab({ box }: { box: Box }) {
 // ---------------- Timeline ----------------
 export function TimelineTab({ box }: { box: Box }) {
   const { data: ev, error } = useApi<List<BoxaEvent>>(paths.boxEvents(box.id));
-  const { data: jobs } = useApi<List<Job>>(paths.adminJobs);
-  const [open, setOpen] = React.useState<string | null>(null);
   if (error) return <ErrorBox error={error} />;
   if (!ev) return <LoadingRows />;
-  const myJobs = (jobs?.items ?? []).filter((j) => j.box_id === box.id);
-  type Item = { ts: string; kind: "job"; job: Job } | { ts: string; kind: "event"; ev: BoxaEvent };
-  const items: Item[] = [
-    ...myJobs.map((j) => ({ ts: j.created_at, kind: "job" as const, job: j })),
-    ...ev.items.filter((e) => !e.type.startsWith("exec")).map((e) => ({ ts: e.ts, kind: "event" as const, ev: e })),
-  ].sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts));
-  const saved = myJobs.reduce((a, j) => a + (j.result?.tokens_saved ?? 0), 0);
+  const items = [...ev.items].sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts)).map((e) => ({ e, x: parseExecEvent(e) }));
+  const execs = items.filter((i) => i.x);
+  const saved = execs.reduce((a, i) => a + (i.x?.tokens_saved ?? 0), 0);
+  const hasTokens = execs.some((i) => i.x?.tokens_saved !== null);
   if (!items.length) return <Empty title="Chưa có hoạt động" />;
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap gap-2 text-[13px]">
-        <Badge variant="outline">{myJobs.length} lệnh</Badge>
-        <Badge variant="red">{myJobs.filter((j) => (j.result?.exit_code ?? 0) !== 0).length} lỗi</Badge>
-        <Badge variant="green"><Zap className="size-3" /> tiết kiệm {compact(saved)} token nhờ nén output</Badge>
+        <Badge variant="outline">{execs.length} lệnh</Badge>
+        <Badge variant="red">{execs.filter((i) => i.x!.exit_code !== 0 || i.x!.timed_out).length} lỗi</Badge>
+        {hasTokens && <Badge variant="green"><Zap className="size-3" /> tiết kiệm {compact(saved)} token nhờ nén output</Badge>}
       </div>
       <ol className="relative flex flex-col gap-2 border-l border-border pl-4">
-        {items.map((it) =>
-          it.kind === "job" ? (
-            <li key={it.job.id} className="relative">
-              <span className={cn("absolute -left-[21px] top-3 size-2.5 rounded-full border-2 border-background", (it.job.result?.exit_code ?? 0) === 0 ? "bg-st-running" : "bg-st-error")} />
-              <button onClick={() => setOpen(open === it.job.id ? null : it.job.id)} className="w-full rounded-md border border-border bg-card p-3 text-left hover:border-border/100 hover:bg-surface-2/40">
+        {items.map(({ e, x }) =>
+          x ? (
+            <li key={e.id} className="relative">
+              <span className={cn("absolute -left-[21px] top-3 size-2.5 rounded-full border-2 border-background", x.exit_code === 0 && !x.timed_out ? "bg-st-running" : "bg-st-error")} />
+              <div className="rounded-md border border-border bg-card p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <TermIcon className="size-3.5 text-muted-foreground" />
-                  <Mono className="min-w-0 flex-1 truncate">{it.job.command}</Mono>
-                  {it.job.result && (
-                    <>
-                      <Badge variant={it.job.result.exit_code === 0 ? "green" : "red"} className="font-mono">exit {it.job.result.exit_code}</Badge>
-                      <span className="font-mono text-xs text-muted-foreground">{ms(it.job.result.duration_ms)}</span>
-                      {it.job.result.tokens_saved > 0 && <span className="font-mono text-xs text-st-running">−{compact(it.job.result.tokens_saved)} token</span>}
-                    </>
-                  )}
-                  {!it.job.result && <Badge variant="blue">{it.job.status}</Badge>}
-                  <span className="text-xs text-muted-foreground">{dateTime(it.ts)}</span>
+                  <Mono className="min-w-0 flex-1 basis-60 truncate" >{x.command}</Mono>
+                  {x.timed_out && <Badge variant="yellow">TIMEOUT</Badge>}
+                  <Badge variant={x.exit_code === 0 ? "green" : "red"} className="font-mono">exit {x.exit_code}</Badge>
+                  <span className="font-mono text-xs text-muted-foreground">{ms(x.duration_ms)}</span>
+                  {x.tokens_saved ? <span className="font-mono text-xs text-st-running">−{compact(x.tokens_saved)} token</span> : null}
+                  {x.log_id && <a href={`?tab=logs&log=${x.log_id}`} className="font-mono text-xs text-primary hover:underline">log</a>}
+                  <span className="text-xs text-muted-foreground">{e.actor} · {dateTime(e.ts)}</span>
                 </div>
-                {open === it.job.id && it.job.result && (
-                  <pre className="mt-2 max-h-64 overflow-auto rounded bg-background p-2 font-mono text-[12px] leading-relaxed">
-                    {it.job.result.stdout_tail}
-                    {it.job.result.stderr_tail && <span className="text-st-error">{`\n${it.job.result.stderr_tail}`}</span>}
-                    {it.job.result.truncated && <span className="text-muted-foreground">{"\n… (đã rút gọn — xem đầy đủ ở tab Logs)"}</span>}
-                  </pre>
-                )}
-              </button>
+              </div>
             </li>
           ) : (
-            <li key={it.ev.id} className="relative py-1">
-              <span className={cn("absolute -left-[20px] top-2.5 size-2 rounded-full", it.ev.type.includes("fail") ? "bg-st-error" : "bg-muted-foreground/60")} />
+            <li key={e.id} className="relative py-1">
+              <span className={cn("absolute -left-[20px] top-2.5 size-2 rounded-full", /fail|down|error/.test(e.type) ? "bg-st-error" : "bg-muted-foreground/60")} />
               <div className="flex flex-wrap items-baseline gap-x-2 text-[13px]">
-                <span className="font-mono text-[11.5px] text-muted-foreground">{it.ev.type}</span>
-                <span>{it.ev.message}</span>
-                {it.ev.cost_usd !== null && <Mono className="text-muted-foreground">{usd(it.ev.cost_usd)}</Mono>}
-                <span className="text-xs text-muted-foreground">· {it.ev.actor} · {dateTime(it.ts)}</span>
+                <span className="font-mono text-[11.5px] text-muted-foreground">{e.type}</span>
+                <span>{e.message}</span>
+                {e.cost_usd !== null && <Mono className="text-muted-foreground">{usd(e.cost_usd)}</Mono>}
+                <span className="text-xs text-muted-foreground">· {e.actor} · {dateTime(e.ts)}</span>
               </div>
             </li>
           ),
@@ -246,38 +244,59 @@ export function FilesTab({ box }: { box: Box }) {
 
 // ---------------- Logs ----------------
 export function LogsTab({ box }: { box: Box }) {
-  const { data: jobs, error } = useApi<List<Job>>(paths.adminJobs);
-  const mine = (jobs?.items ?? []).filter((j) => j.box_id === box.id && j.result?.log_id);
-  const [sel, setSel] = React.useState<string | null>(null);
-  const logId = sel ?? mine[0]?.result?.log_id ?? null;
-  const { data: text } = useApi<string>(logId ? paths.log(logId) : null);
+  const sp = useSearchParams();
+  const { data: ev, error } = useApi<List<BoxaEvent>>(paths.boxEvents(box.id));
+  const known = (ev?.items ?? []).map(parseExecEvent).filter((x): x is NonNullable<typeof x> => Boolean(x?.log_id));
+  const [input, setInput] = React.useState(sp.get("log") ?? "");
+  const [logId, setLogId] = React.useState<string | null>(sp.get("log"));
+  const { data: text, error: logErr } = useApi<string>(logId ? paths.log(logId) : null);
   if (error) return <ErrorBox error={error} />;
-  if (!jobs) return <LoadingRows />;
-  if (!mine.length) return <Empty title="Chưa có log nào được lưu" />;
+  if (!ev) return <LoadingRows />;
+  const journal = [...ev.items].sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts)).map((e) => `${e.ts}  ${e.type.padEnd(18)} ${e.actor}  ${e.message}`).join("\n");
   return (
     <div className="grid gap-4 lg:grid-cols-5">
-      <Card className="p-2 lg:col-span-2">
-        <ul className="flex flex-col">
-          {mine.map((j) => (
-            <li key={j.id}>
-              <button onClick={() => setSel(j.result!.log_id)} className={cn("flex w-full items-center gap-2 rounded px-2 py-2 text-left hover:bg-surface-2", logId === j.result!.log_id && "bg-surface-2")}>
-                <span className={cn("size-2 shrink-0 rounded-full", j.result!.exit_code === 0 ? "bg-st-running" : "bg-st-error")} />
-                <Mono className="min-w-0 flex-1 truncate">{j.command}</Mono>
-                <span className="shrink-0 text-[11px] text-muted-foreground">{relTime(j.created_at)}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </Card>
-      <div className="lg:col-span-3">
-        {logId && (
-          <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3 lg:col-span-2">
+        <Card className="p-3">
+          <p className="mb-2 text-[13px] font-medium">Mở log đầy đủ của một lệnh</p>
+          <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); setLogId(input.trim() || null); }}>
+            <Input value={input} onChange={(e) => setInput(e.target.value)} placeholder="log_id (trong ExecResult)" className="font-mono" />
+            <Button type="submit" size="sm" variant="secondary" disabled={!input.trim()}>Mở</Button>
+          </form>
+          {known.length > 0 && (
+            <ul className="mt-2 flex flex-col">
+              {known.map((k) => (
+                <li key={k.log_id}>
+                  <button onClick={() => { setInput(k.log_id!); setLogId(k.log_id); }} className={cn("flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-surface-2", logId === k.log_id && "bg-surface-2")}>
+                    <span className={cn("size-2 shrink-0 rounded-full", k.exit_code === 0 ? "bg-st-running" : "bg-st-error")} />
+                    <Mono className="min-w-0 flex-1 truncate">{k.command}</Mono>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+        <p className="text-xs text-muted-foreground">Log đầy đủ được lưu theo <span className="font-mono">log_id</span> mà agent nhận trong kết quả exec (khi output bị rút gọn).</p>
+      </div>
+      <div className="flex flex-col gap-2 lg:col-span-3">
+        {logId ? (
+          <>
             <div className="flex items-center justify-between">
               <Mono className="text-muted-foreground">{logId}</Mono>
-              <Button size="xs" variant="secondary" disabled={typeof text !== "string"} onClick={() => download(`${logId}.log`, String(text))}><Download /> Tải log</Button>
+              <div className="flex gap-2">
+                <Button size="xs" variant="ghost" onClick={() => setLogId(null)}>Nhật ký box</Button>
+                <Button size="xs" variant="secondary" disabled={typeof text !== "string"} onClick={() => download(`${logId}.log`, String(text))}><Download /> Tải log</Button>
+              </div>
             </div>
-            <pre className="max-h-[520px] overflow-auto rounded-md border border-border bg-background p-3 font-mono text-[12.5px] leading-relaxed">{typeof text === "string" ? text : "Đang tải…"}</pre>
-          </div>
+            <pre className="max-h-[520px] overflow-auto rounded-md border border-border bg-background p-3 font-mono text-[12.5px] leading-relaxed">{logErr ? `Không mở được log: ${logErr.message}` : typeof text === "string" ? text : "Đang tải…"}</pre>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center justify-between">
+              <span className="text-[13px] text-muted-foreground">Nhật ký sự kiện của box ({ev.items.length} dòng)</span>
+              <Button size="xs" variant="secondary" onClick={() => download(`${box.slug}-events.log`, journal)}><Download /> Tải về</Button>
+            </div>
+            <pre className="max-h-[520px] overflow-auto rounded-md border border-border bg-background p-3 font-mono text-[12px] leading-relaxed">{journal || "Chưa có sự kiện"}</pre>
+          </>
         )}
       </div>
     </div>

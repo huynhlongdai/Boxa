@@ -60,6 +60,11 @@ export interface Box {
   secrets: string[];
   created_at: string;
   last_active_at: string | null;
+  // Trường phụ Core có thể trả thêm
+  error?: string;
+  retries?: number;
+  taken_over?: boolean;
+  billing?: string;
 }
 
 export interface CreateBoxBody {
@@ -210,13 +215,14 @@ export interface CostsResponse extends List<LedgerEntry> {
   };
 }
 
-// Không có trong contract chi tiết; giả định: { items: Suggestion[] }
+// GET /costs/suggestions → { items: Suggestion[] } (shape theo boxa/core manager.Suggestion)
 export interface Suggestion {
-  id: string;
+  kind: string;
   title: string;
   detail: string;
-  saving_month_usd: number;
-  box_id?: string | null;
+  saving_usd: number;
+  box_id?: string;
+  agent_id?: string;
 }
 
 export interface Template {
@@ -305,36 +311,50 @@ export interface Snippet {
 }
 
 // ---- Các shape admin chưa được contract mô tả chi tiết (giả định, cần core xác nhận) ----
+// (shape theo boxa/core; contract v1 chỉ mô tả sơ lược)
 export interface AdminSystem {
   version: string;
   uptime_s: number;
-  components: { name: string; status: "ok" | "degraded" | "down"; latency_ms: number }[];
+  db?: string;
+  public_url?: string;
+  auto_burst?: boolean;
+  components: { name: string; status: string; latency_ms: number; detail?: string }[];
 }
 
-export interface Quotas {
-  max_boxes_per_agent: number;
-  max_concurrent_boxes: number;
-  max_box_cpu: number;
-  max_box_ram_mb: number;
-  max_spend_day_usd: number;
-  exec_rate_per_min: number;
+/** GET /admin/jobs: các job nền định kỳ của Core (reaper, ledger, price_feed…). */
+export interface SchedJob {
+  name: string;
+  interval_s: number;
+  last_run_at: string | null;
+  last_status: string;
+  last_error: string;
+  duration_ms: number;
+  runs: number;
 }
+
+/** GET/PUT /admin/quotas: map số; nhãn tiếng Việt cho các khoá đã biết. */
+export type Quotas = Record<string, number>;
 
 export interface AdminUser {
   id: string;
-  email: string;
   name: string;
-  role: "owner" | "admin" | "viewer";
-  created_at: string;
-  last_login_at: string | null;
+  role: string;
+  email?: string;
+  admin_keys?: number;
+  note?: string;
+  created_at?: string;
+  last_login_at?: string | null;
 }
 
-// Giả định: GET /boxes/:id/observe
+/** GET /boxes/:id/observe (proto.ObserveResult). cpu/ram/disk là tuỳ chọn. */
 export interface Observe {
-  cpu_pct: number;
-  ram_pct: number;
-  disk_pct: number;
-  processes: { pid: number; command: string; cpu_pct: number }[];
+  files_changed: string[];
+  processes: { pid: number; cmd: string }[];
+  ports: number[];
+  since: string;
+  cpu_pct?: number;
+  ram_pct?: number;
+  disk_pct?: number;
 }
 
 export type StreamEventName = "box.updated" | "event.created" | "approval.created" | "overview.updated";

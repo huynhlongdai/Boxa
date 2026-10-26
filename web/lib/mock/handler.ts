@@ -359,13 +359,13 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
       case "events":
         return list(s.events.filter((e) => e.box_id === b.id).sort((a, c) => Date.parse(c.ts) - Date.parse(a.ts)));
       case "observe": {
-        const host = s.hosts.find((h) => h.id === b.host_id);
         const running = b.status === "running";
+        const fs = Object.keys(s.files[b.id] ?? {});
         return ok({
-          cpu_pct: running ? Math.round(10 + Math.random() * 60) : 0,
-          ram_pct: running ? Math.round(30 + Math.random() * 40) : 0,
-          disk_pct: Math.round((host?.disk_used_pct ?? 30) * 0.8),
-          processes: running ? [{ pid: 412, command: b.template.includes("browser") ? "chromium --headless" : b.template === "node" ? "node server.js" : "python main.py", cpu_pct: 22.4 }, { pid: 88, command: "boxd --dial gw.boxa", cpu_pct: 0.4 }] : [],
+          files_changed: running ? fs.filter((f) => f.startsWith("/work")).slice(0, 3) : [],
+          processes: running ? [{ pid: 412, cmd: b.template.includes("browser") ? "chromium --headless=new" : b.template === "node" ? "node server.js" : "python main.py" }, { pid: 88, cmd: "boxd --dial gw.boxa" }] : [],
+          ports: running ? b.ports : [],
+          since: b.last_active_at ?? b.created_at,
         });
       }
       case "files": {
@@ -407,7 +407,7 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
         const result = { exit_code: 0, duration_ms: 120, stdout_tail: stdout, stderr_tail: "", truncated: false, log_id, files_changed: [], tokens_saved: 0 };
         s.jobs.push({ id, box_id: b.id, command: cmd, status: "done", result, created_at: iso(Date.now()), finished_at: iso(Date.now() + 120) });
         s.logs[log_id] = `$ ${cmd}\n${stdout}\n[exit 0] 0.1s\n`;
-        pushEvent(s, { actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "exec", message: cmd, cost_usd: null });
+        pushEvent(s, { actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "box.exec", message: `exit=0 120ms: ${cmd} tokens_saved=0 log=${log_id}`, cost_usd: null });
         return body.async ? ok({ job_id: id }, 202) : ok(result);
       }
       case "takeover":
@@ -503,9 +503,9 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
   if (r0 === "costs") {
     if (r1 === "suggestions")
       return list([
-        { id: "sug_1", title: "kecon-story-gen ngủ trễ", detail: "Box rảnh trung bình 47 phút trước khi ngủ. Đặt idle_minutes = 10 để giảm ~18% chi phí box này.", saving_month_usd: 1.9, box_id: "box_a9d054" },
-        { id: "sug_2", title: "shopee-crawl-02 nên chuyển sang pool", detail: "Task crawl chạy đều mỗi ngày 3 giờ ở burst Vultr sgp. Đặt vào pool Hetzner fsn1 (còn 4 vCPU trống) rẻ hơn ~5 lần.", saving_month_usd: 4.6, box_id: "box_2c81e4" },
-        { id: "sug_3", title: "replingo-api dư spec", detail: "CPU trung bình 6%, RAM 21% trong 7 ngày. Giảm từ 2 vCPU/4 GB xuống 1 vCPU/2 GB.", saving_month_usd: 1.1, box_id: "box_c4410f" },
+        { kind: "idle_late", title: "kecon-story-gen ngủ trễ", detail: "Box rảnh trung bình 47 phút trước khi ngủ. Đặt idle_minutes = 10 để giảm ~18% chi phí box này.", saving_usd: 1.9, box_id: "box_a9d054", agent_id: "agt_kecon" },
+        { kind: "move_to_pool", title: "shopee-crawl-02 nên chuyển sang pool", detail: "Task crawl chạy đều mỗi ngày 3 giờ ở burst Vultr sgp. Đặt vào pool Hetzner fsn1 (còn 4 vCPU trống) rẻ hơn ~5 lần.", saving_usd: 4.6, box_id: "box_2c81e4", agent_id: "agt_shopee" },
+        { kind: "oversized", title: "replingo-api dư spec", detail: "CPU trung bình 6%, RAM 21% trong 7 ngày. Giảm từ 2 vCPU/4 GB xuống 1 vCPU/2 GB.", saving_usd: 1.1, box_id: "box_c4410f", agent_id: "agt_replingo" },
       ]);
     const items = filterLedger(s, q);
     const by_provider: Record<string, number> = {};
@@ -662,17 +662,29 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
     if (r1 === "system")
       return ok({
         version: "0.1.0-mock",
+        db: "postgres",
+        public_url: "https://boxa.example.com",
+        auto_burst: true,
         uptime_s: Math.round((Date.now() - s.started_at) / 1000) + 3 * 86400,
         components: [
-          { name: "db (Postgres)", status: "ok", latency_ms: 2 },
-          { name: "scheduler", status: "ok", latency_ms: 4 },
-          { name: "reaper", status: "ok", latency_ms: 1 },
-          { name: "price_feed (battleships)", status: "degraded", latency_ms: 812 },
-          { name: "gateway (QUIC)", status: "ok", latency_ms: 9 },
-          { name: "object store (R2)", status: "ok", latency_ms: 38 },
+          { name: "db", status: "ok", latency_ms: 0.4, detail: "postgres" },
+          { name: "scheduler", status: "ok", latency_ms: 0, detail: `${s.hosts.length} host đang kết nối, auto_burst=true` },
+          { name: "reaper", status: "ok", latency_ms: 0, detail: "chạy 12 giây trước" },
+          { name: "ledger", status: "ok", latency_ms: 0, detail: "chạy 20 giây trước" },
+          { name: "price_feed", status: "degraded", latency_ms: 1701, detail: "battleships.dev phản hồi chậm" },
+          { name: "gateway", status: "ok", latency_ms: 0, detail: `1 SSE subscriber, ${s.hosts.length} host tunnel` },
         ],
       });
-    if (r1 === "jobs") return list([...s.jobs].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)));
+    if (r1 === "jobs") {
+      const now = Date.now();
+      return list([
+        { name: "reaper", interval_s: 30, last_run_at: iso(now - 12_000), last_status: "ok", last_error: "", duration_ms: 3, runs: 8640 },
+        { name: "ledger", interval_s: 60, last_run_at: iso(now - 20_000), last_status: "ok", last_error: "", duration_ms: 11, runs: 4320 },
+        { name: "price_feed", interval_s: 21600, last_run_at: iso(now - 3 * HOUR), last_status: "ok", last_error: "", duration_ms: 1701, runs: 12 },
+        { name: "self_test", interval_s: 86400, last_run_at: iso(now - 9 * HOUR), last_status: "error", last_error: "netcup: token hết hạn (401)", duration_ms: 812, runs: 3 },
+        { name: "daily_report", interval_s: 86400, last_run_at: iso(now - 13 * HOUR), last_status: "ok", last_error: "", duration_ms: 240, runs: 3 },
+      ]);
+    }
     if (r1 === "audit") {
       let items = [...s.events].sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts));
       const actor = q.get("actor"), type = q.get("type");
@@ -681,7 +693,7 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
       return list(items);
     }
     if (r1 === "quotas") {
-      if (M === "PUT") s.quotas = { ...s.quotas, ...(body as object) };
+      if (M === "PUT") s.quotas = { ...s.quotas, ...(body as Record<string, number>) };
       return ok(s.quotas);
     }
     if (r1 === "users") return list(s.users);

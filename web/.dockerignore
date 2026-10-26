@@ -1,0 +1,5 @@
+node_modules
+.next
+smoke-*.log
+.env*.local
+docs/screenshots

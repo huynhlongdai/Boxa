@@ -24,6 +24,7 @@ import type {
   Overview,
   Provider,
   Quotas,
+  SchedJob,
   Secret,
   Settings,
   Snapshot,
@@ -229,7 +230,7 @@ export const api = {
 
   // Admin
   adminSystem: () => http.get<AdminSystem>(paths.adminSystem),
-  adminJobs: () => http.get<List<Job>>(paths.adminJobs),
+  adminJobs: () => http.get<List<SchedJob>>(paths.adminJobs),
   adminAudit: (f?: { actor?: string; type?: string }) => http.get<List<BoxaEvent>>(paths.adminAudit(f)),
   adminQuotas: () => http.get<Quotas>(paths.adminQuotas),
   saveQuotas: (q: Quotas) => http.put<Quotas>(paths.adminQuotas, q),

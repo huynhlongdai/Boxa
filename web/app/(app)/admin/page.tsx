@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Activity, AlertTriangle, FilterX, Plus, Save } from "lucide-react";
 import { api, paths } from "@/lib/api";
 import { useAction, useApi } from "@/lib/hooks";
-import type { AdminSystem, AdminUser, Agent, ApiKey, BoxaEvent, Box, Health, Job, List, Quotas, Settings } from "@/lib/types";
+import type { AdminSystem, AdminUser, Agent, ApiKey, BoxaEvent, Health, List, Quotas, SchedJob, Settings } from "@/lib/types";
 import { cn, dateTime, ms, relTime } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,17 +32,18 @@ function SystemTab() {
         <Card className="p-4"><p className="text-xs text-muted-foreground">Phiên bản</p><p className="mt-1 font-mono text-lg">{data.version}</p></Card>
         <Card className="p-4"><p className="text-xs text-muted-foreground">Uptime</p><p className="mt-1 font-mono text-lg">{Math.floor(data.uptime_s / 86400)}n {Math.floor((data.uptime_s % 86400) / 3600)}g</p></Card>
         <Card className="p-4"><p className="text-xs text-muted-foreground">/health</p><p className="mt-1 text-lg">{health?.ok ? <span className="text-st-running">OK</span> : <span className="text-st-error">Lỗi</span>}</p></Card>
-        <Card className="p-4"><p className="text-xs text-muted-foreground">Thành phần lỗi</p><p className="mt-1 text-lg">{data.components.filter((c) => c.status !== "ok").length}</p></Card>
+        <Card className="p-4"><p className="text-xs text-muted-foreground">CSDL · auto burst</p><p className="mt-1 font-mono text-lg">{data.db ?? "—"} · {data.auto_burst ? "bật" : "tắt"}</p></Card>
       </div>
       <Card>
         <Table>
-          <THead><TR className="hover:bg-transparent"><TH>Thành phần</TH><TH>Trạng thái</TH><TH className="text-right">Độ trễ</TH></TR></THead>
+          <THead><TR className="hover:bg-transparent"><TH>Thành phần</TH><TH>Trạng thái</TH><TH className="hidden md:table-cell">Chi tiết</TH><TH className="text-right">Độ trễ</TH></TR></THead>
           <TBody>
             {data.components.map((c) => (
               <TR key={c.name}>
                 <TD><Mono>{c.name}</Mono></TD>
                 <TD><Badge variant={tone(c.status)}><Dot tone={tone(c.status)} />{c.status === "ok" ? "Ổn định" : c.status === "degraded" ? "Chậm" : "Ngừng"}</Badge></TD>
-                <TD className={cn("text-right font-mono text-[13px]", c.latency_ms > 500 && "text-st-warning")}>{c.latency_ms} ms</TD>
+                <TD className="hidden text-[13px] text-muted-foreground md:table-cell">{c.detail ?? ""}</TD>
+                <TD className={cn("text-right font-mono text-[13px]", c.latency_ms > 500 && "text-st-warning")}>{c.latency_ms < 1 ? c.latency_ms.toFixed(2) : Math.round(c.latency_ms)} ms</TD>
               </TR>
             ))}
           </TBody>
@@ -53,32 +54,35 @@ function SystemTab() {
 }
 
 function JobsTab() {
-  const { data, error } = useApi<List<Job>>(paths.adminJobs);
-  const { data: boxes } = useApi<List<Box>>(paths.boxes());
-  const slug = (id: string) => boxes?.items.find((b) => b.id === id)?.slug ?? id;
+  const { data, error } = useApi<List<SchedJob>>(paths.adminJobs, { refreshInterval: 10000 });
   if (error) return <ErrorBox error={error} />;
   if (!data) return <LoadingRows />;
-  const st = { queued: "gray", running: "blue", done: "green", failed: "red" } as const;
-  const label = { queued: "Chờ", running: "Đang chạy", done: "Xong", failed: "Lỗi" } as const;
+  if (!data.items.length) return <Empty title="Không có job nền nào" />;
+  const every = (s: number) => (s >= 3600 ? `${Math.round(s / 3600)} giờ` : s >= 60 ? `${Math.round(s / 60)} phút` : `${s} giây`);
   return (
-    <Card>
-      <Table>
-        <THead><TR className="hover:bg-transparent"><TH>Job</TH><TH>Box</TH><TH>Lệnh</TH><TH>Trạng thái</TH><TH>Exit</TH><TH>Thời lượng</TH><TH>Tạo</TH></TR></THead>
-        <TBody>
-          {data.items.map((j) => (
-            <TR key={j.id}>
-              <TD><Mono>{j.id}</Mono></TD>
-              <TD><Link href={`/boxes/${j.box_id}?tab=timeline`} className="hover:text-primary"><Mono>{slug(j.box_id)}</Mono></Link></TD>
-              <TD className="max-w-[320px] truncate"><Mono>{j.command}</Mono></TD>
-              <TD><Badge variant={st[j.status]}>{label[j.status]}</Badge></TD>
-              <TD className={cn("font-mono text-[13px]", (j.result?.exit_code ?? 0) !== 0 && "text-st-error")}>{j.result?.exit_code ?? "—"}</TD>
-              <TD className="whitespace-nowrap font-mono text-[13px]">{j.result ? ms(j.result.duration_ms) : "—"}</TD>
-              <TD className="whitespace-nowrap text-[13px] text-muted-foreground">{relTime(j.created_at)}</TD>
-            </TR>
-          ))}
-        </TBody>
-      </Table>
-    </Card>
+    <div className="flex flex-col gap-2">
+      <p className="text-[13px] text-muted-foreground">Các job nền định kỳ của Core (Reaper, ledger, price feed…).</p>
+      <Card>
+        <Table>
+          <THead><TR className="hover:bg-transparent"><TH>Job</TH><TH>Chu kỳ</TH><TH>Lần chạy cuối</TH><TH>Trạng thái</TH><TH>Thời lượng</TH><TH className="text-right">Số lần</TH></TR></THead>
+          <TBody>
+            {data.items.map((j) => (
+              <TR key={j.name}>
+                <TD><Mono>{j.name}</Mono></TD>
+                <TD className="whitespace-nowrap text-[13px]">mỗi {every(j.interval_s)}</TD>
+                <TD className="whitespace-nowrap text-[13px] text-muted-foreground">{relTime(j.last_run_at)}</TD>
+                <TD>
+                  <Badge variant={j.last_status === "ok" ? "green" : j.last_status ? "red" : "gray"}>{j.last_status === "ok" ? "Ổn" : j.last_status || "chưa chạy"}</Badge>
+                  {j.last_error && <p className="mt-1 max-w-[320px] text-xs text-st-error">{j.last_error}</p>}
+                </TD>
+                <TD className="whitespace-nowrap font-mono text-[13px]">{ms(j.duration_ms)}</TD>
+                <TD className="text-right font-mono text-[13px]">{j.runs.toLocaleString("vi-VN")}</TD>
+              </TR>
+            ))}
+          </TBody>
+        </Table>
+      </Card>
+    </div>
   );
 }
 
@@ -174,27 +178,32 @@ function KeysTab() {
   );
 }
 
-const QUOTA_FIELDS: [keyof Quotas, string, string][] = [
-  ["max_boxes_per_agent", "Box tối đa / agent", "box"],
-  ["max_concurrent_boxes", "Box chạy đồng thời (toàn hệ thống)", "box"],
-  ["max_box_cpu", "vCPU tối đa / box", "vCPU"],
-  ["max_box_ram_mb", "RAM tối đa / box", "MB"],
-  ["max_spend_day_usd", "Trần chi tiêu / ngày", "USD"],
-  ["exec_rate_per_min", "Giới hạn exec / phút / agent", "lệnh"],
-];
+const QUOTA_LABELS: Record<string, [string, string]> = {
+  max_boxes_per_agent: ["Box tối đa / agent", "box"],
+  max_concurrent_boxes: ["Box chạy đồng thời (toàn hệ thống)", "box"],
+  max_cpu_per_box: ["vCPU tối đa / box", "vCPU"],
+  max_ram_mb_per_box: ["RAM tối đa / box", "MB"],
+  max_disk_gb_per_box: ["Đĩa tối đa / box", "GB"],
+  rate_limit_per_minute: ["Giới hạn request / phút / key", "request"],
+  max_spend_day_usd: ["Trần chi tiêu / ngày", "USD"],
+};
 
 function QuotaForm({ initial }: { initial: Quotas }) {
   const [q, setQ] = React.useState(initial);
   const { run, pending } = useAction();
+  const keys = Object.keys(initial).filter((k) => typeof initial[k] === "number");
   return (
     <Card>
       <CardHeader><CardTitle>Quota & giới hạn</CardTitle><CardDescription>Chặn cứng ở Core — agent nhận lỗi POLICY_DENIED khi vượt.</CardDescription></CardHeader>
       <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {QUOTA_FIELDS.map(([k, label, unit]) => (
-          <Field key={k} label={label} hint={unit}>
-            <Input type="number" min={0} step={k === "max_spend_day_usd" ? 0.5 : 1} value={q[k]} onChange={(e) => setQ((x) => ({ ...x, [k]: Number(e.target.value) }))} className="font-mono" />
-          </Field>
-        ))}
+        {keys.map((k) => {
+          const [label, unit] = QUOTA_LABELS[k] ?? [k, ""];
+          return (
+            <Field key={k} label={label} hint={<><span className="font-mono">{k}</span>{unit ? ` · ${unit}` : ""}</>}>
+              <Input type="number" min={0} step={k.endsWith("_usd") ? 0.5 : 1} value={q[k]} onChange={(e) => setQ((x) => ({ ...x, [k]: Number(e.target.value) }))} className="font-mono" />
+            </Field>
+          );
+        })}
         <div className="flex justify-end sm:col-span-2 lg:col-span-3">
           <Button disabled={JSON.stringify(q) === JSON.stringify(initial) || !!pending} onClick={() => run("q", () => api.saveQuotas(q), { success: "Đã lưu quota", revalidate: [paths.adminQuotas] })}><Save /> Lưu quota</Button>
         </div>
@@ -248,24 +257,26 @@ function UsersTab() {
   const { data, error } = useApi<List<AdminUser>>(paths.adminUsers);
   if (error) return <ErrorBox error={error} />;
   if (!data) return <LoadingRows />;
-  const role = { owner: ["Chủ sở hữu", "yellow"], admin: ["Admin", "blue"], viewer: ["Chỉ xem", "gray"] } as const;
+  const role: Record<string, [string, "yellow" | "blue" | "gray"]> = { owner: ["Chủ sở hữu", "yellow"], admin: ["Admin", "blue"], viewer: ["Chỉ xem", "gray"] };
   return (
-    <Card>
-      <Table>
-        <THead><TR className="hover:bg-transparent"><TH>Tên</TH><TH>Email</TH><TH>Vai trò</TH><TH>Đăng nhập cuối</TH><TH className="hidden md:table-cell">Tạo</TH></TR></THead>
-        <TBody>
-          {data.items.map((u) => (
-            <TR key={u.id}>
-              <TD className="text-[13px] font-medium">{u.name}</TD>
-              <TD><Mono>{u.email}</Mono></TD>
-              <TD><Badge variant={role[u.role][1]}>{role[u.role][0]}</Badge></TD>
-              <TD className="text-[13px] text-muted-foreground">{relTime(u.last_login_at)}</TD>
-              <TD className="hidden text-[13px] text-muted-foreground md:table-cell">{dateTime(u.created_at)}</TD>
-            </TR>
-          ))}
-        </TBody>
-      </Table>
-    </Card>
+    <div className="flex flex-col gap-3">
+      <Card>
+        <Table>
+          <THead><TR className="hover:bg-transparent"><TH>Người dùng</TH><TH>Vai trò</TH><TH>Key admin</TH><TH>Ghi chú</TH></TR></THead>
+          <TBody>
+            {data.items.map((u) => (
+              <TR key={u.id}>
+                <TD><p className="text-[13px] font-medium">{u.name}</p>{u.email && <Mono className="text-muted-foreground">{u.email}</Mono>}</TD>
+                <TD><Badge variant={(role[u.role] ?? [u.role, "gray"])[1]}>{(role[u.role] ?? [u.role])[0]}</Badge></TD>
+                <TD className="font-mono text-[13px]">{u.admin_keys ?? "—"}</TD>
+                <TD className="text-[13px] text-muted-foreground">{u.note ?? (u.last_login_at ? `Đăng nhập ${relTime(u.last_login_at)}` : "—")}</TD>
+              </TR>
+            ))}
+          </TBody>
+        </Table>
+      </Card>
+      <p className="text-xs text-muted-foreground">Boxa v1 dành cho một người vận hành. Quyền truy cập dashboard = key admin (quản lý ở tab API keys).</p>
+    </div>
   );
 }
 

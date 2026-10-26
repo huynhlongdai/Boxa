@@ -16,9 +16,9 @@ import { Dot } from "./status";
 
 type ConnState = "connecting" | "open" | "closed" | "mock";
 
-function wsUrl(boxId: string, wsBase: string | null) {
+function wsUrl(boxId: string, wsBase: string | null, cols: number, rows: number) {
   const base = wsBase || (process.env.NEXT_PUBLIC_BOXA_API || "http://localhost:8080/v1").replace(/^http/, "ws");
-  return `${base.replace(/\/+$/, "")}/boxes/${boxId}/terminal`;
+  return `${base.replace(/\/+$/, "")}/boxes/${boxId}/terminal?cols=${cols}&rows=${rows}`;
 }
 
 export function BoxTerminal({ box }: { box: Box }) {
@@ -27,7 +27,7 @@ export function BoxTerminal({ box }: { box: Box }) {
   const termRef = React.useRef<XTerm | null>(null);
   const wsRef = React.useRef<WebSocket | null>(null);
   const controlRef = React.useRef(false);
-  const [control, setControl] = React.useState(false);
+  const [control, setControl] = React.useState(Boolean(box.taken_over));
   const [conn, setConn] = React.useState<ConnState>("connecting");
   const [busy, setBusy] = React.useState(false);
   const mock = session?.mock ?? false;
@@ -58,7 +58,11 @@ export function BoxTerminal({ box }: { box: Box }) {
       term.open(hostRef.current);
       fit.fit();
       termRef.current = term;
-      ro = new ResizeObserver(() => fit?.fit());
+      ro = new ResizeObserver(() => {
+        fit?.fit();
+        // Giao thức Core: frame JSON {"type":"resize","cols":N,"rows":M}
+        if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
+      });
       ro.observe(hostRef.current);
 
       const prompt = () => term.write(`\r\n\x1b[32manh@${box.slug}\x1b[0m:\x1b[34m/work\x1b[0m$ `);
@@ -122,16 +126,21 @@ export function BoxTerminal({ box }: { box: Box }) {
       // Thật: WebSocket tới Core. Cookie httpOnly boxa_key được trình duyệt gửi kèm khi Core cùng site.
       const connect = () => {
         setConn("connecting");
-        const ws = new WebSocket(wsUrl(box.id, session.ws_base));
+        let opened = false;
+        const ws = new WebSocket(wsUrl(box.id, session.ws_base, term.cols, term.rows));
         wsRef.current = ws;
         ws.onopen = () => {
+          opened = true;
           setConn("open");
           term.writeln(`\x1b[90m# Đã kết nối PTY ${box.id}\x1b[0m`);
         };
         ws.onmessage = (ev) => term.write(typeof ev.data === "string" ? ev.data : "");
         ws.onclose = () => {
           setConn("closed");
-          if (!disposed) term.writeln("\r\n\x1b[33m# Mất kết nối terminal\x1b[0m");
+          if (disposed) return;
+          if (!opened)
+            term.writeln("\x1b[33m# Không mở được WebSocket tới Core.\x1b[0m\r\n\x1b[90m# Trình duyệt không gửi được header Authorization cho WebSocket: Core cần chấp nhận cookie httpOnly “boxa_key” (cùng site),\r\n# hoặc đặt NEXT_PUBLIC_BOXA_WS trỏ tới endpoint cùng domain có xác thực bằng cookie.\x1b[0m");
+          else term.writeln("\r\n\x1b[33m# Mất kết nối terminal\x1b[0m");
         };
         ws.onerror = () => setConn("closed");
       };

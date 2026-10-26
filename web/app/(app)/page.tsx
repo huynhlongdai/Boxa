@@ -32,7 +32,7 @@ export default function OverviewPage() {
             <KpiCard
               label="Chi hôm nay"
               icon={<Wallet />}
-              value={<span>{usd(data.spent_today)} <span className="text-sm font-normal text-muted-foreground">/ {usd(data.budget_day)}</span></span>}
+              value={<span>{usd(data.spent_today)} <span className="whitespace-nowrap text-sm font-normal text-muted-foreground">/ {usd(data.budget_day)}</span></span>}
               spent={data.spent_today}
               budget={data.budget_day}
               sub={`${Math.round(pct(data.spent_today, data.budget_day))}% ngân sách ngày`}
@@ -40,7 +40,7 @@ export default function OverviewPage() {
             <KpiCard
               label="Chi tháng này"
               icon={<CalendarDays />}
-              value={<span>{usd(data.spent_month, 2)} <span className="text-sm font-normal text-muted-foreground">/ {usd(data.budget_month, 0)}</span></span>}
+              value={<span>{usd(data.spent_month, 2)} <span className="whitespace-nowrap text-sm font-normal text-muted-foreground">/ {usd(data.budget_month, 0)}</span></span>}
               spent={data.spent_month}
               budget={data.budget_month}
               sub={`${Math.round(pct(data.spent_month, data.budget_month))}% ngân sách tháng`}
@@ -122,9 +122,6 @@ export default function OverviewPage() {
         <CardContent>{data ? <StackedCostChart data={data.cost_7d} height={260} /> : <Skeleton className="h-[260px]" />}</CardContent>
       </Card>
 
-      <div className="mt-6 md:hidden">
-        <EmergencyButton className="h-12 w-full text-base" />
-      </div>
     </>
   );
 }

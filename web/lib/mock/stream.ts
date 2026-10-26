@@ -35,8 +35,8 @@ export function mockStream(signal: AbortSignal): ReadableStream<Uint8Array> {
             actor: `agent:${b.agent_name}`,
             box_id: b.id,
             agent_id: b.agent_id,
-            type: "exec",
-            message: cmds[n % cmds.length],
+            type: "box.exec",
+            message: `exit=0 ${200 + (n % 7) * 130}ms: ${cmds[n % cmds.length]}`,
             cost_usd: null,
           };
           s.events.push(evt);
