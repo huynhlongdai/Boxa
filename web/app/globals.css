@@ -36,13 +36,28 @@
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "ss01", "cv11";
   }
-  /* Typography tiếng Việt: tiêu đề cân dòng, đoạn văn tránh dòng mồ côi */
+  /* Typography tiếng Việt: tiêu đề cân dòng, đoạn văn tránh dòng mồ côi; không tự gạch nối giữa từ ghép */
   h1, h2, h3, h4, .text-balance {
     text-wrap: balance;
   }
   p, li, .text-pretty {
     text-wrap: pretty;
   }
+  html {
+    hyphens: manual;
+    overflow-wrap: break-word;
+  }
+  /* CJK: ngắt dòng theo quy tắc nghiêm (không để 、。」 đầu dòng); nhãn ngắn (tiêu đề, nút, nhãn, ô bảng, badge)
+     giữ nguyên cụm từ (keep-all) nhưng vẫn được bẻ khi tràn (overflow-wrap:anywhere) để không vỡ layout ở 390px. */
+  :lang(zh), :lang(ja) {
+    line-break: strict;
+  }
+  :lang(zh) :is(h1, h2, h3, h4, button, label, th, [role="tab"]),
+  :lang(ja) :is(h1, h2, h3, h4, button, label, th, [role="tab"]) {
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+
   code, kbd, pre, .font-mono {
     font-variant-ligatures: none;
   }

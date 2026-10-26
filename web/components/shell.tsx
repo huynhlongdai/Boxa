@@ -2,17 +2,20 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { Box as BoxIcon, Command as CmdIcon, LogOut, MoreHorizontal, Rocket, Search, Wrench } from "lucide-react";
+import { Box as BoxIcon, Command as CmdIcon, Languages, LogOut, MoreHorizontal, Rocket, Search, Wrench } from "lucide-react";
 import { NAV, isActive } from "./nav";
 import { usePalette } from "./command-palette";
 import { useLive } from "./live";
 import { Dot } from "./boxa/status";
 import { SheetContent } from "./ui/dialog";
+import { LocaleGrid, LocaleSelect } from "./locale-switcher";
 import { useApi } from "@/lib/hooks";
 import { paths } from "@/lib/api";
 import type { Overview, Settings } from "@/lib/types";
-import { cn, usd } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { useFmt } from "@/lib/format";
 
 function Logo({ compact }: { compact?: boolean }) {
   return (
@@ -27,10 +30,11 @@ function Logo({ compact }: { compact?: boolean }) {
 
 function LiveIndicator({ compact }: { compact?: boolean }) {
   const { connected, session } = useLive();
+  const t = useTranslations("shell");
   return (
-    <div className="flex items-center gap-2 text-[11.5px] text-muted-foreground" title={connected ? "Đang nhận cập nhật trực tiếp (SSE)" : "Mất SSE — đang làm mới mỗi 10 giây"}>
+    <div className="flex items-center gap-2 text-[11.5px] text-muted-foreground" title={connected ? t("liveTitle") : t("pollingTitle")}>
       <Dot tone={connected ? "green" : "yellow"} pulse={connected} />
-      {!compact && <span>{connected ? "Trực tiếp" : "Polling 10s"}</span>}
+      {!compact && <span className="whitespace-nowrap">{connected ? t("live") : t("polling")}</span>}
       {session?.mock && <span className="rounded border border-st-warning/40 px-1 font-mono text-[10px] text-st-warning">MOCK</span>}
     </div>
   );
@@ -38,11 +42,12 @@ function LiveIndicator({ compact }: { compact?: boolean }) {
 
 function MaintenanceBanner() {
   const { data } = useApi<Settings>(paths.settings);
+  const t = useTranslations("shell");
   if (!data?.maintenance.enabled) return null;
   return (
     <div className="flex items-center gap-2 border-b border-st-warning/30 bg-st-warning/10 px-4 py-2 text-[13px] text-st-warning">
       <Wrench className="size-4 shrink-0" />
-      <span className="font-medium">Đang bảo trì:</span>
+      <span className="shrink-0 font-medium">{t("maintenance")}</span>
       <span className="text-st-warning/90">{data.maintenance.message}</span>
     </div>
   );
@@ -50,12 +55,14 @@ function MaintenanceBanner() {
 
 function SpendPill() {
   const { data } = useApi<Overview>(paths.overview);
+  const t = useTranslations("shell");
+  const { usd } = useFmt();
   if (!data) return null;
   const p = data.budget_day ? (data.spent_today / data.budget_day) * 100 : 0;
   return (
     <Link href="/costs" className="hidden items-center gap-1.5 rounded-md border border-border px-2 py-1 font-mono text-[12px] sm:flex">
       <span className={cn(p >= 100 ? "text-st-error" : p >= 80 ? "text-st-warning" : "text-foreground")}>{usd(data.spent_today)}</span>
-      <span className="text-muted-foreground">/ {usd(data.budget_day)} hôm nay</span>
+      <span className="whitespace-nowrap text-muted-foreground">{t("spentToday", { budget: usd(data.budget_day) })}</span>
     </Link>
   );
 }
@@ -65,6 +72,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const palette = usePalette();
   const [moreOpen, setMoreOpen] = React.useState(false);
+  const tn = useTranslations("nav");
+  const ts = useTranslations("shell");
   const { data: ov } = useApi<Overview>(paths.overview);
   const pending = ov?.approvals_pending ?? 0;
   const moreItems = NAV.filter((n) => !n.mobileTab);
@@ -87,10 +96,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <button
             onClick={palette.open}
             className="flex h-9 w-full items-center justify-center gap-2 rounded-md border border-border bg-background px-2.5 text-[13px] text-muted-foreground hover:text-foreground lg:justify-start"
-            aria-label="Mở bảng lệnh"
+            aria-label={ts("openPalette")}
           >
             <Search className="size-4" />
-            <span className="hidden lg:inline">Tìm hoặc gõ lệnh…</span>
+            <span className="hidden truncate lg:inline">{ts("searchPlaceholder")}</span>
             <kbd className="ml-auto hidden rounded border border-border px-1 font-mono text-[10px] lg:inline">⌘K</kbd>
           </button>
         </div>
@@ -101,14 +110,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
               <Link
                 key={n.href}
                 href={n.href}
-                title={n.label}
+                title={tn(n.key)}
                 className={cn(
                   "relative flex h-9 items-center justify-center gap-2.5 rounded-md px-2.5 text-sm transition-colors lg:justify-start",
                   active ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-surface-2/60 hover:text-foreground",
                 )}
               >
                 <n.icon className="size-[18px] shrink-0" />
-                <span className="hidden lg:inline">{n.label}</span>
+                <span className="hidden truncate lg:inline">{tn(n.key)}</span>
                 {n.href === "/" && pending > 0 && (
                   <span className="absolute right-1 top-1 grid min-w-4 place-items-center rounded-full bg-st-warning px-1 text-[10px] font-semibold text-black lg:static lg:ml-auto">
                     {pending}
@@ -120,12 +129,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </nav>
         <div className="flex flex-col gap-2 border-t border-border p-3">
           <Link href="/onboarding" className="hidden items-center gap-2 text-[13px] text-muted-foreground hover:text-foreground lg:flex">
-            <Rocket className="size-4" /> Khởi động lần đầu
+            <Rocket className="size-4" /> {tn("onboarding")}
           </Link>
+          <span className="hidden lg:block"><LocaleSelect /></span>
+          <span className="flex justify-center lg:hidden"><LocaleSelect compact /></span>
           <div className="flex items-center justify-center lg:justify-between">
             <span className="lg:hidden"><LiveIndicator compact /></span>
             <span className="hidden lg:block"><LiveIndicator /></span>
-            <button onClick={logout} className="hidden text-muted-foreground hover:text-foreground lg:block" title="Đăng xuất" aria-label="Đăng xuất">
+            <button onClick={logout} className="hidden text-muted-foreground hover:text-foreground lg:block" title={tn("logout")} aria-label={tn("logout")}>
               <LogOut className="size-4" />
             </button>
           </div>
@@ -143,7 +154,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <button
               onClick={palette.open}
               className="grid size-9 place-items-center rounded-md border border-border text-muted-foreground hover:text-foreground md:hidden"
-              aria-label="Mở bảng lệnh"
+              aria-label={ts("openPalette")}
             >
               <CmdIcon className="size-4" />
             </button>
@@ -159,7 +170,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           return (
             <Link key={n.href} href={n.href} className={cn("relative flex h-14 flex-col items-center justify-center gap-0.5 text-[10.5px]", active ? "text-primary" : "text-muted-foreground")}>
               <n.icon className="size-5" />
-              {n.label}
+              <span className="max-w-full truncate px-1">{tn(n.key)}</span>
               {n.href === "/" && pending > 0 && (
                 <span className="absolute right-[22%] top-1.5 grid min-w-4 place-items-center rounded-full bg-st-warning px-1 text-[10px] font-semibold text-black">{pending}</span>
               )}
@@ -169,12 +180,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <DialogPrimitive.Root open={moreOpen} onOpenChange={setMoreOpen}>
           <DialogPrimitive.Trigger className={cn("flex h-14 flex-col items-center justify-center gap-0.5 text-[10.5px]", moreActive ? "text-primary" : "text-muted-foreground")}>
             <MoreHorizontal className="size-5" />
-            Thêm
+            <span className="max-w-full truncate px-1">{tn("more")}</span>
           </DialogPrimitive.Trigger>
           <SheetContent side="bottom">
-            <DialogPrimitive.Title className="mb-3 text-sm font-semibold">Thêm</DialogPrimitive.Title>
+            <DialogPrimitive.Title className="mb-3 text-sm font-semibold">{tn("more")}</DialogPrimitive.Title>
             <div className="grid grid-cols-3 gap-2">
-              {[...moreItems, { href: "/onboarding", label: "Lần đầu", icon: Rocket }].map((n) => (
+              {[...moreItems.map((n) => ({ href: n.href, label: tn(n.key), icon: n.icon })), { href: "/onboarding", label: tn("onboardingShort"), icon: Rocket }].map((n) => (
                 <Link
                   key={n.href}
                   href={n.href}
@@ -185,16 +196,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   )}
                 >
                   <n.icon className="size-5" />
-                  {n.label}
+                  <span className="text-center leading-tight">{n.label}</span>
                 </Link>
               ))}
               <button onClick={() => { setMoreOpen(false); palette.open(); }} className="flex flex-col items-center gap-1.5 rounded-lg border border-border bg-background p-3 text-[12.5px]">
-                <CmdIcon className="size-5" /> Bảng lệnh
+                <CmdIcon className="size-5" /> <span className="text-center leading-tight">{tn("palette")}</span>
               </button>
               <button onClick={logout} className="flex flex-col items-center gap-1.5 rounded-lg border border-border bg-background p-3 text-[12.5px] text-muted-foreground">
-                <LogOut className="size-5" /> Đăng xuất
+                <LogOut className="size-5" /> <span className="text-center leading-tight">{tn("logout")}</span>
               </button>
             </div>
+            <p className="mb-2 mt-4 flex items-center gap-1.5 text-[12.5px] font-medium text-muted-foreground"><Languages className="size-4" /> {ts("language")}</p>
+            <LocaleGrid onChanged={() => setMoreOpen(false)} />
           </SheetContent>
         </DialogPrimitive.Root>
       </nav>

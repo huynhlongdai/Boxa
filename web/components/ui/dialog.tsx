@@ -1,4 +1,5 @@
 "use client";
+import { useTranslations } from "next-intl";
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
@@ -9,6 +10,7 @@ export const DialogTrigger = DialogPrimitive.Trigger;
 export const DialogClose = DialogPrimitive.Close;
 
 export function DialogContent({ className, children, hideClose, ...props }: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { hideClose?: boolean }) {
+  const tClose = useTranslations("common");
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/70 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=open]:fade-in-0" />
@@ -21,7 +23,7 @@ export function DialogContent({ className, children, hideClose, ...props }: Reac
       >
         {children}
         {!hideClose && (
-          <DialogPrimitive.Close className="absolute right-3 top-3 rounded-sm p-1 text-muted-foreground hover:text-foreground" aria-label="Đóng">
+          <DialogPrimitive.Close className="absolute right-3 top-3 rounded-sm p-1 text-muted-foreground hover:text-foreground" aria-label={tClose("close")}>
             <X className="size-4" />
           </DialogPrimitive.Close>
         )}
@@ -47,6 +49,7 @@ DialogDescription.displayName = "DialogDescription";
 
 /** Sheet (drawer) — dùng cho menu "Thêm" trên mobile và drawer chi tiết. */
 export function SheetContent({ className, children, side = "bottom", ...props }: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { side?: "bottom" | "right" }) {
+  const tClose = useTranslations("common");
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
@@ -61,7 +64,7 @@ export function SheetContent({ className, children, side = "bottom", ...props }:
         {...props}
       >
         {children}
-        <DialogPrimitive.Close className="absolute right-3 top-3 rounded-sm p-1 text-muted-foreground hover:text-foreground" aria-label="Đóng">
+        <DialogPrimitive.Close className="absolute right-3 top-3 rounded-sm p-1 text-muted-foreground hover:text-foreground" aria-label={tClose("close")}>
           <X className="size-4" />
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>

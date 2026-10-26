@@ -38,6 +38,9 @@ export function mockStream(signal: AbortSignal): ReadableStream<Uint8Array> {
             type: "box.exec",
             message: `exit=0 ${200 + (n % 7) * 130}ms: ${cmds[n % cmds.length]}`,
             cost_usd: null,
+            tokens_saved: (n % 3) * 140,
+            log_id: null,
+            data: { exit_code: 0, duration_ms: 200 + (n % 7) * 130, command: cmds[n % cmds.length], tokens_saved: (n % 3) * 140 },
           };
           s.events.push(evt);
           send("event.created", evt);

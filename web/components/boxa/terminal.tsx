@@ -7,6 +7,7 @@ import type { Terminal as XTerm } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { Hand, Plug, PlugZap, Undo2 } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { api, errMsg } from "@/lib/api";
 import type { Box, ExecResult } from "@/lib/types";
 import { useLive } from "@/components/live";
@@ -23,6 +24,9 @@ function wsUrl(boxId: string, wsBase: string | null, cols: number, rows: number)
 
 export function BoxTerminal({ box }: { box: Box }) {
   const { session } = useLive();
+  const t = useTranslations("terminal");
+  const tRef = React.useRef(t);
+  tRef.current = t;
   const hostRef = React.useRef<HTMLDivElement>(null);
   const termRef = React.useRef<XTerm | null>(null);
   const wsRef = React.useRef<WebSocket | null>(null);
@@ -65,12 +69,14 @@ export function BoxTerminal({ box }: { box: Box }) {
       });
       ro.observe(hostRef.current);
 
-      const prompt = () => term.write(`\r\n\x1b[32manh@${box.slug}\x1b[0m:\x1b[34m/work\x1b[0m$ `);
+      const tt = tRef.current;
+      const user = tt("promptUser");
+      const prompt = () => term.write(`\r\n\x1b[32m${user}@${box.slug}\x1b[0m:\x1b[34m/work\x1b[0m$ `);
 
       if (session.mock) {
         setConn("mock");
-        term.writeln(`\x1b[90m# Boxa terminal (MOCK) · ${box.id} · ${box.provider}/${box.region}\x1b[0m`);
-        term.writeln(`\x1b[90m# Đang xem agent ${box.agent_name}. Bấm “Chiếm quyền” để gõ lệnh.\x1b[0m`);
+        term.writeln(`\x1b[90m${tt("mockHeader", { id: box.id, where: `${box.provider}/${box.region}` })}\x1b[0m`);
+        term.writeln(`\x1b[90m${tt("mockWatching", { agent: box.agent_name })}\x1b[0m`);
         const lines = [
           `\x1b[36m[agent]\x1b[0m $ ls /work`,
           `README.md  out  requirements.txt`,
@@ -94,9 +100,9 @@ export function BoxTerminal({ box }: { box: Box }) {
             if (!cmd) return prompt();
             term.write("\r\n");
             if (cmd === "clear") { term.clear(); return prompt(); }
-            if (cmd === "help") { term.write("Lệnh mock: ls [path], cat <file>, pwd, whoami, clear, mọi lệnh khác gửi qua /exec"); return prompt(); }
+            if (cmd === "help") { term.write(tt("mockHelp")); return prompt(); }
             if (cmd === "pwd") { term.write("/work"); return prompt(); }
-            if (cmd === "whoami") { term.write("anh (đang chiếm quyền)"); return prompt(); }
+            if (cmd === "whoami") { term.write(tt("whoami")); return prompt(); }
             try {
               const [bin, arg] = cmd.split(/\s+/, 2);
               if (bin === "ls" || bin === "cat") {
@@ -132,15 +138,15 @@ export function BoxTerminal({ box }: { box: Box }) {
         ws.onopen = () => {
           opened = true;
           setConn("open");
-          term.writeln(`\x1b[90m# Đã kết nối PTY ${box.id}\x1b[0m`);
+          term.writeln(`\x1b[90m${tt("connected", { id: box.id })}\x1b[0m`);
         };
         ws.onmessage = (ev) => term.write(typeof ev.data === "string" ? ev.data : "");
         ws.onclose = () => {
           setConn("closed");
           if (disposed) return;
           if (!opened)
-            term.writeln("\x1b[33m# Không mở được WebSocket tới Core.\x1b[0m\r\n\x1b[90m# Trình duyệt không gửi được header Authorization cho WebSocket: Core cần chấp nhận cookie httpOnly “boxa_key” (cùng site),\r\n# hoặc đặt NEXT_PUBLIC_BOXA_WS trỏ tới endpoint cùng domain có xác thực bằng cookie.\x1b[0m");
-          else term.writeln("\r\n\x1b[33m# Mất kết nối terminal\x1b[0m");
+            term.writeln(`\x1b[33m${tt("wsFailed")}\x1b[0m\r\n\x1b[90m${tt("wsFailedHint")}\x1b[0m`);
+          else term.writeln(`\r\n\x1b[33m${tt("lost")}\x1b[0m`);
         };
         ws.onerror = () => setConn("closed");
       };
@@ -165,9 +171,9 @@ export function BoxTerminal({ box }: { box: Box }) {
     try {
       await api.takeover(box.id);
       setControl(true);
-      toast.success("Anh đang cầm terminal. Agent tạm dừng exec.");
+      toast.success(t("takeoverToast"));
       termRef.current?.focus();
-      if (mock) termRef.current?.write(`\r\n\x1b[33m# Anh đã chiếm quyền\x1b[0m\r\n\x1b[32manh@${box.slug}\x1b[0m:\x1b[34m/work\x1b[0m$ `);
+      if (mock) termRef.current?.write(`\r\n\x1b[33m${t("tookOver")}\x1b[0m\r\n\x1b[32m${t("promptUser")}@${box.slug}\x1b[0m:\x1b[34m/work\x1b[0m$ `);
     } catch (e) {
       toast.error(errMsg(e));
     } finally {
@@ -179,8 +185,8 @@ export function BoxTerminal({ box }: { box: Box }) {
     try {
       await api.release(box.id);
       setControl(false);
-      toast.success("Đã trả quyền cho agent");
-      termRef.current?.writeln("\r\n\x1b[33m# Đã trả quyền cho agent\x1b[0m");
+      toast.success(t("releaseToast"));
+      termRef.current?.writeln(`\r\n\x1b[33m${t("released")}\x1b[0m`);
     } catch (e) {
       toast.error(errMsg(e));
     } finally {
@@ -189,29 +195,29 @@ export function BoxTerminal({ box }: { box: Box }) {
   };
 
   const connBadge =
-    conn === "open" ? <Badge variant="green"><Dot tone="green" pulse />Đã kết nối</Badge>
-    : conn === "mock" ? <Badge variant="yellow"><Dot tone="yellow" />Mô phỏng</Badge>
-    : conn === "connecting" ? <Badge variant="blue"><Dot tone="blue" pulse />Đang kết nối</Badge>
-    : <Badge variant="red"><Dot tone="red" />Mất kết nối</Badge>;
+    conn === "open" ? <Badge variant="green"><Dot tone="green" pulse />{t("stateOpen")}</Badge>
+    : conn === "mock" ? <Badge variant="yellow"><Dot tone="yellow" />{t("stateMock")}</Badge>
+    : conn === "connecting" ? <Badge variant="blue"><Dot tone="blue" pulse />{t("stateConnecting")}</Badge>
+    : <Badge variant="red"><Dot tone="red" />{t("stateClosed")}</Badge>;
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         {connBadge}
-        <Badge variant={control ? "yellow" : "outline"}>{control ? "Anh đang điều khiển" : "Chỉ xem — agent điều khiển"}</Badge>
+        <Badge variant={control ? "yellow" : "outline"}>{control ? t("youControl") : t("watchOnly")}</Badge>
         <div className="ml-auto flex gap-2">
           {conn === "closed" && (
-            <Button size="sm" variant="outline" onClick={() => window.location.reload()}><Plug /> Kết nối lại</Button>
+            <Button size="sm" variant="outline" onClick={() => window.location.reload()}><Plug /> {t("reconnect")}</Button>
           )}
           {control ? (
-            <Button size="sm" variant="secondary" disabled={busy} onClick={release}><Undo2 /> Trả quyền</Button>
+            <Button size="sm" variant="secondary" disabled={busy} onClick={release}><Undo2 /> {t("release")}</Button>
           ) : (
-            <Button size="sm" disabled={busy || box.status !== "running"} onClick={takeover}><Hand /> Chiếm quyền</Button>
+            <Button size="sm" disabled={busy || box.status !== "running"} onClick={takeover}><Hand /> {t("takeover")}</Button>
           )}
         </div>
       </div>
       {box.status !== "running" && (
-        <p className="flex items-center gap-2 text-[13px] text-muted-foreground"><PlugZap className="size-4" /> Box không ở trạng thái chạy — đánh thức box để dùng terminal.</p>
+        <p className="flex items-center gap-2 text-[13px] text-muted-foreground"><PlugZap className="size-4 shrink-0" /> {t("notRunning")}</p>
       )}
       <div className="h-[420px] overflow-hidden rounded-md border border-border bg-background md:h-[520px]" ref={hostRef} />
     </div>

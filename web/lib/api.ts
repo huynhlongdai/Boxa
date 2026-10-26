@@ -6,6 +6,7 @@ import type {
   AdminUser,
   Agent,
   AgentKind,
+  AgentKindInfo,
   ApiErrorBody,
   ApiKey,
   Approval,
@@ -21,8 +22,11 @@ import type {
   List,
   Observe,
   Offer,
+  ExecBatchResult,
   Overview,
   Provider,
+  Quote,
+  QuoteBody,
   Quotas,
   SchedJob,
   Secret,
@@ -31,6 +35,8 @@ import type {
   Snippet,
   Suggestion,
   Template,
+  ToolFormat,
+  Transport,
   ValidateResult,
 } from "./types";
 
@@ -40,11 +46,15 @@ export class ApiError extends Error {
   code: string;
   hint?: string;
   status: number;
+  retryAfter?: number;
+  docsUrl?: string;
   constructor(status: number, body: Partial<ApiErrorBody> | null, fallback: string) {
     super(body?.error?.message ?? fallback);
     this.status = status;
     this.code = body?.error?.code ?? "INVALID";
     this.hint = body?.error?.hint;
+    this.retryAfter = body?.error?.retry_after_s;
+    this.docsUrl = body?.error?.docs_url;
   }
 }
 
@@ -125,11 +135,14 @@ export const paths = {
   boxEvents: (id: string) => `/boxes/${id}/events`,
   boxSnapshots: (id: string) => `/boxes/${id}/snapshots`,
   boxObserve: (id: string) => `/boxes/${id}/observe`,
+  boxYaml: (id: string) => `/boxes/${id}/yaml`,
   job: (id: string) => `/jobs/${id}`,
   log: (id: string) => `/logs/${id}`,
   agents: "/agents",
   agent: (id: string) => `/agents/${id}`,
-  snippet: (id: string, kind: AgentKind) => `/agents/${id}/snippet${qs({ kind })}`,
+  // v1.1: `lang` = biến thể transport của snippet (mcp-http, rest, sdk-python…); ngôn ngữ người đọc đi qua Accept-Language.
+  snippet: (id: string, kind: AgentKind, transport?: Transport) => `/agents/${id}/snippet${qs({ kind, lang: transport, transport })}`,
+  agentKinds: "/agent-kinds",
   keys: "/keys",
   costs: (f?: CostFilters) => `/costs${qs(f as Query)}`,
   costsCsv: (f?: CostFilters) => `${PROXY_BASE}/costs.csv${qs(f as Query)}`,
@@ -146,6 +159,13 @@ export const paths = {
   adminAudit: (f?: { actor?: string; type?: string }) => `/admin/audit${qs(f)}`,
   adminQuotas: "/admin/quotas",
   adminUsers: "/admin/users",
+  // v1.1 discovery (không cần auth). Proxy: /api/boxa/<x> → <BOXA_API>/<x>; tiền tố "_root/" → gốc Core (bỏ /v1).
+  openapi: "/openapi.json",
+  tools: (format: ToolFormat) => `/tools${qs({ format })}`,
+  llmsTxt: "/_root/llms.txt",
+  llmsFullTxt: "/_root/llms-full.txt",
+  mcpCard: "/_root/.well-known/mcp.json",
+  a2aCard: "/_root/.well-known/agent.json",
 };
 
 export const api = {
@@ -171,11 +191,15 @@ export const api = {
   snapshots: (id: string) => http.get<List<Snapshot>>(paths.boxSnapshots(id)),
   takeover: (id: string) => http.post<Box>(`/boxes/${id}/takeover`),
   release: (id: string) => http.post<Box>(`/boxes/${id}/release`),
-  // Ngoài contract v1 (cần core bổ sung): khôi phục snapshot / fork từ snapshot
+  // v1.1: khôi phục snapshot / fork từ snapshot → Box
   restoreSnapshot: (id: string, snapshotId: string) => http.post<Box>(`/boxes/${id}/restore`, { snapshot_id: snapshotId }),
   forkSnapshot: (id: string, snapshotId: string) => http.post<Box>(`/boxes/${id}/fork`, { snapshot_id: snapshotId }),
 
-  getJob: (id: string) => http.get<Job>(paths.job(id)),
+  boxYaml: (id: string) => http.get<{ yaml: string }>(paths.boxYaml(id)),
+  execBatch: (id: string, commands: string[], stopOnError = true) => http.post<ExecBatchResult>(`/boxes/${id}/exec-batch`, { commands, stop_on_error: stopOnError }),
+  quote: (body: QuoteBody) => http.post<Quote>("/quote", body),
+
+  getJob: (id: string, wait?: number) => http.get<Job>(`${paths.job(id)}${qs({ wait })}`),
   getLog: (id: string) => http.get<string>(paths.log(id)),
 
   // Agents
@@ -184,7 +208,8 @@ export const api = {
   createAgent: (body: Partial<Agent> & { name: string; kind: AgentKind }) => http.post<Agent>(paths.agents, body),
   updateAgent: (id: string, body: Partial<Agent>) => http.patch<Agent>(paths.agent(id), body),
   deleteAgent: (id: string) => http.del<{ ok: boolean }>(paths.agent(id)),
-  snippet: (id: string, kind: AgentKind) => http.get<Snippet>(paths.snippet(id, kind)),
+  snippet: (id: string, kind: AgentKind, transport?: Transport) => http.get<Snippet>(paths.snippet(id, kind, transport)),
+  agentKinds: () => http.get<List<AgentKindInfo>>(paths.agentKinds),
 
   // Keys
   listKeys: () => http.get<List<ApiKey>>(paths.keys),

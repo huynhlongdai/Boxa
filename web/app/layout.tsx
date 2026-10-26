@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getTranslations } from "next-intl/server";
 import "@fontsource/be-vietnam-pro/400.css";
 import "@fontsource/be-vietnam-pro/500.css";
 import "@fontsource/be-vietnam-pro/600.css";
@@ -9,10 +11,13 @@ import "@xterm/xterm/css/xterm.css";
 import "./globals.css";
 import { Toaster } from "sonner";
 
-export const metadata: Metadata = {
-  title: { default: "Boxa", template: "%s · Boxa" },
-  description: "Hạ tầng cloud cá nhân cho AI agent",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("meta");
+  return {
+    title: { default: "Boxa", template: "%s · Boxa" },
+    description: t("description"),
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: "#0a0b0d",
@@ -21,12 +26,15 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const locale = await getLocale();
   return (
-    <html lang="vi" className="dark">
+    <html lang={locale} className="dark">
       <body className="min-h-dvh font-sans">
-        {children}
-        <Toaster theme="dark" position="top-center" richColors closeButton />
+        <NextIntlClientProvider>
+          {children}
+          <Toaster theme="dark" position="top-center" richColors closeButton />
+        </NextIntlClientProvider>
       </body>
     </html>
   );

@@ -3,15 +3,16 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FilterX } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { paths, type BoxFilters } from "@/lib/api";
 import { useApi } from "@/lib/hooks";
 import type { Agent, Box, List } from "@/lib/types";
-import { duration } from "@/lib/utils";
+import { useFmt } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { BoxStatusChip, BOX_STATUS_LABEL, LifecycleBadge, Mono } from "@/components/boxa/status";
+import { BoxStatusChip, BOX_STATUSES, LifecycleBadge, Mono, useBoxStatusLabel } from "@/components/boxa/status";
 import { MoneyBudget, BudgetBar } from "@/components/boxa/budget";
 import { BoxActions } from "@/components/boxa/box-actions";
 import { CreateBoxDialog } from "@/components/boxa/create-box";
@@ -22,6 +23,10 @@ const PROVIDERS = ["hetzner", "vultr", "contabo", "digitalocean", "netcup", "loc
 function BoxesInner() {
   const router = useRouter();
   const sp = useSearchParams();
+  const t = useTranslations("boxes");
+  const tc = useTranslations("common");
+  const statusLabel = useBoxStatusLabel();
+  const { since } = useFmt();
   const f: BoxFilters = { status: sp.get("status") ?? "", agent: sp.get("agent") ?? "", provider: sp.get("provider") ?? "", lifecycle: sp.get("lifecycle") ?? "" };
   const set = (k: keyof BoxFilters, v: string) => {
     const n = new URLSearchParams(sp.toString());
@@ -35,31 +40,31 @@ function BoxesInner() {
 
   return (
     <>
-      <PageHeader title="Boxes" desc="Mọi box agent đang dùng, ở mọi nhà cung cấp." actions={<CreateBoxDialog />} />
+      <PageHeader title={t("title")} desc={t("desc")} actions={<CreateBoxDialog />} />
       <div className="mb-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-        <Select value={f.status} onChange={(e) => set("status", e.target.value)} aria-label="Lọc trạng thái">
-          <option value="">Mọi trạng thái</option>
-          {Object.entries(BOX_STATUS_LABEL).filter(([k]) => k !== "terminated").map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        <Select value={f.status} onChange={(e) => set("status", e.target.value)} aria-label={t("filterStatus")}>
+          <option value="">{t("anyStatus")}</option>
+          {BOX_STATUSES.filter((k) => k !== "terminated").map((k) => <option key={k} value={k}>{statusLabel(k)}</option>)}
         </Select>
-        <Select value={f.agent} onChange={(e) => set("agent", e.target.value)} aria-label="Lọc agent">
-          <option value="">Mọi agent</option>
+        <Select value={f.agent} onChange={(e) => set("agent", e.target.value)} aria-label={t("filterAgent")}>
+          <option value="">{tc("anyAgent")}</option>
           {agents?.items.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </Select>
-        <Select value={f.provider} onChange={(e) => set("provider", e.target.value)} aria-label="Lọc provider">
-          <option value="">Mọi provider</option>
+        <Select value={f.provider} onChange={(e) => set("provider", e.target.value)} aria-label={t("filterProvider")}>
+          <option value="">{tc("anyProvider")}</option>
           {PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
         </Select>
-        <Select value={f.lifecycle} onChange={(e) => set("lifecycle", e.target.value)} aria-label="Lọc lifecycle">
-          <option value="">Mọi lifecycle</option>
+        <Select value={f.lifecycle} onChange={(e) => set("lifecycle", e.target.value)} aria-label={t("filterLifecycle")}>
+          <option value="">{t("anyLifecycle")}</option>
           <option value="task">task</option>
           <option value="session">session</option>
           <option value="service">service</option>
         </Select>
-        {any && <Button variant="ghost" size="sm" className="col-span-2 sm:col-span-1" onClick={() => router.replace("/boxes")}><FilterX /> Bỏ lọc</Button>}
+        {any && <Button variant="ghost" size="sm" className="col-span-2 sm:col-span-1" onClick={() => router.replace("/boxes")}><FilterX /> {tc("clearFilters")}</Button>}
       </div>
 
       {error ? <ErrorBox error={error} retry={() => mutate()} /> : isLoading || !data ? <LoadingRows rows={6} /> : !data.items.length ? (
-        <Empty title="Không có box nào khớp bộ lọc" desc="Agent sẽ tự tạo box khi cần qua API hoặc MCP." />
+        <Empty title={t("empty")} desc={t("emptyDesc")} />
       ) : (
         <>
           {/* Desktop/tablet: bảng */}
@@ -67,7 +72,7 @@ function BoxesInner() {
             <Table>
               <THead>
                 <TR className="hover:bg-transparent">
-                  <TH>Slug</TH><TH>Agent</TH><TH>Trạng thái</TH><TH>Provider / vùng</TH><TH>Lifecycle</TH><TH>Thời gian chạy</TH><TH>Đã tiêu / ngân sách</TH><TH className="text-right">Thao tác</TH>
+                  <TH>{t("colSlug")}</TH><TH>{tc("agent")}</TH><TH>{tc("status")}</TH><TH>{t("colWhere")}</TH><TH>{t("colLifecycle")}</TH><TH>{t("colUptime")}</TH><TH>{tc("spentOfBudget")}</TH><TH className="text-right">{tc("actions")}</TH>
                 </TR>
               </THead>
               <TBody>
@@ -81,7 +86,7 @@ function BoxesInner() {
                     <TD><BoxStatusChip status={b.status} /></TD>
                     <TD><Mono>{b.provider}</Mono> <span className="text-muted-foreground">/</span> <Mono className="text-muted-foreground">{b.region}</Mono></TD>
                     <TD><LifecycleBadge lc={b.lifecycle} /></TD>
-                    <TD className="whitespace-nowrap text-[13px] text-muted-foreground">{b.status === "running" ? duration(b.created_at) : "—"}</TD>
+                    <TD className="whitespace-nowrap text-[13px] text-muted-foreground">{b.status === "running" ? since(b.created_at) : "—"}</TD>
                     <TD className="min-w-[140px]">
                       <MoneyBudget spent={b.spent_usd} budget={b.budget_usd} />
                       <BudgetBar spent={b.spent_usd} budget={b.budget_usd} className="mt-1" />
@@ -105,7 +110,7 @@ function BoxesInner() {
                 </div>
                 <div className="mt-3 flex items-center gap-2">
                   <LifecycleBadge lc={b.lifecycle} />
-                  <span className="text-xs text-muted-foreground">{b.status === "running" ? duration(b.created_at) : ""}</span>
+                  <span className="text-xs text-muted-foreground">{b.status === "running" ? since(b.created_at) : ""}</span>
                   <span className="ml-auto"><MoneyBudget spent={b.spent_usd} budget={b.budget_usd} /></span>
                 </div>
                 <BudgetBar spent={b.spent_usd} budget={b.budget_usd} className="mt-2" />

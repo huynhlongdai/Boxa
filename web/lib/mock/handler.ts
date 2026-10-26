@@ -1,8 +1,12 @@
 // Bộ xử lý MOCK MODE: mô phỏng Boxa Core theo contract v1, trạng thái giữ trong bộ nhớ.
 import { parseDocument } from "yaml";
-import type { Agent, AgentKind, ApiKey, Approval, Box, BoxaEvent, ErrorCode, Host, LedgerEntry, Overview, Settings, Template } from "../types";
+import type { Agent, AgentKind, ApiKey, Approval, Box, BoxaEvent, ErrorCode, Host, LedgerEntry, Overview, Quote, QuoteOption, Settings, Template } from "../types";
+import type { Locale } from "@/i18n/config";
+import { FALLBACK_KINDS } from "../agent-kinds";
+import { mt, seedText } from "./i18n";
+import { discovery } from "./discovery";
 import { DAY, HOUR, MIN, iso, makeSeed, r4, type MockState } from "./seed";
-import { makeSnippet } from "./snippets";
+import { makeSnippet } from "../snippets";
 
 type G = typeof globalThis & { __boxaMock?: MockState };
 
@@ -20,12 +24,17 @@ export interface MockResponse {
 }
 
 const ok = (body: unknown, status = 200): MockResponse => ({ status, body });
-const err = (status: number, code: ErrorCode, message: string, hint: string): MockResponse => ({
+// Ngôn ngữ của request đang xử lý (handleMock chạy đồng bộ nên an toàn).
+let L: Locale = "vi";
+const DOCS = "https://boxa.dev/docs/errors";
+/** Lỗi theo contract v1.1: message + hint dịch theo Accept-Language, code không đổi, kèm docs_url (+ retry_after_s nếu có). */
+const err = (status: number, code: ErrorCode, key: string, params: Record<string, string | number> = {}, extra: { retry_after_s?: number } = {}): MockResponse => ({
   status,
-  body: { error: { code, message, hint } },
+  body: { error: { code, message: mt(L, key, params), hint: mt(L, `${key}_hint`, params), docs_url: `${DOCS}#${code.toLowerCase()}`, ...extra } },
+  headers: extra.retry_after_s ? { "Retry-After": String(extra.retry_after_s) } : undefined,
 });
 const list = <T>(items: T[]) => ok({ items, next_cursor: null });
-const notFound = (what: string) => err(404, "NOT_FOUND", `Không tìm thấy ${what}`, "Kiểm tra lại ID hoặc gọi lệnh list trước.");
+const notFound = (what: string) => err(404, "NOT_FOUND", "not_found", { what });
 
 function nextId(s: MockState, prefix: string) {
   s.seq += 1;
@@ -189,33 +198,33 @@ function validateYaml(src: string) {
       const idx = src.split("\n").findIndex((l) => l.trimStart().startsWith(`${key}:`));
       return idx >= 0 ? idx + 1 : 1;
     };
-    if (!v || typeof v !== "object") errors.push({ line: 1, message: "YAML phải là một object" });
+    if (!v || typeof v !== "object") errors.push({ line: 1, message: mt(L, "v_object") });
     else {
-      if (!v.name && !v.slug && !v.template) errors.push({ line: 1, message: "Thiếu trường `name` (hoặc `template`)" });
+      if (!v.name && !v.slug && !v.template) errors.push({ line: 1, message: mt(L, "v_name") });
       const spec = v.spec as Record<string, unknown> | undefined;
-      if (!spec) errors.push({ line: 1, message: "Thiếu `spec` (cpu, ram_mb, disk_gb)" });
+      if (!spec) errors.push({ line: 1, message: mt(L, "v_spec") });
       else {
-        if (typeof spec.cpu !== "number" || spec.cpu < 1 || spec.cpu > 16) errors.push({ line: lineOf("cpu"), message: "`spec.cpu` phải là số từ 1 đến 16" });
-        if (typeof spec.ram_mb !== "number" || spec.ram_mb < 256) errors.push({ line: lineOf("ram_mb"), message: "`spec.ram_mb` phải ≥ 256" });
-        if (typeof spec.disk_gb !== "number" || spec.disk_gb < 5) errors.push({ line: lineOf("disk_gb"), message: "`spec.disk_gb` phải ≥ 5" });
+        if (typeof spec.cpu !== "number" || spec.cpu < 1 || spec.cpu > 16) errors.push({ line: lineOf("cpu"), message: mt(L, "v_cpu") });
+        if (typeof spec.ram_mb !== "number" || spec.ram_mb < 256) errors.push({ line: lineOf("ram_mb"), message: mt(L, "v_ram") });
+        if (typeof spec.disk_gb !== "number" || spec.disk_gb < 5) errors.push({ line: lineOf("disk_gb"), message: mt(L, "v_disk") });
       }
       if (v.lifecycle && !["task", "session", "service"].includes(String(v.lifecycle)))
-        errors.push({ line: lineOf("lifecycle"), message: "`lifecycle` chỉ nhận task | session | service" });
-      if (v.gpu) errors.push({ line: lineOf("gpu"), message: "GPU chưa hỗ trợ ở v1 (dời sang P5)" });
+        errors.push({ line: lineOf("lifecycle"), message: mt(L, "v_lifecycle") });
+      if (v.gpu) errors.push({ line: lineOf("gpu"), message: mt(L, "v_gpu") });
     }
   }
   return { ok: errors.length === 0, errors };
 }
 
 function createBox(s: MockState, body: Record<string, unknown>): MockResponse {
-  if (s.settings.maintenance.enabled) return err(503, "INVALID", "Hệ thống đang bảo trì", "Thử lại sau khi admin tắt chế độ bảo trì.");
+  if (s.settings.maintenance.enabled) return err(503, "INVALID", "maintenance", {}, { retry_after_s: 300 });
   let spec = body.spec as Box["spec"] | undefined;
   let template = (body.template as string) ?? "base";
   let lifecycle = (body.lifecycle as Box["lifecycle"]) ?? "task";
   let slug = body.slug as string | undefined;
   if (typeof body.yaml === "string") {
     const v = validateYaml(body.yaml);
-    if (!v.ok) return err(400, "INVALID", `box.yaml không hợp lệ: ${v.errors[0].message}`, "Sửa YAML rồi gửi lại.");
+    if (!v.ok) return err(400, "INVALID", "bad_yaml", { detail: v.errors[0].message });
     const js = parseDocument(body.yaml).toJS() as Record<string, unknown>;
     spec = js.spec as Box["spec"];
     template = (js.template as string) ?? (js.name as string) ?? template;
@@ -225,7 +234,7 @@ function createBox(s: MockState, body: Record<string, unknown>): MockResponse {
   const agent = s.agents.find((a) => a.id === body.agent_id) ?? s.agents.find((a) => a.id === "agt_hark")!;
   const hAgent = hydrateAgent(s, agent);
   if (hAgent.spent_today_usd >= agent.budget_day_usd * 1.2)
-    return err(402, "BUDGET_EXCEEDED", `${agent.name} đã vượt ngân sách ngày`, "Xin anh duyệt thêm ngân sách trong hộp “Cần anh”.");
+    return err(402, "BUDGET_EXCEEDED", "over_budget", { agent: agent.name });
   spec = spec ?? { cpu: 2, ram_mb: 2048, disk_gb: 20 };
   const host = s.hosts.find((h) => h.status === "ready" && h.billing === "pool" && agent.policy.providers.includes(h.provider)) ?? s.hosts.find((h) => h.status === "ready")!;
   const id = nextId(s, "box");
@@ -247,7 +256,7 @@ function createBox(s: MockState, body: Record<string, unknown>): MockResponse {
     budget_usd: (body.budget_usd as number) ?? 1,
     spent_usd: 0,
     cost_per_hour: r4((host.price_hour / host.cpu) * spec.cpu),
-    placement_reason: `${host.billing === "pool" ? "Pool" : "Burst"} ${host.provider}/${host.region} còn chỗ cho ${spec.cpu} vCPU/${spec.ram_mb / 1024} GB; khớp chính sách của ${agent.name}.`,
+    placement_reason: mt(L, host.billing === "pool" ? "q_pool" : "q_burst", { provider: host.provider, region: host.region, cpu: spec.cpu, ram: spec.ram_mb / 1024, agent: agent.name }),
     ports: (body.ports as number[]) ?? [],
     secrets: (body.secrets as string[]) ?? [],
     created_at: iso(Date.now()),
@@ -257,7 +266,68 @@ function createBox(s: MockState, body: Record<string, unknown>): MockResponse {
   s.boxes.push(b);
   s.files[id] = { "/work/README.md": `# ${b.slug}\n`, "/memory/notes.md": `# Ghi nhớ của ${agent.name}\n` };
   pushEvent(s, { actor: "user:anh", box_id: id, agent_id: agent.id, type: "box.created", message: `Tạo box ${b.slug} (${template}) tại ${host.provider}/${host.region}`, cost_usd: null });
-  return ok(hydrateBox(s, b), 201);
+  return ok({ ...hydrateBox(s, b), next: [mt(L, "n_exec", { id }), mt(L, "n_down", { id })] }, 201);
+}
+
+/** POST /quote: dry-run đặt chỗ + giá (không tạo box). */
+function quote(s: MockState, body: Record<string, unknown>): MockResponse {
+  const spec = body.spec as Box["spec"] | undefined;
+  if (!spec?.cpu || !spec.ram_mb) return err(400, "INVALID", "bad_spec");
+  const agent = s.agents.find((a) => a.id === body.agent_id) ?? s.agents.find((a) => a.id === "agt_hark")!;
+  const lifecycle = (body.lifecycle as Box["lifecycle"]) ?? "task";
+  const hours = typeof body.ttl_seconds === "number" ? body.ttl_seconds / 3600 : lifecycle === "service" ? 720 : lifecycle === "session" ? 8 : 2;
+  const allowed = agent.policy.providers;
+  const opts: (QuoteOption & { _pool: boolean })[] = [];
+  for (const h of s.hosts) {
+    if (h.status !== "ready" || h.billing !== "pool" || !allowed.includes(h.provider)) continue;
+    const freeCpu = h.cpu * (1 - h.cpu_used_pct / 100);
+    if (freeCpu < spec.cpu) continue;
+    const cph = r4((h.price_hour / h.cpu) * spec.cpu);
+    opts.push({ _pool: true, provider: h.provider, region: h.region, sku: h.sku, billing: "pool", cost_per_hour: cph, expected_total_usd: r4(cph * hours), reason: mt(L, "q_alt_pool", { provider: h.provider, region: h.region }) });
+  }
+  for (const o of s.offers) {
+    if (!allowed.includes(o.provider) || o.cpu < spec.cpu || o.ram_mb < spec.ram_mb || o.min_billing_minutes >= 43200) continue;
+    opts.push({ _pool: false, provider: o.provider, region: o.region, sku: o.sku, billing: "burst", cost_per_hour: o.price_hour, expected_total_usd: r4(o.price_hour * Math.max(hours, o.min_billing_minutes / 60)), reason: mt(L, "q_alt_burst", { provider: o.provider, region: o.region, min: o.min_billing_minutes }) });
+  }
+  if (!opts.length) return err(503, "NO_CAPACITY", "no_capacity", { cpu: spec.cpu, agent: agent.name, s: 60 }, { retry_after_s: 60 });
+  // Scheduler ưu tiên pool tháng còn chỗ (chi phí biên ≈ $0), sau đó mới tới burst theo giờ rẻ nhất
+  opts.sort((a, b) => Number(b._pool) - Number(a._pool) || a.cost_per_hour - b.cost_per_hour);
+  const [best, ...rest] = opts;
+  const q: Quote = {
+    provider: best.provider,
+    region: best.region,
+    sku: best.sku,
+    billing: best.billing,
+    cost_per_hour: best.cost_per_hour,
+    expected_total_usd: best.expected_total_usd ?? 0,
+    expected_hours: Math.round(hours * 10) / 10,
+    placement_reason: mt(L, best._pool ? "q_pool" : "q_burst", { provider: best.provider, region: best.region, cpu: spec.cpu, ram: spec.ram_mb / 1024, agent: agent.name }),
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    alternatives: rest.slice(0, 4).map(({ _pool, ...o }) => o),
+  };
+  return ok(q);
+}
+
+let tokenSeed = 0;
+/** Chạy một lệnh mock, ghi job + log + event box.exec (kèm data có cấu trúc như Core v1.1). */
+function runExec(s: MockState, b: MockState["boxes"][number], cmd: string) {
+  const id = nextId(s, "job");
+  const log_id = `log_${id.slice(4)}`;
+  const fail = /\b(false|exit 1)\b/.test(cmd);
+  const stdout = cmd.startsWith("echo ") ? cmd.slice(5) : `(mock) ok: ${cmd}`;
+  tokenSeed = (tokenSeed + 1) % 7;
+  const tokens_saved = cmd.length > 12 ? 180 + tokenSeed * 95 : 0;
+  const duration_ms = 90 + tokenSeed * 40;
+  const exit_code = fail ? 1 : 0;
+  const result = { exit_code, duration_ms, stdout_tail: stdout, stderr_tail: fail ? "exit status 1" : "", truncated: tokens_saved > 0, log_id, files_changed: [] as string[], tokens_saved };
+  s.jobs.push({ id, box_id: b.id, command: cmd, status: fail ? "failed" : "done", result, created_at: iso(Date.now()), finished_at: iso(Date.now() + duration_ms) });
+  s.logs[log_id] = `$ ${cmd}\n${stdout}\n[exit ${exit_code}] ${(duration_ms / 1000).toFixed(2)}s\n`;
+  const evt = pushEvent(s, { actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "box.exec", message: `exit=${exit_code} ${duration_ms}ms: ${cmd} tokens_saved=${tokens_saved} log=${log_id}`, cost_usd: null });
+  evt.tokens_saved = tokens_saved;
+  evt.log_id = log_id;
+  evt.data = { exit_code, duration_ms, command: cmd, tokens_saved, log_id };
+  b.last_active_at = iso(Date.now());
+  return { id, result };
 }
 
 function csvEscape(v: string | number) {
@@ -283,7 +353,8 @@ function filterLedger(s: MockState, q: URLSearchParams) {
     .sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts));
 }
 
-export function handleMock(method: string, segs: string[], q: URLSearchParams, body: Record<string, unknown>, apiBase: string): MockResponse {
+export function handleMock(method: string, segs: string[], q: URLSearchParams, body: Record<string, unknown>, apiBase: string, locale: Locale = "vi"): MockResponse {
+  L = locale;
   const s = store();
   advance(s);
   const [r0, r1, r2] = segs;
@@ -292,6 +363,12 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
   // ---- health / overview ----
   if (r0 === "health") return ok({ ok: true, version: "0.1.0-mock", components: { db: "ok", scheduler: "ok", reaper: "ok", price_feed: "ok", gateway: "ok" } });
   if (r0 === "overview") return ok(overview(s));
+
+  // ---- v1.1: discovery, agent kinds, quote ----
+  const disc = discovery(segs, q, apiBase);
+  if (disc) return disc;
+  if (r0 === "agent-kinds") return list(FALLBACK_KINDS);
+  if (r0 === "quote" && M === "POST") return quote(s, body);
 
   // ---- boxes ----
   if (r0 === "boxes") {
@@ -319,13 +396,13 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
     }
     switch (r2) {
       case "sleep":
-        if (b.status !== "running") return err(409, "INVALID", `Box đang ở trạng thái ${b.status}`, "Chỉ cho ngủ box đang chạy.");
+        if (b.status !== "running") return err(409, "INVALID", "bad_state_sleep", { status: b.status });
         b.status = "sleeping";
         b.url = null;
         pushEvent(s, { actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "box.sleeping", message: `Cho ${b.slug} ngủ`, cost_usd: null });
         return ok(hydrateBox(s, b));
       case "wake":
-        if (!["sleeping", "failed"].includes(b.status)) return err(409, "INVALID", `Box đang ở trạng thái ${b.status}`, "Chỉ đánh thức box đang ngủ.");
+        if (!["sleeping", "failed"].includes(b.status)) return err(409, "INVALID", "bad_state_wake", { status: b.status });
         b.status = "provisioning";
         b._ready_at = Date.now() + 5000;
         pushEvent(s, { actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "box.waking", message: `Đánh thức ${b.slug}`, cost_usd: null });
@@ -355,6 +432,22 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
           s.files[nb.id] = { ...s.files[b.id] };
         }
         return res;
+      }
+      case "yaml":
+        return ok({ yaml: toYaml(hydrateBox(s, b)) });
+      case "exec-batch": {
+        if (b.status === "sleeping") return err(409, "BOX_SLEEPING", "sleeping", {}, { retry_after_s: 5 });
+        const cmds = body.commands;
+        if (!Array.isArray(cmds) || !cmds.length || cmds.some((c) => typeof c !== "string")) return err(400, "INVALID", "bad_commands");
+        const stop = body.stop_on_error !== false;
+        const results: unknown[] = [];
+        let stopped_at: number | null = null;
+        for (let i = 0; i < cmds.length; i++) {
+          const { result } = runExec(s, b, String(cmds[i]));
+          results.push({ command: cmds[i], ...result });
+          if (stop && result.exit_code !== 0) { stopped_at = i; break; }
+        }
+        return ok({ results, stopped_at, next: [mt(L, "n_down", { id: b.id })] });
       }
       case "events":
         return list(s.events.filter((e) => e.box_id === b.id).sort((a, c) => Date.parse(c.ts) - Date.parse(a.ts)));
@@ -393,22 +486,16 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
             entries.set(first, e);
           } else entries.set(first, { name: first, type: "file", size: new TextEncoder().encode(content).length });
         }
-        if (!entries.size && !["/work", "/memory"].includes(p)) return notFound(`đường dẫn ${p}`);
+        if (!entries.size && !["/work", "/memory"].includes(p)) return notFound(p);
         return ok({ entries: [...entries.values()].sort((a, c) => (a.type === c.type ? a.name.localeCompare(c.name) : a.type === "dir" ? -1 : 1)) });
       }
       case "grep":
         return ok({ matches: Object.entries(s.files[b.id] ?? {}).flatMap(([p, c]) => c.split("\n").map((l, i) => ({ path: p, line: i + 1, text: l })).filter((m) => m.text.includes(String(body.pattern ?? "")))) });
       case "exec": {
-        if (b.status === "sleeping") return err(409, "BOX_SLEEPING", "Box đang ngủ", "Gọi wake trước rồi chạy lại lệnh.");
-        const id = nextId(s, "job");
-        const log_id = `log_${id.slice(4)}`;
-        const cmd = String(body.command ?? "");
-        const stdout = cmd.startsWith("echo ") ? cmd.slice(5) : `(mock) đã chạy: ${cmd}`;
-        const result = { exit_code: 0, duration_ms: 120, stdout_tail: stdout, stderr_tail: "", truncated: false, log_id, files_changed: [], tokens_saved: 0 };
-        s.jobs.push({ id, box_id: b.id, command: cmd, status: "done", result, created_at: iso(Date.now()), finished_at: iso(Date.now() + 120) });
-        s.logs[log_id] = `$ ${cmd}\n${stdout}\n[exit 0] 0.1s\n`;
-        pushEvent(s, { actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "box.exec", message: `exit=0 120ms: ${cmd} tokens_saved=0 log=${log_id}`, cost_usd: null });
-        return body.async ? ok({ job_id: id }, 202) : ok(result);
+        if (b.status === "sleeping") return err(409, "BOX_SLEEPING", "sleeping", {}, { retry_after_s: 5 });
+        const { id, result } = runExec(s, b, String(body.command ?? ""));
+        if (body.async) return ok({ job_id: id, next: [mt(L, "n_wait", { job: id })] }, 202);
+        return ok({ ...result, next: result.truncated ? [mt(L, "n_log", { log: result.log_id })] : [mt(L, "n_down", { id: b.id })] });
       }
       case "takeover":
         b._taken_over = true;
@@ -436,8 +523,8 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
       if (M === "GET") return list(s.agents.map((a) => hydrateAgent(s, a)));
       if (M === "POST") {
         const name = String(body.name ?? "").trim();
-        if (!/^[a-z0-9][a-z0-9-]{1,38}$/.test(name)) return err(400, "INVALID", "Tên agent chỉ gồm a-z, 0-9, dấu gạch ngang (2–39 ký tự)", "Đổi tên rồi thử lại.");
-        if (s.agents.some((a) => a.name === name)) return err(409, "INVALID", `Agent ${name} đã tồn tại`, "Chọn tên khác.");
+        if (!/^[a-z0-9][a-z0-9-]{1,38}$/.test(name)) return err(400, "INVALID", "agent_name");
+        if (s.agents.some((a) => a.name === name)) return err(409, "INVALID", "agent_exists", { name });
         const a: Agent = {
           id: nextId(s, "agt"),
           name,
@@ -460,7 +547,7 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
     }
     const a = s.agents.find((x) => x.id === r1 || x.name === r1);
     if (!a) return notFound(`agent ${r1}`);
-    if (r2 === "snippet") return ok(makeSnippet((q.get("kind") as AgentKind) || a.kind, a.name, apiBase));
+    if (r2 === "snippet") return ok(makeSnippet((q.get("kind") as AgentKind) || a.kind, a.name, apiBase, q.get("transport") ?? q.get("lang")));
     if (M === "GET") return ok(hydrateAgent(s, a));
     if (M === "PATCH") {
       for (const k of ["name", "kind", "budget_day_usd", "budget_month_usd", "policy"] as const) {
@@ -502,11 +589,11 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
   }
   if (r0 === "costs") {
     if (r1 === "suggestions")
-      return list([
+      return list(([
         { kind: "idle_late", title: "kecon-story-gen ngủ trễ", detail: "Box rảnh trung bình 47 phút trước khi ngủ. Đặt idle_minutes = 10 để giảm ~18% chi phí box này.", saving_usd: 1.9, box_id: "box_a9d054", agent_id: "agt_kecon" },
         { kind: "move_to_pool", title: "shopee-crawl-02 nên chuyển sang pool", detail: "Task crawl chạy đều mỗi ngày 3 giờ ở burst Vultr sgp. Đặt vào pool Hetzner fsn1 (còn 4 vCPU trống) rẻ hơn ~5 lần.", saving_usd: 4.6, box_id: "box_2c81e4", agent_id: "agt_shopee" },
         { kind: "oversized", title: "replingo-api dư spec", detail: "CPU trung bình 6%, RAM 21% trong 7 ngày. Giảm từ 2 vCPU/4 GB xuống 1 vCPU/2 GB.", saving_usd: 1.1, box_id: "box_c4410f", agent_id: "agt_replingo" },
-      ]);
+      ] as const).map((x) => seedText(L, x.kind, { ...x })));
     const items = filterLedger(s, q);
     const by_provider: Record<string, number> = {};
     for (const l of items) by_provider[l.provider] = r4((by_provider[l.provider] ?? 0) + l.amount_usd);
@@ -525,8 +612,8 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
       p.last_check_at = iso(Date.now());
       if (token.length < 16 || /sai|invalid|wrong/i.test(token)) {
         p.connected = false;
-        p.error = "Token không hợp lệ (401 từ API của nhà cung cấp)";
-        return err(400, "PROVIDER_FAILED", p.error, "Tạo token mới có quyền Read & Write rồi dán lại.");
+        p.error = mt(L, "bad_token");
+        return err(400, "PROVIDER_FAILED", "bad_token");
       }
       p.connected = true;
       p.error = null;
@@ -539,8 +626,8 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
     if (!r1 && M === "POST") {
       const offer = s.offers.find((o) => o.provider === body.provider && o.sku === body.sku && o.region === body.region) ?? s.offers.find((o) => o.provider === body.provider);
       const prov = s.providers.find((p) => p.id === body.provider);
-      if (!prov?.connected) return err(400, "PROVIDER_FAILED", `Chưa kết nối ${String(body.provider)}`, "Nhập API token ở mục Providers trước.");
-      if (!offer) return err(400, "INVALID", "Không có offer phù hợp", "Chọn sku/vùng khác.");
+      if (!prov?.connected) return err(400, "PROVIDER_FAILED", "provider_off", { provider: String(body.provider) });
+      if (!offer) return err(400, "INVALID", "no_offer");
       const h: MockState["hosts"][number] = {
         id: nextId(s, "hst"), provider: String(body.provider), region: String(body.region ?? offer.region), sku: String(body.sku ?? offer.sku),
         ip: `95.217.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`, status: "provisioning",
@@ -560,7 +647,7 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
     }
     if (M === "DELETE") {
       if (s.boxes.some((b) => b.host_id === h.id && ["running", "provisioning"].includes(b.status)))
-        return err(409, "INVALID", "Host còn box đang chạy", "Drain host và đợi box chuyển đi trước khi xoá.");
+        return err(409, "INVALID", "host_busy");
       s.hosts = s.hosts.filter((x) => x.id !== h.id);
       return ok({ ok: true });
     }
@@ -573,8 +660,8 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
     if (!r1 && M === "GET") return list(s.templates);
     if (!r1 && M === "POST") {
       const name = String(body.name ?? "").trim();
-      if (!name) return err(400, "INVALID", "Thiếu tên template", "Đặt tên rồi lưu lại.");
-      if (s.templates.some((t) => t.name === name)) return err(409, "INVALID", `Template ${name} đã có`, "Chọn tên khác.");
+      if (!name) return err(400, "INVALID", "tpl_name");
+      if (s.templates.some((t) => t.name === name)) return err(409, "INVALID", "tpl_exists", { name });
       const t: Template = { name, description: String(body.description ?? ""), yaml: String(body.yaml ?? ""), uses: 0, created_at: iso(Date.now()) };
       s.templates.push(t);
       return ok(t, 201);
@@ -583,7 +670,7 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
     if (!t) return notFound(`template ${r1}`);
     if (M === "PUT") {
       const v = validateYaml(String(body.yaml ?? t.yaml));
-      if (!v.ok) return err(400, "INVALID", `YAML lỗi dòng ${v.errors[0].line}: ${v.errors[0].message}`, "Sửa rồi lưu lại.");
+      if (!v.ok) return err(400, "INVALID", "tpl_yaml", { line: v.errors[0].line, detail: v.errors[0].message });
       t.yaml = String(body.yaml ?? t.yaml);
       if (body.description !== undefined) t.description = String(body.description);
       return ok(t);
@@ -599,9 +686,9 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
     if (!r1 && M === "GET") return list(s.secrets);
     if (!r1 && M === "POST") {
       const name = String(body.name ?? "").trim().toUpperCase();
-      if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(name)) return err(400, "INVALID", "Tên secret chỉ gồm A-Z, 0-9, _", "Ví dụ: SHOPEE_COOKIE");
-      if (!body.value) return err(400, "INVALID", "Thiếu giá trị", "Nhập giá trị secret.");
-      if (s.secrets.some((x) => x.name === name)) return err(409, "INVALID", `Secret ${name} đã có`, "Dùng nút Xoay vòng để đổi giá trị.");
+      if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(name)) return err(400, "INVALID", "secret_name");
+      if (!body.value) return err(400, "INVALID", "secret_value");
+      if (s.secrets.some((x) => x.name === name)) return err(409, "INVALID", "secret_exists", { name });
       const sec = { name, agents: (body.agents as string[]) ?? [], created_at: iso(Date.now()), rotated_at: null };
       s.secrets.push(sec);
       return ok(sec, 201);
@@ -621,9 +708,9 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
 
   // ---- approvals ----
   if (r0 === "approvals") {
-    if (!r1) return list([...s.approvals].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)));
+    if (!r1) return list([...s.approvals].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)).map((a) => seedText(L, a.id, a)));
     const a = s.approvals.find((x) => x.id === r1);
-    if (!a) return notFound(`yêu cầu ${r1}`);
+    if (!a) return notFound(`approval ${r1}`);
     if (r2 === "approve" || r2 === "reject") {
       a.status = r2 === "approve" ? "approved" : "rejected";
       if (r2 === "approve" && a.type === "budget") {
@@ -634,12 +721,12 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
         s.hosts.push({ id: nextId(s, "hst"), provider: "hetzner", region: "fsn1", sku: "cx42", ip: "49.12.91.4", status: "provisioning", cpu: 8, ram_mb: 16384, disk_gb: 160, cpu_used_pct: 1, ram_used_pct: 4, disk_used_pct: 3, box_count: 0, price_month: 19.4, price_hour: 0.0311, billing: "pool", created_at: iso(Date.now()), _ready_at: Date.now() + 10000 });
       }
       pushEvent(s, { actor: "user:anh", box_id: null, agent_id: null, type: `approval.${a.status}`, message: `${a.status === "approved" ? "Duyệt" : "Từ chối"}: ${a.title}`, cost_usd: null });
-      return ok(a as Approval);
+      return ok(seedText(L, a.id, a) as Approval);
     }
   }
 
   if (r0 === "emergency-stop" && M === "POST") {
-    if (body.confirm !== "DUNG") return err(400, "INVALID", "Thiếu xác nhận", 'Gửi {"confirm":"DUNG"}.');
+    if (body.confirm !== "DUNG") return err(400, "INVALID", "confirm");
     let n = 0;
     for (const b of s.boxes) if (["running", "provisioning", "placing"].includes(b.status)) { b.status = "sleeping"; b.url = null; delete b._ready_at; n++; }
     pushEvent(s, { actor: "user:anh", box_id: null, agent_id: null, type: "emergency.stop", message: `Dừng khẩn cấp: cho ngủ ${n} box`, cost_usd: null });
@@ -699,7 +786,7 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
     if (r1 === "users") return list(s.users);
   }
 
-  return err(404, "NOT_FOUND", `Không có endpoint ${M} /${segs.join("/")}`, "Xem docs/api-contract-v1.md.");
+  return err(404, "NOT_FOUND", "no_endpoint", { method: M, path: `/${segs.join("/")}` });
 }
 
 export { MIN };

@@ -1,3 +1,5 @@
+"use client";
+import { useTranslations } from "next-intl";
 import { AlertTriangle, Inbox } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -16,7 +18,7 @@ export function PageHeader({ title, desc, actions, className }: { title: React.R
 
 export function SectionTitle({ children, right, className }: { children: React.ReactNode; right?: React.ReactNode; className?: string }) {
   return (
-    <div className={cn("mb-3 flex items-center justify-between gap-2", className)}>
+    <div className={cn("mb-3 flex flex-wrap items-center justify-between gap-2", className)}>
       <h2 className="text-[15px] font-semibold">{children}</h2>
       {right}
     </div>
@@ -35,17 +37,20 @@ export function Empty({ title, desc, action }: { title: string; desc?: string; a
 }
 
 export function ErrorBox({ error, retry }: { error: unknown; retry?: () => void }) {
+  const t = useTranslations("common");
   const msg = error instanceof Error ? error.message : String(error);
+  const hint = (error as { hint?: string })?.hint;
   return (
     <div className="flex items-start gap-3 rounded-lg border border-st-error/30 bg-st-error/5 p-4 text-sm">
       <AlertTriangle className="mt-0.5 size-4 shrink-0 text-st-error" />
-      <div className="flex-1">
-        <p className="font-medium text-st-error">Không tải được dữ liệu</p>
-        <p className="mt-0.5 text-muted-foreground">{msg}</p>
+      <div className="min-w-0 flex-1">
+        <p className="font-medium text-st-error">{t("loadError")}</p>
+        <p className="mt-0.5 break-words text-muted-foreground">{msg}</p>
+        {hint && <p className="mt-0.5 break-words text-[13px] text-muted-foreground/80">{hint}</p>}
       </div>
       {retry && (
-        <button className="text-[13px] text-primary hover:underline" onClick={retry}>
-          Tải lại
+        <button className="shrink-0 text-[13px] text-primary hover:underline" onClick={retry}>
+          {t("reload")}
         </button>
       )}
     </div>

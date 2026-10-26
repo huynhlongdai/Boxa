@@ -9,16 +9,20 @@ export interface ExecInfo {
   log_id: string | null;
 }
 
+type EvData = { exit_code?: number; duration_ms?: number; command?: string; timed_out?: boolean; tokens_saved?: number; log_id?: string | null };
+
 /**
  * Core ghi mỗi lệnh exec thành event `box.exec` với message
  * "exit=<code> <ms>ms: <command>" (có thể có tiền tố "TIMEOUT ").
- * Hỗ trợ thêm phần đuôi tuỳ chọn " tokens_saved=<n> log=<id>" nếu Core bổ sung.
+ * v1.1: chi tiết có cấu trúc nằm ở `data` ({exit_code, tokens_saved, log_id…}) hoặc trường phẳng `tokens_saved` / `log_id`;
+ * vẫn đọc được đuôi " tokens_saved=<n> log=<id>" trong message (bản Core cũ / mock).
  */
-export function parseExecEvent(e: BoxaEvent): ExecInfo | null {
+export function parseExecEvent(e: BoxaEvent & { data?: EvData | null }): ExecInfo | null {
   if (e.type !== "box.exec" && e.type !== "exec") return null;
+  const d: EvData = e.data ?? {};
   const m = e.message.match(/^(TIMEOUT )?exit=(-?\d+) (\d+)ms: ([\s\S]*)$/);
-  if (!m) return null;
-  let cmd = m[4];
+  if (!m && d.exit_code === undefined) return null;
+  let cmd = m ? m[4] : d.command ?? "";
   let tokens: number | null = null;
   let log: string | null = null;
   const lm = cmd.match(/\s+log=(\S+)\s*$/);
@@ -31,5 +35,14 @@ export function parseExecEvent(e: BoxaEvent): ExecInfo | null {
     tokens = Number(tm[1]);
     cmd = cmd.slice(0, tm.index);
   }
-  return { timed_out: Boolean(m[1]), exit_code: Number(m[2]), duration_ms: Number(m[3]), command: cmd, tokens_saved: tokens, log_id: log && log !== "null" ? log : null };
+  const tok = d.tokens_saved ?? e.tokens_saved ?? tokens;
+  const lid = d.log_id ?? e.log_id ?? log;
+  return {
+    timed_out: d.timed_out ?? Boolean(m?.[1]),
+    exit_code: d.exit_code ?? Number(m?.[2] ?? 0),
+    duration_ms: d.duration_ms ?? Number(m?.[3] ?? 0),
+    command: d.command ?? cmd,
+    tokens_saved: typeof tok === "number" ? tok : null,
+    log_id: lid && lid !== "null" ? lid : null,
+  };
 }

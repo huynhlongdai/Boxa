@@ -2,36 +2,45 @@
 import * as React from "react";
 import { Check, Copy } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export async function copyText(text: string, okMsg = "Đã copy") {
+export async function copyText(text: string, okMsg: string, failMsg: string) {
   try {
     await navigator.clipboard.writeText(text);
     toast.success(okMsg);
     return true;
   } catch {
-    toast.error("Trình duyệt chặn clipboard — hãy bôi đen và copy tay");
+    toast.error(failMsg);
     return false;
   }
 }
 
-export function CopyButton({ text, label = "Copy", className }: { text: string; label?: string; className?: string }) {
+/** copyText với thông báo theo ngôn ngữ hiện tại. */
+export function useCopy() {
+  const t = useTranslations("common");
+  return (text: string) => copyText(text, t("copied"), t("copyFailed"));
+}
+
+export function CopyButton({ text, label, className }: { text: string; label?: string; className?: string }) {
   const [done, setDone] = React.useState(false);
+  const t = useTranslations("common");
+  const copy = useCopy();
   return (
     <Button
       size="xs"
       variant="secondary"
       className={className}
       onClick={async () => {
-        if (await copyText(text)) {
+        if (await copy(text)) {
           setDone(true);
           setTimeout(() => setDone(false), 1500);
         }
       }}
     >
       {done ? <Check /> : <Copy />}
-      {done ? "Đã copy" : label}
+      {done ? t("copied") : label ?? t("copy")}
     </Button>
   );
 }

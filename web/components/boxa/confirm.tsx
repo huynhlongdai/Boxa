@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { useTranslations } from "next-intl";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -8,7 +9,7 @@ import { Input } from "@/components/ui/input";
 export function ConfirmButton({
   title,
   desc,
-  confirmLabel = "Xác nhận",
+  confirmLabel,
   onConfirm,
   destructive,
   typeToConfirm,
@@ -22,6 +23,7 @@ export function ConfirmButton({
   destructive?: boolean;
   typeToConfirm?: string;
 }) {
+  const t = useTranslations("common");
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [typed, setTyped] = React.useState("");
@@ -32,19 +34,19 @@ export function ConfirmButton({
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle className="break-words">{title}</DialogTitle>
           {desc && <DialogDescription asChild><div>{desc}</div></DialogDescription>}
         </DialogHeader>
         {typeToConfirm && (
           <div className="flex flex-col gap-1.5">
             <p className="text-[13px] text-muted-foreground">
-              Gõ <span className="font-mono text-foreground">{typeToConfirm}</span> để xác nhận
+              {t.rich("typeToConfirm", { text: typeToConfirm, mono: (c) => <span className="break-all font-mono text-foreground">{c}</span> })}
             </p>
             <Input value={typed} onChange={(e) => setTyped(e.target.value)} className="font-mono" autoFocus />
           </div>
         )}
         <DialogFooter>
-          <Button variant="ghost" onClick={() => setOpen(false)}>Huỷ</Button>
+          <Button variant="ghost" onClick={() => setOpen(false)}>{t("cancel")}</Button>
           <Button
             variant={destructive ? "destructive" : "default"}
             disabled={busy || (typeToConfirm ? typed.trim() !== typeToConfirm : false)}
@@ -59,7 +61,7 @@ export function ConfirmButton({
               }
             }}
           >
-            {busy ? "Đang xử lý…" : confirmLabel}
+            {busy ? t("processing") : confirmLabel ?? t("confirm")}
           </Button>
         </DialogFooter>
       </DialogContent>

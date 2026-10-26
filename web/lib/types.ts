@@ -9,10 +9,15 @@ export type ErrorCode =
   | "POLICY_DENIED"
   | "NOT_FOUND"
   | "UNAUTHORIZED"
-  | "INVALID";
+  | "INVALID"
+  | "RATE_LIMITED"
+  | "INTERNAL";
 
+export const ERROR_CODES: ErrorCode[] = ["BUDGET_EXCEEDED", "NO_CAPACITY", "PROVIDER_FAILED", "BOX_SLEEPING", "TIMEOUT", "POLICY_DENIED", "NOT_FOUND", "UNAUTHORIZED", "INVALID", "RATE_LIMITED", "INTERNAL"];
+
+/** v1.1: message/hint đã được Core dịch theo Accept-Language; code không đổi. */
 export interface ApiErrorBody {
-  error: { code: ErrorCode; message: string; hint?: string };
+  error: { code: ErrorCode; message: string; hint?: string; retry_after_s?: number; docs_url?: string };
 }
 
 export interface List<T> {
@@ -82,7 +87,18 @@ export interface CreateBoxBody {
   yaml?: string;
 }
 
-export type AgentKind = "claude-code" | "openai-agents" | "n8n" | "hark" | "custom";
+/** v1.1: 22 kind (GET /agent-kinds). Giữ kiểu string để không vỡ khi Core thêm kind mới. */
+export type AgentKind = string;
+export type AgentKindCategory = "coding" | "framework" | "workflow" | "platform" | "custom";
+export type Transport = "mcp-stdio" | "mcp-http" | "rest" | "sdk-python" | "sdk-ts" | "cli" | "function-calling";
+
+export interface AgentKindInfo {
+  id: AgentKind;
+  name: string;
+  category: AgentKindCategory;
+  transports: Transport[];
+  doc_url: string | null;
+}
 
 export interface AgentPolicy {
   providers: string[];
@@ -147,6 +163,10 @@ export interface BoxaEvent {
   type: string;
   message: string;
   cost_usd: number | null;
+  /** v1.1: event box.exec có thể mang sẵn các trường này. */
+  tokens_saved?: number | null;
+  log_id?: string | null;
+  data?: { exit_code?: number; duration_ms?: number; command?: string; timed_out?: boolean; tokens_saved?: number; log_id?: string | null } | null;
 }
 
 export interface Host {
@@ -295,6 +315,8 @@ export interface Settings {
   budget_month_usd: number;
   maintenance: { enabled: boolean; message: string };
   features: { gpu: boolean };
+  /** v1.1: ngôn ngữ mặc định cho thông báo (Telegram/email) và lỗi API. */
+  locale?: string;
 }
 
 export interface FileEntry {
@@ -308,7 +330,42 @@ export interface Snippet {
   kind: AgentKind;
   language: string;
   snippet: string;
+  transport?: Transport;
 }
+
+/** v1.1: POST /quote (dry-run, không tạo box). */
+export interface QuoteOption {
+  provider: string;
+  region: string;
+  sku?: string;
+  cost_per_hour: number;
+  expected_total_usd?: number;
+  placement_reason?: string;
+  reason?: string;
+  billing?: "pool" | "burst";
+}
+export interface Quote {
+  provider: string;
+  region: string;
+  sku?: string;
+  billing?: "pool" | "burst";
+  cost_per_hour: number;
+  expected_total_usd: number;
+  expected_hours?: number;
+  placement_reason: string;
+  alternatives: QuoteOption[];
+}
+
+export interface QuoteBody {
+  agent_id?: string;
+  template?: string;
+  spec: Spec;
+  lifecycle?: Lifecycle;
+  ttl_seconds?: number;
+  idle_minutes?: number;
+}
+
+export type ToolFormat = "openai" | "anthropic" | "gemini" | "mcp";
 
 // ---- Các shape admin chưa được contract mô tả chi tiết (giả định, cần core xác nhận) ----
 // (shape theo boxa/core; contract v1 chỉ mô tả sơ lược)
@@ -355,6 +412,12 @@ export interface Observe {
   cpu_pct?: number;
   ram_pct?: number;
   disk_pct?: number;
+}
+
+export interface ExecBatchResult {
+  results: (ExecResult & { command: string })[];
+  stopped_at?: number | null;
+  next?: string[];
 }
 
 export type StreamEventName = "box.updated" | "event.created" | "approval.created" | "overview.updated";

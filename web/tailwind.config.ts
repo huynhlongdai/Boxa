@@ -7,7 +7,8 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['"Be Vietnam Pro"', "ui-sans-serif", "system-ui", "sans-serif"],
+        // Be Vietnam Pro cho Latin/Việt; CJK rơi về font hệ thống (PingFang/Hiragino/Noto/YaHei/Meiryo)
+        sans: ['"Be Vietnam Pro"', "ui-sans-serif", "system-ui", '"PingFang SC"', '"Hiragino Sans"', '"Hiragino Kaku Gothic ProN"', '"Noto Sans CJK SC"', '"Noto Sans JP"', '"Microsoft YaHei"', "Meiryo", "sans-serif"],
         mono: ['"JetBrains Mono"', "ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
       },
       colors: {
