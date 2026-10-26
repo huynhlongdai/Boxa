@@ -26,6 +26,9 @@ type CreateRequest struct {
 	Region    string
 	CloudInit string
 	Labels    map[string]string
+	// v1.4 (T2/T3 sandbox providers): shell command run once inside the
+	// sandbox after it starts (starts `boxd --dial`); empty = exec-only shim.
+	Bootstrap string
 }
 
 // Handle identifies a created host at the provider.
@@ -94,6 +97,16 @@ func NewRegistry(ps ...Provider) *Registry {
 }
 
 func (r *Registry) Get(id string) (Provider, bool) { p, ok := r.m[id]; return p, ok }
+
+// Add registers more providers (v1.4: sandbox drivers); an existing id is replaced.
+func (r *Registry) Add(ps ...Provider) {
+	for _, p := range ps {
+		if _, ok := r.m[p.ID()]; !ok {
+			r.order = append(r.order, p.ID())
+		}
+		r.m[p.ID()] = p
+	}
+}
 func (r *Registry) All() []Provider {
 	out := make([]Provider, 0, len(r.order))
 	for _, id := range r.order {

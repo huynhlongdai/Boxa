@@ -1,0 +1,43 @@
+# Agent 37 Cloud instances — declarative adapter (Boxa v1.4).
+id: agent37
+name: Agent 37
+tier: T2
+verification: docs-verified
+verified_note: "From agent37.com/docs/agents-api (POST /v1/instances, instance object status values, DELETE /v1/instances/{id}, POST /v1/instances/{id}/exec on api.agent37.com with Bearer, answering exit_code/stdout/stderr)."
+docs: https://www.agent37.com/docs/agents-api/overview
+website: https://www.agent37.com/cloud
+initials: A37
+color: "#16a34a"
+base_url: https://api.agent37.com/v1
+auth: {Authorization: "Bearer {{cred.token}}"}
+credentials: [{name: token, label: API key, secret: true, hint: "sk_live_…"}]
+env_vars: [AGENT37_API_KEY]
+capabilities: {background: true, pause: true, snapshot: false, fork: true, ports: true, pty: false, files: true, gpu: false, boot_ms: 5000, max_lifetime_s: 0, max_cpu: 8, max_ram_mb: 16384, isolation: gvisor}
+pricing: {cpu_second: 0.0000139, gb_second: 0.0000046, source: "https://www.agent37.com/docs/agents-api/billing", confidence: estimated, note: "metered per minute from a prepaid wallet; unit rates are shown in the dashboard, not the docs — estimate"}
+sizes:
+  - {sku: 1x2, cpu: 1, ram_mb: 2048, disk_gb: 4}
+  - {sku: 2x4, cpu: 2, ram_mb: 4096, disk_gb: 4}
+  - {sku: 4x8, cpu: 4, ram_mb: 8192, disk_gb: 8}
+regions: [{id: us, name: United States}]
+default_template: agent37-ubuntu
+workdir: /root
+states: {running: running, provisioning: starting, starting: starting, restarting: starting, updating: starting, waking: starting, sleeping: paused, stopping: stopped, stopped: stopped, failed: error, deleting: deleted, deleted: deleted}
+validate: {method: GET, path: /instances}
+create:
+  method: POST
+  path: /instances
+  body:
+    template: "{{spec.template}}"
+    region?: "{{spec.region}}"
+    name?: "{{spec.name}}"
+    env?: "{{json:spec.env}}"
+    resources: {cpu: "{{int:spec.cpu}}", memory: "{{int:spec.ram_gb}}"}
+    auto_sleep: false
+  capture: {id: $.id, state: $.status}
+get: {method: GET, path: "/instances/{{p:id}}", capture: {state: $.status}}
+delete: {method: DELETE, path: "/instances/{{p:id}}"}
+exec:
+  - method: POST
+    path: "/instances/{{p:id}}/exec"
+    body: {command: "{{cmd}}", user: root}
+    capture: {stdout: $.stdout, stderr: $.stderr, exit_code: $.exit_code}

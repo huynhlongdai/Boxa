@@ -1,0 +1,50 @@
+# Runloop devboxes — declarative adapter (Boxa v1.4).
+id: runloop
+name: Runloop
+tier: T2
+verification: docs-verified
+verified_note: "Routes and fields from Runloop's published OpenAPI (docs.runloop.ai/openapi-specs/stainless-processed-openapi.json): POST /v1/devboxes, GET /v1/devboxes/{id}, POST …/execute_sync, …/shutdown, …/suspend, …/resume, …/write_file_contents, …/read_file_contents."
+docs: https://docs.runloop.ai/api-reference
+website: https://www.runloop.ai
+initials: RL
+color: "#6d28d9"
+base_url: https://api.runloop.ai
+auth: {Authorization: "Bearer {{cred.token}}"}
+credentials: [{name: token, label: API key, secret: true, hint: "ak_…"}]
+env_vars: [RUNLOOP_API_KEY]
+capabilities: {background: true, pause: true, snapshot: true, fork: false, ports: true, pty: false, files: true, gpu: false, boot_ms: 2000, max_lifetime_s: 0, max_cpu: 8, max_ram_mb: 32768, isolation: microvm}
+pricing: {cpu_second: 0.00003, gb_second: 0.000007, source: "https://www.runloop.ai/pricing", confidence: docs, note: "$0.108/CPU-h + $0.0252/GB-h while running; storage extra"}
+sizes:
+  - {sku: X_SMALL, cpu: 0.5, ram_mb: 1024, disk_gb: 4}
+  - {sku: SMALL, cpu: 1, ram_mb: 2048, disk_gb: 4}
+  - {sku: MEDIUM, cpu: 2, ram_mb: 4096, disk_gb: 8}
+  - {sku: LARGE, cpu: 2, ram_mb: 8192, disk_gb: 16}
+  - {sku: X_LARGE, cpu: 4, ram_mb: 16384, disk_gb: 16}
+  - {sku: XX_LARGE, cpu: 8, ram_mb: 32768, disk_gb: 16}
+regions: [{id: global, name: Runloop}]
+workdir: /home/user
+states: {running: running, queued: starting, scheduled: starting, provisioning: starting, initializing: starting, resuming: starting, suspending: paused, suspended: paused, failure: error, shutdown: deleted}
+validate: {method: GET, path: "/v1/devboxes?limit=1"}
+create:
+  method: POST
+  path: /v1/devboxes
+  body:
+    name?: "{{spec.name}}"
+    environment_variables?: "{{json:spec.env}}"
+    metadata?: "{{json:spec.labels}}"
+    launch_parameters:
+      resource_size_request: "{{spec.sku}}"
+  capture: {id: $.id, state: $.status}
+get: {method: GET, path: "/v1/devboxes/{{p:id}}", capture: {state: $.status}}
+delete: {method: POST, path: "/v1/devboxes/{{p:id}}/shutdown"}
+pause: {method: POST, path: "/v1/devboxes/{{p:id}}/suspend"}
+resume: {method: POST, path: "/v1/devboxes/{{p:id}}/resume"}
+exec:
+  - method: POST
+    path: "/v1/devboxes/{{p:id}}/execute_sync"
+    body: {command: "{{cmd}}"}
+    capture: {stdout: $.stdout, stderr: $.stderr, exit_code: $.exit_status}
+put_file:
+  - {method: POST, path: "/v1/devboxes/{{p:id}}/write_file_contents", body: {file_path: "{{path}}", contents: "{{content}}"}}
+get_file:
+  - {method: POST, path: "/v1/devboxes/{{p:id}}/read_file_contents", body: {file_path: "{{path}}"}, raw: true}

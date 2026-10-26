@@ -1,0 +1,38 @@
+# Upstash Box — declarative adapter (Boxa v1.4). Exec-only by default (T3).
+id: upstash-box
+name: Upstash Box
+tier: T3
+verification: sdk-source
+verified_note: "Upstash documents Box through its SDKs only. Paths (POST /v2/box, GET/DELETE /v2/box/{id}, POST /v2/box/{id}/exec with argv → {exit_code, output, error}), the X-Box-Api-Key header and the default base URL are read from the official @upstash/box SDK source."
+docs: https://upstash.com/docs/box/overall/how-it-works
+website: https://upstash.com/box
+initials: UB
+color: "#00e9a3"
+base_url: https://us-east-1.box.upstash.com
+auth: {X-Box-Api-Key: "{{cred.token}}"}
+credentials: [{name: token, label: Box API key, secret: true, hint: "box_…"}]
+env_vars: [UPSTASH_BOX_API_KEY]
+capabilities: {background: false, pause: true, snapshot: true, fork: false, ports: true, pty: false, files: true, gpu: false, boot_ms: 1500, max_lifetime_s: 0, max_cpu: 2, max_ram_mb: 4096, isolation: container}
+pricing: {cpu_second: 0.000014, gb_second: 0.0000045, source: "https://upstash.com/pricing/box", confidence: estimated, note: "usage-based; unit rates not stated in the docs — estimate"}
+sizes:
+  - {sku: small, cpu: 1, ram_mb: 2048, disk_gb: 10}
+regions: [{id: us-east-1, name: US East 1}]
+default_template: node
+workdir: /workspace/home
+states: {creating: starting, idle: running, running: running, paused: paused, error: error, deleted: deleted}
+validate: {method: GET, path: /v2/box}
+create:
+  method: POST
+  path: /v2/box
+  body:
+    runtime: "{{spec.template}}"
+    "name?": "{{spec.name}}"
+    "env_vars?": "{{json:spec.env}}"
+  capture: {id: $.id, state: $.status}
+get: {method: GET, path: "/v2/box/{{p:id}}", capture: {state: $.status}}
+delete: {method: DELETE, path: "/v2/box/{{p:id}}"}
+exec:
+  - method: POST
+    path: "/v2/box/{{p:id}}/exec"
+    body: {command: [sh, -c, "{{cmd}}"]}
+    capture: {stdout: $.output, stderr: $.error, exit_code: $.exit_code}

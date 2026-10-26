@@ -33,6 +33,7 @@ type Hub struct {
 	reg      Registrar
 	mu       sync.RWMutex
 	conns    map[string]*Peer
+	virt     map[string]Virtual // v1.4: T3 sandbox shims answering RPCs in-process
 	streams  map[string]StreamSink
 	upgrader websocket.Upgrader
 }
@@ -41,16 +42,45 @@ func NewHub(reg Registrar) *Hub {
 	return &Hub{
 		reg:      reg,
 		conns:    map[string]*Peer{},
+		virt:     map[string]Virtual{},
 		streams:  map[string]StreamSink{},
 		upgrader: websocket.Upgrader{ReadBufferSize: 32 << 10, WriteBufferSize: 32 << 10},
 	}
 }
 
-// Connected reports whether a host has a live tunnel.
+// Virtual is an in-process host (v1.4 T3 "boxd-shim"): it answers the same
+// RPCs boxd does by translating them to a sandbox provider's exec API.
+type Virtual interface {
+	Call(ctx context.Context, method string, params, out any) error
+}
+
+// RegisterVirtual attaches (or with v == nil detaches) a virtual host.
+func (h *Hub) RegisterVirtual(hostID string, v Virtual) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if v == nil {
+		delete(h.virt, hostID)
+		return
+	}
+	h.virt[hostID] = v
+}
+
+// IsVirtual reports whether a host is served by a shim.
+func (h *Hub) IsVirtual(hostID string) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	_, ok := h.virt[hostID]
+	return ok
+}
+
+// Connected reports whether a host has a live tunnel (or is a virtual host).
 func (h *Hub) Connected(hostID string) bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	_, ok := h.conns[hostID]
+	if !ok {
+		_, ok = h.virt[hostID]
+	}
 	return ok
 }
 
@@ -70,6 +100,12 @@ func (h *Hub) Peer(hostID string) (*Peer, bool) {
 
 // Call is a convenience RPC to a host.
 func (h *Hub) Call(ctx context.Context, hostID, method string, params, out any) error {
+	h.mu.RLock()
+	v, isVirt := h.virt[hostID]
+	h.mu.RUnlock()
+	if isVirt {
+		return v.Call(ctx, method, params, out)
+	}
 	p, ok := h.Peer(hostID)
 	if !ok {
 		return ErrClosed

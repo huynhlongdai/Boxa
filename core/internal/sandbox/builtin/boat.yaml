@@ -1,0 +1,37 @@
+# boat.dev sandboxes — declarative adapter (Boxa v1.4).
+id: boat
+name: boat
+tier: T2
+verification: docs-verified
+verified_note: "From docs.boat.dev/api/v1 (POST /sandboxes, GET /sandboxes/{id}, POST …/commands with exitCode/stdout/stderr, POST …/stop, POST …/resume, DELETE /sandboxes/{id}, detached commands for background jobs)."
+docs: https://docs.boat.dev/api/v1
+website: https://boat.dev
+initials: BT
+color: "#0ea5e9"
+base_url: https://boat.dev/api/v1
+auth: {Authorization: "Bearer {{cred.token}}"}
+credentials: [{name: token, label: API key, secret: true, hint: "boat_…"}]
+env_vars: [BOAT_API_KEY]
+capabilities: {background: true, pause: true, snapshot: true, fork: true, ports: true, pty: true, files: true, gpu: false, boot_ms: 3000, max_lifetime_s: 0, max_cpu: 8, max_ram_mb: 16384, isolation: vm}
+pricing: {cpu_second: 0.000014, gb_second: 0.0000045, source: "https://boat.dev/", confidence: estimated, note: "billed per second on top of a $20/mo plan; per-unit rates not published in the API docs — estimate"}
+sizes:
+  - {sku: default, cpu: 2, ram_mb: 4096, disk_gb: 20}
+regions: [{id: global, name: boat}]
+workdir: /home/ubuntu
+states: {provisioning: starting, provisioned: starting, cloning: starting, ready: running, idle: running, running: running, archiving: stopped, archived: stopped, error: error}
+validate: {method: GET, path: /sandboxes}
+create:
+  method: POST
+  path: /sandboxes
+  headers: {Idempotency-Key: "{{spec.name}}"}
+  body: {ttlSeconds: "{{int:spec.timeout_s}}"}
+  capture: {id: $.sandbox.id, state: $.sandbox.state}
+get: {method: GET, path: "/sandboxes/{{p:id}}", capture: {state: $.sandbox.state}}
+delete: {method: DELETE, path: "/sandboxes/{{p:id}}"}
+pause: {method: POST, path: "/sandboxes/{{p:id}}/stop"}
+resume: {method: POST, path: "/sandboxes/{{p:id}}/resume"}
+exec:
+  - method: POST
+    path: "/sandboxes/{{p:id}}/commands"
+    body: {command: "{{cmd}}", timeoutSeconds: "{{int:timeout_s}}"}
+    capture: {stdout: $.stdout, stderr: $.stderr, exit_code: $.exitCode}

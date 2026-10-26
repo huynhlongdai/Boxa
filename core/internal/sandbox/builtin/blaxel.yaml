@@ -1,0 +1,49 @@
+# Blaxel sandboxes — declarative adapter (Boxa v1.4).
+id: blaxel
+name: Blaxel
+tier: T2
+verification: docs-verified
+verified_note: "Control plane from docs.blaxel.ai controlplane.yml (POST/GET/DELETE /v0/sandboxes, metadata.url, Status enum); in-sandbox API from blaxel-ai/sandbox sandbox-api/docs/openapi.yml (POST /process with waitForCompletion, keepAlive for background processes)."
+docs: https://docs.blaxel.ai/api-reference/introduction
+website: https://blaxel.ai
+initials: BL
+color: "#f97316"
+base_url: https://api.blaxel.ai/v0
+auth: {Authorization: "Bearer {{cred.token}}"}
+headers: {X-Blaxel-Workspace: "{{cred.workspace}}"}
+credentials:
+  - {name: token, label: API key, secret: true}
+  - {name: workspace, label: Workspace, hint: "the name in the console URL"}
+env_vars: [BL_API_KEY, BL_WORKSPACE]
+capabilities: {background: true, pause: true, snapshot: false, fork: false, ports: true, pty: false, files: true, gpu: false, boot_ms: 25, max_lifetime_s: 0, max_cpu: 8, max_ram_mb: 16384, isolation: microvm}
+pricing: {gb_second: 0.0000115, source: "https://blaxel.ai/pricing", confidence: docs, note: "billed per GB of memory per second; CPU = memory/2048 (included); standby is not billed for compute"}
+sizes:
+  - {sku: 2g, cpu: 1, ram_mb: 2048, disk_gb: 10}
+  - {sku: 4g, cpu: 2, ram_mb: 4096, disk_gb: 10}
+  - {sku: 8g, cpu: 4, ram_mb: 8192, disk_gb: 10}
+  - {sku: 16g, cpu: 8, ram_mb: 16384, disk_gb: 10}
+regions: [{id: us-pdx-1, name: US Portland}, {id: eu-lon-1, name: EU London}]
+default_template: "blaxel/base-image:latest"
+workdir: /blaxel
+ref_vars: [url]
+states: {DEPLOYED: running, DEPLOYING: starting, UPLOADING: starting, BUILDING: starting, BUILT: starting, DEACTIVATED: stopped, DEACTIVATING: stopped, ARCHIVING: stopped, FAILED: error, DELETING: deleted, TERMINATED: deleted}
+validate: {method: GET, path: /sandboxes}
+create:
+  method: POST
+  path: /sandboxes
+  body:
+    metadata: {name: "{{spec.name}}"}
+    spec:
+      region?: "{{spec.region}}"
+      runtime:
+        image: "{{spec.template}}"
+        memory: "{{int:spec.ram_mb}}"
+  capture: {id: $.metadata.name, url: $.metadata.url, state: $.status}
+get: {method: GET, path: "/sandboxes/{{p:id}}", capture: {state: $.status, url: $.metadata.url}}
+delete: {method: DELETE, path: "/sandboxes/{{p:id}}"}
+exec:
+  - method: POST
+    base: "{{vars.url}}"
+    path: /process
+    body: {command: "{{cmd}}", waitForCompletion: true, timeout: "{{int:timeout_s}}"}
+    capture: {stdout: "$.stdout|$.logs", stderr: $.stderr, exit_code: $.exitCode}

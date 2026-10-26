@@ -45,6 +45,28 @@ func main() {
 		fmt.Println("boxd", manager.Version)
 		return
 	}
+	// v1.4: `boxd --dial <core url> [--token <bootstrap token>]` (used inside
+	// T2 sandboxes) is the same as BOXD_CORE_URL / BOXD_TOKEN.
+	for i := 1; i < len(os.Args); i++ {
+		a := os.Args[i]
+		val := ""
+		if k, v, ok := strings.Cut(a, "="); ok {
+			a, val = k, v
+		} else if i+1 < len(os.Args) {
+			val = os.Args[i+1]
+		}
+		switch a {
+		case "--dial", "-dial":
+			os.Setenv("BOXD_CORE_URL", val)
+		case "--token", "-token":
+			os.Setenv("BOXD_TOKEN", val)
+		default:
+			continue
+		}
+		if !strings.Contains(os.Args[i], "=") {
+			i++
+		}
+	}
 	log.SetPrefix("boxd ")
 	stateDir := env("BOXD_STATE_DIR", "./boxd-state")
 	if err := os.MkdirAll(stateDir, 0o700); err != nil {
@@ -64,15 +86,19 @@ func main() {
 		d := boxd.NewIncusDriver(env("BOXD_MEMORY_ROOT", "/var/lib/boxa/memory"), os.Getenv("BOXD_SNAPSHOT_EXPORT_DIR"))
 		d.EgressMode = env("BOXD_EGRESS_MODE", "acl") // acl (Incus network ACL) | nft (nftables)
 		drv = d
-	case "local":
+	case "local", "sandbox":
 		d, err := boxd.NewLocalDriver(env("BOXD_ROOT", filepath.Join(stateDir, "root")))
 		if err != nil {
 			log.Fatal(err)
 		}
 		drv = d
-		log.Printf("WARNING: local driver gives no isolation — dev/test only")
+		if driverName == "local" {
+			log.Printf("WARNING: local driver gives no isolation — dev/test only")
+		} else {
+			log.Printf("sandbox mode: one box per T2 sandbox; isolation comes from the sandbox provider")
+		}
 	default:
-		log.Fatalf("unknown BOXD_DRIVER %q (incus|local)", driverName)
+		log.Fatalf("unknown BOXD_DRIVER %q (incus|local|sandbox)", driverName)
 	}
 	every, _ := time.ParseDuration(env("BOXD_METRICS_EVERY", "10s"))
 	a, err := boxd.NewAgent(boxd.Config{

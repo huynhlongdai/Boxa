@@ -1,0 +1,53 @@
+# Vercel Sandbox (v2 named sandboxes + sessions) — declarative adapter (Boxa v1.4).
+id: vercel
+name: Vercel Sandbox
+tier: T2
+verification: docs-verified
+verified_note: "From vercel.com/docs/rest-api/sandboxes (POST /v2/sandboxes → {sandbox, session, routes}; POST /v2/sandboxes/sessions/{sessionId}/cmd; GET …/cmd/{cmdId}/logs NDJSON {stream,data}; GET …/cmd/{cmdId}?wait=true; DELETE /v2/sandboxes/{name})."
+docs: https://vercel.com/docs/rest-api/sandboxes
+website: https://vercel.com/sandbox
+initials: VC
+color: "#000000"
+base_url: https://api.vercel.com
+auth: {Authorization: "Bearer {{cred.token}}"}
+credentials:
+  - {name: token, label: Access token, secret: true}
+  - {name: project_id, label: Project ID, hint: "prj_…"}
+  - {name: team_id, label: Team ID, optional: true, hint: "team_…"}
+env_vars: [VERCEL_TOKEN, VERCEL_PROJECT_ID, VERCEL_TEAM_ID]
+capabilities: {background: true, pause: false, snapshot: true, fork: true, ports: true, pty: false, files: true, gpu: false, boot_ms: 1500, max_lifetime_s: 18000, max_cpu: 8, max_ram_mb: 16384, isolation: microvm}
+pricing: {cpu_second: 0.0000356, gb_second: 0.0000059, source: "https://vercel.com/docs/sandbox/pricing", confidence: estimated, note: "Active CPU + provisioned memory; plan-dependent — estimate"}
+sizes:
+  - {sku: "1", cpu: 1, ram_mb: 2048, disk_gb: 10}
+  - {sku: "2", cpu: 2, ram_mb: 4096, disk_gb: 10}
+  - {sku: "4", cpu: 4, ram_mb: 8192, disk_gb: 10}
+  - {sku: "8", cpu: 8, ram_mb: 16384, disk_gb: 10}
+regions: [{id: iad1, name: Washington DC (iad1)}]
+default_template: node24
+workdir: /vercel/sandbox
+ref_vars: [session]
+states: {running: running, pending: starting, stopping: stopped, stopped: stopped, failed: error}
+validate: {method: GET, path: "/v2/sandboxes?projectId={{q:cred.project_id}}&teamId={{q:cred.team_id}}&limit=1"}
+create:
+  method: POST
+  path: "/v2/sandboxes?teamId={{q:cred.team_id}}"
+  body:
+    projectId: "{{cred.project_id}}"
+    name: "{{spec.name}}"
+    runtime: "{{spec.template}}"
+    resources: {vcpus: "{{int:spec.cpu}}"}
+    timeout: "{{int:spec.timeout_ms}}"
+  capture: {id: $.sandbox.name, session: $.session.id, state: $.session.status}
+get: {method: GET, path: "/v2/sandboxes/{{p:id}}?projectId={{q:cred.project_id}}&teamId={{q:cred.team_id}}", capture: {state: "$.session.status|$.sandbox.status", session: $.session.id}}
+delete: {method: DELETE, path: "/v2/sandboxes/{{p:id}}?projectId={{q:cred.project_id}}&teamId={{q:cred.team_id}}"}
+exec:
+  - method: POST
+    path: "/v2/sandboxes/sessions/{{p:vars.session}}/cmd?teamId={{q:cred.team_id}}"
+    body: {command: bash, args: ["-lc", "{{cmd}}"], timeout: "{{int:timeout_ms}}"}
+    capture: {cmd_id: $.command.id}
+  - method: GET
+    path: "/v2/sandboxes/sessions/{{p:vars.session}}/cmd/{{p:vars.cmd_id}}/logs?teamId={{q:cred.team_id}}"
+    ndjson: {stream: $.stream, data: $.data}
+  - method: GET
+    path: "/v2/sandboxes/sessions/{{p:vars.session}}/cmd/{{p:vars.cmd_id}}?wait=true&teamId={{q:cred.team_id}}"
+    capture: {exit_code: $.command.exitCode}
