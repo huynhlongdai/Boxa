@@ -394,7 +394,7 @@ func (a *Agent) exec(ctx context.Context, p proto.ExecParams) (*ExecOut, error) 
 		}
 	}
 	res.TokensSaved = tokensSaved(total, len(so)+len(se))
-	files, _ := a.drv.ChangedFiles(ctx, p.BoxID, start.Add(-time.Second))
+	files, _ := a.drv.ChangedFiles(ctx, p.BoxID, start.Add(-10*time.Millisecond))
 	if files == nil {
 		files = []string{}
 	}

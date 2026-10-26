@@ -131,7 +131,8 @@ func (m *Manager) Schedule(ctx context.Context, b *model.Box, agent *model.Agent
 			rejected = append(rejected, fmt.Sprintf("%s: full (ram %d/%d MB)", h.ID, a.ram, int(capRAM)))
 			continue
 		}
-		if h.DiskGB > 0 && float64(a.disk+b.Spec.DiskGB) > float64(h.DiskGB)*0.9 {
+		// Disk is thin-provisioned (Incus/ZFS/btrfs): allow 2x; local dev driver does not allocate disk.
+		if h.Driver != "local" && h.DiskGB > 0 && float64(a.disk+b.Spec.DiskGB) > float64(h.DiskGB)*2 {
 			rejected = append(rejected, fmt.Sprintf("%s: disk full", h.ID))
 			continue
 		}
