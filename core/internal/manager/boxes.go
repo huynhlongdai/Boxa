@@ -1105,6 +1105,11 @@ func (m *Manager) terminateBox(ctx context.Context, b *model.Box, actor, why str
 		}
 	}
 	m.setStatus(ctx, b, model.StatusTerminated, actor, note)
+	if b.HostID != "" { // v1.4: a sandbox host exists only for its one box
+		if h, err := m.Store.GetHost(ctx, b.HostID); err == nil && h.Billing == "sandbox" && h.Status != "deleted" {
+			go m.destroyHost(context.Background(), h, actor, "its box ended (sandbox billed per second)")
+		}
+	}
 	return m.decorateBox(ctx, b), nil
 }
 

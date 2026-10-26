@@ -33,6 +33,7 @@ func (m *Manager) ListProviders(ctx context.Context) ([]*model.Provider, error) 
 		if p.TokenEnc != "" && p.TokenSource == "" {
 			p.TokenSource = "api"
 		}
+		m.fillProviderMeta(p)
 	}
 	sort.Slice(ps, func(i, j int) bool { return order[ps[i].ID] < order[ps[j].ID] })
 	return ps, nil

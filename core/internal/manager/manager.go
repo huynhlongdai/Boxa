@@ -49,7 +49,10 @@ type Config struct {
 	HostDownAfter      time.Duration
 	CreateWait         time.Duration
 	URLKey             string           // HMAC key for box URL tokens (defaults to a random per-process key)
-	ProviderChain      []string         // burst fallback order (default hetzner, vultr, digitalocean, contabo, netcup)
+	ProviderChain      []string         // burst fallback order (default hetzner, vultr, digitalocean, contabo, netcup, then the sandbox chain)
+	AutoSandbox        bool             // v1.4: box_up may create sandboxes without approval (BOXA_AUTO_SANDBOX)
+	SandboxMode        string           // v1.4: auto | dial (T2) | shim (T3) default for sandbox providers
+	SandboxEmptyAfter  time.Duration    // v1.4: destroy an empty sandbox host after this (default 1 min)
 	ObjectStore        *objstore.Config // snapshot storage from env (nil = settings/local)
 	TelegramAPI        string           // override https://api.telegram.org (tests)
 	// v1.3
@@ -63,6 +66,9 @@ type Config struct {
 }
 
 func (c *Config) defaults() {
+	if c.SandboxEmptyAfter == 0 {
+		c.SandboxEmptyAfter = time.Minute
+	}
 	if c.LedgerInterval == 0 {
 		c.LedgerInterval = time.Minute
 	}
@@ -208,6 +214,7 @@ func (m *Manager) Init(ctx context.Context, envAdminKey string) (string, error) 
 		}
 	}
 	m.initV13(ctx)
+	m.initV14(ctx)
 	return m.bootstrapAdmin(ctx, envAdminKey)
 }
 

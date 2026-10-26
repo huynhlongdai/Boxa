@@ -94,10 +94,12 @@ func needsProps() map[string]any {
 		"location":       str("Where you (the agent) run, for latency: region id (sin, fra1), ISO country (VN, US) or \"lat,lon\""),
 		"max_latency_ms": num("Reject placements estimated slower than this round-trip time"),
 		"optimize":       enum("What to favour when ranking options (default balanced)", "balanced", "cost", "speed", "reliability", "latency"),
-		"isolation":      enum("container (default, fastest) | vm (own kernel, for untrusted code) | sandbox (T2 sandbox API)", "any", "container", "vm", "sandbox"),
+		"isolation":      enum("container (default, fastest) | vm (own kernel, for untrusted code) | sandbox (T2/T3 sandbox API: E2B, Daytona, Prized, boxd.sh, Novita, …)", "any", "container", "vm", "sandbox"),
 		"arch":           enum("CPU architecture", "any", "amd64", "arm64"),
 		"lifetime":       enum("ephemeral = thrown away after the job; persistent = kept and slept when idle", "ephemeral", "persistent"),
 		"duration_hours": num("Expected run time, used for the cost estimate"),
+		"untrusted":      boolean("The box runs code you do not trust (prefers VMs and hardware-isolated sandboxes)"),
+		"fork":           boolean("You will fork/clone the box (prefers places with native fork)"),
 	}
 }
 
@@ -107,7 +109,7 @@ var Tools = []Tool{
 		Description: "START HERE. Returns your live box with this name (waking it if asleep, with a resume summary of recent commands, running jobs and changed files) or creates it. Safe to call at the start of every session: the same name never creates a second box. Pass profile (e.g. coding-agent) instead of guessing cpu/ram.",
 		InputSchema: obj(withName(specProps(false)), "name")},
 	{Name: "box_recommend", Title: "Recommend where to run", REST: "POST /v1/recommend", Annotations: ro(),
-		Description: "Rank every way to satisfy your needs (warm pre-started container, container on a pool host, Incus VM, new provider server) with price, ETA in seconds, a 0-100 score and plain-language reasons, plus rejected options and why. Creates nothing. Use when unsure which profile/size to pick or when box_up returned NO_CAPACITY.",
+		Description: "Rank every way to satisfy your needs (warm pre-started container, container on a pool host, Incus VM, new provider server, per-second sandbox API such as E2B / Daytona / Prized / boxd.sh) with price, ETA in seconds, a 0-100 score and plain-language reasons, plus rejected options and why. Creates nothing. Use when unsure which profile/size to pick or when box_up returned NO_CAPACITY.",
 		InputSchema: obj(recommendProps())},
 	{Name: "box_up", Title: "Create a box", REST: "POST /v1/boxes", Annotations: rw(),
 		Description: "Create a Linux sandbox box and wait until it is running (warm-pool hits start in about a second). Prefer box_ensure for long-lived work. Pass profile and optional limits (max_price_hour, location, isolation) and Boxa auto-picks template, size and placement; or pass template + cpu/ram_mb explicitly. The response includes estimate {kind, cost_per_hour, expected_total_usd, eta_seconds, actual_seconds, warm_hit} and next hints.",

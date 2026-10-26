@@ -233,7 +233,7 @@ var ops = []op{
 	// v1.3: smart providers, need-based selection, speed, agent support, mesh
 	{Method: "GET", Path: "/v1/profiles", Summary: "Workload profiles + per-agent-kind defaults", Tag: "discovery", NoAuth: true},
 	{Method: "POST", Path: "/v1/recommend", Summary: "Rank placement options for requirements (price, ETA, score, reasons)", Tag: "selection", Req: manager.RecommendInput{}, Resp: manager.RecommendResult{},
-		Desc: "Options: warm (pre-started container), pool (container on a pool host), vm (Incus VM), burst (new provider server), sandbox (T2 API, when connected). Nothing is created."},
+		Desc: "Options: warm (pre-started container), pool (container on a pool host), vm (Incus VM), burst (new provider server), sandbox (v1.4 T2/T3 sandbox API, per-second; requires approval until the provider is connected and BOXA_AUTO_SANDBOX or BOXA_AUTO_BURST is on). Nothing is created."},
 	{Method: "POST", Path: "/v1/boxes/ensure", Summary: "Get-or-create a box by name (idempotent)", Tag: "boxes", Req: manager.EnsureInput{}, Resp: manager.EnsureResult{}, Status: 200,
 		Desc: "200 when an existing box is returned (action reused|woken, with resume), 201 when created."},
 	{Method: "GET", Path: "/v1/boxes/{id}/resume", Summary: "Wake if needed and summarise recent state (execs, jobs, files, ports)", Tag: "boxes", Resp: manager.ResumeInfo{}, Params: []param{idP}},
@@ -256,6 +256,10 @@ var ops = []op{
 	{Method: "GET", Path: "/v1/mesh/config", Summary: "Generated headscale config.yaml, derp.yaml and acl.json", Tag: "mesh", Params: []param{qp("format", "string", "yaml = config.yaml as text")}},
 	{Method: "GET", Path: "/v1/mesh/acl", Summary: "Generated ACL policy from box ownership + egress", Tag: "mesh"},
 	{Method: "POST", Path: "/v1/mesh/keys", Summary: "Create a pre-auth key for a host or box", Tag: "mesh", Req: manager.MeshKeyInput{}, Resp: manager.MeshKeyResult{}, Status: 201},
+	// v1.4: sandbox provider tier
+	{Method: "GET", Path: "/v1/sandbox/providers", Summary: "Sandbox API providers (T2/T3): capabilities, per-second prices, regions, verification level, connection state", Tag: "infra", Resp: manager.SandboxProviderView{}, List: true,
+		Desc: "Connect one with PUT /v1/providers/{id}/token (multi-field credentials as a JSON object string, e.g. {\"token\":\"…\",\"project_id\":\"…\"}). mode=dial: boxd runs inside the sandbox (T2); mode=shim: exec-only gateway shim (T3)."},
+	{Method: "POST", Path: "/v1/sandbox/adapters/lint", Summary: "Check a declarative YAML sandbox adapter (admin)", Tag: "infra", Req: LintRequest{}, Resp: LintResult{}},
 	{Method: "POST", Path: "/a2a", Summary: "A2A JSON-RPC 2.0 task API", Tag: "a2a",
 		Desc: "Methods: message/send (alias tasks/send), message/stream (alias tasks/sendSubscribe, SSE), tasks/get, tasks/cancel, tasks/resubscribe. Text part = command (metadata.box_id); data part {box_id, command} or {tool, arguments}. Task id of a command = job id."},
 }

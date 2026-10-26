@@ -16,6 +16,7 @@ import (
 	"boxa/core/internal/manager"
 	"boxa/core/internal/mcp"
 	"boxa/core/internal/model"
+	"boxa/core/internal/sandbox"
 	"boxa/core/internal/selector"
 )
 
@@ -34,6 +35,15 @@ func (s *Server) llmsHeader(r *http.Request) (string, string, *strings.Builder) 
 	fmt.Fprintf(&b, "## %s\n\n%s\n\n", t("llms.h_choose"), t("llms.choose"))
 	for _, p := range selector.Profiles {
 		fmt.Fprintf(&b, "- `%s` (%s, %s, %.0f vCPU / %d MB): %s\n", p.ID, p.Template, p.Lifecycle, p.Defaults.CPU, p.Defaults.RAMMB, p.Description)
+	}
+	b.WriteString("\n")
+	// v1.4: sandbox API providers
+	fmt.Fprintf(&b, "## %s\n\n%s\n\n", t("llms.h_sandbox"), t("llms.sandbox"))
+	for _, p := range s.M.Providers.All() {
+		if sp, ok := p.(sandbox.Provider); ok {
+			in := sp.Info()
+			fmt.Fprintf(&b, "- `%s` %s (%s, %s, %s): %s\n", in.ID, in.Name, in.Tier, in.Adapter, in.Verification, in.Docs)
+		}
 	}
 	b.WriteString("\n")
 	return loc, base, &b

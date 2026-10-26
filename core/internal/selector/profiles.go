@@ -191,6 +191,7 @@ func Resolve(req model.Requirements, kind string) (model.Requirements, Profile) 
 	}
 	out.PublicURL = out.PublicURL || req.PublicURL
 	out.Untrusted = out.Untrusted || req.Untrusted
+	out.Fork = out.Fork || req.Fork
 	if out.Untrusted && out.Isolation == "" {
 		out.Isolation = "vm"
 	}

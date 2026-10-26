@@ -111,7 +111,7 @@ func (m *Manager) reapHosts(ctx context.Context, now time.Time) error {
 			continue
 		}
 		// Empty burst hosts.
-		if h.Billing != "burst" || h.Status != "ready" {
+		if (h.Billing != "burst" && h.Billing != "sandbox") || h.Status != "ready" {
 			continue
 		}
 		if count[h.ID] > 0 {
@@ -127,7 +127,14 @@ func (m *Manager) reapHosts(ctx context.Context, now time.Time) error {
 			m.Store.PutHost(ctx, h)
 			continue
 		}
-		if now.Sub(*h.EmptySince) > m.Cfg.BurstEmptyAfter {
+		after := m.Cfg.BurstEmptyAfter
+		if h.Billing == "sandbox" {
+			after = m.Cfg.SandboxEmptyAfter
+			if now.Sub(h.CreatedAt) < m.Cfg.CreateWait+30*time.Second {
+				continue // still being handed to its box
+			}
+		}
+		if now.Sub(*h.EmptySince) > after {
 			m.destroyHost(ctx, h, "reaper", fmt.Sprintf("burst host empty for %s", now.Sub(*h.EmptySince).Round(time.Minute)))
 		}
 	}

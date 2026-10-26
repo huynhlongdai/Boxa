@@ -33,6 +33,8 @@ type Requirements struct {
 	Optimize  string `json:"optimize,omitempty" yaml:"optimize,omitempty"`
 	PublicURL bool   `json:"public_url,omitempty" yaml:"public_url,omitempty"`
 	Untrusted bool   `json:"untrusted,omitempty" yaml:"untrusted,omitempty"`
+	// Fork (v1.4): the workload forks/clones the box (parallel attempts).
+	Fork bool `json:"fork,omitempty" yaml:"fork,omitempty"`
 }
 
 // BoxEstimate is the cost/ETA preview attached to every create response.
@@ -49,14 +51,17 @@ type BoxEstimate struct {
 
 // ProviderPrefs are operator preferences per provider (connect wizard).
 type ProviderPrefs struct {
-	Enabled       bool      `json:"enabled"`
-	Priority      int       `json:"priority"`        // 1 = first; 0 = use the chain order
-	MaxHourlyUSD  float64   `json:"max_hourly_usd"`  // refuse offers above this price (0 = no cap)
-	MaxMonthlyUSD float64   `json:"max_monthly_usd"` // cap on the sum of monthly prices of live hosts (0 = no cap)
-	MaxServers    int       `json:"max_servers"`     // cap on live hosts at this provider (0 = no cap)
-	Regions       []string  `json:"regions"`         // allowed regions (empty = all)
-	DefaultRegion string    `json:"default_region"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	Enabled       bool     `json:"enabled"`
+	Priority      int      `json:"priority"`        // 1 = first; 0 = use the chain order
+	MaxHourlyUSD  float64  `json:"max_hourly_usd"`  // refuse offers above this price (0 = no cap)
+	MaxMonthlyUSD float64  `json:"max_monthly_usd"` // cap on the sum of monthly prices of live hosts (0 = no cap)
+	MaxServers    int      `json:"max_servers"`     // cap on live hosts at this provider (0 = no cap)
+	Regions       []string `json:"regions"`         // allowed regions (empty = all)
+	DefaultRegion string   `json:"default_region"`
+	// v1.4 (sandbox providers): auto (T2 dial-in when the sandbox can keep a
+	// background process and BOXA_PUBLIC_URL is set, else T3 shim) | dial | shim.
+	SandboxMode string    `json:"sandbox_mode,omitempty"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // DefaultProviderPrefs: enabled, no caps.

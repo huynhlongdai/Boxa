@@ -10,6 +10,7 @@ import (
 
 	"boxa/core/internal/model"
 	"boxa/core/internal/provider"
+	"boxa/core/internal/sandbox"
 	"boxa/core/internal/store"
 )
 
@@ -123,6 +124,9 @@ func (m *Manager) candidates(ctx context.Context, b *model.Box, agent *model.Age
 			continue
 		}
 		if h.Status != "ready" || !m.Hub.Connected(h.ID) {
+			continue
+		}
+		if h.Billing == "sandbox" { // v1.4: one box per sandbox, never shared
 			continue
 		}
 		if !allowed(agent.Policy.Providers, h.Provider) || !allowed(agent.Policy.Regions, h.Region) {
@@ -305,7 +309,12 @@ func (m *Manager) proposePoolExpand(ctx context.Context, b *model.Box, c *candid
 // Providers with a preference priority (1 = first) come before the rest,
 // which keep their configured chain order (v1.3).
 func (m *Manager) chain() []string {
-	base := provider.DefaultChain
+	base := append([]string{}, provider.DefaultChain...)
+	for _, id := range sandbox.DefaultChain { // v1.4: sandbox providers after the T1 chain
+		if _, ok := m.Providers.Get(id); ok {
+			base = append(base, id)
+		}
+	}
 	if len(m.Cfg.ProviderChain) > 0 {
 		base = m.Cfg.ProviderChain
 	}

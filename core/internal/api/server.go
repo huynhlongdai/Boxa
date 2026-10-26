@@ -97,6 +97,7 @@ func (s *Server) routes() http.Handler {
 			r.Get("/boxes/{id}/yaml", s.boxYAML)
 			r.Post("/quote", s.quote)
 			s.routesV13(r)
+			s.routesV14(r)
 			r.Get("/boxes/{id}/files", s.readFile)
 			r.Put("/boxes/{id}/files", s.writeFile)
 			r.Post("/boxes/{id}/grep", s.grep)

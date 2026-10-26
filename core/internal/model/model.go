@@ -230,6 +230,11 @@ type Provider struct {
 	TokenEnc     string         `json:"-"`
 	TokenSource  string         `json:"token_source,omitempty"` // env | api
 	ChainRank    int            `json:"chain_rank,omitempty"`   // 1-based position in the burst fallback chain (0 = not in chain)
+	// v1.4: how the provider is integrated (filled from the registry, not stored).
+	Group        string `json:"group,omitempty"`        // vps | sandbox
+	Adapter      string `json:"adapter,omitempty"`      // api | native | yaml
+	Verification string `json:"verification,omitempty"` // live-verified | docs-verified | sdk-source
+	Docs         string `json:"docs,omitempty"`
 }
 
 type Offer struct {

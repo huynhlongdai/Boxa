@@ -639,6 +639,11 @@ func needsBody(a args, withSpec bool) map[string]any {
 			rq[k] = a.num(k)
 		}
 	}
+	for _, k := range []string{"untrusted", "fork"} {
+		if v, ok := a[k].(bool); ok && v {
+			rq[k] = true
+		}
+	}
 	if withSpec {
 		if a.has("cpu") {
 			rq["cpu"] = a.num("cpu")

@@ -18,7 +18,7 @@ import (
 	"boxa/core/internal/api"
 	"boxa/core/internal/manager"
 	"boxa/core/internal/objstore"
-	"boxa/core/internal/provider"
+	"boxa/core/internal/sandbox"
 	"boxa/core/internal/secret"
 	"boxa/core/internal/store"
 )
@@ -137,9 +137,11 @@ func main() {
 		},
 		URLKey:        secret.Hash("url:" + master),
 		ProviderChain: chain,
+		AutoSandbox:   envBool("BOXA_AUTO_SANDBOX"),
+		SandboxMode:   os.Getenv("BOXA_SANDBOX_MODE"),
 		ObjectStore:   objCfg,
 	}
-	m := manager.New(st, provider.Default(nil), crypt, cfg)
+	m := manager.New(st, sandbox.DefaultRegistry(nil), crypt, cfg)
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	adminKey, err := m.Init(ctx, os.Getenv("BOXA_ADMIN_KEY"))

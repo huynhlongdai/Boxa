@@ -17,6 +17,7 @@ import (
 	"boxa/core/internal/egress"
 	"boxa/core/internal/model"
 	"boxa/core/internal/provider"
+	"boxa/core/internal/sandbox"
 	"boxa/core/internal/selector"
 )
 
@@ -145,7 +146,7 @@ func (m *Manager) firstAutoPlaceable(ranked []selector.Scored) *selector.Scored 
 		switch s.Kind {
 		case selector.KindWarm, selector.KindPool, selector.KindVM:
 			return s
-		case selector.KindBurst:
+		case selector.KindBurst, selector.KindSandbox:
 			if !s.RequiresApproval {
 				return s
 			}
@@ -245,7 +246,7 @@ func (m *Manager) buildOptions(ctx context.Context, b *model.Box, agent *model.A
 			CPU: h.CPU, RAMMB: h.RAMMB, DiskGB: maxInt(h.DiskGB*2, b.Spec.DiskGB), CostPerHour: model.Round6(c.costPerHour),
 			ExpectedTotalUSD: model.Round4(c.costPerHour*hours + c.cost), ETASeconds: round1(m.containerETA(h, baseTemplate)),
 			Reliability: 1, Health: "healthy", Headroom: math.Max(0, 1-c.loadAfter), LatencyMS: selector.EstimateLatencyMS(req.Location, h.Region),
-			Notes: []string{fmt.Sprintf("host load %.0f%% → %.0f%%", c.loadBefore*100, c.loadAfter*100)}}
+			Notes: []string{fmt.Sprintf("host load %.0f%% → %.0f%%", c.loadBefore*100, c.loadAfter*100)}, Tier: "T1", Fork: true, Pause: true, Ports: true}
 		opts = append(opts, o)
 		if hasFeature(h, "vm") {
 			v := o
@@ -270,7 +271,7 @@ func (m *Manager) buildOptions(ctx context.Context, b *model.Box, agent *model.A
 		opts = append(opts, selector.Option{Kind: selector.KindWarm, Provider: h.Provider, Region: h.Region, HostID: h.ID, Arch: h.Arch, Isolation: "container",
 			CPU: h.CPU, RAMMB: h.RAMMB, DiskGB: maxInt(h.DiskGB*2, b.Spec.DiskGB), CostPerHour: model.Round6(cph), ExpectedTotalUSD: model.Round4(cph * hours),
 			ETASeconds: round1(m.warmClaimETA()), Reliability: 1, Health: "healthy", Headroom: warmHeadroom(cands, h.ID), LatencyMS: selector.EstimateLatencyMS(req.Location, h.Region),
-			WarmID: e.ID, Notes: []string{"pre-started container: no image unpack or template setup"}})
+			WarmID: e.ID, Notes: []string{"pre-started container: no image unpack or template setup"}, Tier: "T1", Fork: true, Pause: true, Ports: true})
 	}
 	if len(hosts) > 0 && req.Isolation == "vm" {
 		anyVM := false
@@ -288,7 +289,13 @@ func (m *Manager) buildOptions(ctx context.Context, b *model.Box, agent *model.A
 		}
 		opts = append(opts, o)
 	}
-	rej = append(rej, selector.Rejection{Kind: selector.KindSandbox, Reason: "no T2 sandbox API provider is connected (planned: E2B / Daytona style adapters)"})
+	anySandbox := false
+	for _, o := range opts {
+		anySandbox = anySandbox || o.Kind == selector.KindSandbox
+	}
+	if !anySandbox {
+		rej = append(rej, selector.Rejection{Kind: selector.KindSandbox, Reason: "no sandbox provider has a size that fits (or all are excluded by policy/region)"})
+	}
 	return opts, rej
 }
 
@@ -372,7 +379,7 @@ func (m *Manager) offerOptions(ctx context.Context, b *model.Box, agent *model.A
 			if s.Samples == 0 {
 				st.rel = 0.9 // unknown history: slightly below proven providers
 			}
-			if st.prov == 0 {
+			if st.prov == 0 && !isSandboxTier(prov.Tier()) {
 				st.prov = defaultProvisionS[o.Provider]
 				if st.prov == 0 {
 					st.prov = 120
@@ -397,6 +404,11 @@ func (m *Manager) offerOptions(ctx context.Context, b *model.Box, agent *model.A
 		if o.Confidence == "stock_limited" {
 			opt.Headroom = 0.5
 			opt.Notes = append(opt.Notes, "stock limited at the provider")
+		}
+		opt.Tier, opt.Fork, opt.Pause, opt.Ports = "T1", true, true, true
+		if sp, ok := prov.(sandbox.Provider); ok {
+			m.decorateSandboxOption(ctx, &opt, sp, st.prov)
+			opt.RequiresApproval = !m.autoPlace(opt.Kind) || !connected(o.Provider)
 		}
 		best[key] = opt
 	}
@@ -446,6 +458,9 @@ func (m *Manager) place(ctx context.Context, b *model.Box, agent *model.Agent, e
 		pl.Kind, pl.ETA = "pool", m.containerETA(pl.Host, baseTemplate)
 	} else if pl.Offer != nil {
 		pl.Kind, pl.ETA = "burst", defaultProvisionS[pl.Offer.Provider]+m.containerETA(nil, baseTemplate)
+		if sp, ok := m.sandboxProv(pl.Offer.Provider); ok {
+			pl.Kind, pl.Billing, pl.ETA = "sandbox", "sandbox", m.sandboxETA(ctx, sp.Info())
+		}
 	}
 	return pl, nil, nil
 }
@@ -488,15 +503,19 @@ func (m *Manager) scheduleSmart(ctx context.Context, b *model.Box, agent *model.
 				pl.Isolation = "vm"
 			}
 			return pl, nil, true
-		case selector.KindBurst:
-			if !m.Cfg.AutoBurst || !connected(s.Provider) {
+		case selector.KindBurst, selector.KindSandbox:
+			if !m.autoPlace(s.Kind) || !connected(s.Provider) {
 				continue
 			}
 			o := m.findOffer(ctx, s.Provider, s.SKU, s.Region)
 			if o == nil {
 				continue
 			}
-			return &Placement{Offer: o, Billing: "burst", CostPerHour: s.CostPerHour, Reason: reason, Kind: "burst", ETA: s.ETASeconds, Score: s.Score}, nil, true
+			billing := "burst"
+			if s.Kind == selector.KindSandbox {
+				billing = "sandbox"
+			}
+			return &Placement{Offer: o, Billing: billing, CostPerHour: s.CostPerHour, Reason: reason, Kind: s.Kind, ETA: s.ETASeconds, Score: s.Score}, nil, true
 		}
 	}
 	return nil, nil, false

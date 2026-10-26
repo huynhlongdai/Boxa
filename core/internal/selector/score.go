@@ -15,7 +15,7 @@ const (
 	KindPool    = "pool"    // new container on a connected pool host
 	KindVM      = "vm"      // Incus VM on a pool host that supports it
 	KindBurst   = "burst"   // new server rented from a provider (hourly)
-	KindSandbox = "sandbox" // T2 sandbox API (E2B/Daytona/Modal-style), when connected
+	KindSandbox = "sandbox" // T2/T3 sandbox API (E2B, Daytona, Prized, … v1.4)
 )
 
 // Option is one way to satisfy the requirements, built by the manager from
@@ -44,6 +44,18 @@ type Option struct {
 	Blocked          string   `json:"blocked,omitempty"` // breaker open / rate limited / budget cap
 	Notes            []string `json:"notes,omitempty"`
 	WarmID           string   `json:"warm_id,omitempty"`
+	// v1.4 capability flags (hosts: fork = clone, pause = sleep, ports = public URL).
+	Tier         string  `json:"tier,omitempty"` // T1 | T2 | T3
+	Fork         bool    `json:"fork"`
+	Pause        bool    `json:"pause"`
+	Ports        bool    `json:"ports"`
+	GPU          bool    `json:"gpu,omitempty"`
+	MaxLifetimeH float64 `json:"max_lifetime_h,omitempty"` // 0 = unlimited
+	BootMS       int     `json:"boot_ms,omitempty"`
+	Verification string  `json:"verification,omitempty"` // adapter verification level (sandbox providers)
+	// StrongIsolation: the sandbox has its own kernel (microVM / VM / gVisor);
+	// false for container-based sandbox APIs.
+	StrongIsolation bool `json:"strong_isolation,omitempty"`
 }
 
 // Component is one explained part of a score.
@@ -107,6 +119,9 @@ func Rank(req model.Requirements, prof Profile, opts []Option) ([]Scored, []Reje
 			// untrusted code may still run in a container, but only with an explicit opt-in
 			reject(o, "untrusted workload needs a VM or sandbox (containers share the host kernel)")
 			continue
+		case req.Isolation == "vm" && req.Untrusted && o.Kind == KindSandbox && !o.StrongIsolation:
+			reject(o, "untrusted workload: this sandbox API runs containers on a shared kernel")
+			continue
 		case req.Isolation == "vm" && !req.Untrusted && o.Isolation == "container":
 			reject(o, "isolation=vm requested")
 			continue
@@ -116,11 +131,17 @@ func Rank(req model.Requirements, prof Profile, opts []Option) ([]Scored, []Reje
 		case req.Isolation == "sandbox" && o.Isolation != "sandbox":
 			reject(o, "isolation=sandbox requested")
 			continue
-		case req.Lifetime == "persistent" && o.Kind == KindSandbox:
-			reject(o, "sandbox APIs are ephemeral; persistent boxes need a host")
+		case req.Lifetime == "persistent" && o.Kind == KindSandbox && !o.Pause:
+			reject(o, "this sandbox cannot pause; persistent boxes need pause/resume or a host")
 			continue
-		case req.PublicURL && o.Kind == KindSandbox:
-			reject(o, "sandbox APIs do not expose a public URL")
+		case o.Kind == KindSandbox && o.MaxLifetimeH > 0 && req.DurationHours > o.MaxLifetimeH:
+			reject(o, fmt.Sprintf("sandbox lives at most %.1f h < %.1f h needed", o.MaxLifetimeH, req.DurationHours))
+			continue
+		case req.PublicURL && o.Kind == KindSandbox && !o.Ports:
+			reject(o, "this sandbox provider does not expose a public URL")
+			continue
+		case req.Fork && !o.Fork:
+			reject(o, "fork/clone requested but not supported here")
 			continue
 		}
 		keep = append(keep, o)
@@ -180,6 +201,18 @@ func Rank(req model.Requirements, prof Profile, opts []Option) ([]Scored, []Reje
 			total -= 5
 			s.Reasons = append(s.Reasons, "−5: price data is stale")
 		}
+		if o.Kind == KindSandbox && req.Untrusted && o.StrongIsolation {
+			total += 8
+			s.Reasons = append(s.Reasons, "+8: own-kernel sandbox (microVM/gVisor) for untrusted code")
+		}
+		if o.Kind == KindSandbox && req.Lifetime == "ephemeral" && o.MinBillingHours == 0 {
+			total += 4
+			s.Reasons = append(s.Reasons, "+4: per-second billing, nothing left running after the task")
+		}
+		if o.Kind == KindSandbox && req.Fork && o.Fork {
+			total += 3
+			s.Reasons = append(s.Reasons, "+3: native fork")
+		}
 		s.Score = round1(clamp(total, 0, 100))
 		s.Reasons = append(explain(s, w), s.Reasons...)
 		s.Reasons = append(s.Reasons, o.Notes...)
@@ -215,7 +248,7 @@ func explain(s Scored, w Weights) []string {
 		return l[i].k < l[j].k
 	})
 	var out []string
-	label := map[string]string{KindWarm: "warm container", KindPool: "pool host container", KindVM: "Incus VM", KindBurst: "new " + s.Provider + " server", KindSandbox: "sandbox API"}[s.Kind]
+	label := map[string]string{KindWarm: "warm container", KindPool: "pool host container", KindVM: "Incus VM", KindBurst: "new " + s.Provider + " server", KindSandbox: s.Provider + " sandbox"}[s.Kind]
 	out = append(out, fmt.Sprintf("%s in %s: score %.0f/100", label, orStr(s.Region, "?"), s.Score))
 	for i := 0; i < len(l) && i < 2; i++ {
 		out = append(out, fmt.Sprintf("+ %s %.0f (%s, weight %.0f%%)", l[i].k, l[i].c.Score, l[i].c.Value, l[i].c.Weight*100))

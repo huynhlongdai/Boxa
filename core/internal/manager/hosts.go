@@ -11,6 +11,7 @@ import (
 	"boxa/core/internal/model"
 	"boxa/core/internal/proto"
 	"boxa/core/internal/provider"
+	"boxa/core/internal/sandbox"
 	"boxa/core/internal/secret"
 	"boxa/core/internal/store"
 )
@@ -212,6 +213,9 @@ func (m *Manager) CreateHost(ctx context.Context, p *Principal, provID, sku, reg
 	if err != nil {
 		return nil, err
 	}
+	if sp, ok := prov.(sandbox.Provider); ok { // v1.4 T2/T3: one sandbox = one single-box host
+		return m.createSandboxHost(ctx, p, sp, token, sku, region)
+	}
 	if m.Cfg.PublicURL == "" {
 		return nil, model.EH(model.ErrInvalid, "Set BOXA_PUBLIC_URL to the https URL where boxd can reach core.", "BOXA_PUBLIC_URL is not configured")
 	}
@@ -355,6 +359,7 @@ func (m *Manager) destroyHost(ctx context.Context, h *model.Host, actor, why str
 	if p, ok := m.Hub.Peer(h.ID); ok {
 		p.Close()
 	}
+	m.Hub.RegisterVirtual(h.ID, nil)
 	h.Status, h.Connected, h.TokenHash, h.BootstrapHash = "deleted", false, "", ""
 	if err := m.Store.PutHost(ctx, h); err != nil {
 		return err
@@ -367,6 +372,7 @@ func (m *Manager) destroyHost(ctx context.Context, h *model.Host, actor, why str
 // waitHostReady blocks until a new host's boxd connects.
 func (m *Manager) waitHostReady(ctx context.Context, id string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
+	delay := 250 * time.Millisecond // v1.4: sandboxes join in seconds; poll fast first
 	for time.Now().Before(deadline) {
 		if m.Hub.Connected(id) {
 			if h, err := m.Store.GetHost(ctx, id); err == nil {
@@ -377,7 +383,10 @@ func (m *Manager) waitHostReady(ctx context.Context, id string, timeout time.Dur
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(3 * time.Second):
+		case <-time.After(delay):
+		}
+		if delay < 3*time.Second {
+			delay *= 2
 		}
 	}
 	log.Printf("host %s did not connect within %s", id, timeout)

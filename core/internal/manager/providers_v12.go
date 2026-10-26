@@ -18,6 +18,11 @@ func (m *Manager) ConfigureProvidersFromEnv(ctx context.Context, getenv func(str
 	var ids []string
 	for _, p := range m.Providers.All() {
 		tok := provider.TokenFromEnv(p.ID(), getenv)
+		if ef, ok := p.(interface {
+			TokenFromEnv(func(string) string) string
+		}); ok { // v1.4 sandbox providers
+			tok = ef.TokenFromEnv(getenv)
+		}
 		if tok == "" {
 			continue
 		}

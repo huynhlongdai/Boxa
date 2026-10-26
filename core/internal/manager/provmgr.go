@@ -457,6 +457,8 @@ type CatalogItem struct {
 	Health            string    `json:"health"`
 	Usable            bool      `json:"usable"`
 	Blocked           string    `json:"blocked,omitempty"`
+	Tier              string    `json:"tier"`  // v1.4: T1 (server) | T2/T3 (sandbox API, per second)
+	Group             string    `json:"group"` // vps | sandbox
 }
 
 // CatalogSource summarises one data source.
@@ -568,6 +570,10 @@ func (m *Manager) buildCatalog(ctx context.Context) (*Catalog, error) {
 			health[it.Provider] = h
 		}
 		it.Health = h
+		it.Tier, it.Group = "T1", "vps"
+		if sp, ok := m.sandboxProv(it.Provider); ok {
+			it.Tier, it.Group = sp.Info().Tier, "sandbox"
+		}
 		it.Blocked = m.offerBlocked(ctx, model.Offer{Provider: it.Provider, Region: it.Region, PriceHour: it.PriceHour, PriceMonth: it.PriceMonth})
 		mp, err := m.Store.GetProvider(ctx, it.Provider)
 		it.Usable = err == nil && mp.Connected && it.Blocked == ""
