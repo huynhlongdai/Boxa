@@ -416,8 +416,8 @@ export function CatalogView() {
               {items.map((i) => (
                 <TR key={`${i.provider}-${i.sku}-${i.region}`} className={cn(!i.usable && "opacity-70")}>
                   <TD className="whitespace-nowrap"><Mono>{i.provider}</Mono></TD>
-                  <TD><Mono>{i.sku}</Mono></TD>
-                  <TD><Mono>{i.region}</Mono></TD>
+                  <TD className="whitespace-nowrap"><Mono>{i.sku}</Mono></TD>
+                  <TD className="whitespace-nowrap"><Mono>{i.region}</Mono></TD>
                   <TD className="whitespace-nowrap"><Mono className="text-muted-foreground">{i.cpu}c · {mb(i.ram_mb)} · {i.disk_gb}G · {i.arch}</Mono></TD>
                   <TD className="whitespace-nowrap font-mono text-[13px]">
                     {usd(i.price_hour)}

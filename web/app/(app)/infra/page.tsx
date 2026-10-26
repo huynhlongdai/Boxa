@@ -155,7 +155,7 @@ function ProvidersTab() {
       <SectionTitle>{t("expansion")}</SectionTitle>
       <div className="mb-6"><ApprovalList filter={(a) => a.type === "pool_expand" || a.type === "host_down"} emptyText={t("noExpansion")} /></div>
 
-      <SectionTitle right={providers && <Button size="sm" onClick={() => setWizard(true)}><PlugZap /> {t("connectWizard")}</Button>}>{t("providers")}</SectionTitle>
+      <SectionTitle right={providers && <Button size="sm" data-open-wizard onClick={() => setWizard(true)}><PlugZap /> {t("connectWizard")}</Button>}>{t("providers")}</SectionTitle>
       {providers && <ConnectProviderWizard providers={providers.items} open={wizard} onOpenChange={setWizard} />}
       {pe ? <ErrorBox error={pe} /> : !providers ? <LoadingRows rows={2} /> : (
         <>

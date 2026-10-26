@@ -205,7 +205,7 @@ export function recommend(s: MockState, L: Locale, body: { requirements?: Requir
     const freeRam = Math.round(h.ram_mb * (1 - h.ram_used_pct / 100));
     const cph = r4((h.price_hour / h.cpu) * cpu);
     const base = { provider: h.provider, region: h.region, host_id: h.id, arch: h.sku.startsWith("cax") ? "arm64" : "amd64", cpu, ram_mb: ram, disk_gb: disk, cost_per_hour: cph, expected_total_usd: 0,
-      reliability: 0.995, health: st.prov[h.provider]?.stats.status ?? "healthy", latency_ms: rtt(h.region), min_billing_h: 0, requires_approval: false, price_stale: false };
+      reliability: 0.995, health: "healthy", latency_ms: rtt(h.region), min_billing_h: 0, requires_approval: false, price_stale: false };
     if (freeCpu < cpu || freeRam < ram) { rej.push({ kind: "pool", provider: h.provider, region: h.region, host_id: h.id, reason: mt(L, "j_nocap", { host: h.id, cpu: freeCpu, ram: freeRam }) }); continue; }
     const headroom = Math.max(0, Math.round((1 - (h.cpu_used_pct / 100 + cpu / h.cpu)) * 100) / 100);
     opts.push({ ...base, kind: "pool", isolation: "container", eta_seconds: 8.5, headroom, reasons: [mt(L, "r_pool", { host: h.id, free: freeCpu })] });
@@ -580,7 +580,7 @@ export function handleV13(s: MockState, ctx: V13Ctx, M: string, segs: string[], 
       let woke = false;
       if (b.status === "sleeping") { b.status = "running"; b.last_active_at = iso(Date.now()); woke = true; ctx.pushEvent({ actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "box.woke", message: `Wake ${b.slug} (resume)`, cost_usd: null }); }
       const execs = s.events.filter((e) => e.box_id === b.id && e.type === "box.exec").sort((a, z) => Date.parse(z.ts) - Date.parse(a.ts)).slice(0, 5)
-        .map((e) => ({ ts: e.ts, command: (e.data?.command as string) ?? e.message.replace(/^[^:]*: /, "").replace(/ tokens_saved=.*$/, ""), exit_code: (e.data?.exit_code as number) ?? null, log_id: (e.data?.log_id as string) ?? e.log_id ?? null }));
+        .map((e) => ({ ts: e.ts, command: (e.data?.command as string) ?? e.message.replace(/^[^:]*: /, "").replace(/ tokens_saved=.*$/, ""), exit_code: (e.data?.exit_code as number) ?? (/exit=(\d+)/.test(e.message) ? Number(/exit=(\d+)/.exec(e.message)![1]) : null), log_id: (e.data?.log_id as string) ?? e.log_id ?? null }));
       const jobs = s.jobs.filter((j) => j.box_id === b.id && ["queued", "running"].includes(j.status));
       const snaps = s.snapshots.filter((x) => x.box_id === b.id).sort((a, z) => Date.parse(z.created_at) - Date.parse(a.created_at));
       const files = Object.keys(s.files[b.id] ?? {}).slice(0, 6);

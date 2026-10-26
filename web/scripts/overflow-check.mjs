@@ -8,7 +8,7 @@ const pwPath = process.env.PLAYWRIGHT_CORE || "playwright-core";
 const { chromium } = await import(pwPath).catch(() => import("playwright"));
 const base = process.env.BASE || "http://localhost:3199";
 const locales = (process.env.LOCALES || "vi,en,zh,ja").split(",");
-const routes = (process.env.ROUTES || "/,/boxes,/boxes/box_7f3a91,/boxes/box_7f3a91?tab=timeline,/boxes/box_7f3a91?tab=logs,/boxes/box_7f3a91?tab=snapshots,/boxes/box_7f3a91?tab=config,/agents,/agents/agt_kecon,/costs,/infra,/templates,/secrets,/settings,/admin,/admin?s=quotas,/admin?s=jobs,/developers,/onboarding,/login").split(",");
+const routes = (process.env.ROUTES || "/,/boxes,/boxes/box_7f3a91,/boxes/box_7f3a91?tab=timeline,/boxes/box_7f3a91?tab=logs,/boxes/box_7f3a91?tab=snapshots,/boxes/box_7f3a91?tab=config,/recommend,/agents,/agents/agt_kecon,/costs,/infra,/infra?s=health,/infra?s=catalog,/infra?s=speed,/infra?s=mesh,/templates,/secrets,/settings,/admin,/admin?s=quotas,/admin?s=jobs,/developers,/onboarding,/login").split(",");
 const viewports = (process.env.VIEWPORTS || "390x844,1366x900,1600x900").split(",").map((v) => {
   const [width, height] = v.split("x").map(Number);
   return { width, height };
@@ -96,7 +96,14 @@ for (const locale of locales) {
     }
     // Hộp thoại: tạo box (+ báo giá), wizard agent, bảng lệnh
     const dialogs = [
-      ["/boxes", async () => { await page.locator("main button:has(svg.lucide-plus)").first().click(); await page.waitForTimeout(400); await page.locator("[role=dialog] select").first().selectOption({ index: 1 }); await page.locator("[role=dialog] button:has(svg.lucide-calculator)").click(); await page.waitForTimeout(800); }],
+      // v1.3: tạo box theo nhu cầu (mặc định) → xếp hạng; chế độ tự chọn → báo giá
+      ["/boxes", async () => { await page.locator("main button:has(svg.lucide-plus)").first().click(); await page.waitForTimeout(600); await page.locator("[role=dialog] select").first().selectOption({ index: 1 }); await page.locator("[role=dialog] form button[type=submit]").click(); await page.waitForTimeout(1200); }],
+      ["/boxes", async () => { await page.locator("main button:has(svg.lucide-plus)").first().click(); await page.waitForTimeout(400); await page.locator("[role=dialog] [role=tab][aria-selected=false]").click(); await page.waitForTimeout(300); await page.locator("[role=dialog] select").first().selectOption({ index: 1 }); await page.locator("[role=dialog] button:has(svg.lucide-calculator)").click(); await page.waitForTimeout(800); }],
+      ["/recommend", async () => { await page.locator("main form button[type=submit]").click(); await page.waitForTimeout(1200); await page.locator("[data-rec-rejected] summary").click().catch(() => {}); await page.waitForTimeout(300); }],
+      ["/infra", async () => { await page.locator("[data-open-wizard]").click(); await page.waitForTimeout(400); await page.locator("[data-connect-wizard] [aria-pressed]").nth(2).click(); await page.locator("[data-connect-wizard] button:not([aria-label])").last().click(); await page.waitForTimeout(300); await page.locator("[data-connect-wizard] input").fill("dop_v1_0123456789abcdef0123"); await page.locator("[data-connect-wizard] button:not([aria-label])").last().click(); await page.waitForTimeout(1200); }],
+      ["/infra", async () => { await page.locator("[data-open-wizard]").click(); await page.waitForTimeout(400); await page.locator("[data-connect-wizard] [aria-pressed]").first().click(); await page.locator("[data-connect-wizard] button:not([aria-label])").last().click(); await page.waitForTimeout(300); await page.locator("[data-connect-wizard] input").fill("hcloud_0123456789abcdef0123"); await page.locator("[data-connect-wizard] button:not([aria-label])").last().click(); await page.waitForTimeout(1200); await page.locator("[data-connect-wizard] button:not([aria-label])").last().click(); await page.waitForTimeout(500); }],
+      ["/infra?s=health", async () => { await page.locator("[data-provider-health] button[aria-expanded]").first().click(); await page.waitForTimeout(400); }],
+      ["/infra?s=mesh", async () => { await page.locator("[data-mesh-key-open]").click(); await page.waitForTimeout(400); await page.locator("[role=dialog] button:not([aria-label])").last().click(); await page.waitForTimeout(900); }],
       ["/agents", async () => { await page.locator("main button:has(svg.lucide-plus)").first().click(); await page.waitForTimeout(600); }],
       ["/boxes", async () => { await page.keyboard.press("Control+k"); await page.waitForTimeout(500); await page.keyboard.type("wake "); await page.waitForTimeout(500); }],
       ["/boxes/box_7f3a91", async () => { await page.locator("main button:has(svg.lucide-pencil)").first().click(); await page.waitForTimeout(500); }],

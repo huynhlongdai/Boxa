@@ -1101,7 +1101,7 @@
       "apiSuccess": "API success",
       "createSuccess": "Create success",
       "attempts": "{n, plural, one {# attempt} other {# attempts}}",
-      "provision": "Provisioning p50",
+      "provision": "Provision p50",
       "lastOk": "Last OK",
       "rateLimit": "Rate limit",
       "remaining": "{n} left",

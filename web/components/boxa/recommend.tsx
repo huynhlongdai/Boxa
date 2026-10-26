@@ -54,7 +54,7 @@ function OptionCard({ o, best, onCreate, canCreate, creating }: { o: RecommendOp
   const [why, setWhy] = React.useState(best);
   return (
     <Card className={cn("min-w-0 p-3.5", best && "border-primary/50")} data-rec-option={o.rank}>
-      <div className="flex flex-wrap items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="flex flex-wrap items-center gap-1.5 text-[13px]">
             <span className="font-mono text-muted-foreground">#{o.rank}</span>
@@ -66,7 +66,7 @@ function OptionCard({ o, best, onCreate, canCreate, creating }: { o: RecommendOp
           <p className="mt-1 break-all font-mono text-[13px]">{o.provider}/{o.region}{o.sku ? ` · ${o.sku}` : ""}{o.host_id ? ` · ${o.host_id}` : ""}</p>
           <p className="text-xs text-muted-foreground"><Mono>{o.cpu}c · {mb(o.ram_mb)} · {o.disk_gb}G · {o.isolation}{o.arch ? ` · ${o.arch}` : ""}</Mono></p>
         </div>
-        <div className="text-right">
+        <div className="shrink-0 text-right">
           <ScorePill score={o.score} />
           <p className="text-[11px] text-muted-foreground">{t("score")}</p>
         </div>

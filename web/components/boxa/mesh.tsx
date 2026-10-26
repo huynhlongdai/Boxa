@@ -33,7 +33,7 @@ function KeyDialog({ disabled }: { disabled: boolean }) {
   const { run, pending } = useAction();
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setRes(null); }}>
-      <DialogTrigger asChild><Button size="sm" disabled={disabled}><KeyRound /> {t("createKey")}</Button></DialogTrigger>
+      <DialogTrigger asChild><Button size="sm" data-mesh-key-open disabled={disabled}><KeyRound /> {t("createKey")}</Button></DialogTrigger>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{t("keyTitle")}</DialogTitle>
@@ -117,12 +117,12 @@ export function MeshView() {
       {data.enabled && (
         <Card className="mb-4">
           <Table>
-            <THead><TR className="hover:bg-transparent"><TH>{t("node")}</TH><TH>{t("ips")}</TH><TH>{t("tags")}</TH><TH>{t("lastSeen")}</TH></TR></THead>
+            <THead><TR className="hover:bg-transparent"><TH>{t("node")}</TH><TH className="hidden sm:table-cell">{t("ips")}</TH><TH>{t("tags")}</TH><TH>{t("lastSeen")}</TH></TR></THead>
             <TBody>
               {data.nodes.map((n) => (
                 <TR key={n.id}>
                   <TD className="whitespace-nowrap">{n.online ? <Wifi className="mr-1 inline size-3.5 text-st-running" /> : <WifiOff className="mr-1 inline size-3.5 text-muted-foreground" />}<Mono>{n.givenName || n.name}</Mono></TD>
-                  <TD><Mono className="text-muted-foreground">{n.ipAddresses[0]}</Mono></TD>
+                  <TD className="hidden sm:table-cell"><Mono className="text-muted-foreground">{n.ipAddresses[0]}</Mono></TD>
                   <TD><span className="flex flex-wrap gap-1">{n.forcedTags.map((x) => <Badge key={x} variant="outline" className="font-mono">{x}</Badge>)}</span></TD>
                   <TD className="whitespace-nowrap text-[12.5px]">{n.online ? t("now") : relTime(n.lastSeen)}</TD>
                 </TR>

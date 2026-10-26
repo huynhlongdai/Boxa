@@ -107,7 +107,7 @@ export function WarmPoolSettings() {
         <Table>
           <THead>
             <TR className="hover:bg-transparent">
-              <TH>{t("template")}</TH><TH>{t("profile")}</TH><TH>{t("spec")}</TH><TH>{t("min")}</TH><TH>{t("max")}</TH><TH>{t("ttlMin")}</TH><TH>{t("ready")}</TH><TH><span className="sr-only">{tc("actions")}</span></TH>
+              <TH>{t("template")}</TH><TH>{t("profile")}</TH><TH>{t("spec")}</TH><TH>{t("min")}</TH><TH>{t("max")}</TH><TH>{t("ttlMin")}</TH><TH>{t("ready")}</TH><TH aria-label={tc("actions")} />
             </TR>
           </THead>
           <TBody>
@@ -115,7 +115,7 @@ export function WarmPoolSettings() {
               <TR key={i}>
                 <TD><Input aria-label={t("template")} value={r.template} onChange={(e) => upd(i, "template", e.target.value)} className="h-8 w-32 px-2 font-mono text-[13px]" /></TD>
                 <TD>
-                  <Select aria-label={t("profile")} value={r.profile} onChange={(e) => upd(i, "profile", e.target.value)} className="h-8 w-40 text-[13px]">
+                  <Select aria-label={t("profile")} value={r.profile} onChange={(e) => upd(i, "profile", e.target.value)} className="h-8 w-52 text-[13px]">
                     <option value="">—</option>
                     {profiles?.items.map((p) => <option key={p.id} value={p.id}>{p.id}</option>)}
                   </Select>

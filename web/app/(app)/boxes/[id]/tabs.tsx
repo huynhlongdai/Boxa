@@ -55,8 +55,9 @@ export function OverviewTab({ box }: { box: Box }) {
   const { data: obs } = useApi<Observe>(box.status === "running" ? paths.boxObserve(box.id) : null, { refreshInterval: 10000 });
   const remaining = box.budget_usd ? Math.max(0, box.budget_usd - box.spent_usd) : null;
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
-      <Card className="min-w-0 lg:col-span-2">
+    <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
+      <div className="flex min-w-0 flex-col gap-4 lg:col-span-2">
+      <Card className="min-w-0">
         <CardHeader><CardTitle>{t("specs")}</CardTitle></CardHeader>
         <CardContent>
           <Row k={t("spec")}><Mono>{t("specValue", { cpu: box.spec.cpu, ram: f.mb(box.spec.ram_mb), disk: box.spec.disk_gb })}</Mono></Row>
@@ -79,9 +80,12 @@ export function OverviewTab({ box }: { box: Box }) {
           </div>
         </CardContent>
       </Card>
-      <div className="flex min-w-0 flex-col gap-4">
+      <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 [&>*]:min-w-0">
         <EstimateCard box={box} />
         <ResumeCard box={box} />
+      </div>
+      </div>
+      <div className="flex min-w-0 flex-col gap-4">
         <RightsizeCard boxId={box.id} enabled={["running", "sleeping"].includes(box.status)} />
         <EgressCard box={box} />
         <Card>
