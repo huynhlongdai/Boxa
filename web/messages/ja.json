@@ -591,8 +591,13 @@
       "health": "ヘルス",
       "catalog": "価格カタログ",
       "speed": "速度",
-      "mesh": "メッシュ"
-    }
+      "mesh": "メッシュ",
+      "sandbox": "サンドボックス API"
+    },
+    "groupVps": "VPS / VM (T1)",
+    "groupSandbox": "サンドボックス API (T2/T3)",
+    "sandboxAll": "全 {n} 件を表示",
+    "on": "有効"
   },
   "kinds": {
     "category": {
@@ -1071,7 +1076,14 @@
       "back": "戻る",
       "next": "次へ",
       "save": "保存して接続",
-      "saved": "{name} を接続しました"
+      "saved": "{name} を接続しました",
+      "sandboxFrom": "サンドボックス · {price}/時〜、秒単位課金",
+      "groupVps": "VPS / VM (T1)",
+      "groupVpsDesc": "時間/月単位でサーバーを借り、1 ホストで複数 box を実行。",
+      "groupSandbox": "サンドボックス API (T2/T3)",
+      "groupSandboxDesc": "box ごとに 1 サンドボックス、秒単位課金、box 終了時に削除。",
+      "optional": "（任意）",
+      "sandboxBilling": "比較のため時間単価で表示、実際はサンドボックス稼働中の秒単位で課金。"
     },
     "prefs": {
       "title": "{name} の設定",
@@ -1144,7 +1156,16 @@
       "state": "状態",
       "feedPrice": "コミュニティ価格表の価格",
       "notConnected": "未接続",
-      "count": "{n} / {total} 件"
+      "count": "{n} / {total} 件",
+      "second": "/秒",
+      "tier": "ティア",
+      "tierAll": "すべて · {n}",
+      "tierVps": "VPS (T1) · {n}",
+      "tierSandbox": "サンドボックス API (T2/T3) · {n}",
+      "perSecondHint": "サンドボックスは秒単位課金で月額なし",
+      "adapterPrice": "アダプター",
+      "adapterPriceHint": "秒単価はアダプター由来（プロバイダーの料金ページ）",
+      "estimated": "推定"
     }
   },
   "mesh": {
@@ -1327,7 +1348,17 @@
         "name": "信頼できないコード用サンドボックス",
         "desc": "信頼できないコードを最も強い分離で実行。既定でオフライン、終われば破棄。"
       }
-    }
+    },
+    "strong": "専用カーネル",
+    "strongHelp": "microVM / VM / gVisor：信頼できないコードでも安全",
+    "capFork": "フォーク",
+    "capPause": "一時停止",
+    "capPorts": "公開ポート",
+    "capLife": "最大 {h} 時間",
+    "perSecond": "秒単位",
+    "perSecondHelp": "秒単位課金、box 終了時に削除",
+    "fork": "フォーク / クローンが必要",
+    "forkHint": "エージェントが box を複製して複数の案を並行で試す"
   },
   "estimate": {
     "title": "作成時の見積もり",
@@ -1365,5 +1396,113 @@
     "sleeping": "ボックスはスリープ中です。概要を読み込むと起動します。",
     "wakeResume": "起動して概要を表示",
     "resumed": "ボックスを起動しました"
+  },
+  "sbx": {
+    "tier": {
+      "T1": "VPS",
+      "T2": "サンドボックス API",
+      "T3": "exec のみ"
+    },
+    "tierHelp": {
+      "T1": "素のサーバー/VM：boxd + Incus、時間または月単位課金",
+      "T2": "サンドボックス API：boxd がサンドボックス内で動き Core に接続、ターミナルとスナップショット対応",
+      "T3": "exec のみの API：ゲートウェイの shim が boxd の代わりに応答、ターミナル・スナップショット・egress なし"
+    },
+    "ver": {
+      "live": "実機で検証済み",
+      "docs": "ドキュメント準拠",
+      "sdk": "SDK ソース準拠"
+    },
+    "verHelp": {
+      "live": "実キーで実 API を呼び出し済み（読み取りのみ）",
+      "docs": "ルートとフィールドは公式ドキュメント/OpenAPI から、実行未検証",
+      "sdk": "REST リファレンス非公開：公式 SDK のソースから読み取り"
+    },
+    "estPrice": "推定価格",
+    "estPriceHelp": "プロバイダーが秒単価を公開していないため推定値を使用",
+    "cap": {
+      "unsupported": "{name}：非対応",
+      "boot": "起動 {v}",
+      "bootHelp": "作成から起動までの目安",
+      "fork": "フォーク",
+      "pause": "一時停止",
+      "life": "最大 {v}",
+      "lifeHelp": "1 つのサンドボックスの最大寿命",
+      "lifeInf": "無制限",
+      "gpu": "GPU",
+      "ports": "公開ポート",
+      "strong": "専用カーネル：信頼できないコード向き",
+      "shared": "共有カーネルのコンテナ：信頼できないコードには不可"
+    },
+    "mode": {
+      "label": "boxd の実行方式",
+      "auto": "自動",
+      "dial": "ダイヤルイン (T2)",
+      "shim": "Shim (T3)",
+      "noDial": "このプロバイダーはバックグラウンド処理を保持できないため shim (T3) のみ。"
+    },
+    "modeHelp": {
+      "auto": "バックグラウンド処理が保持でき BOXA_PUBLIC_URL があれば T2、なければ T3",
+      "dial": "boxd がサンドボックス内で Core に接続：ターミナル・スナップショット・egress 対応",
+      "shim": "Core が boxd の代わりに exec API を呼ぶ：公開 URL 不要、機能は限定的"
+    },
+    "connected": "接続済み",
+    "notConnected": "未接続",
+    "adapterHelp": "native = Go 実装のアダプター、YAML = 宣言型アダプター",
+    "native": "ネイティブ",
+    "from": "最低",
+    "perSecond": "秒単位",
+    "more": "詳細",
+    "less": "閉じる",
+    "verifiedFrom": "検証元：",
+    "envVars": "環境変数：",
+    "settings": "設定",
+    "connect": "接続",
+    "docs": "API ドキュメント",
+    "customAdapter": "カスタム YAML アダプター",
+    "title": "サンドボックス API プロバイダー",
+    "count": "{n}/{total} 接続済み",
+    "desc": "サンドボックスは秒単位課金で、box ごとに 1 つ作成し box と一緒に削除。短いタスク、信頼できないコード、素早いフォークに向く。価格と機能はアダプター由来で、検証レベルは確認の度合いを示す。",
+    "skipped": {
+      "title": "未統合",
+      "modal": {
+        "name": "Modal",
+        "why": "SDK のみ（Python/JS、Modal 独自の gRPC）で、Core から呼べる公開 REST がない。"
+      },
+      "cloudflare": {
+        "name": "Cloudflare Sandbox",
+        "why": "自分の Worker 内（Durable Object + SDK）で動き、Core が呼べるホスト型 REST 制御面がない。"
+      },
+      "koyeb": {
+        "name": "Koyeb",
+        "why": "サンドボックスはパブリックプレビューで SDK/CLI から作成、exec は WebSocket ストリーム。安定した REST はまだない。"
+      },
+      "zipbox": {
+        "name": "zipbox",
+        "why": "このリリースでは API と単価を未検証。カスタム YAML アダプターで追加可能。"
+      }
+    },
+    "perSecondHelp": "サンドボックスは秒単位課金で、box 終了時に削除",
+    "billedPerSecond": "秒単位課金",
+    "adapter": {
+      "title": "カスタム YAML アダプター",
+      "desc": "Go を書かずに新しいサンドボックス API を追加：HTTP ルート・認証・JSON パスを宣言し、Core に読み込む前に検査。",
+      "back": "サンドボックス API プロバイダー",
+      "yaml": "アダプター（YAML）",
+      "placeholder": "ここにアダプター YAML を貼り付け…",
+      "lint": "検査",
+      "linting": "検査中…",
+      "sample": "サンプルを貼る",
+      "howTitle": "アダプターの追加手順",
+      "how1": "サンプルに沿って YAML を書く（create/get/delete/exec ルート、認証、機能、価格）。",
+      "how2": "ここで検査し、ファイルを <mono>BOXA_SANDBOX_ADAPTERS_DIR</mono> に保存。",
+      "how3": "Core を再起動すると、新しいプロバイダーがサンドボックス API 一覧に表示される。",
+      "required": "必須キー：",
+      "invalid": "アダプターが無効",
+      "valid": "アダプターは有効",
+      "sizes": "サイズ",
+      "regions": "リージョン",
+      "creds": "認証情報"
+    }
   }
 }

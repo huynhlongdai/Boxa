@@ -591,8 +591,13 @@
       "health": "健康状况",
       "catalog": "价格目录",
       "speed": "速度",
-      "mesh": "Mesh"
-    }
+      "mesh": "Mesh",
+      "sandbox": "沙箱 API"
+    },
+    "groupVps": "VPS / 虚拟机 (T1)",
+    "groupSandbox": "沙箱 API (T2/T3)",
+    "sandboxAll": "查看全部 {n} 个",
+    "on": "已启用"
   },
   "kinds": {
     "category": {
@@ -1071,7 +1076,14 @@
       "back": "上一步",
       "next": "下一步",
       "save": "保存并连接",
-      "saved": "已连接 {name}"
+      "saved": "已连接 {name}",
+      "sandboxFrom": "沙箱 · {price}/小时起，按秒计费",
+      "groupVps": "VPS / 虚拟机 (T1)",
+      "groupVpsDesc": "按小时/月租用服务器，一台主机运行多个 box。",
+      "groupSandbox": "沙箱 API (T2/T3)",
+      "groupSandboxDesc": "每个 box 一个沙箱，按秒计费，box 结束即删除。",
+      "optional": "（可选）",
+      "sandboxBilling": "以下价格折算为每小时便于比较，实际按沙箱运行秒数计费。"
     },
     "prefs": {
       "title": "{name} 设置",
@@ -1144,7 +1156,16 @@
       "state": "状态",
       "feedPrice": "社区价格源的价格",
       "notConnected": "未连接",
-      "count": "{n} / {total} 项"
+      "count": "{n} / {total} 项",
+      "second": "/秒",
+      "tier": "层级",
+      "tierAll": "全部 · {n}",
+      "tierVps": "VPS (T1) · {n}",
+      "tierSandbox": "沙箱 API (T2/T3) · {n}",
+      "perSecondHint": "沙箱按秒计费，无月价",
+      "adapterPrice": "适配器",
+      "adapterPriceHint": "按秒单价来自适配器（服务商价格页）",
+      "estimated": "估算"
     }
   },
   "mesh": {
@@ -1327,7 +1348,17 @@
         "name": "不可信代码沙箱",
         "desc": "以最强隔离运行不可信代码，默认断网，用完即弃。"
       }
-    }
+    },
+    "strong": "独立内核",
+    "strongHelp": "microVM / VM / gVisor：可安全运行不可信代码",
+    "capFork": "Fork",
+    "capPause": "暂停",
+    "capPorts": "公网端口",
+    "capLife": "最长 {h} 小时",
+    "perSecond": "按秒计费",
+    "perSecondHelp": "按秒计费，box 结束即删除",
+    "fork": "需要 fork / 克隆",
+    "forkHint": "Agent 会克隆 box 以并行尝试多种方案"
   },
   "estimate": {
     "title": "创建时的估算",
@@ -1365,5 +1396,113 @@
     "sleeping": "盒子正在休眠。查看摘要会唤醒它。",
     "wakeResume": "唤醒并查看摘要",
     "resumed": "已唤醒盒子"
+  },
+  "sbx": {
+    "tier": {
+      "T1": "VPS",
+      "T2": "沙箱 API",
+      "T3": "仅 exec"
+    },
+    "tierHelp": {
+      "T1": "裸服务器/虚拟机：boxd + Incus，按小时或按月计费",
+      "T2": "沙箱 API：boxd 在沙箱内运行并回连 Core，支持终端和快照",
+      "T3": "仅 exec API：网关 shim 代替 boxd 应答，无终端、快照和出站规则"
+    },
+    "ver": {
+      "live": "实测验证",
+      "docs": "依据文档",
+      "sdk": "依据 SDK 源码"
+    },
+    "verHelp": {
+      "live": "已用真实密钥调用真实 API（只读）",
+      "docs": "路由和字段来自官方文档/OpenAPI，未实测",
+      "sdk": "服务商未公布 REST 文档：依据官方 SDK 源码"
+    },
+    "estPrice": "估算价格",
+    "estPriceHelp": "服务商未公布按秒单价，Boxa 使用估算值",
+    "cap": {
+      "unsupported": "{name}：不支持",
+      "boot": "启动 {v}",
+      "bootHelp": "从创建到运行的典型耗时",
+      "fork": "Fork",
+      "pause": "暂停",
+      "life": "最长 {v}",
+      "lifeHelp": "单个沙箱的最长存活时间",
+      "lifeInf": "不限时",
+      "gpu": "GPU",
+      "ports": "公网端口",
+      "strong": "独立内核：适合不可信代码",
+      "shared": "共享内核容器：不适合不可信代码"
+    },
+    "mode": {
+      "label": "boxd 运行方式",
+      "auto": "自动",
+      "dial": "回连 (T2)",
+      "shim": "Shim (T3)",
+      "noDial": "该服务商无法保留后台进程，只能以 shim (T3) 运行。"
+    },
+    "modeHelp": {
+      "auto": "沙箱可保留后台进程且设置了 BOXA_PUBLIC_URL 时用 T2，否则 T3",
+      "dial": "boxd 在沙箱内运行并回连 Core：终端、快照、出站规则齐全",
+      "shim": "Core 代替 boxd 调用 exec API：无需公网 URL，功能较少"
+    },
+    "connected": "已连接",
+    "notConnected": "未连接",
+    "adapterHelp": "native = Go 编写的适配器；YAML = 声明式适配器",
+    "native": "原生",
+    "from": "起价",
+    "perSecond": "按秒",
+    "more": "详情",
+    "less": "收起",
+    "verifiedFrom": "验证来源：",
+    "envVars": "环境变量：",
+    "settings": "设置",
+    "connect": "连接",
+    "docs": "API 文档",
+    "customAdapter": "自定义 YAML 适配器",
+    "title": "沙箱 API 服务商",
+    "count": "已连接 {n}/{total}",
+    "desc": "沙箱按秒计费：每个 box 一个沙箱，随 box 删除。适合短任务、不可信代码或快速 fork。价格和能力来自适配器，验证级别表示适配器的检验程度。",
+    "skipped": {
+      "title": "暂未集成",
+      "modal": {
+        "name": "Modal",
+        "why": "仅提供 SDK（Python/JS，走 Modal 自有 gRPC），没有可供 Core 调用的公开 REST。"
+      },
+      "cloudflare": {
+        "name": "Cloudflare Sandbox",
+        "why": "运行在你自己的 Worker 里（Durable Object + SDK），没有供 Core 调用的托管 REST 控制面。"
+      },
+      "koyeb": {
+        "name": "Koyeb",
+        "why": "沙箱处于公开预览，通过 SDK/CLI 创建，exec 走 WebSocket 流；尚无稳定 REST。"
+      },
+      "zipbox": {
+        "name": "zipbox",
+        "why": "本版本未验证其 API 和单价；可通过自定义 YAML 适配器接入。"
+      }
+    },
+    "perSecondHelp": "沙箱按秒计费，box 结束即删除",
+    "billedPerSecond": "按秒计费",
+    "adapter": {
+      "title": "自定义 YAML 适配器",
+      "desc": "无需编写 Go 即可接入新的沙箱 API：声明 HTTP 路由、认证方式和 JSON 路径，载入 Core 前先检查。",
+      "back": "沙箱 API 服务商",
+      "yaml": "适配器内容（YAML）",
+      "placeholder": "在此粘贴适配器 YAML…",
+      "lint": "检查",
+      "linting": "检查中…",
+      "sample": "粘贴示例",
+      "howTitle": "如何添加适配器",
+      "how1": "按示例编写 YAML（create/get/delete/exec 路由、认证、能力、价格）。",
+      "how2": "在这里检查，然后把文件保存到 <mono>BOXA_SANDBOX_ADAPTERS_DIR</mono> 目录。",
+      "how3": "重启 Core，新服务商会出现在沙箱 API 列表中，可直接连接。",
+      "required": "必填字段：",
+      "invalid": "适配器无效",
+      "valid": "适配器有效",
+      "sizes": "规格",
+      "regions": "区域",
+      "creds": "凭据"
+    }
   }
 }

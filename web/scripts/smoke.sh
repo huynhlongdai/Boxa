@@ -47,7 +47,7 @@ check_page() {
   ok "[$l] 200 $path"
 }
 
-ROUTES="/ /boxes /boxes/box_7f3a91 /boxes/box_7f3a91?tab=logs /recommend /infra?s=health /infra?s=catalog /infra?s=speed /infra?s=mesh /agents /agents/agt_kecon /costs /infra /templates /secrets /settings /admin /developers /onboarding /login"
+ROUTES="/ /boxes /boxes/box_7f3a91 /boxes/box_7f3a91?tab=logs /recommend /infra?s=health /infra?s=catalog /infra?s=speed /infra?s=mesh /infra?s=sandbox /infra/adapters /boxes/box_5e2b70 /agents /agents/agt_kecon /costs /infra /templates /secrets /settings /admin /developers /onboarding /login"
 
 echo "== Trang × ngôn ngữ (cookie boxa_locale)"
 for l in $LOCALES; do
@@ -111,7 +111,7 @@ curl -s "$BASE/api/boxa/_root/llms.txt" | grep -q "^# Boxa" && ok "llms.txt có 
 
 echo "== v1.2: providers (chuỗi dự phòng), egress, lưu trữ snapshot, thông báo, A2A card"
 pc=$(curl -s "$BASE/api/boxa/providers" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log(j.items.filter(p=>p.chain_rank).sort((a,b)=>a.chain_rank-b.chain_rank).map(p=>p.id).join(">"))})')
-[ "$pc" = "hetzner>vultr>digitalocean>contabo>netcup" ] && ok "chuỗi provider $pc" || bad "chuỗi provider: $pc"
+[[ "$pc" == "hetzner>vultr>digitalocean>contabo>netcup>"* ]] && ok "chuỗi provider $pc" || bad "chuỗi provider: $pc"
 n=$(curl -s "$BASE/api/boxa/providers/contabo/regions" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).items.length))')
 [ "$n" = "9" ] && ok "providers/contabo/regions → 9" || bad "regions: $n"
 eg=$(curl -s -X PUT "$BASE/api/boxa/boxes/box_7f3a91/egress" -H 'content-type: application/json' -d '{"allow":["pypi.org","*.github.com"],"deny_by_default":true}' | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const e=JSON.parse(s).egress;console.log(e&&e.source+"|"+e.allow.length+"|"+e.mode)})')
@@ -136,7 +136,7 @@ jx() {
     | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{let j;try{j=JSON.parse(s)}catch{console.log('NOJSON '+s.slice(0,80));return};try{console.log($e)}catch(x){console.log('ERR '+x.message)}})"
 }
 expect() { local name="$1" got="$2" want="$3"; if [[ "$got" == $want ]]; then ok "$name → $got"; else bad "$name → $got (muốn $want)"; fi; }
-expect "GET /providers/health" "$(jx GET providers/health - 'j.items.length+"|"+j.items.find(x=>x.provider.id==="contabo").stats.breaker.state+"|"+Object.keys(j.items.find(x=>x.provider.id==="hetzner").score.breakdown).length')" "6|open|6"
+expect "GET /providers/health" "$(jx GET providers/health - 'j.items.length+"|"+j.items.find(x=>x.provider.id==="contabo").stats.breaker.state+"|"+Object.keys(j.items.find(x=>x.provider.id==="hetzner").score.breakdown).length')" "17|open|6"
 expect "GET /providers/hetzner/health" "$(jx GET providers/hetzner/health - 'j.provider.id+"|"+(j.recent.length>0)+"|"+(j.stats.api_latency_p95_ms>=j.stats.api_latency_p50_ms)')" "hetzner|true|true"
 expect "POST validate (token sai)" "$(jx POST providers/digitalocean/validate '{"token":"sai"}' 'j.ok+"|"+j.error_class')" "false|auth"
 expect "POST validate (token đúng)" "$(jx POST providers/digitalocean/validate '{"token":"dop_v1_0123456789abcdef0123"}' 'j.ok+"|"+(j.regions.length>0)+"|"+(j.sizes.length>0)')" "true|true|true"
@@ -168,6 +168,27 @@ expect "GET /mesh/config" "$(jx GET mesh/config - '/server_url/.test(j.config)+"
 expect "GET /mesh/acl" "$(jx GET mesh/acl - 'Array.isArray(j.notes)+"|"+(j.policy.acls.length>0)')" "true|true"
 expect "POST /mesh/keys" "$(jx POST mesh/keys '{"box_id":"box_9a6d13","reusable":false,"ttl_minutes":30}' 'j.key.startsWith("hskey-")+"|"+/tailscale up --login-server/.test(j.command)+"|"+j.ephemeral')" "true|true|true"
 expect "error.next khi NOT_FOUND" "$(jx GET boxes/khong-co - 'j.error.code+"|"+(j.error.next.length>0)')" "NOT_FOUND|true"
+
+echo "== v1.4: Sandbox API providers (T2/T3), catalog theo tier, recommend sandbox, lint adapter YAML"
+expect "GET /sandbox/providers" "$(jx GET sandbox/providers - 'j.items.length+"|"+j.items.every(p=>p.initials&&p.docs&&p.capabilities&&p.pricing.source&&["live-verified","docs-verified","sdk-source"].includes(p.verification))+"|"+j.items.find(p=>p.id==="prized").verification+"|"+j.items.find(p=>p.id==="upstash-box").mode')" "11|true|live-verified|shim"
+expect "sandbox mode: E2B ép dial, T2 auto → dial" "$(jx GET sandbox/providers - 'j.items.find(p=>p.id==="e2b").mode+"|"+j.items.find(p=>p.id==="boat").mode+"|"+j.items.filter(p=>p.connected).length')" "dial|dial|4"
+expect "GET /providers có group sandbox" "$(jx GET providers - 'j.items.filter(p=>p.group==="sandbox").length+"|"+j.items.filter(p=>p.group==="vps").length+"|"+j.items.find(p=>p.id==="novita").verification')" "11|6|sdk-source"
+expect "GET /catalog có tier T2/T3 theo giây" "$(jx GET catalog - 'j.items.some(i=>i.tier==="T2"&&i.group==="sandbox"&&i.min_billing_minutes===0)+"|"+j.items.some(i=>i.tier==="T3")+"|"+j.items.filter(i=>i.tier==="T1").every(i=>i.group==="vps")')" "true|true|true"
+expect "GET /catalog?tier=T3" "$(jx GET 'catalog?tier=T3' - 'j.items.length>0&&j.items.every(i=>i.tier==="T3")')" "true"
+expect "POST /recommend untrusted+fork → sandbox T2, loại theo capability" "$(jx POST recommend '{"requirements":{"untrusted":true,"fork":true,"lifetime":"ephemeral","cpu":2,"ram_mb":2048}}' 'j.options.some(o=>o.kind==="sandbox"&&o.tier&&o.fork&&o.strong_isolation)+"|"+j.rejected.some(r=>r.provider==="daytona"&&/kernel/i.test(r.reason))+"|"+j.rejected.some(r=>r.provider==="runloop"&&/fork/i.test(r.reason))')" "true|true|true"
+expect "POST /recommend persistent+public_url → loại vercel/prized" "$(jx POST recommend '{"requirements":{"lifetime":"persistent","public_url":true,"duration_hours":30}}' 'j.rejected.some(r=>r.provider==="vercel")+"|"+j.rejected.some(r=>r.provider==="prized")')" "true|true"
+expect "POST /recommend isolation=sandbox" "$(jx POST recommend '{"requirements":{"isolation":"sandbox"}}' 'j.options.length>0&&j.options.every(o=>o.kind==="sandbox")')" "true"
+expect "POST /boxes isolation=sandbox → host sandbox" "$(jx POST boxes '{"agent_id":"agt_hark","requirements":{"isolation":"sandbox","untrusted":true}}' 'j.estimate.kind+"|"+(j.host_id||"").startsWith("hst")')" "sandbox|true"
+expect "GET /hosts có host sandbox T2 + T3" "$(jx GET hosts - 'j.items.filter(h=>h.billing==="sandbox").map(h=>h.driver).sort().slice(0,2).join(",")')" "sandbox,s*"
+expect "PUT prefs sandbox_mode=shim" "$(jx PUT providers/e2b/prefs '{"sandbox_mode":"shim"}' 'j.sandbox_mode')" "shim"
+expect "PUT prefs sandbox_mode sai → 400" "$(jx PUT providers/e2b/prefs '{"sandbox_mode":"turbo"}' 'j.error.code')" "INVALID"
+jx PUT providers/e2b/prefs '{"sandbox_mode":"dial"}' 'j.sandbox_mode' >/dev/null
+expect "POST validate sandbox thiếu trường" "$(jx POST providers/vercel/validate '{"token":"vcl_0123456789abcdef"}' 'j.ok+"|"+j.error_class')" "false|auth"
+expect "POST validate sandbox nhiều trường" "$(jx POST providers/vercel/validate '{"token":"{\"token\":\"vcl_0123456789abcdef\",\"project_id\":\"prj_1\"}"}' 'j.ok+"|"+(j.sizes.length>0)+"|"+j.sizes[0].min_billing_minutes')" "true|true|0"
+expect "POST /sandbox/adapters/lint thiếu trường" "$(jx POST sandbox/adapters/lint '{"yaml":"id: x\n"}' 'j.ok+"|"+/missing base_url/.test(j.error)')" "false|true"
+expect "POST /sandbox/adapters/lint YAML hỏng" "$(jx POST sandbox/adapters/lint '{"yaml":"id: [x"}' 'j.ok')" "false"
+expect "POST /sandbox/adapters/lint hợp lệ" "$(jx POST sandbox/adapters/lint '{"yaml":"id: acme\nname: Acme\nbase_url: https://api.acme.dev\nvalidate: {method: GET, path: /x}\ncreate: {method: POST, path: /x}\nget: {method: GET, path: /x}\ndelete: {method: DELETE, path: /x}\nexec: [{method: POST, path: /x}]\nsizes: [{sku: s, cpu: 1, ram_mb: 1024, disk_gb: 5}]\npricing: {cpu_second: 0.00001, gb_second: 0.000003}\n"}' 'j.ok+"|"+j.info.id+"|"+j.info.adapter+"|"+(j.info.from_usd_h>0)')" "true|acme|yaml|true"
+expect "POST /sandbox/adapters/lint rỗng → 400" "$(jx POST sandbox/adapters/lint '{"yaml":""}' 'j.error.code')" "INVALID"
 
 echo "== Lỗi được dịch theo ngôn ngữ (code không đổi)"
 declare -A NF=([vi]="Không tìm thấy" [en]="not found" [zh]="未找到" [ja]="見つかりません")

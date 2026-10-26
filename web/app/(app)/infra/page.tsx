@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import Link from "next/link";
 import { ArrowDownUp, CheckCircle2, Cpu, Plug, PlugZap, Plus, ServerCog, Trash2, TrendingDown } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -22,8 +23,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CatalogView, ConnectProviderWizard, ProviderHealthView } from "@/components/boxa/provider-manager";
 import { SpeedSummary, WarmPoolSettings } from "@/components/boxa/speed";
 import { MeshView } from "@/components/boxa/mesh";
+import { ProviderLogo, SandboxProvidersView, TierBadge, VerificationBadge } from "@/components/boxa/sandbox";
 
-const TABS = ["providers", "health", "catalog", "speed", "mesh"] as const;
+const TABS = ["providers", "sandbox", "health", "catalog", "speed", "mesh"] as const;
 
 
 const TOKEN_HINT: Record<string, string> = { contabo: "contabo", netcup: "netcup", digitalocean: "digitalocean", hetzner: "hetzner", vultr: "vultr" };
@@ -54,11 +56,14 @@ function ProviderCard({ p }: { p: Provider }) {
   return (
     <Card className="flex flex-col p-4">
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="font-medium">{p.name}</p>
-          <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Badge variant="outline" className="font-mono">{p.tier}</Badge> {["T1", "T2", "T3"].includes(p.tier) ? t(`tier.${p.tier}`) : ""}
-          </p>
+        <div className="flex min-w-0 items-start gap-2.5">
+          <ProviderLogo id={p.id} />
+          <div className="min-w-0">
+            <p className="font-medium">{p.name}</p>
+            <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Badge variant="outline" className="font-mono">{p.tier}</Badge> {["T1", "T2", "T3"].includes(p.tier) ? t(`tier.${p.tier}`) : ""}
+            </p>
+          </div>
         </div>
         <ProviderChip p={p} />
       </div>
@@ -149,6 +154,8 @@ function ProvidersTab() {
   const sortedOffers = [...(offers?.items ?? [])].sort((a, b) => (sortAsc ? 1 : -1) * (a.price_hour / a.cpu - b.price_hour / b.cpu));
   const poolMonth = (hosts?.items ?? []).filter((h) => h.billing === "pool").reduce((a, h) => a + h.price_month, 0);
   const [wizard, setWizard] = React.useState(false);
+  const vps = providers?.items.filter((p) => p.group !== "sandbox") ?? [];
+  const sbx = providers?.items.filter((p) => p.group === "sandbox") ?? [];
 
   return (
     <>
@@ -169,9 +176,27 @@ function ProvidersTab() {
               </React.Fragment>
             ))}
           </p>
-          <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {providers.items.map((p) => <ProviderCard key={p.id} p={p} />)}
+          <h3 className="mb-2 text-[13px] font-semibold">{t("groupVps")}</h3>
+          <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {vps.map((p) => <ProviderCard key={p.id} p={p} />)}
           </div>
+          {sbx.length > 0 && (
+            <div className="mb-6 rounded-lg border border-border p-3" data-sandbox-summary>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-[13px] font-semibold">{t("groupSandbox")}</h3>
+                <Link href="/infra?s=sandbox" className="text-[13px] text-primary hover:underline">{t("sandboxAll", { n: sbx.length })}</Link>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {sbx.map((p) => (
+                  <span key={p.id} className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12.5px]">
+                    <ProviderLogo id={p.id} className="size-5 rounded text-[8.5px]" />{p.name}
+                    {p.connected ? <Badge variant="green">{t("on")}</Badge> : null}
+                    <VerificationBadge v={p.verification} />
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -185,7 +210,7 @@ function ProvidersTab() {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="flex items-center gap-1.5"><ServerCog className="size-4 text-muted-foreground" /><Mono className="truncate">{h.id}</Mono></p>
-                  <p className="mt-0.5 text-xs text-muted-foreground"><Mono>{h.provider}/{h.region} · {h.sku} · {h.ip}</Mono></p>
+                  <p className="mt-0.5 text-xs text-muted-foreground"><Mono>{h.provider}/{h.region} · {h.sku}{h.ip ? ` · ${h.ip}` : h.provider_ref ? ` · ${h.provider_ref}` : ""}</Mono></p>
                 </div>
                 <HostStatusChip status={h.status} />
               </div>
@@ -195,10 +220,10 @@ function ProvidersTab() {
                 <Bar label={t("disk")} v={h.disk_used_pct} />
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <Badge variant={h.billing === "pool" ? "green" : "yellow"}>{h.billing === "pool" ? t("billingPool") : t("billingBurst")}</Badge>
+                {h.billing === "sandbox" ? <TierBadge tier={h.driver === "shim" ? "T3" : "T2"} /> : <Badge variant={h.billing === "pool" ? "green" : "yellow"}>{h.billing === "pool" ? t("billingPool") : t("billingBurst")}</Badge>}
                 <span><Cpu className="mr-0.5 inline size-3" /><Mono>{h.cpu} vCPU · {mb(h.ram_mb)} · {h.disk_gb} GB</Mono></span>
                 <span>{tc("boxCount", { n: h.box_count })}</span>
-                <span className="ml-auto font-mono text-foreground">{h.billing === "pool" ? tc("perMonth", { price: usd(h.price_month, 2) }) : tc("perHour", { price: usd(h.price_hour) })}</span>
+                <span className="ml-auto font-mono text-foreground">{h.billing === "sandbox" ? tc("perHour", { price: usd(h.price_hour) }) : h.billing === "pool" ? tc("perMonth", { price: usd(h.price_month, 2) }) : tc("perHour", { price: usd(h.price_hour) })}</span>
               </div>
               <div className="mt-3 flex gap-2 border-t border-border pt-3">
                 <ConfirmButton size="xs" variant="outline" disabled={h.status !== "ready"} title={t("drainTitle", { id: h.id })} desc={t("drainDesc")} confirmLabel={t("drain")}
@@ -247,6 +272,18 @@ function ProvidersTab() {
   );
 }
 
+function SandboxTab() {
+  const { data: providers } = useApi<List<Provider>>(paths.providers);
+  const [initial, setInitial] = React.useState<string | undefined>();
+  const [open, setOpen] = React.useState(false);
+  return (
+    <>
+      <SandboxProvidersView onConnect={(id) => { setInitial(id); setOpen(true); }} />
+      {providers && <ConnectProviderWizard providers={providers.items} open={open} onOpenChange={setOpen} initial={initial} />}
+    </>
+  );
+}
+
 function Inner() {
   const t = useTranslations("infra");
   const sp = useSearchParams();
@@ -259,6 +296,7 @@ function Inner() {
       <Tabs value={tab} onValueChange={(v) => router.replace(v === "providers" ? "/infra" : `/infra?s=${v}`, { scroll: false })}>
         <TabsList>{TABS.map((v) => <TabsTrigger key={v} value={v}>{t(`tabs.${v}`)}</TabsTrigger>)}</TabsList>
         <TabsContent value="providers"><ProvidersTab /></TabsContent>
+        <TabsContent value="sandbox"><SandboxTab /></TabsContent>
         <TabsContent value="health"><ProviderHealthView /></TabsContent>
         <TabsContent value="catalog"><CatalogView /></TabsContent>
         <TabsContent value="speed"><SpeedSummary /><WarmPoolSettings /></TabsContent>

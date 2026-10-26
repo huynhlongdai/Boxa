@@ -3,11 +3,11 @@
 // bảng sức khỏe (latency p50/p95, tỉ lệ thành công, thời gian dựng, cầu dao) + điểm có giải thích, và catalog giá gộp.
 import * as React from "react";
 import { useTranslations } from "next-intl";
-import { Activity, CheckCircle2, ChevronLeft, ChevronRight, Plug, RefreshCw, RotateCcw, Settings2, ShieldAlert, XCircle, Zap } from "lucide-react";
+import { Activity, BookOpen, CheckCircle2, ChevronLeft, ChevronRight, ExternalLink, Plug, RefreshCw, RotateCcw, Settings2, ShieldAlert, XCircle, Zap } from "lucide-react";
 import { api, paths } from "@/lib/api";
 import { startsWith, useAction, useApi } from "@/lib/hooks";
 import { useFmt } from "@/lib/format";
-import type { Catalog, List, Provider, ProviderHealth, ProviderPrefs, ProviderRegion, ValidateTokenResult } from "@/lib/types";
+import type { Catalog, List, Provider, ProviderHealth, ProviderPrefs, ProviderRegion, SandboxInfo, SandboxProvider, ValidateTokenResult } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Empty, ErrorBox, LoadingRows, SectionTitle } from "./page";
 import { Mono } from "./status";
 import { ScoreBreakdown, ScorePill } from "./score";
+import { CapabilityBadges, EstimatedPriceBadge, ProviderLogo, SandboxModeField, TierBadge, VerificationBadge, usePerSecond } from "./sandbox";
 
 const STATUS_VARIANT = { healthy: "green", degraded: "yellow", down: "red", unknown: "gray" } as const;
 const BREAKER_VARIANT: Record<string, "green" | "yellow" | "red" | "gray"> = { closed: "green", half_open: "yellow", open: "red" };
@@ -36,7 +37,7 @@ function BreakerBadge({ state }: { state: string }) {
 }
 
 // ---------------- Prefs form (dùng trong wizard và dialog chỉnh) ----------------
-type PrefsDraft = { enabled: boolean; priority: string; max_hourly_usd: string; max_monthly_usd: string; max_servers: string; regions: string[]; default_region: string };
+type PrefsDraft = { enabled: boolean; priority: string; max_hourly_usd: string; max_monthly_usd: string; max_servers: string; regions: string[]; default_region: string; sandbox_mode: string };
 const toDraft = (p?: Partial<ProviderPrefs>): PrefsDraft => ({
   enabled: p?.enabled ?? true,
   priority: String(p?.priority ?? 0),
@@ -45,8 +46,10 @@ const toDraft = (p?: Partial<ProviderPrefs>): PrefsDraft => ({
   max_servers: String(p?.max_servers ?? 0),
   regions: p?.regions ?? [],
   default_region: p?.default_region ?? "",
+  sandbox_mode: p?.sandbox_mode || "auto",
 });
-const fromDraft = (d: PrefsDraft): Partial<ProviderPrefs> => ({
+const fromDraft = (d: PrefsDraft, sandbox = false): Partial<ProviderPrefs> => ({
+  ...(sandbox ? { sandbox_mode: d.sandbox_mode || "auto" } : {}),
   enabled: d.enabled,
   priority: Math.max(0, Math.round(Number(d.priority) || 0)),
   max_hourly_usd: Math.max(0, Number(d.max_hourly_usd) || 0),
@@ -56,7 +59,7 @@ const fromDraft = (d: PrefsDraft): Partial<ProviderPrefs> => ({
   default_region: d.default_region,
 });
 
-function PrefsForm({ draft, set, regions }: { draft: PrefsDraft; set: (d: PrefsDraft) => void; regions: ProviderRegion[] }) {
+function PrefsForm({ draft, set, regions, sandbox }: { draft: PrefsDraft; set: (d: PrefsDraft) => void; regions: ProviderRegion[]; sandbox?: SandboxInfo | null }) {
   const t = useTranslations("pm");
   const toggle = (id: string) => set({ ...draft, regions: draft.regions.includes(id) ? draft.regions.filter((r) => r !== id) : [...draft.regions, id], default_region: draft.default_region === id && draft.regions.includes(id) ? "" : draft.default_region });
   return (
@@ -65,6 +68,7 @@ function PrefsForm({ draft, set, regions }: { draft: PrefsDraft; set: (d: PrefsD
         <span>{t("prefs.enabled")}<span className="block text-xs text-muted-foreground">{t("prefs.enabledHint")}</span></span>
         <Switch checked={draft.enabled} onCheckedChange={(v) => set({ ...draft, enabled: v })} aria-label={t("prefs.enabled")} />
       </label>
+      {sandbox && <SandboxModeField value={draft.sandbox_mode} onChange={(v) => set({ ...draft, sandbox_mode: v })} info={sandbox} />}
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label={t("prefs.priority")} hint={t("prefs.priorityHint")}><Input type="number" min={0} inputMode="numeric" value={draft.priority} onChange={(e) => set({ ...draft, priority: e.target.value })} /></Field>
         <Field label={t("prefs.maxServers")} hint={t("prefs.zeroNoLimit")}><Input type="number" min={0} inputMode="numeric" value={draft.max_servers} onChange={(e) => set({ ...draft, max_servers: e.target.value })} /></Field>
@@ -101,28 +105,78 @@ function PrefsForm({ draft, set, regions }: { draft: PrefsDraft; set: (d: PrefsD
 // ---------------- Wizard ----------------
 const STEPS = ["choose", "token", "review", "prefs"] as const;
 
+/** Ghép credential nhiều trường: chỉ có token → chuỗi thường, có trường khác → JSON (sandbox.ParseCred). */
+function credToken(fields: Record<string, string>): string {
+  const filled = Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v.trim()]).filter(([, v]) => v));
+  const keys = Object.keys(filled);
+  if (keys.length === 0) return "";
+  if (keys.length === 1 && keys[0] === "token") return filled.token;
+  return JSON.stringify(filled);
+}
+
+function ChoiceCard({ c, on, onPick, info }: { c: Provider; on: boolean; onPick: () => void; info?: SandboxProvider }) {
+  const t = useTranslations("pm");
+  const { usd } = useFmt();
+  return (
+    <button type="button" onClick={onPick} aria-pressed={on} data-provider-choice={c.id}
+      className={cn("flex min-w-0 items-start gap-2.5 rounded-lg border p-3 text-left text-[13px] transition-colors", on ? "border-primary bg-primary/5" : "border-border hover:bg-surface-2")}>
+      <ProviderLogo id={c.id} info={info} />
+      <span className="min-w-0 flex-1">
+        <span className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+          <span className="font-medium">{c.name}</span>
+          {c.connected ? <Badge variant="green">{t("wizard.connected")}</Badge> : <Badge variant="outline">{t("wizard.notConnected")}</Badge>}
+        </span>
+        <span className="mt-0.5 block text-xs text-muted-foreground">
+          {info ? t("wizard.sandboxFrom", { price: usd(info.from_usd_h) }) : c.implemented === false ? t("wizard.feedOnly") : t("wizard.apiReady")}
+        </span>
+        {info && (
+          <span className="mt-1.5 flex flex-wrap gap-1">
+            <TierBadge tier={info.tier} />
+            <VerificationBadge v={info.verification} note={info.verified_note} />
+            <EstimatedPriceBadge confidence={info.pricing.confidence} />
+          </span>
+        )}
+      </span>
+    </button>
+  );
+}
+
 export function ConnectProviderWizard({ providers, open, onOpenChange, initial }: { providers: Provider[]; open: boolean; onOpenChange: (o: boolean) => void; initial?: string }) {
   const t = useTranslations("pm");
   const tc = useTranslations("common");
+  const ts = useTranslations("sbx");
   const { usd, mb } = useFmt();
+  const perSec = usePerSecond();
+  const { data: sbx } = useApi<List<SandboxProvider>>(open ? paths.sandboxProviders : null, { refreshInterval: 0 });
   const choices = providers.filter((p) => p.id !== "local");
+  const sbxInfo = (id: string) => sbx?.items.find((x) => x.id === id);
+  const isSbx = (c: Provider) => c.group === "sandbox" || !!sbxInfo(c.id);
+  const vps = choices.filter((c) => !isSbx(c));
+  const sandboxes = choices.filter(isSbx);
   const [step, setStep] = React.useState(0);
   const [pid, setPid] = React.useState(initial ?? "");
   const [token, setToken] = React.useState("");
+  const [fields, setFields] = React.useState<Record<string, string>>({});
   const [val, setVal] = React.useState<ValidateTokenResult | null>(null);
   const [validating, setValidating] = React.useState(false);
   const [draft, setDraft] = React.useState<PrefsDraft>(toDraft());
   const { run, pending } = useAction();
   const p = choices.find((x) => x.id === pid);
+  const info = p ? sbxInfo(p.id) : undefined;
+  const secret = info ? credToken(fields) : token;
+  const missing = info ? info.credentials.filter((f) => !f.optional && !(fields[f.name] ?? "").trim()) : [];
 
   React.useEffect(() => {
-    if (open) { setStep(initial ? 1 : 0); setPid(initial ?? ""); setToken(""); setVal(null); setDraft(toDraft()); }
+    if (open) { setStep(initial ? 1 : 0); setPid(initial ?? ""); setToken(""); setFields({}); setVal(null); setDraft(toDraft()); }
   }, [open, initial]);
+  React.useEffect(() => {
+    if (info) setFields((f) => Object.fromEntries(info.credentials.map((c) => [c.name, f[c.name] ?? c.default ?? ""])));
+  }, [info]);
 
   const validate = async () => {
     if (!p) return;
     setValidating(true);
-    const r = await run("val", () => api.validateProvider(p.id, token));
+    const r = await run("val", () => api.validateProvider(p.id, secret));
     setValidating(false);
     if (r) {
       setVal(r);
@@ -136,11 +190,12 @@ export function ConnectProviderWizard({ providers, open, onOpenChange, initial }
   const save = async () => {
     if (!p) return;
     const ok = await run("save", async () => {
-      if (token) await api.setProviderToken(p.id, token);
-      return api.saveProviderPrefs(p.id, fromDraft(draft));
-    }, { success: t("wizard.saved", { name: p.name }), revalidate: [paths.providers, startsWith("/providers"), startsWith("/catalog")] });
+      if (secret) await api.setProviderToken(p.id, secret);
+      return api.saveProviderPrefs(p.id, fromDraft(draft, !!info));
+    }, { success: t("wizard.saved", { name: p.name }), revalidate: [paths.providers, paths.sandboxProviders, startsWith("/providers"), startsWith("/catalog"), startsWith("/sandbox")] });
     if (ok) onOpenChange(false);
   };
+  const canValidate = info ? (missing.length === 0 || (!!p?.connected && !secret)) : !!token || !!p?.connected;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -160,25 +215,57 @@ export function ConnectProviderWizard({ providers, open, onOpenChange, initial }
         </ol>
 
         {step === 0 && (
-          <div className="grid gap-2 sm:grid-cols-2">
-            {choices.map((c) => (
-              <button key={c.id} type="button" onClick={() => setPid(c.id)} aria-pressed={pid === c.id}
-                className={cn("flex items-start justify-between gap-2 rounded-lg border p-3 text-left text-[13px] transition-colors", pid === c.id ? "border-primary bg-primary/5" : "border-border hover:bg-surface-2")}>
-                <span className="min-w-0">
-                  <span className="block font-medium">{c.name}</span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">{c.implemented === false ? t("wizard.feedOnly") : t("wizard.apiReady")}</span>
-                </span>
-                {c.connected ? <Badge variant="green">{t("wizard.connected")}</Badge> : <Badge variant="outline">{t("wizard.notConnected")}</Badge>}
-              </button>
-            ))}
+          <div className="flex max-h-[58vh] min-w-0 flex-col gap-4 overflow-y-auto pr-1">
+            <section aria-labelledby="wz-vps">
+              <h3 id="wz-vps" className="text-[13px] font-semibold">{t("wizard.groupVps")}</h3>
+              <p className="mb-2 text-xs text-muted-foreground">{t("wizard.groupVpsDesc")}</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {vps.map((c) => <ChoiceCard key={c.id} c={c} on={pid === c.id} onPick={() => setPid(c.id)} />)}
+              </div>
+            </section>
+            {sandboxes.length > 0 && (
+              <section aria-labelledby="wz-sbx" data-wizard-sandbox>
+                <h3 id="wz-sbx" className="text-[13px] font-semibold">{t("wizard.groupSandbox")}</h3>
+                <p className="mb-2 text-xs text-muted-foreground">{t("wizard.groupSandboxDesc")}</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {sandboxes.map((c) => <ChoiceCard key={c.id} c={c} on={pid === c.id} onPick={() => setPid(c.id)} info={sbxInfo(c.id)} />)}
+                </div>
+              </section>
+            )}
           </div>
         )}
 
         {step === 1 && p && (
-          <div className="flex flex-col gap-3">
-            <p className="text-[13px] text-muted-foreground">{t("wizard.tokenFor", { name: p.name })}</p>
+          <div className="flex min-w-0 flex-col gap-3">
+            <div className="flex items-start gap-3">
+              <ProviderLogo id={p.id} info={info} />
+              <div className="min-w-0">
+                <p className="text-[13px] text-muted-foreground">{t("wizard.tokenFor", { name: p.name })}</p>
+                {(info?.docs || p.docs) && (
+                  <a href={info?.docs || p.docs} target="_blank" rel="noreferrer" className="mt-0.5 inline-flex items-center gap-1 text-[12.5px] text-primary hover:underline" data-wizard-docs>
+                    <BookOpen className="size-3.5" />{ts("docs")}<ExternalLink className="size-3" />
+                  </a>
+                )}
+              </div>
+            </div>
             {["hetzner", "vultr", "digitalocean", "contabo", "netcup"].includes(p.id) && <p className="text-xs text-muted-foreground">{t(`wizard.where.${p.id as "hetzner"}`)}</p>}
-            <Input type="password" autoComplete="off" value={token} onChange={(e) => { setToken(e.target.value); setVal(null); }} placeholder={p.connected ? t("wizard.keepToken") : t("wizard.paste")} className="font-mono" aria-label={t("wizard.tokenFor", { name: p.name })} />
+            {info ? (
+              <>
+                <CapabilityBadges caps={info.capabilities} />
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {info.credentials.map((f) => (
+                    <Field key={f.name} label={`${f.label}${f.optional ? ` ${t("wizard.optional")}` : ""}`} hint={f.hint}>
+                      <Input type={f.secret ? "password" : "text"} autoComplete="off" value={fields[f.name] ?? ""} className="font-mono"
+                        placeholder={f.secret && p.connected ? t("wizard.keepToken") : f.default || undefined}
+                        onChange={(e) => { setFields({ ...fields, [f.name]: e.target.value }); setVal(null); }} />
+                    </Field>
+                  ))}
+                </div>
+                {info.env_vars.length > 0 && <p className="break-words text-xs text-muted-foreground">{ts("envVars")} <Mono>{info.env_vars.join(", ")}</Mono></p>}
+              </>
+            ) : (
+              <Input type="password" autoComplete="off" value={token} onChange={(e) => { setToken(e.target.value); setVal(null); }} placeholder={p.connected ? t("wizard.keepToken") : t("wizard.paste")} className="font-mono" aria-label={t("wizard.tokenFor", { name: p.name })} />
+            )}
             {val && !val.ok && (
               <div className="flex items-start gap-2 rounded-md border border-st-error/30 bg-st-error/5 p-3 text-[13px]" role="alert">
                 <XCircle className="mt-0.5 size-4 shrink-0 text-st-error" />
@@ -193,8 +280,9 @@ export function ConnectProviderWizard({ providers, open, onOpenChange, initial }
         )}
 
         {step === 2 && p && val?.ok && (
-          <div className="flex flex-col gap-3 text-[13px]">
+          <div className="flex min-w-0 flex-col gap-3 text-[13px]">
             <p className="flex items-center gap-1.5 text-st-running"><CheckCircle2 className="size-4" /> {t("wizard.valid", { ms: Math.round(val.latency_ms) })}</p>
+            {info && <p className="text-xs text-muted-foreground">{t("wizard.sandboxBilling")}</p>}
             <div>
               <p className="mb-1 text-xs text-muted-foreground">{t("wizard.regions", { n: val.regions.length })}</p>
               <div className="flex flex-wrap gap-1">{val.regions.map((r) => <Badge key={r.id} variant="outline" className="font-mono" title={r.name}>{r.id}</Badge>)}</div>
@@ -203,13 +291,14 @@ export function ConnectProviderWizard({ providers, open, onOpenChange, initial }
               <p className="mb-1 text-xs text-muted-foreground">{t("wizard.sizes", { n: val.sizes.length, total: val.size_count })}</p>
               <div className="max-h-56 overflow-auto rounded-md border border-border">
                 <Table>
-                  <THead><TR className="hover:bg-transparent"><TH>{t("cat.sku")}</TH><TH>{tc("region")}</TH><TH>{t("cat.config")}</TH><TH>{t("cat.hour")}</TH></TR></THead>
+                  <THead><TR className="hover:bg-transparent"><TH>{t("cat.sku")}</TH><TH>{tc("region")}</TH><TH>{t("cat.config")}</TH><TH>{t("cat.hour")}</TH>{info && <TH>{t("cat.second")}</TH>}</TR></THead>
                   <TBody>
                     {val.sizes.slice(0, 20).map((o) => (
                       <TR key={`${o.sku}-${o.region}`}>
                         <TD><Mono>{o.sku}</Mono></TD><TD><Mono>{o.region}</Mono></TD>
                         <TD className="whitespace-nowrap"><Mono className="text-muted-foreground">{o.cpu}c · {mb(o.ram_mb)} · {o.disk_gb}G</Mono></TD>
                         <TD className="font-mono text-[13px]">{usd(o.price_hour)}</TD>
+                        {info && <TD className="whitespace-nowrap font-mono text-[12.5px]">{perSec(o.price_hour)}</TD>}
                       </TR>
                     ))}
                   </TBody>
@@ -219,12 +308,12 @@ export function ConnectProviderWizard({ providers, open, onOpenChange, initial }
           </div>
         )}
 
-        {step === 3 && p && <PrefsForm draft={draft} set={setDraft} regions={val?.regions ?? []} />}
+        {step === 3 && p && <PrefsForm draft={draft} set={setDraft} regions={val?.regions ?? []} sandbox={info} />}
 
         <DialogFooter className="gap-2 sm:justify-between">
           <Button variant="ghost" disabled={step === 0 || (step === 1 && !!initial)} onClick={() => setStep((s) => Math.max(0, s - 1))}><ChevronLeft /> {t("wizard.back")}</Button>
           {step === 0 && <Button disabled={!p} onClick={() => setStep(1)}>{t("wizard.next")} <ChevronRight /></Button>}
-          {step === 1 && <Button disabled={(!token && !p?.connected) || validating} onClick={validate}><Plug /> {validating ? tc("checking") : t("wizard.validate")}</Button>}
+          {step === 1 && <Button disabled={!canValidate || validating} onClick={validate}><Plug /> {validating ? tc("checking") : t("wizard.validate")}</Button>}
           {step === 2 && <Button onClick={() => setStep(3)}>{t("wizard.next")} <ChevronRight /></Button>}
           {step === 3 && <Button disabled={!!pending} onClick={save}><CheckCircle2 /> {pending ? tc("processing") : t("wizard.save")}</Button>}
         </DialogFooter>
@@ -238,6 +327,8 @@ function PrefsDialog({ h, open, onOpenChange }: { h: ProviderHealth; open: boole
   const tc = useTranslations("common");
   const [draft, setDraft] = React.useState(toDraft(h.prefs));
   const { data: regions } = useApi<List<ProviderRegion>>(open ? paths.providerRegions(h.provider.id) : null, { refreshInterval: 0 });
+  const { data: sbx } = useApi<List<SandboxProvider>>(open && h.provider.group === "sandbox" ? paths.sandboxProviders : null, { refreshInterval: 0 });
+  const info = sbx?.items.find((x) => x.id === h.provider.id);
   const { run, pending } = useAction();
   React.useEffect(() => { if (open) setDraft(toDraft(h.prefs)); }, [open, h.prefs]);
   return (
@@ -247,11 +338,11 @@ function PrefsDialog({ h, open, onOpenChange }: { h: ProviderHealth; open: boole
           <DialogTitle>{t("prefs.title", { name: h.provider.name })}</DialogTitle>
           <DialogDescription>{t("prefs.desc")}</DialogDescription>
         </DialogHeader>
-        <PrefsForm draft={draft} set={setDraft} regions={regions?.items ?? h.prefs.regions.map((id) => ({ id, name: id, available: true }))} />
+        <PrefsForm draft={draft} set={setDraft} regions={regions?.items ?? h.prefs.regions.map((id) => ({ id, name: id, available: true }))} sandbox={info} />
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>{tc("cancel")}</Button>
           <Button disabled={!!pending} onClick={async () => {
-            const r = await run("p", () => api.saveProviderPrefs(h.provider.id, fromDraft(draft)), { success: t("prefs.saved"), revalidate: [startsWith("/providers"), startsWith("/catalog")] });
+            const r = await run("p", () => api.saveProviderPrefs(h.provider.id, fromDraft(draft, !!info)), { success: t("prefs.saved"), revalidate: [startsWith("/providers"), startsWith("/catalog"), startsWith("/sandbox")] });
             if (r) onOpenChange(false);
           }}>{pending ? tc("processing") : tc("save")}</Button>
         </DialogFooter>
@@ -285,9 +376,12 @@ function HealthCard({ h }: { h: ProviderHealth }) {
   return (
     <Card className="flex min-w-0 flex-col p-4" data-provider-health={h.provider.id}>
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="font-medium">{h.provider.name}</p>
+        <div className="flex min-w-0 items-start gap-2.5">
+          <ProviderLogo id={h.provider.id} className="hidden sm:grid" />
+          <div className="min-w-0">
+          <p className="flex flex-wrap items-center gap-1.5 font-medium">{h.provider.name}{h.provider.group === "sandbox" && <TierBadge tier={h.provider.tier} />}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">{t("health.samples", { n: s.samples })} · {t("health.hosts", { n: h.hosts })}{h.prefs.priority ? ` · ${t("health.priority", { n: h.prefs.priority })}` : ""}</p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <HealthBadge status={s.status} />
@@ -380,10 +474,15 @@ export function CatalogView() {
   const [arch, setArch] = React.useState("");
   const [minCpu, setMinCpu] = React.useState(0);
   const [usable, setUsable] = React.useState(false);
+  const [tier, setTier] = React.useState("");
+  const perSec = usePerSecond();
   if (error) return <ErrorBox error={error} retry={() => mutate()} />;
   if (!data) return <LoadingRows rows={4} />;
-  const provs = [...new Set(data.items.map((i) => i.provider))].sort();
-  const items = data.items.filter((i) => (!prov || i.provider === prov) && (!arch || i.arch === arch) && i.cpu >= minCpu && (!usable || i.usable));
+  const groupOf = (i: Catalog["items"][number]) => i.group ?? (i.tier && i.tier !== "T1" ? "sandbox" : "vps");
+  const inTier = (i: Catalog["items"][number]) => !tier || groupOf(i) === tier;
+  const provs = [...new Set(data.items.filter(inTier).map((i) => i.provider))].sort();
+  const items = data.items.filter((i) => inTier(i) && (!prov || i.provider === prov) && (!arch || i.arch === arch) && i.cpu >= minCpu && (!usable || i.usable));
+  const nSbx = data.items.filter((i) => groupOf(i) === "sandbox").length;
   const staleN = data.sources.filter((s) => s.stale).length;
   return (
     <>
@@ -392,10 +491,18 @@ export function CatalogView() {
       <div className="mb-3 flex flex-wrap gap-1.5" data-catalog-sources>
         {data.sources.map((s) => (
           <Badge key={`${s.provider}-${s.source}`} variant={s.stale ? "yellow" : "outline"} title={t("cat.sourceTitle", { n: s.count, time: relTime(s.fetched_at) })}>
-            <Mono>{s.provider}</Mono> · {s.source.endsWith("-api") ? t("cat.live") : t("cat.feed")} · {relTime(s.fetched_at)}{s.stale ? ` · ${t("cat.stale")}` : ""}
+            <Mono>{s.provider}</Mono> · {s.source === "sandbox-pricing" ? t("cat.adapterPrice") : s.source.endsWith("-api") ? t("cat.live") : t("cat.feed")} · {relTime(s.fetched_at)}{s.stale ? ` · ${t("cat.stale")}` : ""}
           </Badge>
         ))}
         {staleN > 0 && <span className="text-xs text-st-warning">{t("cat.staleNote", { n: staleN })}</span>}
+      </div>
+      <div className="mb-3 flex flex-wrap gap-1.5" role="radiogroup" aria-label={t("cat.tier")} data-catalog-tier>
+        {([["", t("cat.tierAll", { n: data.items.length })], ["vps", t("cat.tierVps", { n: data.items.length - nSbx })], ["sandbox", t("cat.tierSandbox", { n: nSbx })]] as const).map(([k, label]) => (
+          <button key={k || "all"} type="button" role="radio" aria-checked={tier === k} onClick={() => { setTier(k); setProv(""); }}
+            className={cn("rounded-full border px-2.5 py-1 text-[12.5px]", tier === k ? "border-primary/50 bg-primary/15 text-primary" : "border-border text-muted-foreground hover:text-foreground")}>
+            {label}
+          </button>
+        ))}
       </div>
       <div className="mb-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
         <Select value={prov} onChange={(e) => setProv(e.target.value)} aria-label={tc("provider")} className="sm:w-40"><option value="">{t("cat.allProviders")}</option>{provs.map((p) => <option key={p} value={p}>{p}</option>)}</Select>
@@ -408,7 +515,7 @@ export function CatalogView() {
           <Table>
             <THead>
               <TR className="hover:bg-transparent">
-                <TH>{tc("provider")}</TH><TH>{t("cat.sku")}</TH><TH>{tc("region")}</TH><TH>{t("cat.config")}</TH><TH>{t("cat.hour")}</TH>
+                <TH>{tc("provider")}</TH><TH>{t("cat.tier")}</TH><TH>{t("cat.sku")}</TH><TH>{tc("region")}</TH><TH>{t("cat.config")}</TH><TH>{t("cat.hour")}</TH>
                 <TH className="hidden md:table-cell">{t("cat.month")}</TH><TH>{t("cat.source")}</TH><TH className="hidden lg:table-cell">{t("cat.age")}</TH><TH>{t("cat.state")}</TH>
               </TR>
             </THead>
@@ -416,15 +523,17 @@ export function CatalogView() {
               {items.map((i) => (
                 <TR key={`${i.provider}-${i.sku}-${i.region}`} className={cn(!i.usable && "opacity-70")}>
                   <TD className="whitespace-nowrap"><Mono>{i.provider}</Mono></TD>
+                  <TD className="whitespace-nowrap"><Badge variant={groupOf(i) === "sandbox" ? "blue" : "outline"} className="font-mono" title={groupOf(i) === "sandbox" ? t("cat.perSecondHint") : undefined}>{i.tier ?? "T1"}</Badge></TD>
                   <TD className="whitespace-nowrap"><Mono>{i.sku}</Mono></TD>
                   <TD className="whitespace-nowrap"><Mono>{i.region}</Mono></TD>
                   <TD className="whitespace-nowrap"><Mono className="text-muted-foreground">{i.cpu}c · {mb(i.ram_mb)} · {i.disk_gb}G · {i.arch}</Mono></TD>
                   <TD className="whitespace-nowrap font-mono text-[13px]">
                     {usd(i.price_hour)}
                     {i.feed_price_hour != null && <span className="ml-1 text-[11px] text-muted-foreground line-through" title={t("cat.feedPrice")}>{usd(i.feed_price_hour)}</span>}
+                    {groupOf(i) === "sandbox" && <span className="block text-[11px] text-muted-foreground" data-per-second>{perSec(i.price_hour)}</span>}
                   </TD>
-                  <TD className="hidden font-mono text-[13px] md:table-cell">{usd(i.price_month, 2)}</TD>
-                  <TD className="whitespace-nowrap"><Badge variant={i.price_source.endsWith("-api") ? "blue" : "outline"}>{i.price_source.endsWith("-api") ? t("cat.live") : t("cat.feed")}</Badge></TD>
+                  <TD className="hidden font-mono text-[13px] md:table-cell">{groupOf(i) === "sandbox" ? <span className="text-muted-foreground" title={t("cat.perSecondHint")}>—</span> : usd(i.price_month, 2)}</TD>
+                  <TD className="whitespace-nowrap">{i.price_source === "sandbox-pricing" ? <Badge variant={i.confidence === "estimated" ? "yellow" : "outline"} title={t("cat.adapterPriceHint")}>{i.confidence === "estimated" ? t("cat.estimated") : t("cat.adapterPrice")}</Badge> : <Badge variant={i.price_source.endsWith("-api") ? "blue" : "outline"}>{i.price_source.endsWith("-api") ? t("cat.live") : t("cat.feed")}</Badge>}</TD>
                   <TD className="hidden whitespace-nowrap text-[12.5px] lg:table-cell">{relTime(i.fetched_at)}{i.stale && <Badge variant="yellow" className="ml-1">{t("cat.stale")}</Badge>}</TD>
                   <TD className="max-w-[16rem]">
                     {i.usable ? <HealthBadge status={i.health} /> : <span className="block truncate text-[12px] text-st-warning" title={i.blocked ?? t("cat.notConnected")}>{i.blocked ?? t("cat.notConnected")}</span>}

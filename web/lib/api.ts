@@ -2,6 +2,7 @@
 // Trình duyệt luôn gọi qua proxy Next (/api/boxa/...), proxy gắn API key từ cookie httpOnly,
 // nên key không bao giờ nằm trong JS phía client.
 import type {
+  AdapterLintResult,
   AdminSystem,
   AdminUser,
   Agent,
@@ -55,6 +56,7 @@ import type {
   ProviderPrefs,
   RecommendBody,
   RecommendResult,
+  SandboxProvider,
   ResumeInfo,
   RightSize,
   SpeedView,
@@ -189,6 +191,8 @@ export const paths = {
   providerPrefs: (id: string) => `/providers/${id}/prefs`,
   catalog: (f?: { provider?: string; region?: string; arch?: string; min_cpu?: number; min_ram_mb?: number; max_price_hour?: number; limit?: number }) => `/catalog${qs(f)}`,
   profiles: "/profiles",
+  // v1.4
+  sandboxProviders: "/sandbox/providers",
   rightsize: "/rightsize",
   boxRightsize: (id: string) => `/boxes/${id}/rightsize`,
   boxResume: (id: string) => `/boxes/${id}/resume`,
@@ -293,6 +297,9 @@ export const api = {
   // v1.3: chọn box theo nhu cầu
   profiles: () => http.get<ProfilesResponse>(paths.profiles),
   recommend: (body: RecommendBody) => http.post<RecommendResult>("/recommend", body),
+  // v1.4
+  sandboxProviders: () => http.get<List<SandboxProvider>>(paths.sandboxProviders),
+  lintAdapter: (yaml: string) => http.post<AdapterLintResult>("/sandbox/adapters/lint", { yaml }),
   // v1.3: tốc độ + agent
   rightsizeAll: () => http.get<List<RightSize>>(paths.rightsize),
   rightsizeBox: (id: string) => http.get<RightSize>(paths.boxRightsize(id)),

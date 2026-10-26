@@ -24,6 +24,8 @@ import type {
 import type { Locale } from "@/i18n/config";
 import { mt } from "./i18n";
 import { DAY, HOUR, MIN, ago, iso, r4, type MockState } from "./seed";
+import { SANDBOX_INFO } from "./sandbox-data";
+import { isSandbox, lintAdapter, sandboxCatalog, sandboxInfo, sandboxOptions, sandboxValidate, sandboxViews } from "./v14";
 
 type Res = { status: number; body: unknown; contentType?: string; headers?: Record<string, string> };
 export interface V13Ctx {
@@ -133,6 +135,16 @@ function state(s: MockState, L: Locale): V13State {
     },
     mesh: { enabled: true, keys: 0 },
   };
+  // v1.4: provider sandbox (E2B ép dial-in T2, Upstash Box là T3; Prized/Daytona auto)
+  const sbxStats: Record<string, Partial<HealthStats>> = {
+    e2b: { samples: 96, api_latency_p50_ms: 210, api_latency_p95_ms: 480, api_success_rate: 0.99, create_attempts: 9, create_success_rate: 1, provision_p50_s: 6.4, provision_p95_s: 9.1, last_ok_at: ago(3 * MIN), status: "healthy", reliability: 1 },
+    prized: { samples: 64, api_latency_p50_ms: 260, api_latency_p95_ms: 610, api_success_rate: 0.98, create_attempts: 2, create_success_rate: 1, provision_p50_s: 8.8, provision_p95_s: 11, last_ok_at: ago(6 * MIN), status: "healthy", reliability: 1 },
+    daytona: { samples: 40, api_latency_p50_ms: 340, api_latency_p95_ms: 900, api_success_rate: 0.95, create_attempts: 3, create_success_rate: 0.67, provision_p50_s: 7.5, provision_p95_s: 15, last_ok_at: ago(9 * MIN), last_error_at: ago(50 * MIN), last_error: "HTTP 429 from app.daytona.io", last_error_class: "rate_limit", error_classes: { rate_limit: 2 }, status: "degraded", reliability: 0.67 },
+    "upstash-box": { samples: 30, api_latency_p50_ms: 150, api_latency_p95_ms: 330, api_success_rate: 1, create_attempts: 1, create_success_rate: 1, provision_p50_s: 3, provision_p95_s: 3, last_ok_at: ago(4 * MIN), status: "healthy", reliability: 1 },
+  };
+  for (const [n, i] of SANDBOX_INFO.entries()) {
+    g._v13.prov[i.id] = { stats: stats(i.id, sbxStats[i.id] ?? {}), prefs: prefs({ priority: 6 + n, sandbox_mode: i.id === "e2b" ? "dial" : "auto", max_hourly_usd: i.id === "daytona" ? 0.2 : 0, regions: [] }) };
+  }
   // Seed: vài box có profile + estimate (đo thực tế sau khi chạy)
   const patch: Record<string, { profile: string; estimate: BoxEstimate }> = {
     box_7f3a91: { profile: "browser-automation", estimate: { kind: "warm", cost_per_hour: 0.0078, expected_hours: 8, expected_total_usd: 0.0624, eta_seconds: 1.2, actual_seconds: 1.4, score: 88.6, warm_hit: true } },
@@ -229,6 +241,13 @@ export function recommend(s: MockState, L: Locale, body: { requirements?: Requir
       headroom: Math.max(0, 1 - cpu / o.cpu), latency_ms: rtt(o.region), min_billing_h: minH, requires_approval: !['hetzner', 'vultr'].includes(o.provider), price_stale: Date.now() - Date.parse(o.fetched_at) > 6 * HOUR,
       reasons: [mt(L, "r_burst", { sku: o.sku, provider: o.provider, region: o.region })] });
   }
+  for (const o of opts) Object.assign(o, { tier: "T1", fork: true, pause: true, ports: true });
+  // v1.4: Sandbox API (T2/T3) — loại theo capability ngay tại đây (giống selector/score.go)
+  const prefsOf = (id: string) => st.prov[id]?.prefs;
+  const healthOf = (id: string) => st.prov[id]?.stats.status ?? "unknown";
+  const sbx = sandboxOptions(s, L, req, hours, prefsOf, healthOf, allowed);
+  opts.push(...sbx.opts);
+  rej.push(...sbx.rej);
   // filters
   const keep: Opt[] = [];
   for (const o of opts) {
@@ -241,6 +260,7 @@ export function recommend(s: MockState, L: Locale, body: { requirements?: Requir
     else if (req.max_latency_ms && o.latency_ms > req.max_latency_ms) rej.push({ ...r, reason: mt(L, "j_latency", { ms: o.latency_ms, max: req.max_latency_ms }) });
     else if ((req.isolation === "vm" || req.untrusted) && o.isolation === "container") rej.push({ ...r, reason: mt(L, req.untrusted ? "j_untrusted" : "j_isolation", { iso: "vm" }) });
     else if (req.isolation === "container" && o.isolation !== "container") rej.push({ ...r, reason: mt(L, "j_isolation", { iso: "container" }) });
+    else if (req.isolation === "sandbox" && o.kind !== "sandbox") rej.push({ ...r, reason: mt(L, "j_sbx_only") });
     else keep.push(o);
   }
   for (const o of keep) o.expected_total_usd = r4(o.cost_per_hour * Math.max(hours, o.min_billing_h));
@@ -347,18 +367,20 @@ function catalog(s: MockState, L: Locale, q: URLSearchParams) {
       price_hour: live && o.provider === "vultr" ? r4(o.price_hour * 1.04) : o.price_hour, price_month: o.price_month, min_billing_minutes: o.min_billing_minutes,
       price_source: live ? `${o.provider}-api` : "battleships", sources: live ? ["battleships", `${o.provider}-api`] : ["battleships"],
       feed_price_hour: live && o.provider === "vultr" ? o.price_hour : null, fetched_at: fetched, age_s: age, stale: age > staleAfter,
-      confidence: live ? "verified" : o.confidence, health: ps?.stats.status ?? "unknown", usable: conn && !blocked, blocked,
+      confidence: live ? "verified" : o.confidence, health: ps?.stats.status ?? "unknown", usable: conn && !blocked, blocked, tier: "T1", group: "vps",
     };
   });
+  const v13 = (s as S13)._v13!;
+  items.push(...sandboxCatalog(s, (id) => v13.prov[id]?.prefs, (id) => v13.prov[id]?.stats.status ?? "unknown", L));
   // netcup feed cũ (> 6 giờ)
   for (const it of items) if (it.provider === "netcup") { it.fetched_at = ago(9 * HOUR); it.age_s = 9 * 3600; it.stale = true; }
   const filt = items.filter((it) => (!q.get("provider") || it.provider === q.get("provider")) && (!q.get("region") || it.region === q.get("region")) && (!q.get("arch") || it.arch === q.get("arch"))
-    && it.cpu >= Number(q.get("min_cpu") || 0) && it.ram_mb >= Number(q.get("min_ram_mb") || 0) && (!Number(q.get("max_price_hour")) || it.price_hour <= Number(q.get("max_price_hour"))));
+    && (!q.get("tier") || it.tier === q.get("tier")) && it.cpu >= Number(q.get("min_cpu") || 0) && it.ram_mb >= Number(q.get("min_ram_mb") || 0) && (!Number(q.get("max_price_hour")) || it.price_hour <= Number(q.get("max_price_hour"))));
   filt.sort((a, b) => a.price_hour - b.price_hour);
   const srcMap = new Map<string, { source: string; provider: string; count: number; fetched_at: string; age_s: number; stale: boolean }>();
   for (const it of items) for (const src of it.sources) {
     const k = `${src}|${it.provider}`;
-    const fetched = src === "battleships" ? (it.provider === "netcup" ? ago(9 * HOUR) : ago(3 * HOUR)) : apiFetched;
+    const fetched = src === "sandbox-pricing" ? it.fetched_at : src === "battleships" ? (it.provider === "netcup" ? ago(9 * HOUR) : ago(3 * HOUR)) : apiFetched;
     const age = Math.round((now - Date.parse(fetched)) / 1000);
     const e = srcMap.get(k) ?? { source: src, provider: it.provider, count: 0, fetched_at: fetched, age_s: age, stale: age > staleAfter };
     e.count++;
@@ -468,6 +490,14 @@ export function handleV13(s: MockState, ctx: V13Ctx, M: string, segs: string[], 
     return ok(recommend(s, L, body as Parameters<typeof recommend>[2]));
   }
   if (r0 === "catalog" && M === "GET") return ok(catalog(s, L, q));
+  if (r0 === "sandbox") {
+    if (r1 === "providers" && M === "GET") return list(sandboxViews(s, (id) => st.prov[id]?.prefs, (id) => st.prov[id]?.stats.status ?? "unknown", L));
+    if (r1 === "adapters" && r2 === "lint" && M === "POST") {
+      const y = String(body.yaml ?? "");
+      if (!y.trim()) return err(400, "INVALID", "lint_empty");
+      return ok(lintAdapter(y));
+    }
+  }
   if (r0 === "rightsize" && M === "GET") return list(s.boxes.filter((b) => ["running", "sleeping"].includes(b.status)).map((b) => rightsize(s, L, b)));
   if (r0 === "speed" && M === "GET") return ok(speed(s, L));
   if (r0 === "warm-pool") {
@@ -536,6 +566,8 @@ export function handleV13(s: MockState, ctx: V13Ctx, M: string, segs: string[], 
         if (n.priority < 0 || n.max_hourly_usd < 0 || n.max_monthly_usd < 0 || n.max_servers < 0) return err(400, "INVALID", "prefs_bad");
         n.regions = (n.regions ?? []).filter(Boolean);
         if (n.default_region && n.regions.length && !n.regions.includes(n.default_region)) return err(400, "INVALID", "prefs_region", { region: n.default_region });
+        if (n.sandbox_mode && !["auto", "dial", "shim"].includes(n.sandbox_mode)) return err(400, "INVALID", "prefs_mode", { mode: String(n.sandbox_mode) });
+        if (!isSandbox(r1)) delete n.sandbox_mode;
         n.updated_at = iso(Date.now());
         ps.prefs = n;
         ctx.pushEvent({ actor: "user:anh", box_id: null, agent_id: null, type: "provider.prefs", message: `${r1} prefs updated`, cost_usd: null });
@@ -545,6 +577,8 @@ export function handleV13(s: MockState, ctx: V13Ctx, M: string, segs: string[], 
     if (r2 === "validate" && M === "POST") {
       const token = String(body.token ?? "").trim();
       if (!token && !p.connected && p.id !== "local") return err(400, "INVALID", "token_required");
+      const sinfo = sandboxInfo(p.id);
+      if (sinfo) return ok(sandboxValidate(sinfo, token || '{"token":"stored-token-0000"}', L));
       const t0 = 140 + (token.length % 7) * 31;
       if (token && (token.length < 16 || /sai|invalid|wrong/i.test(token)))
         return ok({ provider: p.id, ok: false, error: mt(L, "bad_token"), error_class: "auth", latency_ms: t0, regions: [], sizes: [], size_count: 0, hint: mt(L, "bad_token_hint") });

@@ -20,6 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { LoadingRows } from "./page";
 import { Mono } from "./status";
 import { ScoreBreakdown, ScorePill } from "./score";
+import { ProviderLogo, TierBadge, VerificationBadge } from "./sandbox";
 
 export const PROFILE_IDS = ["general", "coding-agent", "browser-automation", "build", "data", "long-running-service", "sandbox-untrusted"] as const;
 const KIND_COLORS: Record<string, "green" | "blue" | "yellow" | "gray" | "default"> = { warm: "green", pool: "blue", vm: "default", burst: "yellow", sandbox: "gray" };
@@ -39,12 +40,12 @@ export function useProfileText() {
   }, [t]);
 }
 
-type Draft = { cpu: string; ram_mb: string; disk_gb: string; arch: string; region: string; location: string; max_latency_ms: string; max_price_hour: string; lifetime: string; duration_hours: string; isolation: string; optimize: string; public_url: boolean; untrusted: boolean };
-const EMPTY: Draft = { cpu: "", ram_mb: "", disk_gb: "", arch: "", region: "", location: "", max_latency_ms: "", max_price_hour: "", lifetime: "", duration_hours: "", isolation: "", optimize: "balanced", public_url: false, untrusted: false };
+type Draft = { cpu: string; ram_mb: string; disk_gb: string; arch: string; region: string; location: string; max_latency_ms: string; max_price_hour: string; lifetime: string; duration_hours: string; isolation: string; optimize: string; public_url: boolean; untrusted: boolean; fork: boolean };
+const EMPTY: Draft = { cpu: "", ram_mb: "", disk_gb: "", arch: "", region: "", location: "", max_latency_ms: "", max_price_hour: "", lifetime: "", duration_hours: "", isolation: "", optimize: "balanced", public_url: false, untrusted: false, fork: false };
 
 function toReq(d: Draft): Requirements {
   const n = (s: string) => (s.trim() === "" ? undefined : Number(s));
-  const r: Requirements = { cpu: n(d.cpu), ram_mb: n(d.ram_mb), disk_gb: n(d.disk_gb), arch: d.arch || undefined, region: d.region.trim() || undefined, location: d.location.trim() || undefined, max_latency_ms: n(d.max_latency_ms), max_price_hour: n(d.max_price_hour), lifetime: d.lifetime || undefined, duration_hours: n(d.duration_hours), isolation: d.isolation || undefined, optimize: d.optimize || undefined, public_url: d.public_url || undefined, untrusted: d.untrusted || undefined };
+  const r: Requirements = { cpu: n(d.cpu), ram_mb: n(d.ram_mb), disk_gb: n(d.disk_gb), arch: d.arch || undefined, region: d.region.trim() || undefined, location: d.location.trim() || undefined, max_latency_ms: n(d.max_latency_ms), max_price_hour: n(d.max_price_hour), lifetime: d.lifetime || undefined, duration_hours: n(d.duration_hours), isolation: d.isolation || undefined, optimize: d.optimize || undefined, public_url: d.public_url || undefined, untrusted: d.untrusted || undefined, fork: d.fork || undefined };
   return Object.fromEntries(Object.entries(r).filter(([, v]) => v !== undefined && !(typeof v === "number" && Number.isNaN(v)))) as Requirements;
 }
 
@@ -59,11 +60,12 @@ function OptionCard({ o, best, onCreate, canCreate, creating }: { o: RecommendOp
           <p className="flex flex-wrap items-center gap-1.5 text-[13px]">
             <span className="font-mono text-muted-foreground">#{o.rank}</span>
             <KindBadge kind={o.kind} />
+            {o.tier && <TierBadge tier={o.tier} />}
             {best && <Badge variant="blue"><Sparkles className="size-3" />{t("best")}</Badge>}
             {o.requires_approval && <Badge variant="yellow">{t("needsApproval")}</Badge>}
             {o.price_stale && <Badge variant="outline">{t("priceStale")}</Badge>}
           </p>
-          <p className="mt-1 break-all font-mono text-[13px]">{o.provider}/{o.region}{o.sku ? ` · ${o.sku}` : ""}{o.host_id ? ` · ${o.host_id}` : ""}</p>
+          <p className="mt-1 flex min-w-0 items-center gap-1.5 break-all font-mono text-[13px]">{o.kind === "sandbox" && <ProviderLogo id={o.provider} className="size-5 rounded text-[8.5px]" />}<span className="min-w-0">{o.provider}/{o.region}{o.sku ? ` · ${o.sku}` : ""}{o.host_id ? ` · ${o.host_id}` : ""}</span></p>
           <p className="text-xs text-muted-foreground"><Mono>{o.cpu}c · {mb(o.ram_mb)} · {o.disk_gb}G · {o.isolation}{o.arch ? ` · ${o.arch}` : ""}</Mono></p>
         </div>
         <div className="shrink-0 text-right">
@@ -76,6 +78,17 @@ function OptionCard({ o, best, onCreate, canCreate, creating }: { o: RecommendOp
         <div className="min-w-0"><p className="text-[11px] text-muted-foreground">{t("perHour")}</p><p className="font-mono">{usd(o.cost_per_hour)}</p></div>
         <div className="min-w-0"><p className="text-[11px] text-muted-foreground">{t("total")}</p><p className="font-mono">{usd(o.expected_total_usd)}</p></div>
       </div>
+      {o.tier && (
+        <div className="mt-2 flex flex-wrap gap-1" data-rec-caps>
+          {o.kind === "sandbox" && <VerificationBadge v={o.verification} />}
+          {o.strong_isolation && <Badge variant="green" title={t("strongHelp")}>{t("strong")}</Badge>}
+          <Badge variant="outline" className={cn(!o.fork && "opacity-55 line-through")}>{t("capFork")}</Badge>
+          <Badge variant="outline" className={cn(!o.pause && "opacity-55 line-through")}>{t("capPause")}</Badge>
+          <Badge variant="outline" className={cn(!o.ports && "opacity-55 line-through")}>{t("capPorts")}</Badge>
+          {o.max_lifetime_h ? <Badge variant="outline">{t("capLife", { h: num(o.max_lifetime_h, 1) })}</Badge> : null}
+          {o.kind === "sandbox" && <Badge variant="outline" title={t("perSecondHelp")}>{t("perSecond")}</Badge>}
+        </div>
+      )}
       {o.reasons.length > 0 && <ul className="mt-2 list-disc pl-4 text-[12.5px] text-muted-foreground">{o.reasons.map((r) => <li key={r} className="break-words">{r}</li>)}</ul>}
       <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2.5">
         <button type="button" className="inline-flex items-center gap-1 text-[12.5px] text-primary hover:underline" onClick={() => setWhy((x) => !x)} aria-expanded={why}>
@@ -96,7 +109,7 @@ export function RecommendResults({ res, agentId, onCreated }: { res: RecommendRe
   const router = useRouter();
   const create = async (o: RecommendOption) => {
     if (!agentId) return;
-    const requirements: Requirements = { ...res.requirements, region: o.region, ...(o.isolation === "vm" ? { isolation: "vm" } : {}) };
+    const requirements: Requirements = { ...res.requirements, region: o.region, ...(o.isolation === "vm" ? { isolation: "vm" } : o.kind === "sandbox" ? { isolation: "sandbox" } : {}) };
     const b = await run(`c${o.rank}`, () => api.createBox({ agent_id: agentId, profile: res.profile.id, template: res.template, lifecycle: res.lifecycle, requirements }), { revalidate: [startsWith("/boxes"), "/overview"] });
     if (b) {
       const e = b.estimate;
@@ -125,6 +138,7 @@ export function RecommendResults({ res, agentId, onCreated }: { res: RecommendRe
             {res.rejected.map((r, i) => (
               <li key={i} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 py-1.5">
                 <KindBadge kind={r.kind} />
+                {r.kind === "sandbox" && r.provider && <ProviderLogo id={r.provider} className="size-4 rounded text-[7px]" />}
                 <Mono className="break-all">{[r.provider, r.region].filter(Boolean).join("/")}{r.sku ? ` · ${r.sku}` : ""}{r.host_id ? ` · ${r.host_id}` : ""}</Mono>
                 <span className="w-full text-xs text-muted-foreground sm:w-auto">{r.reason}</span>
               </li>
@@ -248,6 +262,7 @@ export function RecommendPanel({ agentId: fixedAgent, compact, onCreated }: { ag
             <Field label={t("location")} hint={t("locationHint")}><Input value={d.location} onChange={(e) => set("location", e.target.value)} placeholder="VN" className="font-mono" /></Field>
             <label className="flex items-center justify-between gap-3 self-end rounded-md border border-border px-3 py-2 text-[13px]">{t("publicUrl")}<Switch checked={d.public_url} onCheckedChange={(v) => set("public_url", v)} aria-label={t("publicUrl")} /></label>
             <label className="flex items-center justify-between gap-3 self-end rounded-md border border-border px-3 py-2 text-[13px]">{t("untrusted")}<Switch checked={d.untrusted} onCheckedChange={(v) => set("untrusted", v)} aria-label={t("untrusted")} /></label>
+            <label className="flex items-center justify-between gap-3 self-end rounded-md border border-border px-3 py-2 text-[13px]" title={t("forkHint")}>{t("fork")}<Switch checked={d.fork} onCheckedChange={(v) => set("fork", v)} aria-label={t("fork")} /></label>
           </div>
         </details>
         <div className="flex flex-wrap gap-2">

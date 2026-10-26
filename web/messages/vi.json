@@ -591,8 +591,13 @@
       "health": "Sức khỏe",
       "catalog": "Catalog giá",
       "speed": "Tốc độ",
-      "mesh": "Mesh"
-    }
+      "mesh": "Mesh",
+      "sandbox": "Sandbox API"
+    },
+    "groupVps": "VPS / VM (T1)",
+    "groupSandbox": "Sandbox API (T2/T3)",
+    "sandboxAll": "Xem cả {n} provider",
+    "on": "Bật"
   },
   "kinds": {
     "category": {
@@ -1071,7 +1076,14 @@
       "back": "Quay lại",
       "next": "Tiếp",
       "save": "Lưu & kết nối",
-      "saved": "Đã kết nối {name}"
+      "saved": "Đã kết nối {name}",
+      "sandboxFrom": "Sandbox · từ {price}/giờ, tính theo giây",
+      "groupVps": "VPS / VM (T1)",
+      "groupVpsDesc": "Thuê server theo giờ/tháng, chạy nhiều box trên một host.",
+      "groupSandbox": "Sandbox API (T2/T3)",
+      "groupSandboxDesc": "Mỗi box một sandbox, tính theo giây, xoá khi box kết thúc.",
+      "optional": "(tuỳ chọn)",
+      "sandboxBilling": "Giá dưới đây quy ra giờ để so sánh; thực tế tính theo giây khi sandbox chạy."
     },
     "prefs": {
       "title": "Thiết lập {name}",
@@ -1144,7 +1156,16 @@
       "state": "Trạng thái",
       "feedPrice": "Giá trên bảng giá cộng đồng",
       "notConnected": "Chưa kết nối",
-      "count": "{n} / {total} mục"
+      "count": "{n} / {total} mục",
+      "second": "/giây",
+      "tier": "Tier",
+      "tierAll": "Tất cả · {n}",
+      "tierVps": "VPS (T1) · {n}",
+      "tierSandbox": "Sandbox API (T2/T3) · {n}",
+      "perSecondHint": "Sandbox tính theo giây, không có giá tháng",
+      "adapterPrice": "Adapter",
+      "adapterPriceHint": "Đơn giá theo giây từ adapter (trang giá của provider)",
+      "estimated": "Ước tính"
     }
   },
   "mesh": {
@@ -1327,7 +1348,17 @@
         "name": "Sandbox code lạ",
         "desc": "Chạy code không tin cậy với mức cách ly mạnh nhất, mặc định không có mạng, dùng xong bỏ."
       }
-    }
+    },
+    "strong": "Kernel riêng",
+    "strongHelp": "microVM / VM / gVisor: an toàn cho code không tin cậy",
+    "capFork": "Fork",
+    "capPause": "Tạm dừng",
+    "capPorts": "Cổng công khai",
+    "capLife": "Tối đa {h} giờ",
+    "perSecond": "Tính theo giây",
+    "perSecondHelp": "Sandbox tính theo giây, xoá khi box kết thúc",
+    "fork": "Cần fork / clone",
+    "forkHint": "Agent sẽ nhân bản box để thử nhiều hướng song song"
   },
   "estimate": {
     "title": "Ước tính lúc tạo",
@@ -1365,5 +1396,113 @@
     "sleeping": "Box đang ngủ. Xem tóm tắt sẽ đánh thức box.",
     "wakeResume": "Đánh thức & xem tóm tắt",
     "resumed": "Đã đánh thức box"
+  },
+  "sbx": {
+    "tier": {
+      "T1": "VPS",
+      "T2": "Sandbox API",
+      "T3": "Chỉ exec"
+    },
+    "tierHelp": {
+      "T1": "Server/VM thô: boxd + Incus, tính theo giờ hoặc tháng",
+      "T2": "Sandbox API: boxd chạy trong sandbox và dial-in về Core, đủ terminal/snapshot",
+      "T3": "Chỉ exec API: shim ở gateway trả lời thay boxd, không có terminal/snapshot/egress"
+    },
+    "ver": {
+      "live": "Đã chạy thật",
+      "docs": "Theo tài liệu",
+      "sdk": "Theo mã SDK"
+    },
+    "verHelp": {
+      "live": "Đã gọi API thật bằng key thật (chỉ đọc)",
+      "docs": "Route và trường lấy từ tài liệu/OpenAPI chính thức, chưa chạy thật",
+      "sdk": "Provider không công bố REST: đọc từ mã nguồn SDK chính thức"
+    },
+    "estPrice": "Giá ước tính",
+    "estPriceHelp": "Provider không công bố đơn giá theo giây; Boxa dùng giá ước tính",
+    "cap": {
+      "unsupported": "{name}: không hỗ trợ",
+      "boot": "Boot {v}",
+      "bootHelp": "Thời gian điển hình từ lúc tạo tới khi chạy",
+      "fork": "Fork",
+      "pause": "Tạm dừng",
+      "life": "Tối đa {v}",
+      "lifeHelp": "Thời gian sống tối đa của một sandbox",
+      "lifeInf": "Không giới hạn",
+      "gpu": "GPU",
+      "ports": "Cổng công khai",
+      "strong": "Kernel riêng: hợp code không tin cậy",
+      "shared": "Container chung kernel: không dùng cho code không tin cậy"
+    },
+    "mode": {
+      "label": "Cách chạy boxd",
+      "auto": "Tự động",
+      "dial": "Dial-in (T2)",
+      "shim": "Shim (T3)",
+      "noDial": "Provider này không giữ được tiến trình nền nên chỉ chạy shim (T3)."
+    },
+    "modeHelp": {
+      "auto": "T2 khi sandbox giữ được tiến trình nền và có BOXA_PUBLIC_URL, không thì T3",
+      "dial": "boxd chạy trong sandbox rồi gọi về Core: đủ terminal, snapshot, egress",
+      "shim": "Core gọi exec API thay boxd: không cần URL công khai, ít tính năng hơn"
+    },
+    "connected": "Đã kết nối",
+    "notConnected": "Chưa kết nối",
+    "adapterHelp": "native = adapter viết bằng Go; YAML = adapter khai báo",
+    "native": "Native",
+    "from": "Từ",
+    "perSecond": "Theo giây",
+    "more": "Chi tiết",
+    "less": "Thu gọn",
+    "verifiedFrom": "Nguồn xác minh:",
+    "envVars": "Biến môi trường:",
+    "settings": "Thiết lập",
+    "connect": "Kết nối",
+    "docs": "Tài liệu API",
+    "customAdapter": "Adapter YAML tuỳ chỉnh",
+    "title": "Provider Sandbox API",
+    "count": "{n}/{total} đã kết nối",
+    "desc": "Sandbox tính tiền theo giây, mỗi box một sandbox và xoá cùng box. Hợp task ngắn, code không tin cậy hoặc cần fork nhanh. Giá và capability lấy từ adapter; mức xác minh cho biết adapter đã được kiểm tới đâu.",
+    "skipped": {
+      "title": "Chưa tích hợp",
+      "modal": {
+        "name": "Modal",
+        "why": "Chỉ có SDK Python/JS qua gRPC riêng, không có REST công khai để gọi từ Core."
+      },
+      "cloudflare": {
+        "name": "Cloudflare Sandbox",
+        "why": "Chạy trong Worker của chính anh (Durable Object + SDK), không có control plane REST để Core gọi."
+      },
+      "koyeb": {
+        "name": "Koyeb",
+        "why": "Sandbox đang public preview, tạo qua SDK/CLI, exec qua WebSocket stream; chưa có REST ổn định."
+      },
+      "zipbox": {
+        "name": "zipbox",
+        "why": "Chưa xác minh API và đơn giá trong bản này; có thể thêm bằng adapter YAML tuỳ chỉnh."
+      }
+    },
+    "perSecondHelp": "Sandbox tính tiền theo giây và bị xoá khi box kết thúc",
+    "billedPerSecond": "Tính theo giây",
+    "adapter": {
+      "title": "Adapter YAML tuỳ chỉnh",
+      "desc": "Thêm một Sandbox API mới mà không cần viết Go: khai báo route HTTP, cách xác thực và đường dẫn JSON, rồi kiểm tra trước khi nạp vào Core.",
+      "back": "Provider Sandbox API",
+      "yaml": "Nội dung adapter (YAML)",
+      "placeholder": "Dán adapter YAML vào đây…",
+      "lint": "Kiểm tra",
+      "linting": "Đang kiểm tra…",
+      "sample": "Dán mẫu",
+      "howTitle": "Cách thêm adapter",
+      "how1": "Viết YAML theo mẫu (route create/get/delete/exec, auth, capability, giá).",
+      "how2": "Kiểm tra ở đây, rồi lưu file vào thư mục <mono>BOXA_SANDBOX_ADAPTERS_DIR</mono>.",
+      "how3": "Khởi động lại Core, provider mới hiện trong danh sách Sandbox API để kết nối.",
+      "required": "Trường bắt buộc:",
+      "invalid": "Adapter chưa hợp lệ",
+      "valid": "Adapter hợp lệ",
+      "sizes": "Size",
+      "regions": "Region",
+      "creds": "Credential"
+    }
   }
 }

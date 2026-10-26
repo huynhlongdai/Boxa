@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { BoxStatusChip, LifecycleBadge, Mono } from "@/components/boxa/status";
 import { BoxActions } from "@/components/boxa/box-actions";
 import { CloneButton } from "@/components/boxa/box-v13";
+import { BoxPlacementBadges } from "@/components/boxa/sandbox";
 import { ErrorBox } from "@/components/boxa/page";
 import { BoxTerminal } from "@/components/boxa/terminal";
 import { OverviewTab, TimelineTab, FilesTab, LogsTab, SnapshotsTab, ConfigTab } from "./tabs";
@@ -52,6 +53,7 @@ function Inner() {
               </>
             )}
           </p>
+          <div className="mt-1.5"><BoxPlacementBadges box={box} /></div>
         </div>
         <div className="flex flex-wrap items-center gap-1">
           <CloneButton box={box} />

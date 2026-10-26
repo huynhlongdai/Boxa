@@ -19,6 +19,7 @@ import type {
   Delivery,
   StorageView,
 } from "../types";
+import { sandboxProviderRows } from "./v14";
 
 export const MIN = 60_000;
 export const HOUR = 60 * MIN;
@@ -211,7 +212,7 @@ export function makeSeed(): MockState {
       budget_month_usd: 20,
       spent_today_usd: 0,
       spent_month_usd: 0,
-      policy: { providers: ["hetzner", "vultr", "contabo"], regions: ["fsn1", "hel1", "sgp", "eu-de"], egress_allowlist: null },
+      policy: { providers: ["hetzner", "vultr", "contabo", "e2b", "prized", "upstash-box"], regions: ["fsn1", "hel1", "sgp", "eu-de", "global", "us-east-1"], egress_allowlist: null },
       box_count: 0,
       last_call_at: ago(1 * MIN),
       memory_mb: 1240,
@@ -225,6 +226,9 @@ export function makeSeed(): MockState {
     { id: "hst_hel1_01", provider: "hetzner", region: "hel1", sku: "cpx41", ip: "65.21.140.203", status: "ready", cpu: 8, ram_mb: 16384, disk_gb: 240, cpu_used_pct: 71, ram_used_pct: 64, disk_used_pct: 52, box_count: 2, price_month: 27.6, price_hour: 0.0442, billing: "pool", created_at: ago(25 * DAY) },
     { id: "hst_ctb_eu_01", provider: "contabo", region: "eu-de", sku: "cloud-vps-20", ip: "167.86.94.51", status: "ready", cpu: 6, ram_mb: 12288, disk_gb: 200, cpu_used_pct: 23, ram_used_pct: 41, disk_used_pct: 18, box_count: 2, price_month: 8.5, price_hour: 0.0118, billing: "pool", created_at: ago(20 * DAY) },
     { id: "hst_vlt_sgp_01", provider: "vultr", region: "sgp", sku: "vc2-4c-8gb", ip: "139.180.141.66", status: "ready", cpu: 4, ram_mb: 8192, disk_gb: 160, cpu_used_pct: 12, ram_used_pct: 22, disk_used_pct: 9, box_count: 3, price_month: 40, price_hour: 0.06, billing: "burst", created_at: ago(5 * HOUR) },
+    // v1.4: host một-box trên Sandbox API (tính theo giây, xoá cùng box): E2B dial-in (T2), Upstash Box shim (T3)
+    { id: "hst_sbx_e2b_01", provider: "e2b", region: "global", sku: "base", ip: "", status: "ready", cpu: 2, ram_mb: 512, disk_gb: 10, cpu_used_pct: 31, ram_used_pct: 44, disk_used_pct: 12, box_count: 1, price_month: 79.497, price_hour: 0.1089, billing: "sandbox", driver: "sandbox", provider_ref: "i7k2m9x0q4", created_at: ago(40 * MIN) },
+    { id: "hst_sbx_ups_01", provider: "upstash-box", region: "us-east-1", sku: "small", ip: "", status: "ready", cpu: 1, ram_mb: 2048, disk_gb: 10, cpu_used_pct: 8, ram_used_pct: 15, disk_used_pct: 5, box_count: 1, price_month: 60.444, price_hour: 0.0828, billing: "sandbox", driver: "shim", provider_ref: "box_9QeL2v", created_at: ago(18 * MIN) },
   ];
 
   const mk = (b: Partial<Box> & Pick<Box, "id" | "slug" | "agent_id" | "status" | "lifecycle" | "template" | "provider" | "region" | "host_id">): Box => {
@@ -254,6 +258,8 @@ export function makeSeed(): MockState {
     mk({ id: "box_51be07", slug: "kecon-tts", agent_id: "agt_kecon", status: "sleeping", lifecycle: "session", template: "python", provider: "hetzner", region: "fsn1", host_id: "hst_fsn1_01", cost_per_hour: 0.0039, budget_usd: 2, placement_reason: "Pool fsn1; đã ngủ sau 15 phút rảnh (Reaper), snapshot lưu tại R2.", secrets: ["ELEVENLABS_API_KEY"], created_at: ago(4 * DAY), last_active_at: ago(7 * HOUR) }),
     mk({ id: "box_c4410f", slug: "replingo-api", agent_id: "agt_replingo", status: "running", lifecycle: "service", template: "node", provider: "contabo", region: "eu-de", host_id: "hst_ctb_eu_01", spec: { cpu: 2, ram_mb: 4096, disk_gb: 30 }, cost_per_hour: 0.0029, budget_usd: 8, placement_reason: "Service 24/7 → pool tháng rẻ nhất (Contabo $8.5/tháng cho 6 vCPU).", ports: [8080], secrets: ["OPENAI_API_KEY"], created_at: ago(19 * DAY), last_active_at: ago(30 * 1000) }),
     mk({ id: "box_e07b22", slug: "replingo-eval", agent_id: "agt_replingo", status: "provisioning", lifecycle: "task", template: "python", provider: "vultr", region: "sgp", host_id: "hst_vlt_sgp_01", cost_per_hour: 0.015, budget_usd: 0.5, placement_reason: "Contabo eu-de chậm boot (>60s) → task ngắn đặt ở burst Vultr sgp đang có sẵn.", secrets: ["OPENAI_API_KEY"], created_at: ago(1 * MIN), last_active_at: null }),
+    mk({ id: "box_5e2b70", slug: "replingo-fuzz", agent_id: "agt_replingo", status: "running", lifecycle: "task", template: "python", provider: "e2b", region: "global", host_id: "hst_sbx_e2b_01", spec: { cpu: 2, ram_mb: 512, disk_gb: 10 }, cost_per_hour: 0.1089, budget_usd: 0.5, placement_reason: "Code không tin cậy (fuzz input người dùng) → sandbox E2B microVM, tính theo giây; boxd dial-in (T2), xoá sandbox khi box kết thúc.", secrets: [], created_at: ago(40 * MIN), last_active_at: ago(2 * MIN) }),
+    mk({ id: "box_u5b3c1", slug: "hark-sbx-scratch", agent_id: "agt_hark", status: "running", lifecycle: "task", template: "base", provider: "upstash-box", region: "us-east-1", host_id: "hst_sbx_ups_01", spec: { cpu: 1, ram_mb: 2048, disk_gb: 10 }, cost_per_hour: 0.0828, budget_usd: 0.3, placement_reason: "Task ngắn, pool đầy → Upstash Box qua shim chỉ exec (T3): không terminal, không snapshot.", secrets: [], created_at: ago(18 * MIN), last_active_at: ago(5 * MIN) }),
     mk({ id: "box_9a6d13", slug: "n8n-main", agent_id: "agt_n8n", status: "running", lifecycle: "service", template: "base", provider: "contabo", region: "eu-de", host_id: "hst_ctb_eu_01", spec: { cpu: 1, ram_mb: 2048, disk_gb: 20 }, cost_per_hour: 0.0015, budget_usd: 4, placement_reason: "Service → pool Contabo; cùng host với replingo-api để tiết kiệm.", ports: [5678], secrets: ["TELEGRAM_BOT_TOKEN"], created_at: ago(17 * DAY), last_active_at: ago(4 * MIN) }),
     mk({ id: "box_3f0c88", slug: "hark-research", agent_id: "agt_hark", status: "running", lifecycle: "session", template: "python-browser", provider: "hetzner", region: "hel1", host_id: "hst_hel1_01", spec: { cpu: 2, ram_mb: 4096, disk_gb: 25 }, cost_per_hour: 0.011, budget_usd: 3, placement_reason: "Session → pool hel1; cần browser, Hetzner hỗ trợ Chromium headless.", secrets: ["OPENAI_API_KEY"], created_at: ago(6 * HOUR), last_active_at: ago(40 * 1000) }),
     mk({ id: "box_b18f6e", slug: "hark-scratch", agent_id: "agt_hark", status: "failed", lifecycle: "task", template: "base", provider: "vultr", region: "sgp", host_id: "hst_vlt_sgp_01", spec: { cpu: 1, ram_mb: 1024, disk_gb: 10 }, cost_per_hour: 0.0075, budget_usd: 0.3, placement_reason: "Task ngắn → burst Vultr sgp.", created_at: ago(3 * HOUR), last_active_at: ago(2 * HOUR) }),
@@ -291,12 +297,13 @@ export function makeSeed(): MockState {
   }
 
   const providers: Provider[] = [
-    { id: "hetzner", name: "Hetzner Cloud", connected: true, tier: "T1", last_check_at: ago(12 * MIN), error: null, implemented: true, chain_rank: 1, token_source: "env" },
-    { id: "vultr", name: "Vultr", connected: true, tier: "T1", last_check_at: ago(12 * MIN), error: null, implemented: true, chain_rank: 2, token_source: "api" },
-    { id: "digitalocean", name: "DigitalOcean", connected: false, tier: "T1", last_check_at: null, error: null, implemented: true, chain_rank: 3 },
-    { id: "contabo", name: "Contabo", connected: true, tier: "T1", last_check_at: ago(13 * MIN), error: null, implemented: true, chain_rank: 4, token_source: "api" },
-    { id: "netcup", name: "netcup", connected: false, tier: "T1", last_check_at: ago(2 * DAY), error: "Token hết hạn (401 từ SCP API)", implemented: true, chain_rank: 5 },
-    { id: "local", name: "Máy cục bộ (Incus)", connected: false, tier: "T1", last_check_at: null, error: null, implemented: true },
+    { id: "hetzner", name: "Hetzner Cloud", connected: true, tier: "T1", last_check_at: ago(12 * MIN), error: null, implemented: true, chain_rank: 1, token_source: "env", group: "vps", adapter: "api" },
+    { id: "vultr", name: "Vultr", connected: true, tier: "T1", last_check_at: ago(12 * MIN), error: null, implemented: true, chain_rank: 2, token_source: "api", group: "vps", adapter: "api" },
+    { id: "digitalocean", name: "DigitalOcean", connected: false, tier: "T1", last_check_at: null, error: null, implemented: true, chain_rank: 3, group: "vps", adapter: "api" },
+    { id: "contabo", name: "Contabo", connected: true, tier: "T1", last_check_at: ago(13 * MIN), error: null, implemented: true, chain_rank: 4, token_source: "api", group: "vps", adapter: "api" },
+    { id: "netcup", name: "netcup", connected: false, tier: "T1", last_check_at: ago(2 * DAY), error: "Token hết hạn (401 từ SCP API)", implemented: true, chain_rank: 5, group: "vps", adapter: "api" },
+    { id: "local", name: "Máy cục bộ (Incus)", connected: false, tier: "T1", last_check_at: null, error: null, implemented: true, group: "vps", adapter: "self" },
+    ...sandboxProviderRows(),
   ];
 
   const fetched = ago(3 * HOUR);

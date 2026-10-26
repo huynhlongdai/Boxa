@@ -200,11 +200,16 @@ export interface Host {
   box_count: number;
   price_month: number;
   price_hour: number;
-  billing: "pool" | "burst";
+  /** v1.4: sandbox = host một-box trên Sandbox API (tính theo giây, xoá cùng box). */
+  billing: "pool" | "burst" | "sandbox";
+  /** v1.4: sandbox = boxd dial-in trong sandbox (T2), shim = exec-only shim ở gateway (T3). */
+  driver?: string;
+  provider_ref?: string;
   created_at: string;
 }
 
-export type ProviderId = "hetzner" | "vultr" | "digitalocean" | "contabo" | "netcup" | "local";
+/** T1 cố định + id provider sandbox (v1.4, do registry của Core quyết định). */
+export type ProviderId = "hetzner" | "vultr" | "digitalocean" | "contabo" | "netcup" | "local" | (string & {});
 
 export interface Provider {
   id: ProviderId;
@@ -219,6 +224,13 @@ export interface Provider {
   chain_rank?: number;
   /** env = token lấy từ biến môi trường, api = dán trên dashboard. */
   token_source?: "env" | "api";
+  /** v1.4: vps | sandbox (điền từ registry, không lưu). */
+  group?: "vps" | "sandbox" | string;
+  /** v1.4: api | self | native | yaml */
+  adapter?: string;
+  /** v1.4: live-verified | docs-verified | sdk-source (provider sandbox). */
+  verification?: string;
+  docs?: string;
 }
 
 export interface ProviderRegion {
@@ -553,6 +565,8 @@ export interface Requirements {
   optimize?: "balanced" | "cost" | "speed" | "reliability" | "latency" | string;
   public_url?: boolean;
   untrusted?: boolean;
+  /** v1.4: workload fork/clone box (chạy nhiều nhánh song song). */
+  fork?: boolean;
 }
 
 /** Ước tính giá/ETA đi kèm mọi response tạo box. */
@@ -590,6 +604,8 @@ export interface ProviderPrefs {
   max_servers: number;
   regions: string[];
   default_region: string;
+  /** v1.4 (provider sandbox): auto | dial (T2) | shim (T3). */
+  sandbox_mode?: SandboxMode | string;
   updated_at?: string;
 }
 
@@ -687,6 +703,9 @@ export interface CatalogItem {
   health: string;
   usable: boolean;
   blocked?: string;
+  /** v1.4: T1 (server) | T2/T3 (sandbox API, tính theo giây). */
+  tier?: "T1" | "T2" | "T3" | string;
+  group?: "vps" | "sandbox" | string;
 }
 export interface CatalogSource {
   source: string;
@@ -763,6 +782,16 @@ export interface RecommendOption {
   score: number;
   breakdown: Record<string, ScoreComponent>;
   reasons: string[];
+  /** v1.4 */
+  tier?: "T1" | "T2" | "T3" | string;
+  fork?: boolean;
+  pause?: boolean;
+  ports?: boolean;
+  gpu?: boolean;
+  max_lifetime_h?: number;
+  boot_ms?: number;
+  verification?: string;
+  strong_isolation?: boolean;
 }
 export interface Rejection {
   kind: string;
@@ -923,4 +952,78 @@ export interface MeshKeyResult {
   expires_at: string;
   login_server: string;
   command: string;
+}
+
+// ---------------- v1.4: Sandbox API providers (T2/T3) ----------------
+// Shape bám theo boxa/core/internal/sandbox/sandbox.go (Info) + manager/sandbox14.go (SandboxProviderView) + api/v14.go (lint).
+
+export type SandboxMode = "auto" | "dial" | "shim";
+export type Verification = "live-verified" | "docs-verified" | "sdk-source";
+
+export interface SandboxCapabilities {
+  background: boolean;
+  pause: boolean;
+  snapshot: boolean;
+  fork: boolean;
+  ports: boolean;
+  pty: boolean;
+  files: boolean;
+  gpu: boolean;
+  boot_ms: number;
+  /** 0 = không giới hạn / không công bố. */
+  max_lifetime_s: number;
+  max_cpu: number;
+  max_ram_mb: number;
+  isolation: "microvm" | "gvisor" | "container" | "vm" | string;
+}
+export interface SandboxPricing {
+  cpu_second: number;
+  gb_second: number;
+  disk_gb_second: number;
+  flat_second: number;
+  source: string;
+  /** docs | estimated */
+  confidence: string;
+  note?: string;
+}
+export interface SandboxSize { sku: string; cpu: number; ram_mb: number; disk_gb: number }
+export interface SandboxCredField { name: string; label: string; secret: boolean; optional: boolean; default?: string; hint?: string }
+export interface SandboxInfo {
+  id: string;
+  name: string;
+  tier: "T2" | "T3" | string;
+  adapter: "native" | "yaml" | string;
+  verification: Verification | string;
+  verified_note?: string;
+  docs: string;
+  website: string;
+  initials: string;
+  color: string;
+  capabilities: SandboxCapabilities;
+  pricing: SandboxPricing;
+  sizes: SandboxSize[];
+  regions: { id: string; name: string }[];
+  templates: string[];
+  default_template: string;
+  workdir: string;
+  credentials: SandboxCredField[];
+  env_vars: string[];
+  notes: string[];
+  from_usd_h: number;
+}
+/** GET /v1/sandbox/providers */
+export interface SandboxProvider extends SandboxInfo {
+  /** dial (T2) | shim (T3) — chế độ hiệu lực sau khi áp sandbox_mode. */
+  mode: "dial" | "shim" | string;
+  connected: boolean;
+  usable: boolean;
+  blocked?: string;
+  health: string;
+  chain_rank?: number;
+}
+/** POST /v1/sandbox/adapters/lint */
+export interface AdapterLintResult {
+  ok: boolean;
+  error?: string | null;
+  info?: SandboxInfo | null;
 }

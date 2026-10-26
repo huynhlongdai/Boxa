@@ -591,8 +591,13 @@
       "health": "Health",
       "catalog": "Price catalog",
       "speed": "Speed",
-      "mesh": "Mesh"
-    }
+      "mesh": "Mesh",
+      "sandbox": "Sandbox API"
+    },
+    "groupVps": "VPS / VM (T1)",
+    "groupSandbox": "Sandbox API (T2/T3)",
+    "sandboxAll": "View all {n}",
+    "on": "On"
   },
   "kinds": {
     "category": {
@@ -1071,7 +1076,14 @@
       "back": "Back",
       "next": "Next",
       "save": "Save & connect",
-      "saved": "{name} connected"
+      "saved": "{name} connected",
+      "sandboxFrom": "Sandbox · from {price}/h, billed per second",
+      "groupVps": "VPS / VM (T1)",
+      "groupVpsDesc": "Rent servers by the hour or month; many boxes per host.",
+      "groupSandbox": "Sandbox API (T2/T3)",
+      "groupSandboxDesc": "One sandbox per box, billed per second, deleted when the box ends.",
+      "optional": "(optional)",
+      "sandboxBilling": "Prices are shown per hour for comparison; you are billed per second while the sandbox runs."
     },
     "prefs": {
       "title": "{name} settings",
@@ -1144,7 +1156,16 @@
       "state": "State",
       "feedPrice": "Community feed price",
       "notConnected": "Not connected",
-      "count": "{n} / {total} items"
+      "count": "{n} / {total} items",
+      "second": "/second",
+      "tier": "Tier",
+      "tierAll": "All · {n}",
+      "tierVps": "VPS (T1) · {n}",
+      "tierSandbox": "Sandbox API (T2/T3) · {n}",
+      "perSecondHint": "Sandboxes bill per second; no monthly price",
+      "adapterPrice": "Adapter",
+      "adapterPriceHint": "Per-second rates from the adapter (provider pricing page)",
+      "estimated": "Estimated"
     }
   },
   "mesh": {
@@ -1327,7 +1348,17 @@
         "name": "Untrusted code sandbox",
         "desc": "Run code you do not trust with the strongest isolation, offline by default, thrown away."
       }
-    }
+    },
+    "strong": "Own kernel",
+    "strongHelp": "microVM / VM / gVisor: safe for untrusted code",
+    "capFork": "Fork",
+    "capPause": "Pause",
+    "capPorts": "Public ports",
+    "capLife": "Max {h} h",
+    "perSecond": "Per second",
+    "perSecondHelp": "Billed per second, deleted when the box ends",
+    "fork": "Needs fork / clone",
+    "forkHint": "The agent will clone the box to try several paths in parallel"
   },
   "estimate": {
     "title": "Estimate at creation",
@@ -1365,5 +1396,113 @@
     "sleeping": "The box is asleep. Loading the summary wakes it.",
     "wakeResume": "Wake & show summary",
     "resumed": "Box woken"
+  },
+  "sbx": {
+    "tier": {
+      "T1": "VPS",
+      "T2": "Sandbox API",
+      "T3": "Exec only"
+    },
+    "tierHelp": {
+      "T1": "Raw server/VM: boxd + Incus, billed hourly or monthly",
+      "T2": "Sandbox API: boxd runs inside the sandbox and dials in to Core; full terminal and snapshots",
+      "T3": "Exec-only API: a gateway shim answers for boxd; no terminal, snapshots or egress rules"
+    },
+    "ver": {
+      "live": "Live-verified",
+      "docs": "Docs-verified",
+      "sdk": "From SDK source"
+    },
+    "verHelp": {
+      "live": "Called the real API with a real key (read-only)",
+      "docs": "Routes and fields from the official docs/OpenAPI; not run live",
+      "sdk": "No published REST reference: read from the official SDK source"
+    },
+    "estPrice": "Estimated price",
+    "estPriceHelp": "The provider does not publish per-second unit rates; Boxa uses an estimate",
+    "cap": {
+      "unsupported": "{name}: not supported",
+      "boot": "Boot {v}",
+      "bootHelp": "Typical time from create to running",
+      "fork": "Fork",
+      "pause": "Pause",
+      "life": "Max {v}",
+      "lifeHelp": "Maximum lifetime of one sandbox",
+      "lifeInf": "No limit",
+      "gpu": "GPU",
+      "ports": "Public ports",
+      "strong": "Own kernel: fits untrusted code",
+      "shared": "Shared-kernel containers: not for untrusted code"
+    },
+    "mode": {
+      "label": "How boxd runs",
+      "auto": "Auto",
+      "dial": "Dial-in (T2)",
+      "shim": "Shim (T3)",
+      "noDial": "This provider cannot keep a background process, so it runs as a shim (T3) only."
+    },
+    "modeHelp": {
+      "auto": "T2 when the sandbox keeps background processes and BOXA_PUBLIC_URL is set, else T3",
+      "dial": "boxd runs in the sandbox and calls Core: terminal, snapshots, egress",
+      "shim": "Core calls the exec API instead of boxd: no public URL needed, fewer features"
+    },
+    "connected": "Connected",
+    "notConnected": "Not connected",
+    "adapterHelp": "native = adapter written in Go; YAML = declarative adapter",
+    "native": "Native",
+    "from": "From",
+    "perSecond": "Per second",
+    "more": "Details",
+    "less": "Less",
+    "verifiedFrom": "Verified from:",
+    "envVars": "Env vars:",
+    "settings": "Settings",
+    "connect": "Connect",
+    "docs": "API docs",
+    "customAdapter": "Custom YAML adapter",
+    "title": "Sandbox API providers",
+    "count": "{n}/{total} connected",
+    "desc": "Sandboxes bill per second: one sandbox per box, deleted with the box. Good for short tasks, untrusted code or fast forks. Prices and capabilities come from the adapter; the verification level says how far it has been checked.",
+    "skipped": {
+      "title": "Not integrated yet",
+      "modal": {
+        "name": "Modal",
+        "why": "SDK-only (Python/JS over Modal’s own gRPC); no public REST API for Core to call."
+      },
+      "cloudflare": {
+        "name": "Cloudflare Sandbox",
+        "why": "Runs inside your own Worker (Durable Object + SDK); there is no hosted REST control plane for Core."
+      },
+      "koyeb": {
+        "name": "Koyeb",
+        "why": "Sandboxes are in public preview, created via SDK/CLI with exec over a WebSocket stream; no stable REST yet."
+      },
+      "zipbox": {
+        "name": "zipbox",
+        "why": "API and unit prices not verified in this release; can be added as a custom YAML adapter."
+      }
+    },
+    "perSecondHelp": "Sandboxes bill per second and are deleted when the box ends",
+    "billedPerSecond": "Billed per second",
+    "adapter": {
+      "title": "Custom YAML adapter",
+      "desc": "Add a new sandbox API without writing Go: declare HTTP routes, auth and JSON paths, then lint it before loading it into Core.",
+      "back": "Sandbox API providers",
+      "yaml": "Adapter (YAML)",
+      "placeholder": "Paste the adapter YAML here…",
+      "lint": "Lint",
+      "linting": "Linting…",
+      "sample": "Paste sample",
+      "howTitle": "How to add an adapter",
+      "how1": "Write the YAML from the sample (create/get/delete/exec routes, auth, capabilities, prices).",
+      "how2": "Lint it here, then save the file into <mono>BOXA_SANDBOX_ADAPTERS_DIR</mono>.",
+      "how3": "Restart Core; the new provider appears under Sandbox API, ready to connect.",
+      "required": "Required keys:",
+      "invalid": "Adapter is not valid",
+      "valid": "Adapter is valid",
+      "sizes": "Sizes",
+      "regions": "Regions",
+      "creds": "Credentials"
+    }
   }
 }

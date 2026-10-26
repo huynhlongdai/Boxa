@@ -271,3 +271,77 @@ Theo `docs/api-contract-v1.md` mục "v1.2 additions". Mọi thứ dưới đây
 **A2A JSON-RPC (`internal/api/a2a.go`).** `POST /a2a` (cùng Bearer key): `message/send` (= `tasks/send`), `message/stream` (= `tasks/sendSubscribe`, SSE), `tasks/get`, `tasks/cancel`, `tasks/resubscribe`. Text part = lệnh + `metadata.box_id` (hoặc data part `{box_id, command, cwd?, timeout_s?}`) → job exec async, **task id = job id**; data part `{tool, arguments}` gọi bất kỳ tool nào trong 18 tool (chạy đồng bộ). Trạng thái job → A2A: `queued→submitted`, `running→working`, `done→completed`, `failed→failed`, `canceled→canceled`. `tasks/cancel` = `POST /v1/jobs/:id/cancel` (kill lệnh trên host). Agent card (`/.well-known/agent.json`) giờ có `url: <base>/a2a`, `preferredTransport: JSONRPC`, `capabilities.streaming: true`, skill `exec` + 18 tool.
 
 **Kiểm thử v1.2.** `go test ./...` (thêm `internal/{objstore,notify,egress}`, `provider/more_providers_test.go`, `boxd/egress_test.go`, `e2e/v12_test.go`: snapshot qua S3 giả giữa 2 host + retention, egress, Telegram giả, A2A send/get/cancel/stream, chuỗi provider) và `scripts/e2e.sh` (thêm mục v1.2).
+
+
+
+## 10. v1.4 — provider Sandbox API (T2 / T3)
+
+Ngoài VPS/VM thô (T1), Boxa thuê được sandbox của các dịch vụ "Sandbox API". Mỗi box chạy trong **một sandbox riêng**, tính tiền **theo giây**, và sandbox bị xoá khi box kết thúc. Hợp với task ngắn, code không tin cậy, hoặc việc cần fork nhanh.
+
+**Hai cách chạy (`sandbox_mode`, theo provider hoặc `BOXA_SANDBOX_MODE`).**
+- **T2 – dial-in:** core chạy `boxd --dial` trong sandbox bằng bootstrap token dùng một lần, boxd gọi ngược về core qua `BOXA_PUBLIC_URL` và đăng ký như một host bình thường (đủ terminal, snapshot, egress). Cần sandbox giữ được tiến trình nền và core có URL công khai.
+- **T3 – shim:** core trả lời các RPC của boxd bằng exec/file API của provider (`internal/sandbox/shim.go`). Không cần URL công khai, nhưng không có terminal, snapshot hay luật egress.
+- `auto` (mặc định) chọn T2 khi provider là T2, giữ được tiến trình nền và `BOXA_PUBLIC_URL` đã đặt, ngược lại thì T3.
+
+**Adapter.** Có hai loại adapter, đều nằm trong `internal/sandbox`. Loại *native* viết bằng Go. Loại *YAML* là adapter khai báo: route HTTP, cách xác thực, đường dẫn JSON, ánh xạ trạng thái. Adapter YAML dựng sẵn nằm trong `builtin/*.yaml`; muốn thêm thì bỏ file vào `BOXA_SANDBOX_ADAPTERS_DIR`. Trước khi nạp, kiểm tra file bằng `POST /v1/sandbox/adapters/lint` (admin key) hoặc màn hình **Hạ tầng → Sandbox API → Adapter YAML tuỳ chỉnh**.
+
+### Bảng provider
+
+**T1 – VPS / VM** (boxd + Incus, một host chạy nhiều box, tính theo giờ hoặc tháng):
+
+| Provider | Kết nối | Mức xác minh | Ghi chú |
+|---|---|---|---|
+| Hetzner Cloud (`hetzner`) | `HETZNER_TOKEN` | **live**: kiểm tra token gọi API thật (token sai → 401) | giá live qua API + battleships.dev |
+| Vultr (`vultr`) | `VULTR_API_KEY` | **live**: kiểm tra token gọi API thật | giá live qua API + battleships.dev |
+| DigitalOcean (`digitalocean`) | `DIGITALOCEAN_TOKEN` | docs (test bằng server giả) | |
+| Contabo (`contabo`) | `CONTABO_CLIENT_ID` · `CONTABO_CLIENT_SECRET` · `CONTABO_API_USER` · `CONTABO_API_PASSWORD` | docs (test bằng server giả) | trả theo tháng |
+| netcup (`netcup`) | `NETCUP_REFRESH_TOKEN` | docs (test bằng server giả) | trả theo tháng |
+| Máy cục bộ (`local`) | boxd + bootstrap token | — | tự đăng ký, không cần token |
+
+**T2 / T3 – Sandbox API** (một sandbox cho mỗi box, tính theo giây; giá "từ" là size rẻ nhất quy ra giờ):
+
+| Provider | Tier | Adapter | Mức xác minh | Isolation | Boot | Capability | Sống tối đa | Giá từ | Biến môi trường |
+|---|---|---|---|---|---|---|---|---|---|
+| boxd.sh (`boxdsh`) | T2 | native | docs | microvm | 300 ms | fork, pause, cổng | không giới hạn | $0.0614/giờ | `BOXDSH_API_KEY`, `BOXDSH_ORG` |
+| Prized Sandboxes (`prized`) | T2 | native | **live** (gọi API thật, chỉ đọc) | microvm | 3000 ms | fork, pause | 7 ngày | $0.0660/giờ | `PRIZED_API_KEY` |
+| Daytona (`daytona`) | T2 | native | docs | container | 1000 ms | fork, pause, cổng, GPU | không giới hạn | $0.0669/giờ (ước tính) | `DAYTONA_API_KEY`, `DAYTONA_ORGANIZATION_ID` |
+| Novita Sandbox (`novita`) | T2 | native | mã nguồn SDK | microvm | 1000 ms | pause, cổng | 4 giờ | $0.0763/giờ | `NOVITA_API_KEY`, `NOVITA_TEMPLATES` |
+| E2B (`e2b`) | T2 | native | docs | microvm | 500 ms | fork, pause, cổng | 24 giờ | $0.1089/giờ | `E2B_API_KEY`, `E2B_TEMPLATES` |
+| Runloop (`runloop`) | T2 | yaml | docs | microvm | 2000 ms | pause, cổng | không giới hạn | $0.0792/giờ | `RUNLOOP_API_KEY` |
+| Blaxel (`blaxel`) | T2 | yaml | docs | microvm | 25 ms | pause, cổng | không giới hạn | $0.0828/giờ | `BL_API_KEY`, `BL_WORKSPACE` |
+| Upstash Box (`upstash-box`) | T3 | yaml | mã nguồn SDK | container | 1500 ms | pause, cổng | không giới hạn | $0.0828/giờ (ước tính) | `UPSTASH_BOX_API_KEY` |
+| Agent 37 (`agent37`) | T2 | yaml | docs | gvisor | 5000 ms | fork, pause, cổng | không giới hạn | $0.0832/giờ (ước tính) | `AGENT37_API_KEY` |
+| boat (`boat`) | T2 | yaml | docs | vm | 3000 ms | fork, pause, cổng | không giới hạn | $0.1656/giờ (ước tính) | `BOAT_API_KEY` |
+| Vercel Sandbox (`vercel`) | T2 | yaml | docs | microvm | 1500 ms | fork, cổng | 5 giờ | $0.1706/giờ (ước tính) | `VERCEL_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID` |
+
+Mức xác minh: **live** = đã gọi API thật bằng key thật (chỉ các lệnh đọc, không tốn tiền); **docs** = route và trường lấy từ tài liệu/OpenAPI chính thức, chạy với server giả; **mã nguồn SDK** = provider không công bố REST, adapter đọc từ SDK chính thức. "Ước tính" nghĩa là provider không công bố đơn giá theo giây, nên Boxa dùng giá ước tính. Daytona và Upstash Box chạy container chung kernel, nên bị loại khi `untrusted=true`.
+
+**Chưa tích hợp:**
+
+| Provider | Lý do |
+|---|---|
+| Modal | Chỉ có SDK Python/JS chạy trên gRPC riêng của Modal, không có REST công khai để core gọi. |
+| Cloudflare Sandbox | Chạy trong Worker của chính người dùng (Durable Object + SDK), không có control plane REST dạng dịch vụ. |
+| Koyeb | Sandbox còn ở giai đoạn public preview, tạo qua SDK/CLI, exec qua WebSocket stream; chưa có REST ổn định. |
+| zipbox | Bản này chưa xác minh API và đơn giá. Có thể thêm bằng adapter YAML tuỳ chỉnh. |
+
+### API v1.4
+- `GET /v1/sandbox/providers` → `{items:[{id, name, tier, adapter, verification, verified_note, docs, initials, color, capabilities:{background, pause, snapshot, fork, ports, pty, files, gpu, boot_ms, max_lifetime_s, max_cpu, max_ram_mb, isolation}, pricing:{cpu_second, gb_second, disk_gb_second, flat_second, source, confidence}, sizes, regions, credentials, env_vars, mode, connected, usable, blocked?, health, from_usd_h, chain_rank?}]}`.
+- `POST /v1/sandbox/adapters/lint {yaml}` (admin) → `{ok, error?, info?}`.
+- `GET /v1/providers` có thêm `group: vps|sandbox`, `adapter: api|self|native|yaml`, `verification`, `docs`. `GET /v1/catalog` có thêm `tier: T1|T2|T3` và `group`; offer sandbox có `min_billing_minutes=0`.
+- `PUT /v1/providers/:id/prefs` nhận thêm `sandbox_mode: auto|dial|shim`. Credential nhiều trường gửi dạng JSON trong `token`, ví dụ `{"token":"…","project_id":"…"}`.
+- `POST /v1/recommend` và `requirements` nhận thêm `fork`; `isolation` có thêm giá trị `sandbox`. Phương án sandbox có `kind=sandbox` cùng `tier, fork, pause, ports, gpu, max_lifetime_h, boot_ms, verification, strong_isolation`. Lý do bị loại do capability: thiếu fork, không pause được (box lâu dài), quá thời gian sống tối đa, không có URL công khai, hoặc container chung kernel với code không tin cậy (luật này áp dụng cả khi `isolation=sandbox`).
+- Host sandbox có `billing=sandbox` và `driver=sandbox` (T2) hoặc `shim` (T3). Host bị huỷ cùng box của nó.
+
+### Biến môi trường v1.4
+
+| Biến | Mặc định | Ý nghĩa |
+|---|---|---|
+| `BOXA_SANDBOX_ADAPTERS_DIR` | — | thư mục chứa adapter YAML bổ sung (`*.yaml`) |
+| `BOXA_SANDBOX_MODE` | `auto` | `auto` / `dial` / `shim` cho mọi provider sandbox (prefs của từng provider được ưu tiên hơn) |
+| `BOXA_AUTO_SANDBOX` | tắt | cho `box_up` tự thuê sandbox mà không cần duyệt (tính theo giây, xoá cùng box) |
+| `BOXA_PROVIDER_CHAIN` | chuỗi T1 rồi tới chuỗi sandbox | thứ tự dự phòng (mặc định sandbox: e2b, daytona, novita, prized, boxdsh, runloop, blaxel, boat, agent37, vercel, upstash-box) |
+| `E2B_API_KEY`, `DAYTONA_API_KEY`, `PRIZED_API_KEY`, … | — | kết nối provider sandbox lúc khởi động (xem cột "Biến môi trường") |
+
+**Kiểm thử v1.4.** `go test ./...` gồm `sandbox/native_test.go` (httptest cho từng adapter native), `yaml_shim_test.go` (engine YAML + shim), `selector/sandbox_test.go`, `e2e/v14_test.go` (failover sang shim T3, boxd dial-in T2, dọn dẹp). Test live chỉ đọc cho Prized là tuỳ chọn: `BOXA_LIVE_PRIZED=1 PRIZED_API_KEY=…`. `scripts/e2e.sh` có mục v1.4: một adapter YAML trỏ tới `scripts/fake-sandbox.py` (sandbox REST chỉ exec, chạy trên localhost). Mục này kiểm tra lint, kết nối, recommend, tạo box trên host sandbox (shim T3), exec, và sandbox bị xoá khi box kết thúc.
+

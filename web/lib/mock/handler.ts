@@ -289,6 +289,13 @@ function createBox(s: MockState, body: Record<string, unknown>): MockResponse {
     if (!pick) return err(503, "NO_CAPACITY", "no_capacity", { cpu: spec?.cpu ?? 1, agent: agent.name, s: 60 }, { retry_after_s: 60 });
   }
   spec = spec ?? { cpu: 2, ram_mb: 2048, disk_gb: 20 };
+  // v1.4: phương án sandbox → host một-box trên Sandbox API (T2 dial-in / T3 shim), xoá cùng box
+  if (pick?.kind === "sandbox") {
+    s.hosts.push({ id: nextId(s, "hst"), provider: pick.provider, region: pick.region, sku: pick.sku ?? "default", ip: "", status: "ready", cpu: pick.cpu, ram_mb: pick.ram_mb, disk_gb: pick.disk_gb,
+      cpu_used_pct: 0, ram_used_pct: 0, disk_used_pct: 0, box_count: 0, price_hour: pick.cost_per_hour, price_month: r4(pick.cost_per_hour * 730), billing: "sandbox",
+      driver: pick.tier === "T3" ? "shim" : "sandbox", provider_ref: Math.random().toString(36).slice(2, 12), created_at: iso(Date.now()) });
+    pick = { ...pick, host_id: s.hosts[s.hosts.length - 1].id };
+  }
   const host = (pick?.host_id && s.hosts.find((h) => h.id === pick!.host_id)) || (s.hosts.find((h) => h.status === "ready" && h.billing === "pool" && agent.policy.providers.includes(h.provider)) ?? s.hosts.find((h) => h.status === "ready")!);
   const id = nextId(s, "box");
   const b: MockState["boxes"][number] = {
