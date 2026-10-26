@@ -1,0 +1,37 @@
+import { NextRequest, NextResponse } from "next/server";
+import { COOKIE_NAME, coreBase, isMock } from "@/lib/server/config";
+
+export const dynamic = "force-dynamic";
+
+export async function POST(req: NextRequest) {
+  let key = "";
+  try {
+    const body = (await req.json()) as { key?: string };
+    key = (body.key ?? "").trim();
+  } catch {
+    /* noop */
+  }
+  if (!key) {
+    return NextResponse.json({ error: { code: "INVALID", message: "Thiếu API key", hint: "Dán API key admin (bx_live_…)." } }, { status: 400 });
+  }
+  if (!(await isMock())) {
+    // Kiểm tra key với Core trước khi lưu cookie
+    try {
+      const res = await fetch(`${coreBase()}/overview`, { headers: { Authorization: `Bearer ${key}` }, cache: "no-store" });
+      if (res.status === 401 || res.status === 403) {
+        return NextResponse.json({ error: { code: "UNAUTHORIZED", message: "API key không hợp lệ hoặc không có quyền admin", hint: "Tạo key scope admin bằng `box keys create --admin`." } }, { status: 401 });
+      }
+    } catch {
+      return NextResponse.json({ error: { code: "PROVIDER_FAILED", message: "Không kết nối được Boxa Core", hint: `Kiểm tra BOXA_API (${coreBase()}).` } }, { status: 502 });
+    }
+  }
+  const res = NextResponse.json({ ok: true });
+  res.cookies.set(COOKIE_NAME, key, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production" && process.env.BOXA_INSECURE_COOKIE !== "1",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 30,
+  });
+  return res;
+}

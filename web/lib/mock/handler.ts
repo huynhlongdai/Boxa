@@ -1,0 +1,693 @@
+// Bộ xử lý MOCK MODE: mô phỏng Boxa Core theo contract v1, trạng thái giữ trong bộ nhớ.
+import { parseDocument } from "yaml";
+import type { Agent, AgentKind, ApiKey, Approval, Box, BoxaEvent, ErrorCode, Host, LedgerEntry, Overview, Settings, Template } from "../types";
+import { DAY, HOUR, MIN, iso, makeSeed, r4, type MockState } from "./seed";
+import { makeSnippet } from "./snippets";
+
+type G = typeof globalThis & { __boxaMock?: MockState };
+
+export function store(): MockState {
+  const g = globalThis as G;
+  if (!g.__boxaMock) g.__boxaMock = makeSeed();
+  return g.__boxaMock;
+}
+
+export interface MockResponse {
+  status: number;
+  body: unknown;
+  contentType?: string;
+  headers?: Record<string, string>;
+}
+
+const ok = (body: unknown, status = 200): MockResponse => ({ status, body });
+const err = (status: number, code: ErrorCode, message: string, hint: string): MockResponse => ({
+  status,
+  body: { error: { code, message, hint } },
+});
+const list = <T>(items: T[]) => ok({ items, next_cursor: null });
+const notFound = (what: string) => err(404, "NOT_FOUND", `Không tìm thấy ${what}`, "Kiểm tra lại ID hoặc gọi lệnh list trước.");
+
+function nextId(s: MockState, prefix: string) {
+  s.seq += 1;
+  return `${prefix}_${s.seq.toString(16)}${Math.random().toString(16).slice(2, 6)}`;
+}
+
+function pushEvent(s: MockState, e: Omit<BoxaEvent, "id" | "ts"> & { ts?: string }) {
+  const evt: BoxaEvent = { id: nextId(s, "evt"), ts: e.ts ?? iso(Date.now()), ...e } as BoxaEvent;
+  s.events.push(evt);
+  return evt;
+}
+
+function startOfTodayUTC() {
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  return d.getTime();
+}
+function startOfMonthUTC() {
+  const d = new Date();
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
+}
+
+/** Tiến trình theo thời gian: box/host đang dựng → sẵn sàng; agent onboarding nhận lệnh đầu tiên. */
+function advance(s: MockState) {
+  const now = Date.now();
+  for (const b of s.boxes) {
+    if (["requested", "placing", "provisioning"].includes(b.status) && b._ready_at && b._ready_at <= now) {
+      b.status = "running";
+      b.last_active_at = iso(now);
+      const host = s.hosts.find((h) => h.id === b.host_id);
+      b.url = `https://${b.slug}-${(host?.ip ?? "10.0.0.1").replace(/\./g, "-")}.${s.settings.base_domain}`;
+      delete b._ready_at;
+      pushEvent(s, { actor: "system", box_id: b.id, agent_id: b.agent_id, type: "box.running", message: `Box ${b.slug} sẵn sàng`, cost_usd: null });
+    } else if (b.status === "placing" && !b._ready_at) {
+      b.status = "provisioning";
+    }
+  }
+  for (const h of s.hosts) {
+    if (h.status === "provisioning" && h._ready_at && h._ready_at <= now) {
+      h.status = "ready";
+      delete h._ready_at;
+      pushEvent(s, { actor: "system", box_id: null, agent_id: null, type: "host.ready", message: `Host ${h.id} (${h.provider}/${h.region}) sẵn sàng`, cost_usd: null });
+    }
+  }
+  for (const [agentId, t] of Object.entries(s.first_call_at)) {
+    const a = s.agents.find((x) => x.id === agentId);
+    if (a && !a.last_call_at && t <= now) {
+      a.last_call_at = iso(t);
+      pushEvent(s, { actor: `agent:${a.name}`, box_id: null, agent_id: a.id, type: "agent.first_call", message: `${a.name} gọi lệnh đầu tiên: box_list`, cost_usd: null });
+    }
+  }
+}
+
+/** Cộng dồn chi phí cho box đang chạy (gọi từ luồng SSE). */
+export function tickSpend(s: MockState, seconds: number) {
+  const running = s.boxes.filter((b) => b.status === "running");
+  for (const b of running) {
+    const amt = r4((b.cost_per_hour * seconds) / 3600);
+    if (amt <= 0) continue;
+    const last = [...s.ledger].reverse().find((l) => l.box_id === b.id && l.kind === "compute" && Date.now() - Date.parse(l.ts) < HOUR);
+    if (last) last.amount_usd = r4(last.amount_usd + amt);
+    else
+      s.ledger.push({ id: nextId(s, "led"), ts: iso(Date.now()), agent_id: b.agent_id, box_id: b.id, provider: b.provider, kind: "compute", amount_usd: amt, note: `${b.slug} · ${b.provider === "vultr" ? "burst theo giờ" : "phần pool phân bổ"}` });
+  }
+  return running;
+}
+
+function sum(entries: LedgerEntry[]) {
+  return r4(entries.reduce((a, l) => a + l.amount_usd, 0));
+}
+
+function hydrateAgent(s: MockState, a: Agent): Agent {
+  const today = startOfTodayUTC();
+  const month = startOfMonthUTC();
+  const mine = s.ledger.filter((l) => l.agent_id === a.id);
+  return {
+    ...a,
+    spent_today_usd: sum(mine.filter((l) => Date.parse(l.ts) >= today)),
+    spent_month_usd: sum(mine.filter((l) => Date.parse(l.ts) >= month)),
+    box_count: s.boxes.filter((b) => b.agent_id === a.id && b.status !== "terminated").length,
+  };
+}
+
+function hydrateBox(s: MockState, b: MockState["boxes"][number]): Box {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { _ready_at, _taken_over, ...rest } = b;
+  return { ...rest, spent_usd: sum(s.ledger.filter((l) => l.box_id === b.id)) };
+}
+
+function hydrateHost(s: MockState, h: MockState["hosts"][number]): Host {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { _ready_at, ...rest } = h;
+  return { ...rest, box_count: s.boxes.filter((b) => b.host_id === h.id && !["terminated", "failed"].includes(b.status)).length };
+}
+
+export function overview(s: MockState): Overview {
+  const today = startOfTodayUTC();
+  const month = startOfMonthUTC();
+  const cost_7d: Overview["cost_7d"] = [];
+  for (let d = 6; d >= 0; d--) {
+    const from = today - d * DAY;
+    const to = from + DAY;
+    const by_agent: Record<string, number> = {};
+    for (const a of s.agents) {
+      const v = sum(s.ledger.filter((l) => l.agent_id === a.id && Date.parse(l.ts) >= from && Date.parse(l.ts) < to));
+      if (v > 0) by_agent[a.name] = v;
+    }
+    cost_7d.push({ date: new Date(from).toISOString().slice(0, 10), by_agent });
+  }
+  const todayEntries = s.ledger.filter((l) => Date.parse(l.ts) >= today);
+  const perBox = new Map<string, number>();
+  for (const l of todayEntries) perBox.set(l.box_id, (perBox.get(l.box_id) ?? 0) + l.amount_usd);
+  const top_tasks = [...perBox.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([box_id, cost]) => {
+      const b = s.boxes.find((x) => x.id === box_id);
+      return { box_id, slug: b?.slug ?? box_id, agent_name: b?.agent_name ?? "?", cost_usd: r4(cost) };
+    });
+  const spent_month = sum(s.ledger.filter((l) => Date.parse(l.ts) >= month));
+  // Ước tính chi nếu mọi box đã tạo trong tháng chạy 24/7 ở giá burst
+  const hoursInMonthSoFar = (Date.now() - month) / HOUR;
+  const full247 = s.boxes.filter((b) => b.status !== "terminated").reduce((a, b) => a + b.cost_per_hour * 2.4 * hoursInMonthSoFar, 0);
+  return {
+    spent_today: sum(todayEntries),
+    budget_day: r4(s.settings.budget_month_usd / 30),
+    spent_month,
+    budget_month: s.settings.budget_month_usd,
+    boxes_running: s.boxes.filter((b) => b.status === "running").length,
+    boxes_sleeping: s.boxes.filter((b) => b.status === "sleeping").length,
+    saved_vs_247_usd: r4(Math.max(0, full247 - spent_month)),
+    cost_7d,
+    top_tasks,
+    approvals_pending: s.approvals.filter((a) => a.status === "pending").length,
+  };
+}
+
+function toYaml(b: Box): string {
+  return `# box.yaml (chỉ đọc) — ${b.id}
+slug: ${b.slug}
+agent: ${b.agent_name}
+template: ${b.template}
+lifecycle: ${b.lifecycle}
+spec:
+  cpu: ${b.spec.cpu}
+  ram_mb: ${b.spec.ram_mb}
+  disk_gb: ${b.spec.disk_gb}
+${b.ttl_seconds ? `ttl_seconds: ${b.ttl_seconds}\n` : ""}${b.idle_minutes ? `idle_minutes: ${b.idle_minutes}\n` : ""}${b.budget_usd ? `budget_usd: ${b.budget_usd}\n` : ""}ports: [${b.ports.join(", ")}]
+secrets: [${b.secrets.join(", ")}]
+`;
+}
+export { toYaml as mockBoxYaml };
+
+function validateYaml(src: string) {
+  const errors: { line: number; message: string }[] = [];
+  const doc = parseDocument(src, { prettyErrors: true });
+  for (const e of doc.errors) errors.push({ line: (e.linePos?.[0]?.line ?? 1), message: e.message.split("\n")[0] });
+  if (!errors.length) {
+    const v = doc.toJS() as Record<string, unknown> | null;
+    const lineOf = (key: string) => {
+      const idx = src.split("\n").findIndex((l) => l.trimStart().startsWith(`${key}:`));
+      return idx >= 0 ? idx + 1 : 1;
+    };
+    if (!v || typeof v !== "object") errors.push({ line: 1, message: "YAML phải là một object" });
+    else {
+      if (!v.name && !v.slug && !v.template) errors.push({ line: 1, message: "Thiếu trường `name` (hoặc `template`)" });
+      const spec = v.spec as Record<string, unknown> | undefined;
+      if (!spec) errors.push({ line: 1, message: "Thiếu `spec` (cpu, ram_mb, disk_gb)" });
+      else {
+        if (typeof spec.cpu !== "number" || spec.cpu < 1 || spec.cpu > 16) errors.push({ line: lineOf("cpu"), message: "`spec.cpu` phải là số từ 1 đến 16" });
+        if (typeof spec.ram_mb !== "number" || spec.ram_mb < 256) errors.push({ line: lineOf("ram_mb"), message: "`spec.ram_mb` phải ≥ 256" });
+        if (typeof spec.disk_gb !== "number" || spec.disk_gb < 5) errors.push({ line: lineOf("disk_gb"), message: "`spec.disk_gb` phải ≥ 5" });
+      }
+      if (v.lifecycle && !["task", "session", "service"].includes(String(v.lifecycle)))
+        errors.push({ line: lineOf("lifecycle"), message: "`lifecycle` chỉ nhận task | session | service" });
+      if (v.gpu) errors.push({ line: lineOf("gpu"), message: "GPU chưa hỗ trợ ở v1 (dời sang P5)" });
+    }
+  }
+  return { ok: errors.length === 0, errors };
+}
+
+function createBox(s: MockState, body: Record<string, unknown>): MockResponse {
+  if (s.settings.maintenance.enabled) return err(503, "INVALID", "Hệ thống đang bảo trì", "Thử lại sau khi admin tắt chế độ bảo trì.");
+  let spec = body.spec as Box["spec"] | undefined;
+  let template = (body.template as string) ?? "base";
+  let lifecycle = (body.lifecycle as Box["lifecycle"]) ?? "task";
+  let slug = body.slug as string | undefined;
+  if (typeof body.yaml === "string") {
+    const v = validateYaml(body.yaml);
+    if (!v.ok) return err(400, "INVALID", `box.yaml không hợp lệ: ${v.errors[0].message}`, "Sửa YAML rồi gửi lại.");
+    const js = parseDocument(body.yaml).toJS() as Record<string, unknown>;
+    spec = js.spec as Box["spec"];
+    template = (js.template as string) ?? (js.name as string) ?? template;
+    lifecycle = (js.lifecycle as Box["lifecycle"]) ?? lifecycle;
+    slug = (js.slug as string) ?? `${template}-thu-${Math.random().toString(36).slice(2, 6)}`;
+  }
+  const agent = s.agents.find((a) => a.id === body.agent_id) ?? s.agents.find((a) => a.id === "agt_hark")!;
+  const hAgent = hydrateAgent(s, agent);
+  if (hAgent.spent_today_usd >= agent.budget_day_usd * 1.2)
+    return err(402, "BUDGET_EXCEEDED", `${agent.name} đã vượt ngân sách ngày`, "Xin anh duyệt thêm ngân sách trong hộp “Cần anh”.");
+  spec = spec ?? { cpu: 2, ram_mb: 2048, disk_gb: 20 };
+  const host = s.hosts.find((h) => h.status === "ready" && h.billing === "pool" && agent.policy.providers.includes(h.provider)) ?? s.hosts.find((h) => h.status === "ready")!;
+  const id = nextId(s, "box");
+  const b: MockState["boxes"][number] = {
+    id,
+    slug: slug ?? `${agent.name.split("-")[0]}-${Math.random().toString(36).slice(2, 6)}`,
+    agent_id: agent.id,
+    agent_name: agent.name,
+    status: "provisioning",
+    lifecycle,
+    template,
+    spec,
+    provider: host.provider,
+    region: host.region,
+    host_id: host.id,
+    url: null,
+    ttl_seconds: (body.ttl_seconds as number) ?? (lifecycle === "task" ? s.settings.reaper.default_ttl_seconds : null),
+    idle_minutes: (body.idle_minutes as number) ?? (lifecycle === "service" ? null : s.settings.reaper.idle_minutes),
+    budget_usd: (body.budget_usd as number) ?? 1,
+    spent_usd: 0,
+    cost_per_hour: r4((host.price_hour / host.cpu) * spec.cpu),
+    placement_reason: `${host.billing === "pool" ? "Pool" : "Burst"} ${host.provider}/${host.region} còn chỗ cho ${spec.cpu} vCPU/${spec.ram_mb / 1024} GB; khớp chính sách của ${agent.name}.`,
+    ports: (body.ports as number[]) ?? [],
+    secrets: (body.secrets as string[]) ?? [],
+    created_at: iso(Date.now()),
+    last_active_at: null,
+    _ready_at: Date.now() + 8000,
+  };
+  s.boxes.push(b);
+  s.files[id] = { "/work/README.md": `# ${b.slug}\n`, "/memory/notes.md": `# Ghi nhớ của ${agent.name}\n` };
+  pushEvent(s, { actor: "user:anh", box_id: id, agent_id: agent.id, type: "box.created", message: `Tạo box ${b.slug} (${template}) tại ${host.provider}/${host.region}`, cost_usd: null });
+  return ok(hydrateBox(s, b), 201);
+}
+
+function csvEscape(v: string | number) {
+  const str = String(v);
+  return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+}
+
+function filterLedger(s: MockState, q: URLSearchParams) {
+  const agent = q.get("agent");
+  const provider = q.get("provider");
+  const from = q.get("from");
+  const to = q.get("to");
+  const task = q.get("task");
+  return s.ledger
+    .filter((l) => {
+      if (agent && l.agent_id !== agent && s.agents.find((a) => a.id === l.agent_id)?.name !== agent) return false;
+      if (provider && l.provider !== provider) return false;
+      if (task && l.box_id !== task && s.boxes.find((b) => b.id === l.box_id)?.slug !== task) return false;
+      if (from && Date.parse(l.ts) < Date.parse(from)) return false;
+      if (to && Date.parse(l.ts) > Date.parse(to.length === 10 ? `${to}T23:59:59Z` : to)) return false;
+      return true;
+    })
+    .sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts));
+}
+
+export function handleMock(method: string, segs: string[], q: URLSearchParams, body: Record<string, unknown>, apiBase: string): MockResponse {
+  const s = store();
+  advance(s);
+  const [r0, r1, r2] = segs;
+  const M = method.toUpperCase();
+
+  // ---- health / overview ----
+  if (r0 === "health") return ok({ ok: true, version: "0.1.0-mock", components: { db: "ok", scheduler: "ok", reaper: "ok", price_feed: "ok", gateway: "ok" } });
+  if (r0 === "overview") return ok(overview(s));
+
+  // ---- boxes ----
+  if (r0 === "boxes") {
+    if (!r1) {
+      if (M === "GET") {
+        let items = s.boxes.filter((b) => b.status !== "terminated");
+        const st = q.get("status"), ag = q.get("agent"), pv = q.get("provider"), lc = q.get("lifecycle");
+        if (st) items = items.filter((b) => b.status === st);
+        if (ag) items = items.filter((b) => b.agent_id === ag || b.agent_name === ag);
+        if (pv) items = items.filter((b) => b.provider === pv);
+        if (lc) items = items.filter((b) => b.lifecycle === lc);
+        return list(items.map((b) => hydrateBox(s, b)));
+      }
+      if (M === "POST") return createBox(s, body);
+    }
+    const b = s.boxes.find((x) => x.id === r1 || x.slug === r1);
+    if (!b) return notFound(`box ${r1}`);
+    if (!r2) {
+      if (M === "GET") return ok(hydrateBox(s, b));
+      if (M === "DELETE") {
+        b.status = "terminated";
+        pushEvent(s, { actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "box.terminated", message: `Xoá box ${b.slug}`, cost_usd: null });
+        return ok(hydrateBox(s, b));
+      }
+    }
+    switch (r2) {
+      case "sleep":
+        if (b.status !== "running") return err(409, "INVALID", `Box đang ở trạng thái ${b.status}`, "Chỉ cho ngủ box đang chạy.");
+        b.status = "sleeping";
+        b.url = null;
+        pushEvent(s, { actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "box.sleeping", message: `Cho ${b.slug} ngủ`, cost_usd: null });
+        return ok(hydrateBox(s, b));
+      case "wake":
+        if (!["sleeping", "failed"].includes(b.status)) return err(409, "INVALID", `Box đang ở trạng thái ${b.status}`, "Chỉ đánh thức box đang ngủ.");
+        b.status = "provisioning";
+        b._ready_at = Date.now() + 5000;
+        pushEvent(s, { actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "box.waking", message: `Đánh thức ${b.slug}`, cost_usd: null });
+        return ok(hydrateBox(s, b));
+      case "snapshot": {
+        const snap = { id: nextId(s, "snp"), box_id: b.id, size_mb: Math.round(400 + Math.random() * 1500), created_at: iso(Date.now()), location: `r2://boxa-snapshots/${b.id}/` };
+        snap.location += snap.id;
+        s.snapshots.push(snap);
+        pushEvent(s, { actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "box.snapshot", message: `Snapshot ${snap.id} (${snap.size_mb} MB)`, cost_usd: 0.001 });
+        return ok(snap, 201);
+      }
+      case "snapshots":
+        return list(s.snapshots.filter((x) => x.box_id === b.id).sort((a, c) => Date.parse(c.created_at) - Date.parse(a.created_at)));
+      case "restore":
+      case "fork": {
+        const snap = s.snapshots.find((x) => x.id === body.snapshot_id && x.box_id === b.id);
+        if (!snap) return notFound(`snapshot ${String(body.snapshot_id)}`);
+        if (r2 === "restore") {
+          b.status = "provisioning";
+          b._ready_at = Date.now() + 6000;
+          pushEvent(s, { actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "box.restore", message: `Khôi phục ${b.slug} từ ${snap.id}`, cost_usd: null });
+          return ok(hydrateBox(s, b));
+        }
+        const res = createBox(s, { agent_id: b.agent_id, slug: `${b.slug}-fork-${Math.random().toString(36).slice(2, 5)}`, template: b.template, spec: b.spec, lifecycle: b.lifecycle });
+        if (res.status === 201) {
+          const nb = res.body as Box;
+          s.files[nb.id] = { ...s.files[b.id] };
+        }
+        return res;
+      }
+      case "events":
+        return list(s.events.filter((e) => e.box_id === b.id).sort((a, c) => Date.parse(c.ts) - Date.parse(a.ts)));
+      case "observe": {
+        const host = s.hosts.find((h) => h.id === b.host_id);
+        const running = b.status === "running";
+        return ok({
+          cpu_pct: running ? Math.round(10 + Math.random() * 60) : 0,
+          ram_pct: running ? Math.round(30 + Math.random() * 40) : 0,
+          disk_pct: Math.round((host?.disk_used_pct ?? 30) * 0.8),
+          processes: running ? [{ pid: 412, command: b.template.includes("browser") ? "chromium --headless" : b.template === "node" ? "node server.js" : "python main.py", cpu_pct: 22.4 }, { pid: 88, command: "boxd --dial gw.boxa", cpu_pct: 0.4 }] : [],
+        });
+      }
+      case "files": {
+        const fs = s.files[b.id] ?? {};
+        if (M === "PUT") {
+          fs[String(body.path)] = String(body.content ?? "");
+          s.files[b.id] = fs;
+          return ok({ ok: true });
+        }
+        const p = (q.get("path") || "/work").replace(/\/+$/, "") || "/";
+        if (fs[p] !== undefined) {
+          const lines = fs[p].split("\n");
+          const from = Number(q.get("from") || 1), to = Number(q.get("to") || lines.length);
+          return ok({ content: lines.slice(from - 1, to).join("\n"), total_lines: lines.length });
+        }
+        const prefix = p === "/" ? "/" : `${p}/`;
+        const entries = new Map<string, { name: string; type: "file" | "dir"; size: number }>();
+        for (const [fp, content] of Object.entries(fs)) {
+          if (!fp.startsWith(prefix)) continue;
+          const rest = fp.slice(prefix.length);
+          const [first, ...more] = rest.split("/");
+          if (more.length) {
+            const e = entries.get(first) ?? { name: first, type: "dir" as const, size: 0 };
+            e.size += content.length;
+            entries.set(first, e);
+          } else entries.set(first, { name: first, type: "file", size: new TextEncoder().encode(content).length });
+        }
+        if (!entries.size && !["/work", "/memory"].includes(p)) return notFound(`đường dẫn ${p}`);
+        return ok({ entries: [...entries.values()].sort((a, c) => (a.type === c.type ? a.name.localeCompare(c.name) : a.type === "dir" ? -1 : 1)) });
+      }
+      case "grep":
+        return ok({ matches: Object.entries(s.files[b.id] ?? {}).flatMap(([p, c]) => c.split("\n").map((l, i) => ({ path: p, line: i + 1, text: l })).filter((m) => m.text.includes(String(body.pattern ?? "")))) });
+      case "exec": {
+        if (b.status === "sleeping") return err(409, "BOX_SLEEPING", "Box đang ngủ", "Gọi wake trước rồi chạy lại lệnh.");
+        const id = nextId(s, "job");
+        const log_id = `log_${id.slice(4)}`;
+        const cmd = String(body.command ?? "");
+        const stdout = cmd.startsWith("echo ") ? cmd.slice(5) : `(mock) đã chạy: ${cmd}`;
+        const result = { exit_code: 0, duration_ms: 120, stdout_tail: stdout, stderr_tail: "", truncated: false, log_id, files_changed: [], tokens_saved: 0 };
+        s.jobs.push({ id, box_id: b.id, command: cmd, status: "done", result, created_at: iso(Date.now()), finished_at: iso(Date.now() + 120) });
+        s.logs[log_id] = `$ ${cmd}\n${stdout}\n[exit 0] 0.1s\n`;
+        pushEvent(s, { actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "exec", message: cmd, cost_usd: null });
+        return body.async ? ok({ job_id: id }, 202) : ok(result);
+      }
+      case "takeover":
+        b._taken_over = true;
+        pushEvent(s, { actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "terminal.takeover", message: "Anh chiếm quyền terminal — agent tạm dừng exec", cost_usd: null });
+        return ok(hydrateBox(s, b));
+      case "release":
+        b._taken_over = false;
+        pushEvent(s, { actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "terminal.release", message: "Trả quyền terminal cho agent", cost_usd: null });
+        return ok(hydrateBox(s, b));
+    }
+  }
+
+  if (r0 === "jobs" && r1) {
+    const j = s.jobs.find((x) => x.id === r1);
+    return j ? ok(j) : notFound(`job ${r1}`);
+  }
+  if (r0 === "logs" && r1) {
+    const l = s.logs[r1];
+    return l !== undefined ? { status: 200, body: l, contentType: "text/plain; charset=utf-8" } : notFound(`log ${r1}`);
+  }
+
+  // ---- agents ----
+  if (r0 === "agents") {
+    if (!r1) {
+      if (M === "GET") return list(s.agents.map((a) => hydrateAgent(s, a)));
+      if (M === "POST") {
+        const name = String(body.name ?? "").trim();
+        if (!/^[a-z0-9][a-z0-9-]{1,38}$/.test(name)) return err(400, "INVALID", "Tên agent chỉ gồm a-z, 0-9, dấu gạch ngang (2–39 ký tự)", "Đổi tên rồi thử lại.");
+        if (s.agents.some((a) => a.name === name)) return err(409, "INVALID", `Agent ${name} đã tồn tại`, "Chọn tên khác.");
+        const a: Agent = {
+          id: nextId(s, "agt"),
+          name,
+          kind: (body.kind as AgentKind) ?? "custom",
+          budget_day_usd: Number(body.budget_day_usd ?? 0.5),
+          budget_month_usd: Number(body.budget_month_usd ?? 10),
+          spent_today_usd: 0,
+          spent_month_usd: 0,
+          policy: (body.policy as Agent["policy"]) ?? { providers: ["hetzner"], regions: [], egress_allowlist: null },
+          box_count: 0,
+          last_call_at: null,
+          memory_mb: 0,
+          created_at: iso(Date.now()),
+        };
+        s.agents.push(a);
+        s.first_call_at[a.id] = Date.now() + 15000;
+        pushEvent(s, { actor: "user:anh", box_id: null, agent_id: a.id, type: "agent.created", message: `Tạo agent ${a.name} (${a.kind})`, cost_usd: null });
+        return ok(a, 201);
+      }
+    }
+    const a = s.agents.find((x) => x.id === r1 || x.name === r1);
+    if (!a) return notFound(`agent ${r1}`);
+    if (r2 === "snippet") return ok(makeSnippet((q.get("kind") as AgentKind) || a.kind, a.name, apiBase));
+    if (M === "GET") return ok(hydrateAgent(s, a));
+    if (M === "PATCH") {
+      for (const k of ["name", "kind", "budget_day_usd", "budget_month_usd", "policy"] as const) {
+        if (body[k] !== undefined) (a as unknown as Record<string, unknown>)[k] = body[k];
+      }
+      pushEvent(s, { actor: "user:anh", box_id: null, agent_id: a.id, type: "agent.updated", message: `Cập nhật agent ${a.name}`, cost_usd: null });
+      return ok(hydrateAgent(s, a));
+    }
+    if (M === "DELETE") {
+      s.agents = s.agents.filter((x) => x.id !== a.id);
+      return ok({ ok: true });
+    }
+  }
+
+  // ---- keys ----
+  if (r0 === "keys") {
+    if (!r1 && M === "GET") return list(s.keys);
+    if (!r1 && M === "POST") {
+      const rand = Array.from(crypto.getRandomValues(new Uint8Array(18))).map((x) => "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"[x % 57]).join("");
+      const key = `bx_live_${rand}`;
+      const k: ApiKey = { id: nextId(s, "key"), agent_id: (body.agent_id as string) ?? null, name: String(body.name ?? "key"), prefix: key.slice(0, 12), scopes: (body.scopes as string[]) ?? ["exec"], created_at: iso(Date.now()), last_used_at: null, revoked_at: null };
+      s.keys.push(k);
+      return ok({ ...k, key }, 201);
+    }
+    if (r1 && M === "DELETE") {
+      const k = s.keys.find((x) => x.id === r1);
+      if (!k) return notFound(`key ${r1}`);
+      k.revoked_at = iso(Date.now());
+      pushEvent(s, { actor: "user:anh", box_id: null, agent_id: k.agent_id, type: "key.revoked", message: `Thu hồi key ${k.prefix}…`, cost_usd: null });
+      return ok(k);
+    }
+  }
+
+  // ---- costs ----
+  if (r0 === "costs.csv") {
+    const rows = filterLedger(s, q);
+    const csv = ["id,ts,agent,box,provider,kind,amount_usd,note", ...rows.map((l) => [l.id, l.ts, s.agents.find((a) => a.id === l.agent_id)?.name ?? l.agent_id, s.boxes.find((b) => b.id === l.box_id)?.slug ?? l.box_id, l.provider, l.kind, l.amount_usd.toFixed(4), l.note].map(csvEscape).join(","))].join("\n");
+    return { status: 200, body: csv + "\n", contentType: "text/csv; charset=utf-8", headers: { "Content-Disposition": `attachment; filename="boxa-costs-${new Date().toISOString().slice(0, 10)}.csv"` } };
+  }
+  if (r0 === "costs") {
+    if (r1 === "suggestions")
+      return list([
+        { id: "sug_1", title: "kecon-story-gen ngủ trễ", detail: "Box rảnh trung bình 47 phút trước khi ngủ. Đặt idle_minutes = 10 để giảm ~18% chi phí box này.", saving_month_usd: 1.9, box_id: "box_a9d054" },
+        { id: "sug_2", title: "shopee-crawl-02 nên chuyển sang pool", detail: "Task crawl chạy đều mỗi ngày 3 giờ ở burst Vultr sgp. Đặt vào pool Hetzner fsn1 (còn 4 vCPU trống) rẻ hơn ~5 lần.", saving_month_usd: 4.6, box_id: "box_2c81e4" },
+        { id: "sug_3", title: "replingo-api dư spec", detail: "CPU trung bình 6%, RAM 21% trong 7 ngày. Giảm từ 2 vCPU/4 GB xuống 1 vCPU/2 GB.", saving_month_usd: 1.1, box_id: "box_c4410f" },
+      ]);
+    const items = filterLedger(s, q);
+    const by_provider: Record<string, number> = {};
+    for (const l of items) by_provider[l.provider] = r4((by_provider[l.provider] ?? 0) + l.amount_usd);
+    const burst = sum(items.filter((l) => s.hosts.find((h) => h.id === s.boxes.find((b) => b.id === l.box_id)?.host_id)?.billing === "burst"));
+    const total = sum(items);
+    return ok({ items, next_cursor: null, summary: { total, by_provider, pool_usd: r4(total - burst), burst_usd: burst } });
+  }
+
+  // ---- infra ----
+  if (r0 === "providers") {
+    if (!r1) return list(s.providers);
+    const p = s.providers.find((x) => x.id === r1);
+    if (!p) return notFound(`provider ${r1}`);
+    if (r2 === "token" && M === "PUT") {
+      const token = String(body.token ?? "");
+      p.last_check_at = iso(Date.now());
+      if (token.length < 16 || /sai|invalid|wrong/i.test(token)) {
+        p.connected = false;
+        p.error = "Token không hợp lệ (401 từ API của nhà cung cấp)";
+        return err(400, "PROVIDER_FAILED", p.error, "Tạo token mới có quyền Read & Write rồi dán lại.");
+      }
+      p.connected = true;
+      p.error = null;
+      pushEvent(s, { actor: "user:anh", box_id: null, agent_id: null, type: "provider.connected", message: `Kết nối ${p.name} thành công`, cost_usd: null });
+      return ok(p);
+    }
+  }
+  if (r0 === "hosts") {
+    if (!r1 && M === "GET") return list(s.hosts.map((h) => hydrateHost(s, h)));
+    if (!r1 && M === "POST") {
+      const offer = s.offers.find((o) => o.provider === body.provider && o.sku === body.sku && o.region === body.region) ?? s.offers.find((o) => o.provider === body.provider);
+      const prov = s.providers.find((p) => p.id === body.provider);
+      if (!prov?.connected) return err(400, "PROVIDER_FAILED", `Chưa kết nối ${String(body.provider)}`, "Nhập API token ở mục Providers trước.");
+      if (!offer) return err(400, "INVALID", "Không có offer phù hợp", "Chọn sku/vùng khác.");
+      const h: MockState["hosts"][number] = {
+        id: nextId(s, "hst"), provider: String(body.provider), region: String(body.region ?? offer.region), sku: String(body.sku ?? offer.sku),
+        ip: `95.217.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`, status: "provisioning",
+        cpu: offer.cpu, ram_mb: offer.ram_mb, disk_gb: offer.disk_gb, cpu_used_pct: 2, ram_used_pct: 6, disk_used_pct: 4, box_count: 0,
+        price_month: offer.price_month, price_hour: offer.price_hour, billing: "pool", created_at: iso(Date.now()), _ready_at: Date.now() + 9000,
+      };
+      s.hosts.push(h);
+      pushEvent(s, { actor: "user:anh", box_id: null, agent_id: null, type: "host.created", message: `Tạo host ${h.sku} tại ${h.provider}/${h.region}`, cost_usd: null });
+      return ok(hydrateHost(s, h), 201);
+    }
+    const h = s.hosts.find((x) => x.id === r1);
+    if (!h) return notFound(`host ${r1}`);
+    if (r2 === "drain") {
+      h.status = "draining";
+      pushEvent(s, { actor: "user:anh", box_id: null, agent_id: null, type: "host.draining", message: `Drain host ${h.id}: không nhận box mới`, cost_usd: null });
+      return ok(hydrateHost(s, h));
+    }
+    if (M === "DELETE") {
+      if (s.boxes.some((b) => b.host_id === h.id && ["running", "provisioning"].includes(b.status)))
+        return err(409, "INVALID", "Host còn box đang chạy", "Drain host và đợi box chuyển đi trước khi xoá.");
+      s.hosts = s.hosts.filter((x) => x.id !== h.id);
+      return ok({ ok: true });
+    }
+  }
+  if (r0 === "offers") return list([...s.offers].sort((a, b) => a.price_hour / a.cpu - b.price_hour / b.cpu));
+
+  // ---- templates ----
+  if (r0 === "templates") {
+    if (r1 === "validate" && M === "POST") return ok(validateYaml(String(body.yaml ?? "")));
+    if (!r1 && M === "GET") return list(s.templates);
+    if (!r1 && M === "POST") {
+      const name = String(body.name ?? "").trim();
+      if (!name) return err(400, "INVALID", "Thiếu tên template", "Đặt tên rồi lưu lại.");
+      if (s.templates.some((t) => t.name === name)) return err(409, "INVALID", `Template ${name} đã có`, "Chọn tên khác.");
+      const t: Template = { name, description: String(body.description ?? ""), yaml: String(body.yaml ?? ""), uses: 0, created_at: iso(Date.now()) };
+      s.templates.push(t);
+      return ok(t, 201);
+    }
+    const t = s.templates.find((x) => x.name === decodeURIComponent(r1 ?? ""));
+    if (!t) return notFound(`template ${r1}`);
+    if (M === "PUT") {
+      const v = validateYaml(String(body.yaml ?? t.yaml));
+      if (!v.ok) return err(400, "INVALID", `YAML lỗi dòng ${v.errors[0].line}: ${v.errors[0].message}`, "Sửa rồi lưu lại.");
+      t.yaml = String(body.yaml ?? t.yaml);
+      if (body.description !== undefined) t.description = String(body.description);
+      return ok(t);
+    }
+    if (M === "DELETE") {
+      s.templates = s.templates.filter((x) => x.name !== t.name);
+      return ok({ ok: true });
+    }
+  }
+
+  // ---- secrets ----
+  if (r0 === "secrets") {
+    if (!r1 && M === "GET") return list(s.secrets);
+    if (!r1 && M === "POST") {
+      const name = String(body.name ?? "").trim().toUpperCase();
+      if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(name)) return err(400, "INVALID", "Tên secret chỉ gồm A-Z, 0-9, _", "Ví dụ: SHOPEE_COOKIE");
+      if (!body.value) return err(400, "INVALID", "Thiếu giá trị", "Nhập giá trị secret.");
+      if (s.secrets.some((x) => x.name === name)) return err(409, "INVALID", `Secret ${name} đã có`, "Dùng nút Xoay vòng để đổi giá trị.");
+      const sec = { name, agents: (body.agents as string[]) ?? [], created_at: iso(Date.now()), rotated_at: null };
+      s.secrets.push(sec);
+      return ok(sec, 201);
+    }
+    const sec = s.secrets.find((x) => x.name === decodeURIComponent(r1 ?? ""));
+    if (!sec) return notFound(`secret ${r1}`);
+    if (r2 === "rotate") {
+      sec.rotated_at = iso(Date.now());
+      pushEvent(s, { actor: "user:anh", box_id: null, agent_id: null, type: "secret.rotated", message: `Xoay vòng ${sec.name}`, cost_usd: null });
+      return ok(sec);
+    }
+    if (M === "DELETE") {
+      s.secrets = s.secrets.filter((x) => x.name !== sec.name);
+      return ok({ ok: true });
+    }
+  }
+
+  // ---- approvals ----
+  if (r0 === "approvals") {
+    if (!r1) return list([...s.approvals].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)));
+    const a = s.approvals.find((x) => x.id === r1);
+    if (!a) return notFound(`yêu cầu ${r1}`);
+    if (r2 === "approve" || r2 === "reject") {
+      a.status = r2 === "approve" ? "approved" : "rejected";
+      if (r2 === "approve" && a.type === "budget") {
+        const ag = s.agents.find((x) => x.id === "agt_shopee");
+        if (ag) ag.budget_day_usd = r4(ag.budget_day_usd + (a.amount_usd ?? 0));
+      }
+      if (r2 === "approve" && a.type === "pool_expand") {
+        s.hosts.push({ id: nextId(s, "hst"), provider: "hetzner", region: "fsn1", sku: "cx42", ip: "49.12.91.4", status: "provisioning", cpu: 8, ram_mb: 16384, disk_gb: 160, cpu_used_pct: 1, ram_used_pct: 4, disk_used_pct: 3, box_count: 0, price_month: 19.4, price_hour: 0.0311, billing: "pool", created_at: iso(Date.now()), _ready_at: Date.now() + 10000 });
+      }
+      pushEvent(s, { actor: "user:anh", box_id: null, agent_id: null, type: `approval.${a.status}`, message: `${a.status === "approved" ? "Duyệt" : "Từ chối"}: ${a.title}`, cost_usd: null });
+      return ok(a as Approval);
+    }
+  }
+
+  if (r0 === "emergency-stop" && M === "POST") {
+    if (body.confirm !== "DUNG") return err(400, "INVALID", "Thiếu xác nhận", 'Gửi {"confirm":"DUNG"}.');
+    let n = 0;
+    for (const b of s.boxes) if (["running", "provisioning", "placing"].includes(b.status)) { b.status = "sleeping"; b.url = null; delete b._ready_at; n++; }
+    pushEvent(s, { actor: "user:anh", box_id: null, agent_id: null, type: "emergency.stop", message: `Dừng khẩn cấp: cho ngủ ${n} box`, cost_usd: null });
+    return ok({ ok: true, slept: n });
+  }
+
+  if (r0 === "settings") {
+    if (M === "GET") return ok(s.settings);
+    if (M === "PUT") {
+      const next = { ...s.settings, ...(body as Partial<Settings>) } as Settings;
+      next.features = { ...next.features, gpu: false }; // GPU khoá tới P5
+      s.settings = next;
+      pushEvent(s, { actor: "user:anh", box_id: null, agent_id: null, type: "settings.updated", message: "Cập nhật cài đặt", cost_usd: null });
+      return ok(s.settings);
+    }
+  }
+
+  // ---- admin ----
+  if (r0 === "admin") {
+    if (r1 === "system")
+      return ok({
+        version: "0.1.0-mock",
+        uptime_s: Math.round((Date.now() - s.started_at) / 1000) + 3 * 86400,
+        components: [
+          { name: "db (Postgres)", status: "ok", latency_ms: 2 },
+          { name: "scheduler", status: "ok", latency_ms: 4 },
+          { name: "reaper", status: "ok", latency_ms: 1 },
+          { name: "price_feed (battleships)", status: "degraded", latency_ms: 812 },
+          { name: "gateway (QUIC)", status: "ok", latency_ms: 9 },
+          { name: "object store (R2)", status: "ok", latency_ms: 38 },
+        ],
+      });
+    if (r1 === "jobs") return list([...s.jobs].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)));
+    if (r1 === "audit") {
+      let items = [...s.events].sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts));
+      const actor = q.get("actor"), type = q.get("type");
+      if (actor) items = items.filter((e) => e.actor.includes(actor));
+      if (type) items = items.filter((e) => e.type.startsWith(type));
+      return list(items);
+    }
+    if (r1 === "quotas") {
+      if (M === "PUT") s.quotas = { ...s.quotas, ...(body as object) };
+      return ok(s.quotas);
+    }
+    if (r1 === "users") return list(s.users);
+  }
+
+  return err(404, "NOT_FOUND", `Không có endpoint ${M} /${segs.join("/")}`, "Xem docs/api-contract-v1.md.");
+}
+
+export { MIN };

@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root,
+  .dark {
+    /* Dark mode mặc định — bảng màu theo mockup Boxa */
+    --background: 220 13% 4%;      /* #0a0b0d */
+    --foreground: 220 14% 92%;     /* #e8eaee */
+    --surface: 216 16% 9%;         /* #13161b */
+    --surface-2: 216 17% 13%;      /* #1b1f26 */
+    --card: 216 16% 9%;
+    --card-foreground: 220 14% 92%;
+    --popover: 216 16% 10%;
+    --popover-foreground: 220 14% 92%;
+    --primary: 217 91% 64%;        /* #4f8ff7 */
+    --primary-foreground: 0 0% 100%;
+    --muted: 216 17% 13%;
+    --muted-foreground: 216 10% 65%;
+    --accent: 216 17% 13%;
+    --accent-foreground: 220 14% 92%;
+    --destructive: 358 85% 64%;    /* #f1555b */
+    --destructive-foreground: 0 0% 100%;
+    --border: 216 13% 18%;         /* #262b33 */
+    --input: 216 13% 22%;
+    --ring: 217 91% 64%;
+  }
+  * {
+    @apply border-border;
+  }
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "ss01", "cv11";
+  }
+  /* Typography tiếng Việt: tiêu đề cân dòng, đoạn văn tránh dòng mồ côi */
+  h1, h2, h3, h4, .text-balance {
+    text-wrap: balance;
+  }
+  p, li, .text-pretty {
+    text-wrap: pretty;
+  }
+  code, kbd, pre, .font-mono {
+    font-variant-ligatures: none;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { scrollbar-width: none; }
+  .tabular { font-variant-numeric: tabular-nums; }
+  /* Gom một cụm từ không cho xuống dòng giữa chừng */
+  .ph { display: inline-block; }
+  @media (max-width: 550px) { .ph { display: inline; } }
+}
+
+/* xterm */
+.xterm { padding: 8px; height: 100%; }
+.xterm-viewport { background-color: transparent !important; }
+
+/* cmdk */
+[cmdk-group-heading] {
+  @apply px-2 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground;
+}
+[cmdk-item][data-selected="true"] {
+  @apply bg-surface-2;
+}
+
+/* Recharts tooltip */
+.recharts-tooltip-wrapper { outline: none; }

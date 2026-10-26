@@ -1,0 +1,87 @@
+"use client";
+// Dừng khẩn cấp: xác nhận 2 bước (bước 1 cảnh báo, bước 2 gõ DUNG) → POST /emergency-stop {confirm:"DUNG"}
+import * as React from "react";
+import { OctagonX } from "lucide-react";
+import { toast } from "sonner";
+import { useSWRConfig } from "swr";
+import { api, errMsg } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+
+const Ctx = React.createContext<{ open: () => void }>({ open: () => {} });
+export const useEmergency = () => React.useContext(Ctx);
+
+export function EmergencyProvider({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = React.useState(false);
+  const [step, setStep] = React.useState<1 | 2>(1);
+  const [typed, setTyped] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const { mutate } = useSWRConfig();
+  const close = () => {
+    setOpen(false);
+    setTimeout(() => { setStep(1); setTyped(""); }, 200);
+  };
+  const doStop = async () => {
+    setBusy(true);
+    try {
+      const r = await api.emergencyStop();
+      toast.success(`Đã cho ngủ ${r.slept} box. Không còn box nào tốn tiền compute.`);
+      await mutate(() => true);
+      close();
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Ctx.Provider value={{ open: () => setOpen(true) }}>
+      {children}
+      <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : close())}>
+        <DialogContent className="max-w-md border-st-error/40">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-st-error">
+              <OctagonX className="size-5" /> Dừng khẩn cấp
+            </DialogTitle>
+            <DialogDescription>
+              {step === 1
+                ? "Toàn bộ box đang chạy hoặc đang tạo sẽ được cho ngủ ngay (có snapshot). Agent sẽ nhận lỗi BOX_SLEEPING cho tới khi anh đánh thức lại."
+                : "Bước 2/2 — gõ DUNG để xác nhận. Thao tác này áp dụng cho mọi agent."}
+            </DialogDescription>
+          </DialogHeader>
+          {step === 2 && (
+            <Input
+              autoFocus
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              placeholder="DUNG"
+              className="font-mono text-base tracking-widest"
+              onKeyDown={(e) => { if (e.key === "Enter" && typed.trim() === "DUNG") doStop(); }}
+            />
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={close}>Huỷ</Button>
+            {step === 1 ? (
+              <Button variant="destructive" onClick={() => setStep(2)}>Tiếp tục</Button>
+            ) : (
+              <Button variant="destructive" disabled={typed.trim() !== "DUNG" || busy} onClick={doStop}>
+                {busy ? "Đang dừng…" : "Cho ngủ toàn bộ box"}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Ctx.Provider>
+  );
+}
+
+export function EmergencyButton({ className, compact }: { className?: string; compact?: boolean }) {
+  const { open } = useEmergency();
+  return (
+    <Button variant="destructive" className={cn("font-semibold", className)} onClick={open} size={compact ? "sm" : "default"}>
+      <OctagonX /> Dừng khẩn cấp
+    </Button>
+  );
+}
