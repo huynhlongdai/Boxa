@@ -259,16 +259,16 @@ func (m *Manager) Decide(ctx context.Context, p *Principal, id string, approve b
 // ---- overview / costs ----
 
 type Overview struct {
-	SpentToday       float64            `json:"spent_today"`
-	BudgetDay        float64            `json:"budget_day"`
-	SpentMonth       float64            `json:"spent_month"`
-	BudgetMonth      float64            `json:"budget_month"`
-	BoxesRunning     int                `json:"boxes_running"`
-	BoxesSleeping    int                `json:"boxes_sleeping"`
-	SavedVs247USD    float64            `json:"saved_vs_247_usd"`
-	Cost7d           []DayCost          `json:"cost_7d"`
-	TopTasks         []TopTask          `json:"top_tasks"`
-	ApprovalsPending int                `json:"approvals_pending"`
+	SpentToday       float64   `json:"spent_today"`
+	BudgetDay        float64   `json:"budget_day"`
+	SpentMonth       float64   `json:"spent_month"`
+	BudgetMonth      float64   `json:"budget_month"`
+	BoxesRunning     int       `json:"boxes_running"`
+	BoxesSleeping    int       `json:"boxes_sleeping"`
+	SavedVs247USD    float64   `json:"saved_vs_247_usd"`
+	Cost7d           []DayCost `json:"cost_7d"`
+	TopTasks         []TopTask `json:"top_tasks"`
+	ApprovalsPending int       `json:"approvals_pending"`
 }
 
 type DayCost struct {

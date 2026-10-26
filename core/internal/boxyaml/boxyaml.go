@@ -120,7 +120,9 @@ func Parse(src string) (*Request, Errors) {
 	root := doc.Content[0]
 	r := &Request{Lifecycle: "session"}
 	var errs Errors
-	add := func(n *yaml.Node, f string, a ...any) { errs = append(errs, LineError{Line: n.Line, Message: fmt.Sprintf(f, a...)}) }
+	add := func(n *yaml.Node, f string, a ...any) {
+		errs = append(errs, LineError{Line: n.Line, Message: fmt.Sprintf(f, a...)})
+	}
 	seen := map[string]bool{}
 	for i := 0; i+1 < len(root.Content); i += 2 {
 		k, v := root.Content[i], root.Content[i+1]

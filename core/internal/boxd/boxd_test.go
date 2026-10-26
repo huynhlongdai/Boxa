@@ -2,8 +2,8 @@ package boxd
 
 import (
 	"bytes"
-	"io"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"

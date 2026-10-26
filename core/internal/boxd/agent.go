@@ -3,11 +3,11 @@ package boxd
 import (
 	"bufio"
 	"bytes"
-	"io"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"

@@ -60,7 +60,7 @@ func (s *Server) routes() http.Handler {
 	r.With(s.authMW).Handle("/mcp", mcpHandler)
 	r.Route("/v1", func(r chi.Router) {
 		r.Get("/health", s.health)
-		r.Get("/internal/tls-ask", s.tlsAsk) // Caddy on_demand_tls (bind core to localhost in production)
+		r.Get("/internal/tls-ask", s.tlsAsk)       // Caddy on_demand_tls (bind core to localhost in production)
 		r.Get("/hosts/connect", s.M.Hub.ServeHTTP) // boxd dial-out (own token auth)
 		r.Group(func(r chi.Router) {
 			r.Use(s.authMW)

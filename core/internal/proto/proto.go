@@ -25,22 +25,22 @@ const (
 
 // RPC methods (core → boxd).
 const (
-	MCreate   = "box.create"
-	MStart    = "box.start"
-	MStop     = "box.stop"
-	MDelete   = "box.delete"
-	MExec     = "box.exec"
-	MRead     = "file.read"
-	MWrite    = "file.write"
-	MGrep     = "file.grep"
-	MObserve  = "box.observe"
-	MSnapshot = "box.snapshot"
-	MLogRead  = "log.read"
-	MPtyOpen  = "pty.open"
+	MCreate    = "box.create"
+	MStart     = "box.start"
+	MStop      = "box.stop"
+	MDelete    = "box.delete"
+	MExec      = "box.exec"
+	MRead      = "file.read"
+	MWrite     = "file.write"
+	MGrep      = "file.grep"
+	MObserve   = "box.observe"
+	MSnapshot  = "box.snapshot"
+	MLogRead   = "log.read"
+	MPtyOpen   = "pty.open"
 	MPtyResize = "pty.resize"
-	MPtyClose = "pty.close"
-	MList     = "box.list"
-	MHTTP     = "http.do"
+	MPtyClose  = "pty.close"
+	MList      = "box.list"
+	MHTTP      = "http.do"
 )
 
 type Frame struct {

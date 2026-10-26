@@ -40,7 +40,7 @@ func (h *Hetzner) Validate(ctx context.Context, token string) error {
 }
 
 type hzPrice struct {
-	Location     string `json:"location"`
+	Location     string                      `json:"location"`
 	PriceHourly  struct{ Net, Gross string } `json:"price_hourly"`
 	PriceMonthly struct{ Net, Gross string } `json:"price_monthly"`
 }
@@ -163,8 +163,12 @@ func (h *Hetzner) action(ctx context.Context, token, ref, act string) error {
 }
 
 // Sleep powers the server off (Hetzner still bills stopped servers).
-func (h *Hetzner) Sleep(ctx context.Context, token, ref string) error { return h.action(ctx, token, ref, "shutdown") }
-func (h *Hetzner) Wake(ctx context.Context, token, ref string) error  { return h.action(ctx, token, ref, "poweron") }
+func (h *Hetzner) Sleep(ctx context.Context, token, ref string) error {
+	return h.action(ctx, token, ref, "shutdown")
+}
+func (h *Hetzner) Wake(ctx context.Context, token, ref string) error {
+	return h.action(ctx, token, ref, "poweron")
+}
 
 func (h *Hetzner) Snapshot(ctx context.Context, token, ref, name string) (string, error) {
 	var out struct {

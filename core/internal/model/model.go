@@ -46,28 +46,28 @@ type Spec struct {
 }
 
 type Box struct {
-	ID              string     `json:"id"`
-	Slug            string     `json:"slug"`
-	AgentID         string     `json:"agent_id"`
-	AgentName       string     `json:"agent_name"`
-	Status          string     `json:"status"`
-	Lifecycle       string     `json:"lifecycle"`
-	Template        string     `json:"template"`
-	Spec            Spec       `json:"spec"`
-	Provider        string     `json:"provider"`
-	Region          string     `json:"region"`
-	HostID          string     `json:"host_id"`
-	URL             string     `json:"url"`
-	TTLSeconds      int        `json:"ttl_seconds"`
-	IdleMinutes     int        `json:"idle_minutes"`
-	BudgetUSD       float64    `json:"budget_usd"`
-	SpentUSD        float64    `json:"spent_usd"`
-	CostPerHour     float64    `json:"cost_per_hour"`
-	PlacementReason string     `json:"placement_reason"`
-	Ports           []int      `json:"ports"`
-	Secrets         []string   `json:"secrets"`
-	CreatedAt       time.Time  `json:"created_at"`
-	LastActiveAt    time.Time  `json:"last_active_at"`
+	ID              string    `json:"id"`
+	Slug            string    `json:"slug"`
+	AgentID         string    `json:"agent_id"`
+	AgentName       string    `json:"agent_name"`
+	Status          string    `json:"status"`
+	Lifecycle       string    `json:"lifecycle"`
+	Template        string    `json:"template"`
+	Spec            Spec      `json:"spec"`
+	Provider        string    `json:"provider"`
+	Region          string    `json:"region"`
+	HostID          string    `json:"host_id"`
+	URL             string    `json:"url"`
+	TTLSeconds      int       `json:"ttl_seconds"`
+	IdleMinutes     int       `json:"idle_minutes"`
+	BudgetUSD       float64   `json:"budget_usd"`
+	SpentUSD        float64   `json:"spent_usd"`
+	CostPerHour     float64   `json:"cost_per_hour"`
+	PlacementReason string    `json:"placement_reason"`
+	Ports           []int     `json:"ports"`
+	Secrets         []string  `json:"secrets"`
+	CreatedAt       time.Time `json:"created_at"`
+	LastActiveAt    time.Time `json:"last_active_at"`
 	// Extra fields (not in contract, harmless for clients).
 	Error        string     `json:"error,omitempty"`
 	Retries      int        `json:"retries,omitempty"`
@@ -163,42 +163,42 @@ type Event struct {
 }
 
 type Host struct {
-	ID          string     `json:"id"`
-	Provider    string     `json:"provider"`
-	Region      string     `json:"region"`
-	SKU         string     `json:"sku"`
-	IP          string     `json:"ip"`
-	Status      string     `json:"status"`
-	CPU         float64    `json:"cpu"`
-	RAMMB       int        `json:"ram_mb"`
-	DiskGB      int        `json:"disk_gb"`
-	CPUUsedPct  float64    `json:"cpu_used_pct"`
-	RAMUsedPct  float64    `json:"ram_used_pct"`
-	DiskUsedPct float64    `json:"disk_used_pct"`
-	BoxCount    int        `json:"box_count"`
-	PriceMonth  float64    `json:"price_month"`
-	PriceHour   float64    `json:"price_hour"`
-	Billing     string     `json:"billing"`
-	CreatedAt   time.Time  `json:"created_at"`
-	ProviderRef string     `json:"provider_ref,omitempty"`
-	Driver      string     `json:"driver,omitempty"`
-	Connected   bool       `json:"connected"`
-	LastSeenAt  *time.Time `json:"last_seen_at,omitempty"`
-	EmptySince  *time.Time `json:"empty_since,omitempty"`
-	TokenHash     string `json:"-"`
-	BootstrapHash string `json:"-"`
+	ID            string     `json:"id"`
+	Provider      string     `json:"provider"`
+	Region        string     `json:"region"`
+	SKU           string     `json:"sku"`
+	IP            string     `json:"ip"`
+	Status        string     `json:"status"`
+	CPU           float64    `json:"cpu"`
+	RAMMB         int        `json:"ram_mb"`
+	DiskGB        int        `json:"disk_gb"`
+	CPUUsedPct    float64    `json:"cpu_used_pct"`
+	RAMUsedPct    float64    `json:"ram_used_pct"`
+	DiskUsedPct   float64    `json:"disk_used_pct"`
+	BoxCount      int        `json:"box_count"`
+	PriceMonth    float64    `json:"price_month"`
+	PriceHour     float64    `json:"price_hour"`
+	Billing       string     `json:"billing"`
+	CreatedAt     time.Time  `json:"created_at"`
+	ProviderRef   string     `json:"provider_ref,omitempty"`
+	Driver        string     `json:"driver,omitempty"`
+	Connected     bool       `json:"connected"`
+	LastSeenAt    *time.Time `json:"last_seen_at,omitempty"`
+	EmptySince    *time.Time `json:"empty_since,omitempty"`
+	TokenHash     string     `json:"-"`
+	BootstrapHash string     `json:"-"`
 }
 
 type Provider struct {
-	ID          string     `json:"id"`
-	Name        string     `json:"name"`
-	Connected   bool       `json:"connected"`
-	Tier        string     `json:"tier"`
-	LastCheckAt *time.Time `json:"last_check_at"`
-	Error       *string    `json:"error"`
-	Implemented bool       `json:"implemented"`
+	ID           string         `json:"id"`
+	Name         string         `json:"name"`
+	Connected    bool           `json:"connected"`
+	Tier         string         `json:"tier"`
+	LastCheckAt  *time.Time     `json:"last_check_at"`
+	Error        *string        `json:"error"`
+	Implemented  bool           `json:"implemented"`
 	Capabilities map[string]any `json:"capabilities,omitempty"`
-	TokenEnc    string     `json:"-"`
+	TokenEnc     string         `json:"-"`
 }
 
 type Offer struct {
@@ -282,10 +282,10 @@ type Settings struct {
 		DefaultTTLSeconds int `json:"default_ttl_seconds"`
 		KeepSnapshots     int `json:"keep_snapshots"`
 	} `json:"reaper"`
-	BaseDomain     string  `json:"base_domain"`
-	URLTokenProtect bool   `json:"url_token_protect"`
-	BudgetMonthUSD float64 `json:"budget_month_usd"`
-	Maintenance    struct {
+	BaseDomain      string  `json:"base_domain"`
+	URLTokenProtect bool    `json:"url_token_protect"`
+	BudgetMonthUSD  float64 `json:"budget_month_usd"`
+	Maintenance     struct {
 		Enabled bool   `json:"enabled"`
 		Message string `json:"message"`
 	} `json:"maintenance"`

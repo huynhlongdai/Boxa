@@ -109,8 +109,8 @@ type Store interface {
 
 type BoxFilter struct {
 	AgentID, Status, Provider, Lifecycle, HostID string
-	Statuses                                    []string
-	IncludeTerminated                           bool
+	Statuses                                     []string
+	IncludeTerminated                            bool
 }
 
 type EventFilter struct {
@@ -171,9 +171,9 @@ func Open(dsn string) (*SQL, error) {
 	return s, nil
 }
 
-func (s *SQL) Close() error                     { return s.db.Close() }
-func (s *SQL) Dialect() string                  { return s.dialect }
-func (s *SQL) Ping(ctx context.Context) error   { return s.db.PingContext(ctx) }
+func (s *SQL) Close() error                   { return s.db.Close() }
+func (s *SQL) Dialect() string                { return s.dialect }
+func (s *SQL) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }
 
 func (s *SQL) migrate(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TEXT NOT NULL)`); err != nil {

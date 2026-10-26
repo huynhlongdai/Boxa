@@ -124,17 +124,17 @@ func Default(httpc *http.Client) *Registry {
 // the single Hetzner box from deploy/install.sh). It never creates servers.
 type Local struct{}
 
-func (*Local) ID() string                                    { return "local" }
-func (*Local) Name() string                                  { return "Local / self-registered" }
-func (*Local) Tier() string                                  { return "T1" }
-func (*Local) Implemented() bool                             { return true }
-func (*Local) Caps() Caps                                    { return Caps{Sleep: false, Snapshot: false} }
-func (*Local) Validate(ctx context.Context, token string) error { return nil }
+func (*Local) ID() string                                                      { return "local" }
+func (*Local) Name() string                                                    { return "Local / self-registered" }
+func (*Local) Tier() string                                                    { return "T1" }
+func (*Local) Implemented() bool                                               { return true }
+func (*Local) Caps() Caps                                                      { return Caps{Sleep: false, Snapshot: false} }
+func (*Local) Validate(ctx context.Context, token string) error                { return nil }
 func (*Local) Offers(ctx context.Context, token string) ([]model.Offer, error) { return nil, nil }
 func (*Local) Create(ctx context.Context, token string, req CreateRequest) (Handle, error) {
 	return Handle{}, model.EH(model.ErrInvalid, "Run boxd with BOXD_TOKEN=<bootstrap token> on the machine; it registers itself.", "local hosts cannot be created by core")
 }
-func (*Local) Destroy(ctx context.Context, token, ref string) error { return nil }
+func (*Local) Destroy(ctx context.Context, token, ref string) error          { return nil }
 func (*Local) Status(ctx context.Context, token, ref string) (string, error) { return "unknown", nil }
 
 // ---- stub ----
@@ -155,8 +155,10 @@ func (s *Stub) Offers(ctx context.Context, token string) ([]model.Offer, error) 
 func (s *Stub) Create(ctx context.Context, token string, req CreateRequest) (Handle, error) {
 	return Handle{}, s.err()
 }
-func (s *Stub) Destroy(ctx context.Context, token, ref string) error           { return s.err() }
-func (s *Stub) Status(ctx context.Context, token, ref string) (string, error) { return "unknown", s.err() }
+func (s *Stub) Destroy(ctx context.Context, token, ref string) error { return s.err() }
+func (s *Stub) Status(ctx context.Context, token, ref string) (string, error) {
+	return "unknown", s.err()
+}
 
 // ---- shared HTTP helper ----
 
