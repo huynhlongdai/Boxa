@@ -119,3 +119,67 @@ func TestIncusArgv(t *testing.T) {
 		t.Fatalf("run argv: %q", calls[0])
 	}
 }
+
+func TestIncusRestoreFork(t *testing.T) {
+	d := NewIncusDriver("", "")
+	var calls []string
+	d.run = func(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args ...string) error {
+		calls = append(calls, strings.Join(args, " "))
+		return nil
+	}
+	ctx := context.Background()
+	if err := d.Restore(ctx, proto.RestoreParams{BoxID: "box_a", SourceBoxID: "box_a", SnapshotID: "snap_X1"}); err != nil {
+		t.Fatal(err)
+	}
+	if calls[0] != "snapshot restore boxa-box-a snap-x1" {
+		t.Fatalf("restore argv %q", calls[0])
+	}
+	calls = nil
+	err := d.Restore(ctx, proto.RestoreParams{BoxID: "box_b", SourceBoxID: "box_a", SnapshotID: "snap_X1", Create: true,
+		Box: proto.CreateParams{Spec: model.Spec{CPU: 2, RAMMB: 1024}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(calls, "\n")
+	for _, want := range []string{"copy boxa-box-a/snap-x1 boxa-box-b", "config set boxa-box-b limits.cpu=2", "config set boxa-box-b limits.memory=1024MiB", "start boxa-box-b"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("fork argv missing %q:\n%s", want, joined)
+		}
+	}
+}
+
+func TestLocalRestoreFork(t *testing.T) {
+	d, _ := NewLocalDriver(t.TempDir())
+	ctx := context.Background()
+	if err := d.Create(ctx, proto.CreateParams{BoxID: "box_s", AgentsMD: "src"}); err != nil {
+		t.Fatal(err)
+	}
+	d.Write(ctx, "box_s", "/work/a.txt", []byte("v1"))
+	loc, _, err := d.Snapshot(ctx, "box_s", "snap_1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.Write(ctx, "box_s", "/work/a.txt", []byte("v2"))
+	d.Write(ctx, "box_s", "/work/b.txt", []byte("new"))
+	if err := d.Restore(ctx, proto.RestoreParams{BoxID: "box_s", SourceBoxID: "box_s", SnapshotID: "snap_1", Location: loc}); err != nil {
+		t.Fatal(err)
+	}
+	if b, _, _, _ := d.Read(ctx, "box_s", "/work/a.txt"); string(b) != "v1" {
+		t.Fatalf("restored %q", b)
+	}
+	if _, _, _, err := d.Read(ctx, "box_s", "/work/b.txt"); err == nil {
+		t.Fatal("b.txt survived restore")
+	}
+	if err := d.Restore(ctx, proto.RestoreParams{BoxID: "box_f", SourceBoxID: "box_s", SnapshotID: "snap_1", Location: loc, Create: true, Box: proto.CreateParams{AgentsMD: "fork"}}); err != nil {
+		t.Fatal(err)
+	}
+	if b, _, _, _ := d.Read(ctx, "box_f", "/AGENTS.md"); string(b) != "fork" {
+		t.Fatalf("fork AGENTS.md %q", b)
+	}
+	if b, _, _, _ := d.Read(ctx, "box_f", "/work/a.txt"); string(b) != "v1" {
+		t.Fatalf("fork a.txt %q", b)
+	}
+	if err := d.Restore(ctx, proto.RestoreParams{BoxID: "box_f", SnapshotID: "snap_1", Location: loc, Create: true}); err == nil {
+		t.Fatal("fork onto existing box accepted")
+	}
+}

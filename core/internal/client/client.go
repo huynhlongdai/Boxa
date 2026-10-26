@@ -16,6 +16,7 @@ import (
 type Client struct {
 	BaseURL string // e.g. http://localhost:8080 (without /v1)
 	Key     string
+	Lang    string // Accept-Language sent with every call (vi|en|zh|ja); "" = server default (en)
 	HTTP    *http.Client
 }
 
@@ -38,6 +39,9 @@ func (c *Client) Do(ctx context.Context, method, path string, body any) (int, []
 		return 0, nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+c.Key)
+	if c.Lang != "" {
+		req.Header.Set("Accept-Language", c.Lang)
+	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -52,10 +56,12 @@ func (c *Client) Do(ctx context.Context, method, path string, body any) (int, []
 
 // APIError mirrors the error envelope.
 type APIError struct {
-	Status  int
-	Code    string `json:"code"`
-	Message string `json:"message"`
-	Hint    string `json:"hint"`
+	Status      int
+	Code        string `json:"code"`
+	Message     string `json:"message"`
+	Hint        string `json:"hint"`
+	RetryAfterS *int   `json:"retry_after_s,omitempty"`
+	DocsURL     string `json:"docs_url,omitempty"`
 }
 
 func (e *APIError) Error() string {

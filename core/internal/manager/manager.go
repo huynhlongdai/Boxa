@@ -4,6 +4,7 @@
 package manager
 
 import (
+	"boxa/core/internal/i18n"
 	"context"
 	"errors"
 	"fmt"
@@ -250,7 +251,12 @@ func (m *Manager) boxLock(id string) *sync.Mutex {
 
 // Emit records an audit event and publishes it on the stream.
 func (m *Manager) Emit(ctx context.Context, actor, boxID, agentID, typ, msg string, cost *float64) {
-	e := &model.Event{ID: secret.ID("evt"), TS: time.Now().UTC(), Actor: actor, Type: typ, Message: msg, CostUSD: cost}
+	m.EmitData(ctx, actor, boxID, agentID, typ, msg, cost, nil)
+}
+
+// EmitData is Emit with structured details (Event.data).
+func (m *Manager) EmitData(ctx context.Context, actor, boxID, agentID, typ, msg string, cost *float64, data map[string]any) {
+	e := &model.Event{ID: secret.ID("evt"), TS: time.Now().UTC(), Actor: actor, Type: typ, Message: msg, CostUSD: cost, Data: data}
 	if boxID != "" {
 		e.BoxID = &boxID
 	}
@@ -296,6 +302,12 @@ func (m *Manager) PutSettings(ctx context.Context, s model.Settings) (model.Sett
 	}
 	if s.Notify.Events == nil {
 		s.Notify.Events = []string{}
+	}
+	if s.Locale == "" {
+		s.Locale = "vi"
+	}
+	if !i18n.Supported(s.Locale) {
+		return s, model.E(model.ErrInvalid, "locale must be one of vi, en, zh, ja")
 	}
 	if err := m.Store.PutKV(ctx, "settings", s); err != nil {
 		return s, err

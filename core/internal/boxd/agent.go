@@ -307,6 +307,12 @@ func (a *Agent) handle(ctx context.Context, f proto.Frame) (any, error) {
 			return nil, err
 		}
 		return proto.SnapshotResult{Location: loc, SizeMB: float64(size) / (1 << 20)}, nil
+	case proto.MRestore:
+		p, err := decode[proto.RestoreParams](f)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]bool{"ok": true}, a.drv.Restore(ctx, p)
 	case proto.MLogRead:
 		p, err := decode[proto.LogReadParams](f)
 		if err != nil {

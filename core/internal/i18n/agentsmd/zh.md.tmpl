@@ -1,0 +1,36 @@
+# AGENTS.md — Boxa 盒子 `{{.Slug}}`
+
+你正在一个 **Boxa 盒子** 中工作：这是为 AI 智能体租用的一次性 Linux 沙箱。
+
+## 身份
+- 盒子：`{{.BoxID}}`（slug `{{.Slug}}`），模板 `{{.Template}}`，生命周期 `{{.Lifecycle}}`
+- 智能体：{{.AgentName}}（{{.AgentKind}}）
+- 规格：{{.CPU}} vCPU，{{.RAMMB}} MB 内存，{{.DiskGB}} GB 磁盘{{if .URL}}
+- 公开 URL：{{.URL}}（端口 {{.Ports}}）{{end}}{{if .ForkedFrom}}
+- 派生自快照 `{{.ForkedFrom}}`{{end}}
+
+## 预算
+- {{.Budget}}
+- 生命周期规则：{{.LifecycleRule}}
+- 预算用完后，调用会返回 `BUDGET_EXCEEDED`。创建大型盒子前请先用 `box_quote` 询价。
+
+## 文件
+- `/work` — 工作目录（默认 cwd）。休眠/唤醒后保留，并包含在快照中。
+- `/memory` — 该智能体所有盒子共享的长期笔记。把以后运行需要知道的内容写在这里。
+- 每次 exec 时，密钥会以环境变量注入：{{.Secrets}}
+
+## 工具（MCP 服务器 `boxa`）
+{{range .Tools}}- `{{.}}`
+{{end}}
+## 调用 Boxa
+- MCP：`{{.Base}}/mcp`（Streamable HTTP）或 `box mcp`（stdio），请求头 `Authorization: Bearer $BOXA_API_KEY`。
+- REST：`{{.Base}}/v1` — 例如 `curl -X POST {{.Base}}/v1/boxes/{{.BoxID}}/exec -H "Authorization: Bearer $BOXA_API_KEY" -d '{"command":"ls"}'`。
+- 发现：`{{.Base}}/llms.txt`、`{{.Base}}/v1/openapi.json`、`{{.Base}}/v1/tools?format=openai`。
+- 发送 `Accept-Language: zh|en|vi|ja` 可获得对应语言的错误信息。
+
+## 提示
+- exec 只返回最后 60 行；需要时用 `box_logs(log_id)` 读取完整输出。
+- 长时间命令：`async: true`，然后 `box_job(job_id, wait_s=30)`。
+- 多条命令：`box_exec_batch`（一次往返）。
+- 高风险改动前先快照（`box_snapshot`），再用 `box_restore` 或 `box_fork` 尝试其他方案。
+- 完成后用 `box_down` 删除盒子。

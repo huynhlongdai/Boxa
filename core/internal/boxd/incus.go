@@ -438,3 +438,59 @@ func (d *IncusDriver) Addr(ctx context.Context, id string, port int) (string, er
 	}
 	return "", boxErr("NOT_FOUND", "container has no IPv4 (is it running?)")
 }
+
+func incusSnapName(snapID string) string {
+	return incusNameRe.ReplaceAllString(strings.ReplaceAll(strings.ToLower(snapID), "_", "-"), "")
+}
+
+// Restore: in place → `incus snapshot restore`; fork → `incus copy src/snap dst`
+// (falls back to `incus import` of the exported tarball when the source
+// instance is gone), then apply the new box's limits and AGENTS.md.
+func (d *IncusDriver) Restore(ctx context.Context, p proto.RestoreParams) error {
+	dst, src, snap := cname(p.BoxID), cname(p.SourceBoxID), incusSnapName(p.SnapshotID)
+	if !p.Create && p.SourceBoxID == p.BoxID {
+		_, err := d.incus(ctx, "snapshot", "restore", dst, snap)
+		return err
+	}
+	if !p.Create {
+		// Restore another box's snapshot over this box: replace the instance.
+		d.Stop(ctx, p.BoxID)
+		if _, err := d.incus(ctx, "delete", dst, "--force"); err != nil {
+			return err
+		}
+	}
+	if _, err := d.incus(ctx, "copy", src+"/"+snap, dst); err != nil {
+		file := strings.TrimPrefix(p.Location, "file://")
+		if !strings.HasPrefix(p.Location, "file://") {
+			return err
+		}
+		if _, err2 := d.incus(ctx, "import", file, dst); err2 != nil {
+			return err
+		}
+	}
+	if p.Create {
+		if p.Box.Spec.CPU >= 1 {
+			d.incus(ctx, "config", "set", dst, fmt.Sprintf("limits.cpu=%d", int(p.Box.Spec.CPU)))
+		}
+		if p.Box.Spec.RAMMB > 0 {
+			d.incus(ctx, "config", "set", dst, fmt.Sprintf("limits.memory=%dMiB", p.Box.Spec.RAMMB))
+		}
+	}
+	if err := d.Start(ctx, p.BoxID); err != nil {
+		return err
+	}
+	deadline := time.Now().Add(90 * time.Second)
+	for {
+		if _, err := d.incus(ctx, "exec", dst, "--", "true"); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			return boxErr("PROVIDER_FAILED", "restored container did not become ready in 90s")
+		}
+		time.Sleep(time.Second)
+	}
+	if p.Create && p.Box.AgentsMD != "" {
+		return d.Write(ctx, p.BoxID, "/AGENTS.md", []byte(p.Box.AgentsMD))
+	}
+	return nil
+}

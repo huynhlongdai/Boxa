@@ -21,6 +21,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"boxa/core/internal/boxyaml"
+	"boxa/core/internal/i18n"
 	"boxa/core/internal/manager"
 	"boxa/core/internal/mcp"
 	"boxa/core/internal/model"
@@ -48,18 +49,29 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.handler.S
 
 func (s *Server) routes() http.Handler {
 	r := chi.NewRouter()
-	r.Use(s.recoverer, s.ingressMW, s.cors)
+	r.Use(s.recoverer, s.ingressMW, s.cors, s.localeMW)
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"name": "boxa-core", "version": manager.Version, "api": "/v1", "mcp": "/mcp", "health": "/v1/health"})
 	})
 	r.Get("/dl/{file}", s.download)
 	mcpHandler := &mcp.HTTPHandler{
-		Server:    &mcp.Server{Name: "boxa", Version: manager.Version},
-		CallerFor: func(req *http.Request) mcp.Caller { return &inProcCaller{h: s, auth: req.Header.Get("Authorization")} },
+		Server: &mcp.Server{Name: "boxa", Version: manager.Version},
+		CallerFor: func(req *http.Request) mcp.Caller {
+			return &inProcCaller{h: s, auth: req.Header.Get("Authorization"), lang: reqLocale(req)}
+		},
 	}
 	r.With(s.authMW).Handle("/mcp", mcpHandler)
+	// Discovery (no auth).
+	r.Get("/llms.txt", s.llmsTxt)
+	r.Get("/llms-full.txt", s.llmsFull)
+	r.Get("/.well-known/mcp.json", s.mcpCard)
+	r.Get("/.well-known/agent.json", s.agentCard)
 	r.Route("/v1", func(r chi.Router) {
 		r.Get("/health", s.health)
+		r.Get("/openapi.json", s.openapi)
+		r.Get("/tools", s.tools)
+		r.Get("/agent-kinds", s.agentKinds)
+		r.Get("/errors", s.errorCatalog)
 		r.Get("/internal/tls-ask", s.tlsAsk)       // Caddy on_demand_tls (bind core to localhost in production)
 		r.Get("/hosts/connect", s.M.Hub.ServeHTTP) // boxd dial-out (own token auth)
 		r.Group(func(r chi.Router) {
@@ -77,6 +89,11 @@ func (s *Server) routes() http.Handler {
 			r.Post("/boxes/{id}/takeover", s.boxVerb("takeover"))
 			r.Post("/boxes/{id}/release", s.boxVerb("release"))
 			r.Post("/boxes/{id}/exec", s.exec)
+			r.Post("/boxes/{id}/exec-batch", s.execBatch)
+			r.Post("/boxes/{id}/restore", s.restore)
+			r.Post("/boxes/{id}/fork", s.fork)
+			r.Get("/boxes/{id}/yaml", s.boxYAML)
+			r.Post("/quote", s.quote)
 			r.Get("/boxes/{id}/files", s.readFile)
 			r.Put("/boxes/{id}/files", s.writeFile)
 			r.Post("/boxes/{id}/grep", s.grep)
@@ -143,10 +160,12 @@ func (s *Server) routes() http.Handler {
 		})
 	})
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		writeErr(w, model.E(model.ErrNotFound, "no route %s %s", r.Method, r.URL.Path))
+		writeErr(w, r, model.E(model.ErrNotFound, "no route %s %s", r.Method, r.URL.Path))
 	})
 	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
-		writeErr(w, &model.APIError{Code: model.ErrInvalid, Message: "method not allowed", Hint: "Check the HTTP method in the API contract.", Status: 405})
+		e := model.EH(model.ErrInvalid, "Check the HTTP method in the API contract.", "method not allowed")
+		e.Status = 405
+		writeErr(w, r, e)
 	})
 	return r
 }
@@ -161,7 +180,7 @@ func (s *Server) recoverer(next http.Handler) http.Handler {
 					panic(v)
 				}
 				log.Printf("panic %s %s: %v", r.Method, r.URL.Path, v)
-				writeErr(w, fmt.Errorf("internal error"))
+				writeErr(w, r, fmt.Errorf("internal error"))
 			}
 		}()
 		next.ServeHTTP(w, r)
@@ -214,7 +233,7 @@ func (s *Server) authMW(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p, err := s.M.Authenticate(r.Context(), bearer(r))
 		if err != nil {
-			writeErr(w, err)
+			writeErr(w, r, err)
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), principalKey, p)))
@@ -224,7 +243,7 @@ func (s *Server) authMW(next http.Handler) http.Handler {
 func (s *Server) adminOnly(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := pr(r).Require(model.ScopeAdmin); err != nil {
-			writeErr(w, err)
+			writeErr(w, r, err)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -244,12 +263,82 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	enc.Encode(v)
 }
 
-func writeErr(w http.ResponseWriter, err error) {
+// writeErr writes the contract error envelope, localized to the request's
+// locale (?lang= / Accept-Language), with retry_after_s and docs_url.
+func writeErr(w http.ResponseWriter, r *http.Request, err error) {
 	ae := model.AsAPIError(err)
 	if errors.Is(err, model.ErrNoRows) {
 		ae = model.E(model.ErrNotFound, "not found")
 	}
-	writeJSON(w, ae.Status, map[string]any{"error": ae})
+	le := localizeErr(r, ae)
+	if le.RetryAfterS != nil && *le.RetryAfterS > 0 {
+		w.Header().Set("Retry-After", strconv.Itoa(*le.RetryAfterS))
+	}
+	writeJSON(w, ae.Status, map[string]any{"error": le})
+}
+
+func localizeErr(r *http.Request, ae *model.APIError) *model.APIError {
+	loc := reqLocale(r)
+	out := *ae
+	if loc != i18n.Default {
+		f, args := ae.Format()
+		out.Message = i18n.Msg(loc, f, args...)
+		out.Hint = i18n.Hint(loc, ae.Hint)
+	}
+	if out.RetryAfterS == nil {
+		if n := model.DefaultRetryAfter(ae.Code); n > 0 {
+			out.RetryAfterS = &n
+		}
+	}
+	if out.DocsURL == "" && r != nil {
+		out.DocsURL = baseURL(r) + "/v1/errors#" + ae.Code
+	}
+	return &out
+}
+
+func reqLocale(r *http.Request) string {
+	if r == nil {
+		return i18n.Default
+	}
+	if l, ok := i18n.Lookup(r.Context()); ok {
+		return l
+	}
+	return i18n.FromRequest(r, i18n.Default)
+}
+
+// baseURL is the externally visible origin of the request (honours X-Forwarded-*).
+func baseURL(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	if p := r.Header.Get("X-Forwarded-Proto"); p != "" {
+		scheme = strings.Split(p, ",")[0]
+	}
+	host := r.Host
+	if h := r.Header.Get("X-Forwarded-Host"); h != "" {
+		host = strings.Split(h, ",")[0]
+	}
+	if host == "" {
+		host = "localhost:8080"
+	}
+	return scheme + "://" + host
+}
+
+// localeMW resolves the request locale once and stores it in the context so
+// the manager (AGENTS.md, snippets) and error writer can use it.
+func (s *Server) localeMW(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		loc := i18n.FromRequest(r, "")
+		w.Header().Add("Vary", "Accept-Language")
+		if loc == "" { // no explicit language: API default en; agent-facing texts fall back to the agent/settings locale
+			w.Header().Set("Content-Language", i18n.Default)
+			next.ServeHTTP(w, r)
+			return
+		}
+		w.Header().Set("Content-Language", loc)
+		next.ServeHTTP(w, r.WithContext(i18n.WithLocale(r.Context(), loc)))
+	})
 }
 
 func decode(r *http.Request, v any) error {
@@ -310,7 +399,7 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 func (s *Server) overview(w http.ResponseWriter, r *http.Request) {
 	o, err := s.M.Overview(r.Context(), pr(r))
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 200, o)
@@ -319,7 +408,7 @@ func (s *Server) overview(w http.ResponseWriter, r *http.Request) {
 func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 	fl, ok := w.(http.Flusher)
 	if !ok {
-		writeErr(w, fmt.Errorf("streaming unsupported"))
+		writeErr(w, r, fmt.Errorf("streaming unsupported"))
 		return
 	}
 	p := pr(r)
@@ -366,7 +455,7 @@ type createBoxBody struct {
 func (s *Server) createBox(w http.ResponseWriter, r *http.Request) {
 	var body createBoxBody
 	if err := decode(r, &body); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	key := r.Header.Get("Idempotency-Key")
@@ -382,14 +471,14 @@ func (s *Server) createBox(w http.ResponseWriter, r *http.Request) {
 	}
 	box, created, err := s.M.CreateBox(r.Context(), pr(r), body.Request, key)
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	st := 201
 	if !created {
 		st = 200
 	}
-	writeJSON(w, st, box)
+	writeJSON(w, st, withNext(box, nextForBox(box)))
 }
 
 func (s *Server) listBoxes(w http.ResponseWriter, r *http.Request) {
@@ -400,7 +489,7 @@ func (s *Server) listBoxes(w http.ResponseWriter, r *http.Request) {
 	}
 	bs, err := s.M.ListBoxes(r.Context(), pr(r), f)
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	list(w, bs)
@@ -409,7 +498,7 @@ func (s *Server) listBoxes(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getBox(w http.ResponseWriter, r *http.Request) {
 	b, err := s.M.GetBox(r.Context(), pr(r), chi.URLParam(r, "id"))
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 200, b)
@@ -418,7 +507,7 @@ func (s *Server) getBox(w http.ResponseWriter, r *http.Request) {
 func (s *Server) deleteBox(w http.ResponseWriter, r *http.Request) {
 	b, err := s.M.Terminate(r.Context(), pr(r), chi.URLParam(r, "id"))
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 200, b)
@@ -440,7 +529,7 @@ func (s *Server) boxVerb(verb string) http.HandlerFunc {
 			b, err = s.M.Takeover(r.Context(), pr(r), id, false)
 		}
 		if err != nil {
-			writeErr(w, err)
+			writeErr(w, r, err)
 			return
 		}
 		writeJSON(w, 200, b)
@@ -450,7 +539,7 @@ func (s *Server) boxVerb(verb string) http.HandlerFunc {
 func (s *Server) snapshot(w http.ResponseWriter, r *http.Request) {
 	sn, err := s.M.Snapshot(r.Context(), pr(r), chi.URLParam(r, "id"))
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 201, sn)
@@ -459,26 +548,26 @@ func (s *Server) snapshot(w http.ResponseWriter, r *http.Request) {
 func (s *Server) exec(w http.ResponseWriter, r *http.Request) {
 	var in manager.ExecInput
 	if err := decode(r, &in); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	res, err := s.M.Exec(r.Context(), pr(r), chi.URLParam(r, "id"), in)
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	st := 200
 	if in.Async {
 		st = 202
 	}
-	writeJSON(w, st, res)
+	writeJSON(w, st, withNext(res, nextForExec(chi.URLParam(r, "id"), res)))
 }
 
 func (s *Server) readFile(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	res, err := s.M.ReadFile(r.Context(), pr(r), chi.URLParam(r, "id"), q.Get("path"), qint(r, "from"), qint(r, "to"))
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	if res.IsDir {
@@ -494,11 +583,11 @@ func (s *Server) writeFile(w http.ResponseWriter, r *http.Request) {
 		Content string `json:"content"`
 	}
 	if err := decode(r, &in); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	if err := s.M.WriteFile(r.Context(), pr(r), chi.URLParam(r, "id"), in.Path, in.Content); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": true, "path": in.Path, "bytes": len(in.Content)})
@@ -510,12 +599,12 @@ func (s *Server) grep(w http.ResponseWriter, r *http.Request) {
 		Path    string `json:"path"`
 	}
 	if err := decode(r, &in); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	res, err := s.M.Grep(r.Context(), pr(r), chi.URLParam(r, "id"), in.Pattern, in.Path)
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 200, res)
@@ -524,7 +613,7 @@ func (s *Server) grep(w http.ResponseWriter, r *http.Request) {
 func (s *Server) observe(w http.ResponseWriter, r *http.Request) {
 	res, err := s.M.Observe(r.Context(), pr(r), chi.URLParam(r, "id"))
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 200, res)
@@ -533,7 +622,7 @@ func (s *Server) observe(w http.ResponseWriter, r *http.Request) {
 func (s *Server) boxEvents(w http.ResponseWriter, r *http.Request) {
 	es, err := s.M.BoxEvents(r.Context(), pr(r), chi.URLParam(r, "id"))
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	list(w, es)
@@ -542,7 +631,7 @@ func (s *Server) boxEvents(w http.ResponseWriter, r *http.Request) {
 func (s *Server) boxSnapshots(w http.ResponseWriter, r *http.Request) {
 	ss, err := s.M.ListSnapshots(r.Context(), pr(r), chi.URLParam(r, "id"))
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	list(w, ss)
@@ -555,7 +644,7 @@ func (s *Server) getJob(w http.ResponseWriter, r *http.Request) {
 	}
 	j, err := s.M.WaitJob(r.Context(), pr(r), chi.URLParam(r, "id"), time.Duration(wait)*time.Second)
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 200, j)
@@ -564,7 +653,7 @@ func (s *Server) getJob(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getLog(w http.ResponseWriter, r *http.Request) {
 	txt, err := s.M.GetLog(r.Context(), pr(r), chi.URLParam(r, "id"))
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -576,7 +665,7 @@ func (s *Server) getLog(w http.ResponseWriter, r *http.Request) {
 func (s *Server) listAgents(w http.ResponseWriter, r *http.Request) {
 	as, err := s.M.ListAgents(r.Context(), pr(r))
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	list(w, as)
@@ -585,12 +674,12 @@ func (s *Server) listAgents(w http.ResponseWriter, r *http.Request) {
 func (s *Server) createAgent(w http.ResponseWriter, r *http.Request) {
 	var in manager.AgentInput
 	if err := decode(r, &in); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	a, err := s.M.CreateAgent(r.Context(), pr(r), in)
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 201, a)
@@ -599,7 +688,7 @@ func (s *Server) createAgent(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getAgent(w http.ResponseWriter, r *http.Request) {
 	a, err := s.M.GetAgent(r.Context(), pr(r), chi.URLParam(r, "id"))
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 200, a)
@@ -608,12 +697,12 @@ func (s *Server) getAgent(w http.ResponseWriter, r *http.Request) {
 func (s *Server) patchAgent(w http.ResponseWriter, r *http.Request) {
 	var in manager.AgentInput
 	if err := decode(r, &in); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	a, err := s.M.UpdateAgent(r.Context(), pr(r), chi.URLParam(r, "id"), in)
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 200, a)
@@ -621,16 +710,16 @@ func (s *Server) patchAgent(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) deleteAgent(w http.ResponseWriter, r *http.Request) {
 	if err := s.M.DeleteAgent(r.Context(), pr(r), chi.URLParam(r, "id")); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": true})
 }
 
 func (s *Server) snippet(w http.ResponseWriter, r *http.Request) {
-	sn, err := s.M.Snippet(r.Context(), pr(r), chi.URLParam(r, "id"), r.URL.Query().Get("kind"))
+	sn, err := s.M.Snippet(r.Context(), pr(r), chi.URLParam(r, "id"), r.URL.Query().Get("kind"), r.URL.Query().Get("lang"), s.publicBase(r))
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 200, sn)
@@ -639,7 +728,7 @@ func (s *Server) snippet(w http.ResponseWriter, r *http.Request) {
 func (s *Server) listKeys(w http.ResponseWriter, r *http.Request) {
 	ks, err := s.M.ListKeys(r.Context(), pr(r))
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	list(w, ks)
@@ -648,12 +737,12 @@ func (s *Server) listKeys(w http.ResponseWriter, r *http.Request) {
 func (s *Server) createKey(w http.ResponseWriter, r *http.Request) {
 	var in manager.KeyInput
 	if err := decode(r, &in); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	k, err := s.M.CreateKey(r.Context(), pr(r), in)
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 201, k)
@@ -661,7 +750,7 @@ func (s *Server) createKey(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) revokeKey(w http.ResponseWriter, r *http.Request) {
 	if err := s.M.RevokeKey(r.Context(), pr(r), chi.URLParam(r, "id")); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": true})
@@ -678,7 +767,7 @@ func ledgerFilter(r *http.Request) store.LedgerFilter {
 func (s *Server) costs(w http.ResponseWriter, r *http.Request) {
 	res, err := s.M.Costs(r.Context(), pr(r), ledgerFilter(r))
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 200, res)
@@ -695,7 +784,7 @@ func (s *Server) costsCSV(w http.ResponseWriter, r *http.Request) {
 func (s *Server) suggestions(w http.ResponseWriter, r *http.Request) {
 	ss, err := s.M.Suggestions(r.Context(), pr(r))
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	list(w, ss)
@@ -706,7 +795,7 @@ func (s *Server) suggestions(w http.ResponseWriter, r *http.Request) {
 func (s *Server) providers(w http.ResponseWriter, r *http.Request) {
 	ps, err := s.M.ListProviders(r.Context())
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	list(w, ps)
@@ -717,12 +806,12 @@ func (s *Server) providerToken(w http.ResponseWriter, r *http.Request) {
 		Token string `json:"token"`
 	}
 	if err := decode(r, &in); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	p, err := s.M.SetProviderToken(r.Context(), pr(r), chi.URLParam(r, "id"), in.Token)
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 200, p)
@@ -730,12 +819,12 @@ func (s *Server) providerToken(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) hosts(w http.ResponseWriter, r *http.Request) {
 	if err := pr(r).Require(model.ScopeAdmin); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	hs, err := s.M.ListHosts(r.Context())
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	list(w, hs)
@@ -746,12 +835,12 @@ func (s *Server) createHost(w http.ResponseWriter, r *http.Request) {
 		Provider, SKU, Region, Billing string
 	}
 	if err := decode(r, &in); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	h, err := s.M.CreateHost(r.Context(), pr(r), in.Provider, in.SKU, in.Region, in.Billing)
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 201, h)
@@ -760,7 +849,7 @@ func (s *Server) createHost(w http.ResponseWriter, r *http.Request) {
 func (s *Server) drainHost(w http.ResponseWriter, r *http.Request) {
 	h, err := s.M.DrainHost(r.Context(), pr(r), chi.URLParam(r, "id"))
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 200, h)
@@ -768,7 +857,7 @@ func (s *Server) drainHost(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) deleteHost(w http.ResponseWriter, r *http.Request) {
 	if err := s.M.DeleteHost(r.Context(), pr(r), chi.URLParam(r, "id"), r.URL.Query().Get("force") == "true"); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": true})
@@ -779,7 +868,7 @@ func (s *Server) offers(w http.ResponseWriter, r *http.Request) {
 	minCPU, _ := strconv.ParseFloat(q.Get("min_cpu"), 64)
 	os, err := s.M.ListOffers(r.Context(), manager.OfferFilter{Provider: q.Get("provider"), Region: q.Get("region"), MinCPU: minCPU, MinRAMMB: qint(r, "min_ram_mb")})
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	list(w, os)
@@ -790,7 +879,7 @@ func (s *Server) offers(w http.ResponseWriter, r *http.Request) {
 func (s *Server) listTemplates(w http.ResponseWriter, r *http.Request) {
 	ts, err := s.M.ListTemplates(r.Context())
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	list(w, ts)
@@ -799,12 +888,12 @@ func (s *Server) listTemplates(w http.ResponseWriter, r *http.Request) {
 func (s *Server) createTemplate(w http.ResponseWriter, r *http.Request) {
 	var in manager.TemplateInput
 	if err := decode(r, &in); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	t, err := s.M.PutTemplate(r.Context(), pr(r), in, true)
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 201, t)
@@ -813,13 +902,13 @@ func (s *Server) createTemplate(w http.ResponseWriter, r *http.Request) {
 func (s *Server) putTemplate(w http.ResponseWriter, r *http.Request) {
 	var in manager.TemplateInput
 	if err := decode(r, &in); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	in.Name = chi.URLParam(r, "name")
 	t, err := s.M.PutTemplate(r.Context(), pr(r), in, false)
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 200, t)
@@ -827,7 +916,7 @@ func (s *Server) putTemplate(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) deleteTemplate(w http.ResponseWriter, r *http.Request) {
 	if err := s.M.DeleteTemplate(r.Context(), pr(r), chi.URLParam(r, "name")); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": true})
@@ -838,7 +927,7 @@ func (s *Server) validateTemplate(w http.ResponseWriter, r *http.Request) {
 		YAML string `json:"yaml"`
 	}
 	if err := decode(r, &in); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	_, errs := boxyaml.Parse(in.YAML)
@@ -853,7 +942,7 @@ func (s *Server) validateTemplate(w http.ResponseWriter, r *http.Request) {
 func (s *Server) listSecrets(w http.ResponseWriter, r *http.Request) {
 	ss, err := s.M.ListSecrets(r.Context(), pr(r))
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	list(w, ss)
@@ -862,12 +951,12 @@ func (s *Server) listSecrets(w http.ResponseWriter, r *http.Request) {
 func (s *Server) createSecret(w http.ResponseWriter, r *http.Request) {
 	var in manager.SecretInput
 	if err := decode(r, &in); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	sec, err := s.M.CreateSecret(r.Context(), pr(r), in)
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 201, sec)
@@ -879,12 +968,12 @@ func (s *Server) rotateSecret(w http.ResponseWriter, r *http.Request) {
 		Agents []string `json:"agents"`
 	}
 	if err := decode(r, &in); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	sec, err := s.M.RotateSecret(r.Context(), pr(r), chi.URLParam(r, "name"), in.Value, in.Agents)
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 200, sec)
@@ -892,7 +981,7 @@ func (s *Server) rotateSecret(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) deleteSecret(w http.ResponseWriter, r *http.Request) {
 	if err := s.M.DeleteSecret(r.Context(), pr(r), chi.URLParam(r, "name")); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": true})
@@ -903,7 +992,7 @@ func (s *Server) deleteSecret(w http.ResponseWriter, r *http.Request) {
 func (s *Server) listApprovals(w http.ResponseWriter, r *http.Request) {
 	as, err := s.M.ListApprovals(r.Context(), pr(r), r.URL.Query().Get("status"))
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	list(w, as)
@@ -913,7 +1002,7 @@ func (s *Server) decide(approve bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		a, err := s.M.Decide(r.Context(), pr(r), chi.URLParam(r, "id"), approve)
 		if err != nil {
-			writeErr(w, err)
+			writeErr(w, r, err)
 			return
 		}
 		writeJSON(w, 200, a)
@@ -925,12 +1014,12 @@ func (s *Server) emergencyStop(w http.ResponseWriter, r *http.Request) {
 		Confirm string `json:"confirm"`
 	}
 	if err := decode(r, &in); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	n, err := s.M.EmergencyStop(r.Context(), pr(r), in.Confirm)
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": true, "slept": n})
@@ -938,7 +1027,7 @@ func (s *Server) emergencyStop(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
 	if err := pr(r).Require(model.ScopeAdmin); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 200, s.M.Settings(r.Context()))
@@ -946,17 +1035,17 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 	if err := pr(r).Require(model.ScopeAdmin); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	cur := s.M.Settings(r.Context())
 	if err := decode(r, &cur); err != nil { // partial update: unknown fields keep current values
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	out, err := s.M.PutSettings(r.Context(), cur)
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 200, out)
@@ -978,7 +1067,7 @@ func (s *Server) adminAudit(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	es, err := s.M.Audit(r.Context(), pr(r), store.EventFilter{Actor: q.Get("actor"), Type: q.Get("type"), BoxID: q.Get("box"), AgentID: q.Get("agent"), Limit: qint(r, "limit")})
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	list(w, es)
@@ -991,12 +1080,12 @@ func (s *Server) getQuotas(w http.ResponseWriter, r *http.Request) {
 func (s *Server) putQuotas(w http.ResponseWriter, r *http.Request) {
 	q := s.M.Quotas(r.Context())
 	if err := decode(r, &q); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	out, err := s.M.PutQuotas(r.Context(), q)
 	if err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	writeJSON(w, 200, out)
@@ -1018,12 +1107,12 @@ func (s *Server) refreshPrices(w http.ResponseWriter, r *http.Request) {
 func (s *Server) download(w http.ResponseWriter, r *http.Request) {
 	f := filepath.Base(chi.URLParam(r, "file"))
 	if s.DistDir == "" || !strings.HasPrefix(f, "boxd") {
-		writeErr(w, model.E(model.ErrNotFound, "no such download"))
+		writeErr(w, r, model.E(model.ErrNotFound, "no such download"))
 		return
 	}
 	p := filepath.Join(s.DistDir, f)
 	if _, err := os.Stat(p); err != nil {
-		writeErr(w, model.E(model.ErrNotFound, "no such download"))
+		writeErr(w, r, model.E(model.ErrNotFound, "no such download"))
 		return
 	}
 	http.ServeFile(w, r, p)
@@ -1034,6 +1123,7 @@ func (s *Server) download(w http.ResponseWriter, r *http.Request) {
 type inProcCaller struct {
 	h    http.Handler
 	auth string
+	lang string
 }
 
 func (c *inProcCaller) Do(ctx context.Context, method, path string, body any) (int, []byte, error) {
@@ -1045,9 +1135,15 @@ func (c *inProcCaller) Do(ctx context.Context, method, path string, body any) (i
 		}
 		rd = bytes.NewReader(b)
 	}
+	// Drop the outer request's chi routing context: chi would otherwise treat
+	// this as a sub-route of POST /mcp (wrong method/path → 405 for GETs).
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, nil)
 	req := httptest.NewRequest(method, "/v1"+path, rd).WithContext(ctx)
 	req.Header.Set("Authorization", c.auth)
 	req.Header.Set("Content-Type", "application/json")
+	if c.lang != "" {
+		req.Header.Set("Accept-Language", c.lang)
+	}
 	rec := httptest.NewRecorder()
 	c.h.ServeHTTP(rec, req)
 	return rec.Code, rec.Body.Bytes(), nil

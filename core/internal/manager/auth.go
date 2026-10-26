@@ -1,9 +1,9 @@
 package manager
 
 import (
+	"boxa/core/internal/i18n"
 	"context"
 	"errors"
-	"fmt"
 	"regexp"
 	"sort"
 	"strings"
@@ -95,7 +95,8 @@ func (m *Manager) allow(ctx context.Context, agentID string) error {
 	}
 	b.last = now
 	if b.tokens < 1 {
-		return &model.APIError{Code: "RATE_LIMITED", Message: "too many requests", Hint: "Slow down; the per-agent limit is " + fmt.Sprint(int(limit)) + "/minute.", Status: 429}
+		wait := int((1-b.tokens)/limit*60) + 1
+		return model.E(model.ErrRateLimited, "too many requests (limit %d/minute)", int(limit)).WithRetry(wait)
 	}
 	b.tokens--
 	return nil
@@ -154,7 +155,6 @@ func prefixOf(k string) string {
 
 // ---- agents ----
 
-var agentKinds = map[string]bool{"claude-code": true, "openai-agents": true, "n8n": true, "hark": true, "custom": true}
 var nameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9 ._-]{0,62}$`)
 
 type AgentInput struct {
@@ -164,6 +164,7 @@ type AgentInput struct {
 	BudgetMonthUSD *float64      `json:"budget_month_usd"`
 	Policy         *model.Policy `json:"policy"`
 	MemoryMB       *int          `json:"memory_mb"`
+	Locale         *string       `json:"locale"`
 }
 
 func (m *Manager) CreateAgent(ctx context.Context, p *Principal, in AgentInput) (*model.Agent, error) {
@@ -195,8 +196,8 @@ func applyAgentInput(a *model.Agent, in AgentInput) error {
 		a.Name = *in.Name
 	}
 	if in.Kind != nil {
-		if !agentKinds[*in.Kind] {
-			return model.E(model.ErrInvalid, "kind must be one of claude-code, openai-agents, n8n, hark, custom")
+		if !ValidKind(*in.Kind) {
+			return model.EH(model.ErrInvalid, "List kinds with GET /agent-kinds.", "unknown agent kind %q", *in.Kind)
 		}
 		a.Kind = *in.Kind
 	}
@@ -223,6 +224,12 @@ func applyAgentInput(a *model.Agent, in AgentInput) error {
 	}
 	if in.MemoryMB != nil {
 		a.MemoryMB = *in.MemoryMB
+	}
+	if in.Locale != nil {
+		if *in.Locale != "" && !i18n.Supported(*in.Locale) {
+			return model.E(model.ErrInvalid, "locale must be one of vi, en, zh, ja")
+		}
+		a.Locale = *in.Locale
 	}
 	return nil
 }

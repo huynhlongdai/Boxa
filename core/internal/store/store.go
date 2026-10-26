@@ -90,6 +90,7 @@ type Store interface {
 
 	PutSnapshot(ctx context.Context, s *model.Snapshot) error
 	ListSnapshots(ctx context.Context, boxID string) ([]*model.Snapshot, error)
+	GetSnapshot(ctx context.Context, id string) (*model.Snapshot, error)
 	DeleteSnapshot(ctx context.Context, id string) error
 
 	PutApproval(ctx context.Context, a *model.Approval) error
@@ -636,8 +637,14 @@ func (s *SQL) ListJobs(ctx context.Context, boxID string, limit int) ([]*model.J
 // ---- events ----
 
 func (s *SQL) AddEvent(ctx context.Context, e *model.Event) error {
-	return s.exec(ctx, "INSERT INTO events(id, ts, actor, box_id, agent_id, type, message, cost_usd) VALUES(?,?,?,?,?,?,?,?)",
-		e.ID, FmtTime(e.TS), e.Actor, e.BoxID, e.AgentID, e.Type, e.Message, e.CostUSD)
+	var data *string
+	if len(e.Data) > 0 {
+		b, _ := json.Marshal(e.Data)
+		d := string(b)
+		data = &d
+	}
+	return s.exec(ctx, "INSERT INTO events(id, ts, actor, box_id, agent_id, type, message, cost_usd, data) VALUES(?,?,?,?,?,?,?,?,?)",
+		e.ID, FmtTime(e.TS), e.Actor, e.BoxID, e.AgentID, e.Type, e.Message, e.CostUSD, data)
 }
 
 func (s *SQL) ListEvents(ctx context.Context, f EventFilter) ([]*model.Event, error) {
@@ -656,7 +663,7 @@ func (s *SQL) ListEvents(ctx context.Context, f EventFilter) ([]*model.Event, er
 	if f.Type != "" {
 		add("type LIKE ?", f.Type+"%")
 	}
-	q := "SELECT id, ts, actor, box_id, agent_id, type, message, cost_usd FROM events"
+	q := "SELECT id, ts, actor, box_id, agent_id, type, message, cost_usd, data FROM events"
 	if len(conds) > 0 {
 		q += " WHERE " + strings.Join(conds, " AND ")
 	}
@@ -674,10 +681,13 @@ func (s *SQL) ListEvents(ctx context.Context, f EventFilter) ([]*model.Event, er
 	for rows.Next() {
 		var e model.Event
 		var ts string
-		var box, agent sql.NullString
+		var box, agent, data sql.NullString
 		var cost sql.NullFloat64
-		if err := rows.Scan(&e.ID, &ts, &e.Actor, &box, &agent, &e.Type, &e.Message, &cost); err != nil {
+		if err := rows.Scan(&e.ID, &ts, &e.Actor, &box, &agent, &e.Type, &e.Message, &cost, &data); err != nil {
 			return nil, err
+		}
+		if data.Valid && data.String != "" {
+			json.Unmarshal([]byte(data.String), &e.Data)
 		}
 		e.TS, _ = time.Parse(TimeFormat, ts)
 		if box.Valid {
@@ -859,6 +869,9 @@ func (s *SQL) ListSnapshots(ctx context.Context, boxID string) ([]*model.Snapsho
 		where, args = "box_id=?", []any{boxID}
 	}
 	return listDocs[model.Snapshot](ctx, s, "snapshots", where, "created_at DESC", args...)
+}
+func (s *SQL) GetSnapshot(ctx context.Context, id string) (*model.Snapshot, error) {
+	return getDoc[model.Snapshot](ctx, s, "snapshots", "id=?", id)
 }
 func (s *SQL) DeleteSnapshot(ctx context.Context, id string) error {
 	return s.exec(ctx, "DELETE FROM snapshots WHERE id=?", id)

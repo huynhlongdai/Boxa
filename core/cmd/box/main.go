@@ -1,5 +1,5 @@
 // box: Boxa CLI. Talks to core over REST (BOXA_URL, BOXA_API_KEY).
-// `box mcp` runs a stdio MCP server exposing the 12 box_* tools.
+// `box mcp` runs a stdio MCP server exposing the box_* tools, resources and prompts.
 package main
 
 import (
@@ -18,13 +18,14 @@ import (
 
 	"boxa/core/internal/boxyaml"
 	"boxa/core/internal/client"
+	"boxa/core/internal/i18n"
 	"boxa/core/internal/manager"
 	"boxa/core/internal/mcp"
 )
 
 const usage = `box — Boxa CLI
 
-Env: BOXA_URL (default http://localhost:8080), BOXA_API_KEY
+Env: BOXA_URL (default http://localhost:8080), BOXA_API_KEY, BOXA_LANG (vi|en|zh|ja; default from LANG)
 
   box up [--template python] [--lifecycle task|session|service] [--cpu 1] [--ram 1G] [--disk 10G]
          [--ttl 1h] [--idle 5] [--budget 0.5] [--slug name] [--port 8080] [--secret NAME]
@@ -38,6 +39,11 @@ Env: BOXA_URL (default http://localhost:8080), BOXA_API_KEY
   box job <job_id> [--wait 30]
   box log <log_id>
   box cost [<box>]
+  box quote [same flags as up]                  (dry-run price, nothing created)
+  box batch <box> [--keep-going] -- <cmd1> ;; <cmd2> ;; ...
+  box restore <box> [snapshot_id]
+  box fork <box> [snapshot_id] [--slug name]
+  box yaml <box>
   box mcp                                       (stdio MCP server)
 `
 
@@ -95,6 +101,10 @@ func main() {
 		os.Exit(2)
 	}
 	c := client.New(envOr("BOXA_URL", "http://localhost:8080"), os.Getenv("BOXA_API_KEY"))
+	c.Lang = i18n.Normalize(os.Getenv("BOXA_LANG"))
+	if c.Lang == "" {
+		c.Lang = i18n.Normalize(os.Getenv("LANG"))
+	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 	cmd, args := os.Args[1], os.Args[2:]
@@ -122,8 +132,19 @@ func main() {
 		err = cmdLog(ctx, c, args)
 	case "cost":
 		err = cmdCost(ctx, c, args)
+	case "quote":
+		err = cmdQuote(ctx, c, args)
+	case "batch":
+		err = cmdBatch(ctx, c, args)
+	case "restore", "fork":
+		err = cmdRestoreFork(ctx, c, cmd, args)
+	case "yaml":
+		err = cmdYAML(ctx, c, args)
 	case "mcp":
 		s := &mcp.Server{Name: "boxa", Version: manager.Version}
+		if c.Lang != "" {
+			ctx = i18n.WithLocale(ctx, c.Lang)
+		}
 		err = s.ServeStdio(ctx, c, os.Stdin, os.Stdout)
 	case "version":
 		fmt.Println("box", manager.Version)
@@ -146,6 +167,14 @@ func envOr(k, d string) string {
 }
 
 func cmdUp(ctx context.Context, c *client.Client, args []string) error {
+	return upOrQuote(ctx, c, args, false)
+}
+
+func cmdQuote(ctx context.Context, c *client.Client, args []string) error {
+	return upOrQuote(ctx, c, args, true)
+}
+
+func upOrQuote(ctx context.Context, c *client.Client, args []string, quote bool) error {
 	fs := flag.NewFlagSet("up", flag.ExitOnError)
 	tmpl := fs.String("template", "base", "template")
 	lc := fs.String("lifecycle", "session", "task|session|service")
@@ -232,6 +261,28 @@ func cmdUp(ctx context.Context, c *client.Client, args []string) error {
 		if len(setup) > 0 {
 			body["setup"] = []string(setup)
 		}
+	}
+	if quote {
+		var q map[string]any
+		if err := c.JSON(ctx, "POST", "/quote", body, &q); err != nil {
+			return err
+		}
+		if *jsonOut {
+			printJSON(q)
+			return nil
+		}
+		if q["available"] == true {
+			fmt.Printf("%v/%v  %s/h  ≈ %s total for %vh  within_budget=%v\n", q["provider"], q["region"], fmtNum(q["cost_per_hour"]), fmtNum(q["expected_total_usd"]), q["expected_hours"], q["within_budget"])
+		} else {
+			fmt.Printf("not available now: %v\n", q["placement_reason"])
+		}
+		if alts, _ := q["alternatives"].([]any); len(alts) > 0 {
+			for _, a := range alts {
+				m, _ := a.(map[string]any)
+				fmt.Printf("  alt: %v %v %v %s/h ≈ %s\n", m["kind"], m["provider"], m["region"], fmtNum(m["cost_per_hour"]), fmtNum(m["expected_total_usd"]))
+			}
+		}
+		return nil
 	}
 	if *idem != "" {
 		body["idempotency_key"] = *idem
@@ -510,6 +561,96 @@ func cmdCost(ctx context.Context, c *client.Client, args []string) error {
 	}
 	fmt.Printf("today  %s / budget %s\nmonth  %s / budget %s\nboxes  %v running, %v sleeping\nsaved vs 24/7  %s\n",
 		fmtNum(o["spent_today"]), fmtNum(o["budget_day"]), fmtNum(o["spent_month"]), fmtNum(o["budget_month"]), o["boxes_running"], o["boxes_sleeping"], fmtNum(o["saved_vs_247_usd"]))
+	return nil
+}
+
+func cmdBatch(ctx context.Context, c *client.Client, args []string) error {
+	fs := flag.NewFlagSet("batch", flag.ExitOnError)
+	keep := fs.Bool("keep-going", false, "do not stop at the first failing command")
+	tail := fs.Int("tail", 0, "lines per command")
+	var before, after []string
+	for i, a := range args {
+		if a == "--" {
+			before, after = args[:i], args[i+1:]
+			break
+		}
+	}
+	if after == nil {
+		return fmt.Errorf("usage: box batch <box> [--keep-going] -- <cmd1> ;; <cmd2>")
+	}
+	fs.Parse(reorder(fs, before))
+	if fs.NArg() < 1 {
+		return fmt.Errorf("usage: box batch <box> -- <cmd1> ;; <cmd2>")
+	}
+	var cmds []string
+	for _, part := range strings.Split(strings.Join(after, " "), ";;") {
+		if p := strings.TrimSpace(part); p != "" {
+			cmds = append(cmds, p)
+		}
+	}
+	body := map[string]any{"commands": cmds, "stop_on_error": !*keep}
+	if *tail > 0 {
+		body["tail_lines"] = *tail
+	}
+	var res struct {
+		OK      bool `json:"ok"`
+		Results []struct {
+			Index      int    `json:"index"`
+			Command    string `json:"command"`
+			ExitCode   int    `json:"exit_code"`
+			StdoutTail string `json:"stdout_tail"`
+			StderrTail string `json:"stderr_tail"`
+		} `json:"results"`
+	}
+	if err := c.JSON(ctx, "POST", "/boxes/"+url.PathEscape(fs.Arg(0))+"/exec-batch", body, &res); err != nil {
+		return err
+	}
+	for _, r := range res.Results {
+		fmt.Printf("[%d] $ %s  (exit %d)\n", r.Index, r.Command, r.ExitCode)
+		if r.StdoutTail != "" {
+			fmt.Println(r.StdoutTail)
+		}
+		if r.StderrTail != "" {
+			fmt.Fprintln(os.Stderr, r.StderrTail)
+		}
+	}
+	if !res.OK {
+		os.Exit(1)
+	}
+	return nil
+}
+
+func cmdRestoreFork(ctx context.Context, c *client.Client, verb string, args []string) error {
+	fs := flag.NewFlagSet(verb, flag.ExitOnError)
+	slug := fs.String("slug", "", "name of the forked box")
+	fs.Parse(reorder(fs, args))
+	if fs.NArg() < 1 {
+		return fmt.Errorf("usage: box %s <box> [snapshot_id]", verb)
+	}
+	body := map[string]any{}
+	if fs.NArg() > 1 {
+		body["snapshot_id"] = fs.Arg(1)
+	}
+	if *slug != "" {
+		body["slug"] = *slug
+	}
+	var b map[string]any
+	if err := c.JSON(ctx, "POST", "/boxes/"+url.PathEscape(fs.Arg(0))+"/"+verb, body, &b); err != nil {
+		return err
+	}
+	fmt.Printf("%v  %v  %v\n", b["id"], b["slug"], b["status"])
+	return nil
+}
+
+func cmdYAML(ctx context.Context, c *client.Client, args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: box yaml <box>")
+	}
+	var res map[string]any
+	if err := c.JSON(ctx, "GET", "/boxes/"+url.PathEscape(args[0])+"/yaml", nil, &res); err != nil {
+		return err
+	}
+	fmt.Print(res["yaml"])
 	return nil
 }
 

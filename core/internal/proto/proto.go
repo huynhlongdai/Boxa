@@ -41,6 +41,7 @@ const (
 	MPtyClose  = "pty.close"
 	MList      = "box.list"
 	MHTTP      = "http.do"
+	MRestore   = "box.restore" // v1.1: restore a snapshot into the same box, or fork it into a new one
 )
 
 type Frame struct {
@@ -216,4 +217,17 @@ type HTTPResult struct {
 	Status  int                 `json:"status"`
 	Headers map[string][]string `json:"headers"`
 	Body    []byte              `json:"body"`
+}
+
+// RestoreParams restores snapshot SnapshotID (taken from SourceBoxID) into
+// BoxID. Create=true forks: BoxID does not exist yet and is created from the
+// snapshot using Box (spec/agents_md/env); otherwise BoxID's /work and
+// /memory are replaced in place.
+type RestoreParams struct {
+	BoxID       string       `json:"box_id"`
+	SourceBoxID string       `json:"source_box_id"`
+	SnapshotID  string       `json:"snapshot_id"`
+	Location    string       `json:"location"`
+	Create      bool         `json:"create"`
+	Box         CreateParams `json:"box"`
 }

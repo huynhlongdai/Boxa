@@ -28,6 +28,8 @@ type Driver interface {
 	ChangedFiles(ctx context.Context, id string, since time.Time) ([]string, error)
 	Processes(ctx context.Context, id string) ([]proto.Proc, []int, error)
 	Snapshot(ctx context.Context, id, snapID string) (location string, sizeBytes int64, err error)
+	// Restore restores a snapshot in place or forks it into a new box (p.Create).
+	Restore(ctx context.Context, p proto.RestoreParams) error
 	// ShellCmd returns an interactive shell command for PTY sessions.
 	ShellCmd(ctx context.Context, id string) (*exec.Cmd, error)
 	// Addr returns host:port reachable from the host for a port inside the box.

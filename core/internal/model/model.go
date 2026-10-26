@@ -75,6 +75,8 @@ type Box struct {
 	Setup        []string   `json:"setup,omitempty"`
 	TerminatedAt *time.Time `json:"terminated_at,omitempty"`
 	Billing      string     `json:"billing,omitempty"`
+	Locale       string     `json:"locale,omitempty"`      // agent-facing language (AGENTS.md)
+	ForkedFrom   string     `json:"forked_from,omitempty"` // snapshot id this box was forked from
 }
 
 // Active reports whether the box still occupies host capacity.
@@ -105,6 +107,7 @@ type Agent struct {
 	LastCallAt     *time.Time `json:"last_call_at"`
 	MemoryMB       int        `json:"memory_mb"`
 	CreatedAt      time.Time  `json:"created_at"`
+	Locale         string     `json:"locale,omitempty"` // vi|en|zh|ja; AGENTS.md + snippet language
 }
 
 type APIKey struct {
@@ -160,6 +163,8 @@ type Event struct {
 	Type    string    `json:"type"`
 	Message string    `json:"message"`
 	CostUSD *float64  `json:"cost_usd"`
+	// Data carries structured details (e.g. box.exec: exit_code, tokens_saved, log_id).
+	Data map[string]any `json:"data,omitempty"`
 }
 
 type Host struct {
@@ -292,6 +297,9 @@ type Settings struct {
 	Features struct {
 		GPU bool `json:"gpu"`
 	} `json:"features"`
+	// Locale is the operator default language (vi|en|zh|ja): approvals, AGENTS.md
+	// fallback. API responses follow each request's Accept-Language.
+	Locale string `json:"locale"`
 }
 
 func DefaultSettings() Settings {
@@ -303,6 +311,7 @@ func DefaultSettings() Settings {
 	s.Reaper.KeepSnapshots = 4
 	s.BaseDomain = "sslip.io"
 	s.URLTokenProtect = true
+	s.Locale = "vi"
 	return s
 }
 

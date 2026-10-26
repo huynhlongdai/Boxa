@@ -1,5 +1,6 @@
 // Package mcp implements the Boxa MCP server (Model Context Protocol,
-// JSON-RPC 2.0) with the 12 box_* tools. The same server runs over
+// JSON-RPC 2.0): the box_* tools (tools.go), resources (box files, logs,
+// AGENTS.md via boxa:// URIs) and prompts (resources.go). The same server runs over
 // Streamable HTTP (core /mcp, JSON responses) and stdio (`box mcp`).
 // Tools are thin wrappers that call the REST API through a Caller, so
 // auth, scopes and behaviour are identical to REST.
@@ -10,6 +11,7 @@
 package mcp
 
 import (
+	"boxa/core/internal/i18n"
 	"bufio"
 	"context"
 	"encoding/json"
@@ -53,77 +55,6 @@ type rpcResp struct {
 	ID      json.RawMessage `json:"id"`
 	Result  any             `json:"result,omitempty"`
 	Error   *rpcErr         `json:"error,omitempty"`
-}
-
-// Tool definition.
-type Tool struct {
-	Name        string         `json:"name"`
-	Title       string         `json:"title,omitempty"`
-	Description string         `json:"description"`
-	InputSchema map[string]any `json:"inputSchema"`
-}
-
-func obj(props map[string]any, required ...string) map[string]any {
-	s := map[string]any{"type": "object", "properties": props}
-	if len(required) > 0 {
-		s["required"] = required
-	}
-	return s
-}
-
-func str(desc string) map[string]any  { return map[string]any{"type": "string", "description": desc} }
-func num(desc string) map[string]any  { return map[string]any{"type": "number", "description": desc} }
-func intg(desc string) map[string]any { return map[string]any{"type": "integer", "description": desc} }
-func boolean(desc string) map[string]any {
-	return map[string]any{"type": "boolean", "description": desc}
-}
-func arr(desc, item string) map[string]any {
-	return map[string]any{"type": "array", "description": desc, "items": map[string]any{"type": item}}
-}
-
-var boxID = str("Box id (box_…) or slug")
-
-// Tools is the fixed tool list (contract: 12 tools).
-var Tools = []Tool{
-	{Name: "box_up", Title: "Create a box", Description: "Create (or reuse via idempotency_key) a Linux sandbox box and wait until it is running. Returns the Box object with id. Use lifecycle=task for one-off jobs (auto-terminated at TTL), session for interactive work (sleeps when idle, wakes on next call), service for long-running servers.",
-		InputSchema: obj(map[string]any{
-			"template":        str("base | python | node | python-browser | custom template name"),
-			"lifecycle":       map[string]any{"type": "string", "enum": []string{"task", "session", "service"}},
-			"cpu":             num("vCPUs (default 1)"),
-			"ram_mb":          intg("RAM in MB (default 1024)"),
-			"disk_gb":         intg("Disk in GB (default 10)"),
-			"ttl_seconds":     intg("Task TTL in seconds"),
-			"idle_minutes":    intg("Session idle minutes before sleep"),
-			"budget_usd":      num("Max spend for this box"),
-			"slug":            str("Readable name"),
-			"ports":           arr("Ports to expose over HTTPS", "integer"),
-			"secrets":         arr("Secret names to inject as env vars", "string"),
-			"setup":           arr("Shell commands run once at creation", "string"),
-			"yaml":            str("Full box.yaml instead of the fields above"),
-			"idempotency_key": str("Same key returns the same box instead of creating a new one"),
-		})},
-	{Name: "box_exec", Title: "Run a command", Description: "Run a bash command in the box (cwd /work). Returns exit_code, the last tail_lines (default 60) of stdout/stderr, truncated flag, log_id for full output, files_changed. Set async=true for long commands and poll with box_job. Sleeping boxes are woken automatically.",
-		InputSchema: obj(map[string]any{"box_id": boxID, "command": str("bash command"), "cwd": str("working directory (default /work)"), "timeout_s": intg("timeout in seconds (default 300)"), "async": boolean("run in background, returns job_id"), "tail_lines": intg("lines of output to return")}, "box_id", "command")},
-	{Name: "box_job", Title: "Get job status", Description: "Get an async exec job (status queued|running|done|failed and its ExecResult). wait_s blocks up to that many seconds for completion.",
-		InputSchema: obj(map[string]any{"job_id": str("job id"), "wait_s": intg("seconds to wait for completion (max 60)")}, "job_id")},
-	{Name: "box_read", Title: "Read file or directory", Description: "Read a file (optionally a line range from..to, 1-based) or list a directory in the box.",
-		InputSchema: obj(map[string]any{"box_id": boxID, "path": str("path, e.g. /work/main.py"), "from": intg("first line"), "to": intg("last line")}, "box_id", "path")},
-	{Name: "box_write", Title: "Write file", Description: "Create or overwrite a text file in the box (parent dirs are created).",
-		InputSchema: obj(map[string]any{"box_id": boxID, "path": str("path"), "content": str("full file content")}, "box_id", "path", "content")},
-	{Name: "box_grep", Title: "Search files", Description: "Regex search (extended regexp) under a path in the box; returns path, line, text (max 500 matches).",
-		InputSchema: obj(map[string]any{"box_id": boxID, "pattern": str("regular expression"), "path": str("directory or file (default /work)")}, "box_id", "pattern")},
-	{Name: "box_observe", Title: "Observe changes", Description: "What changed since your last observe call: files changed, running processes, listening ports.",
-		InputSchema: obj(map[string]any{"box_id": boxID}, "box_id")},
-	{Name: "box_snapshot", Title: "Snapshot box", Description: "Snapshot the box filesystem (keeps the latest few).",
-		InputSchema: obj(map[string]any{"box_id": boxID}, "box_id")},
-	{Name: "box_sleep", Title: "Sleep or wake box", Description: "Put a box to sleep to stop compute billing (files are kept). Pass wake=true to wake it instead (exec also auto-wakes).",
-		InputSchema: obj(map[string]any{"box_id": boxID, "wake": boolean("wake instead of sleep")}, "box_id")},
-	{Name: "box_down", Title: "Terminate box", Description: "Terminate and delete the box. Its files are gone unless snapshotted.",
-		InputSchema: obj(map[string]any{"box_id": boxID}, "box_id")},
-	{Name: "box_list", Title: "List boxes", Description: "List your boxes (not terminated). Optional filters.",
-		InputSchema: obj(map[string]any{"status": str("filter by status"), "lifecycle": str("filter by lifecycle")})},
-	{Name: "box_cost", Title: "Cost", Description: "Spend summary: with box_id returns that box's spent_usd and cost_per_hour; without it returns today/month spend and budgets.",
-		InputSchema: obj(map[string]any{"box_id": boxID})},
 }
 
 type args map[string]any
@@ -178,44 +109,68 @@ func callTool(ctx context.Context, c Caller, name string, a args) (int, []byte, 
 	}
 	switch name {
 	case "box_up":
-		body := map[string]any{}
-		if a.s("yaml") != "" {
-			body["yaml"] = a.s("yaml")
-		} else {
-			for _, k := range []string{"template", "lifecycle", "slug"} {
-				if a.s(k) != "" {
-					body[k] = a.s(k)
-				}
-			}
-			spec := map[string]any{}
-			if a.has("cpu") {
-				spec["cpu"] = a.num("cpu")
-			}
-			if a.has("ram_mb") {
-				spec["ram_mb"] = int(a.num("ram_mb"))
-			}
-			if a.has("disk_gb") {
-				spec["disk_gb"] = int(a.num("disk_gb"))
-			}
-			body["spec"] = spec
-			for _, k := range []string{"ttl_seconds", "idle_minutes"} {
-				if a.has(k) {
-					body[k] = int(a.num(k))
-				}
-			}
-			if a.has("budget_usd") {
-				body["budget_usd"] = a.num("budget_usd")
-			}
-			for _, k := range []string{"ports", "secrets", "setup"} {
-				if a.has(k) {
-					body[k] = a[k]
-				}
-			}
-		}
+		body := specBody(a)
 		if k := a.s("idempotency_key"); k != "" {
 			body["_idempotency_key"] = k
 		}
 		return c.Do(ctx, "POST", "/boxes", body)
+	case "box_quote":
+		return c.Do(ctx, "POST", "/quote", specBody(a))
+	case "box_exec_batch":
+		if err := need("box_id"); err != nil {
+			return 0, nil, err
+		}
+		cmds, _ := a["commands"].([]any)
+		if len(cmds) == 0 {
+			return 0, nil, fmt.Errorf("missing required argument %q", "commands")
+		}
+		body := map[string]any{"commands": cmds}
+		if a.has("stop_on_error") {
+			body["stop_on_error"] = a.b("stop_on_error")
+		}
+		if a.s("cwd") != "" {
+			body["cwd"] = a.s("cwd")
+		}
+		for _, k := range []string{"timeout_s", "tail_lines"} {
+			if a.has(k) {
+				body[k] = int(a.num(k))
+			}
+		}
+		return c.Do(ctx, "POST", "/boxes/"+esc(a.s("box_id"))+"/exec-batch", body)
+	case "box_fork", "box_restore":
+		if err := need("box_id"); err != nil {
+			return 0, nil, err
+		}
+		body := map[string]any{}
+		if a.s("snapshot_id") != "" {
+			body["snapshot_id"] = a.s("snapshot_id")
+		}
+		if a.s("slug") != "" && name == "box_fork" {
+			body["slug"] = a.s("slug")
+		}
+		verb := strings.TrimPrefix(name, "box_")
+		return c.Do(ctx, "POST", "/boxes/"+esc(a.s("box_id"))+"/"+verb, body)
+	case "box_logs":
+		return toolLogs(ctx, c, a)
+	case "box_templates":
+		st, b, err := c.Do(ctx, "GET", "/templates", nil)
+		if err != nil || st >= 300 {
+			return st, b, err
+		}
+		var l struct {
+			Items []map[string]any `json:"items"`
+		}
+		json.Unmarshal(b, &l)
+		out := []map[string]any{}
+		for _, t := range l.Items {
+			m := map[string]any{"name": t["name"], "description": t["description"], "builtin": t["builtin"] == true}
+			if a.b("include_yaml") {
+				m["yaml"] = t["yaml"]
+			}
+			out = append(out, m)
+		}
+		js, _ := json.Marshal(map[string]any{"items": out})
+		return st, js, nil
 	case "box_exec":
 		if err := need("box_id", "command"); err != nil {
 			return 0, nil, err
@@ -319,6 +274,108 @@ func callTool(ctx context.Context, c Caller, name string, a args) (int, []byte, 
 	return 0, nil, fmt.Errorf("unknown tool %q", name)
 }
 
+func specBody(a args) map[string]any {
+	body := map[string]any{}
+	if a.s("yaml") != "" {
+		body["yaml"] = a.s("yaml")
+		return body
+	}
+	for _, k := range []string{"template", "lifecycle", "slug", "region"} {
+		if a.s(k) != "" {
+			body[k] = a.s(k)
+		}
+	}
+	spec := map[string]any{}
+	if a.has("cpu") {
+		spec["cpu"] = a.num("cpu")
+	}
+	if a.has("ram_mb") {
+		spec["ram_mb"] = int(a.num("ram_mb"))
+	}
+	if a.has("disk_gb") {
+		spec["disk_gb"] = int(a.num("disk_gb"))
+	}
+	body["spec"] = spec
+	for _, k := range []string{"ttl_seconds", "idle_minutes"} {
+		if a.has(k) {
+			body[k] = int(a.num(k))
+		}
+	}
+	if a.has("budget_usd") {
+		body["budget_usd"] = a.num("budget_usd")
+	}
+	for _, k := range []string{"ports", "secrets", "setup"} {
+		if a.has(k) {
+			body[k] = a[k]
+		}
+	}
+	return body
+}
+
+// toolLogs: full log by id (tail/grep filtered) or the recent exec list of a box.
+func toolLogs(ctx context.Context, c Caller, a args) (int, []byte, error) {
+	if id := a.s("log_id"); id != "" {
+		st, b, err := c.Do(ctx, "GET", "/logs/"+esc(id), nil)
+		if err != nil || st >= 300 {
+			return st, b, err
+		}
+		lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
+		total := len(lines)
+		if g := a.s("grep"); g != "" {
+			var keep []string
+			for _, l := range lines {
+				if strings.Contains(l, g) {
+					keep = append(keep, l)
+				}
+			}
+			lines = keep
+		}
+		if n := int(a.num("tail_lines")); n > 0 && len(lines) > n {
+			lines = lines[len(lines)-n:]
+		}
+		content := strings.Join(lines, "\n")
+		const max = 200 << 10
+		truncated := false
+		if len(content) > max {
+			content, truncated = content[len(content)-max:], true
+		}
+		out, _ := json.Marshal(map[string]any{"log_id": id, "total_lines": total, "returned_lines": len(lines), "truncated": truncated, "content": content})
+		return st, out, nil
+	}
+	if a.s("box_id") == "" {
+		return 0, nil, fmt.Errorf("pass log_id (from an exec result) or box_id")
+	}
+	st, b, err := c.Do(ctx, "GET", "/boxes/"+esc(a.s("box_id"))+"/events", nil)
+	if err != nil || st >= 300 {
+		return st, b, err
+	}
+	var l struct {
+		Items []struct {
+			TS      string         `json:"ts"`
+			Type    string         `json:"type"`
+			Message string         `json:"message"`
+			Data    map[string]any `json:"data"`
+		} `json:"items"`
+	}
+	json.Unmarshal(b, &l)
+	out := []map[string]any{}
+	for _, e := range l.Items {
+		if e.Type != "box.exec" {
+			continue
+		}
+		m := map[string]any{"ts": e.TS, "message": e.Message}
+		for k, v := range e.Data {
+			m[k] = v
+		}
+		out = append(out, m)
+		if len(out) >= 30 {
+			break
+		}
+	}
+	js, _ := json.Marshal(map[string]any{"box_id": a.s("box_id"), "execs": out})
+	return st, js, nil
+}
+
 // Handle processes one JSON-RPC message; returns nil for notifications.
 func (s *Server) Handle(ctx context.Context, c Caller, raw []byte) *rpcResp {
 	var req rpcReq
@@ -339,9 +396,13 @@ func (s *Server) Handle(ctx context.Context, c Caller, raw []byte) *rpcResp {
 		}
 		resp.Result = map[string]any{
 			"protocolVersion": v,
-			"capabilities":    map[string]any{"tools": map[string]any{"listChanged": false}},
-			"serverInfo":      map[string]any{"name": s.Name, "version": s.Version},
-			"instructions":    "Boxa gives you disposable Linux boxes. Typical flow: box_up → box_write/box_exec → box_down. Output is trimmed to save tokens; read full logs only when needed.",
+			"capabilities": map[string]any{
+				"tools":     map[string]any{"listChanged": false},
+				"resources": map[string]any{"subscribe": false, "listChanged": false},
+				"prompts":   map[string]any{"listChanged": false},
+			},
+			"serverInfo":   map[string]any{"name": s.Name, "title": "Boxa", "version": s.Version},
+			"instructions": i18n.T(i18n.FromContext(ctx), "mcp.instructions"),
 		}
 	case "notifications/initialized", "notifications/cancelled", "initialized":
 		return nil
@@ -349,6 +410,35 @@ func (s *Server) Handle(ctx context.Context, c Caller, raw []byte) *rpcResp {
 		resp.Result = map[string]any{}
 	case "tools/list":
 		resp.Result = map[string]any{"tools": Tools}
+	case "resources/list":
+		resp.Result = listResources(ctx, c)
+	case "resources/templates/list":
+		resp.Result = map[string]any{"resourceTemplates": ResourceTemplates}
+	case "resources/read":
+		var p struct {
+			URI string `json:"uri"`
+		}
+		json.Unmarshal(req.Params, &p)
+		r, err := readResource(ctx, c, p.URI)
+		if err != nil {
+			resp.Error = &rpcErr{Code: -32002, Message: err.Error()}
+			break
+		}
+		resp.Result = r
+	case "prompts/list":
+		resp.Result = map[string]any{"prompts": listPrompts(i18n.FromContext(ctx))}
+	case "prompts/get":
+		var p struct {
+			Name      string            `json:"name"`
+			Arguments map[string]string `json:"arguments"`
+		}
+		json.Unmarshal(req.Params, &p)
+		r, err := getPrompt(i18n.FromContext(ctx), p.Name, p.Arguments)
+		if err != nil {
+			resp.Error = &rpcErr{Code: -32602, Message: err.Error()}
+			break
+		}
+		resp.Result = r
 	case "tools/call":
 		var p struct {
 			Name      string `json:"name"`
@@ -373,7 +463,8 @@ func (s *Server) Handle(ctx context.Context, c Caller, raw []byte) *rpcResp {
 		}
 		st, body, err := callTool(ctx, c, p.Name, p.Arguments)
 		if err != nil {
-			resp.Result = toolResult(fmt.Sprintf(`{"error":{"code":"INVALID","message":%q,"hint":"Check the tool arguments."}}`, err.Error()), true)
+			eb, _ := json.Marshal(map[string]any{"error": map[string]any{"code": "INVALID", "message": err.Error(), "hint": i18n.T(i18n.FromContext(ctx), "mcp.check_args")}})
+			resp.Result = toolResult(string(eb), true)
 			break
 		}
 		resp.Result = toolResult(string(body), st >= 300)
@@ -430,6 +521,7 @@ func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c := h.CallerFor(r)
+	r = r.WithContext(i18n.WithLocale(r.Context(), i18n.FromRequest(r, i18n.Default)))
 	trim := strings.TrimSpace(string(body))
 	w.Header().Set("Content-Type", "application/json")
 	if strings.HasPrefix(trim, "[") { // batch (2025-03-26)

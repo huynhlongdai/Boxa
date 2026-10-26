@@ -184,10 +184,13 @@ func TestEndToEnd(t *testing.T) {
 	e.must(ag, "GET", "/boxes/"+box.ID+"/observe", nil, &obs)
 
 	// Async job.
-	var jr map[string]string
+	var jr struct {
+		JobID string   `json:"job_id"`
+		Next  []string `json:"next"`
+	}
 	e.must(ag, "POST", "/boxes/"+box.ID+"/exec", map[string]any{"command": "sleep 0.3; echo async-ok", "async": true}, &jr)
 	var job model.Job
-	e.must(ag, "GET", "/jobs/"+jr["job_id"]+"?wait=10", nil, &job)
+	e.must(ag, "GET", "/jobs/"+jr.JobID+"?wait=10", nil, &job)
 	if job.Status != "done" || job.Result == nil || job.Result.StdoutTail != "async-ok" {
 		t.Fatalf("job: %+v", job)
 	}
@@ -271,8 +274,8 @@ func TestEndToEnd(t *testing.T) {
 		json.NewDecoder(resp.Body).Decode(&out)
 		resp.Body.Close()
 		if r, ok := out["result"].(map[string]any); ok {
-			if tools, ok := r["tools"].([]any); ok && len(tools) != 12 {
-				t.Fatalf("want 12 tools, got %d", len(tools))
+			if tools, ok := r["tools"].([]any); ok && len(tools) != 18 {
+				t.Fatalf("want 18 tools, got %d", len(tools))
 			}
 		} else {
 			t.Fatalf("mcp result: %+v", out)
@@ -384,11 +387,13 @@ func TestTemplatesAndSettings(t *testing.T) {
 	if len(hs.Items) != 1 || !hs.Items[0].Connected || hs.Items[0].Status != "ready" {
 		t.Fatalf("hosts: %+v", hs.Items)
 	}
-	var snip map[string]string
+	var snip struct {
+		Snippet string `json:"snippet"`
+	}
 	var agents model.List[model.Agent]
 	e.must(e.admin, "GET", "/agents", nil, &agents)
 	e.must(e.admin, "GET", "/agents/"+agents.Items[0].ID+"/snippet?kind=claude-code", nil, &snip)
-	if !strings.Contains(snip["snippet"], "claude mcp add") {
+	if !strings.Contains(snip.Snippet, "claude mcp add") {
 		t.Fatalf("snippet: %+v", snip)
 	}
 }

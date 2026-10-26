@@ -34,6 +34,7 @@ func (m *Manager) CreateBox(ctx context.Context, p *Principal, req boxyaml.Reque
 		}
 		return nil, false, model.EH(model.ErrPolicyDenied, "Boxa is in maintenance; retry later.", "%s", msg)
 	}
+	origYAML := req.YAML
 	if req.YAML != "" {
 		parsed, errs := boxyaml.Parse(req.YAML)
 		if errs != nil {
@@ -55,100 +56,16 @@ func (m *Manager) CreateBox(ctx context.Context, p *Principal, req boxyaml.Reque
 			}
 		}
 	}
-	// Template resolution: built-in or custom (custom YAML provides defaults).
-	if req.Template == "" {
-		req.Template = "base"
-	}
-	baseTemplate := req.Template
-	tpl, err := m.Store.GetTemplate(ctx, req.Template)
+	baseTemplate, tpl, err := m.normalizeRequest(ctx, p, &req, agent)
 	if err != nil {
-		return nil, false, model.EH(model.ErrInvalid, "Use one of GET /templates.", "template %q not found", req.Template)
-	}
-	if !tpl.Builtin {
-		if def, errs := boxyaml.Parse(tpl.YAML); errs == nil {
-			baseTemplate = def.Template
-			if req.Spec.CPU == 0 {
-				req.Spec.CPU = def.Spec.CPU
-			}
-			if req.Spec.RAMMB == 0 {
-				req.Spec.RAMMB = def.Spec.RAMMB
-			}
-			if req.Spec.DiskGB == 0 {
-				req.Spec.DiskGB = def.Spec.DiskGB
-			}
-			if req.Lifecycle == "" {
-				req.Lifecycle = def.Lifecycle
-			}
-			req.Setup = append(append([]string{}, def.Setup...), req.Setup...)
-			if len(req.Secrets) == 0 {
-				req.Secrets = def.Secrets
-			}
-			if len(req.Ports) == 0 {
-				req.Ports = def.Ports
-			}
-		}
-		if !boxyaml.IsBuiltin(baseTemplate) {
-			baseTemplate = "base"
-		}
+		return nil, false, err
 	}
 	tpl.Uses++
 	m.Store.PutTemplate(ctx, tpl)
-	// Defaults + validation.
-	if req.Spec.CPU <= 0 {
-		req.Spec.CPU = 1
-	}
-	if req.Spec.RAMMB <= 0 {
-		req.Spec.RAMMB = 1024
-	}
-	if req.Spec.DiskGB <= 0 {
-		req.Spec.DiskGB = 10
-	}
-	switch req.Lifecycle {
-	case "":
-		req.Lifecycle = model.LifecycleSession
-	case model.LifecycleTask, model.LifecycleSession, model.LifecycleService:
-	default:
-		return nil, false, model.E(model.ErrInvalid, "lifecycle must be task, session or service")
-	}
-	q := m.Quotas(ctx)
-	if req.Spec.CPU > q.MaxCPUPerBox || req.Spec.RAMMB > q.MaxRAMMBPerBox || req.Spec.DiskGB > q.MaxDiskGBPerBox {
-		return nil, false, model.EH(model.ErrPolicyDenied, "Request a smaller spec or ask the operator to raise quotas.",
-			"spec exceeds quota (max cpu %.0f, ram %d MB, disk %d GB)", q.MaxCPUPerBox, q.MaxRAMMBPerBox, q.MaxDiskGBPerBox)
-	}
-	existing, _ := m.Store.ListBoxes(ctx, store.BoxFilter{AgentID: agent.ID})
-	if len(existing) >= q.MaxBoxesPerAgent {
-		return nil, false, model.EH(model.ErrPolicyDenied, "Terminate unused boxes (box down) first.", "agent already has %d boxes (quota %d)", len(existing), q.MaxBoxesPerAgent)
-	}
-	for _, port := range req.Ports {
-		if port < 1 || port > 65535 {
-			return nil, false, model.E(model.ErrInvalid, "invalid port %d", port)
-		}
-	}
-	if len(req.Secrets) > 0 {
-		if err := p.Require(model.ScopeSecretUse); err != nil {
-			return nil, false, err
-		}
-		for _, name := range req.Secrets {
-			s, err := m.Store.GetSecret(ctx, name)
-			if err != nil {
-				return nil, false, model.EH(model.ErrInvalid, "Create it first with POST /secrets.", "secret %q not found", name)
-			}
-			if len(s.Agents) > 0 && !contains(s.Agents, agent.ID) {
-				return nil, false, model.E(model.ErrPolicyDenied, "secret %q is not shared with this agent", name)
-			}
-		}
-	}
 	if err := m.checkBudget(ctx, agent); err != nil {
 		return nil, false, err
 	}
-	idle := req.IdleMinutes
-	if idle <= 0 {
-		idle = settings.Reaper.IdleMinutes
-	}
-	ttl := req.TTLSeconds
-	if ttl <= 0 && req.Lifecycle == model.LifecycleTask {
-		ttl = settings.Reaper.DefaultTTLSeconds
-	}
+	idle, ttl := req.IdleMinutes, req.TTLSeconds
 	slug, err := m.uniqueSlug(ctx, req.Slug, baseTemplate)
 	if err != nil {
 		return nil, false, err
@@ -159,10 +76,12 @@ func (m *Manager) CreateBox(ctx context.Context, p *Principal, req boxyaml.Reque
 		Lifecycle: req.Lifecycle, Template: req.Template, Spec: model.Spec{CPU: req.Spec.CPU, RAMMB: req.Spec.RAMMB, DiskGB: req.Spec.DiskGB},
 		Region: req.Region, TTLSeconds: ttl, IdleMinutes: idle, BudgetUSD: req.BudgetUSD,
 		Ports: nonNilInts(req.Ports), Secrets: nonNilStrs(req.Secrets), Setup: req.Setup, CreatedAt: now, LastActiveAt: now,
+		Locale: m.agentLocale(ctx, agent),
 	}
 	if err := m.Store.PutBox(ctx, b); err != nil {
 		return nil, false, err
 	}
+	m.saveBoxYAML(ctx, b, origYAML)
 	if idemKey != "" {
 		if err := m.Store.PutIdempotent(ctx, agent.ID+"|"+idemKey, b.ID); err != nil {
 			// lost a race with an identical request: return the winner
@@ -194,6 +113,103 @@ func (m *Manager) CreateBox(ctx context.Context, p *Principal, req boxyaml.Reque
 		return nil, false, err
 	}
 	return m.decorateBox(ctx, nb), true, nil
+}
+
+// normalizeRequest resolves template defaults, applies spec/lifecycle/TTL
+// defaults and checks quotas, secrets and ports. No side effects (used by
+// CreateBox and Quote).
+func (m *Manager) normalizeRequest(ctx context.Context, p *Principal, reqp *boxyaml.Request, agent *model.Agent) (string, *model.Template, error) {
+	req := *reqp
+	settings := m.Settings(ctx)
+	// Template resolution: built-in or custom (custom YAML provides defaults).
+	if req.Template == "" {
+		req.Template = "base"
+	}
+	baseTemplate := req.Template
+	tpl, err := m.Store.GetTemplate(ctx, req.Template)
+	if err != nil {
+		return "", nil, model.EH(model.ErrInvalid, "Use one of GET /templates.", "template %q not found", req.Template)
+	}
+	if !tpl.Builtin {
+		if def, errs := boxyaml.Parse(tpl.YAML); errs == nil {
+			baseTemplate = def.Template
+			if req.Spec.CPU == 0 {
+				req.Spec.CPU = def.Spec.CPU
+			}
+			if req.Spec.RAMMB == 0 {
+				req.Spec.RAMMB = def.Spec.RAMMB
+			}
+			if req.Spec.DiskGB == 0 {
+				req.Spec.DiskGB = def.Spec.DiskGB
+			}
+			if req.Lifecycle == "" {
+				req.Lifecycle = def.Lifecycle
+			}
+			req.Setup = append(append([]string{}, def.Setup...), req.Setup...)
+			if len(req.Secrets) == 0 {
+				req.Secrets = def.Secrets
+			}
+			if len(req.Ports) == 0 {
+				req.Ports = def.Ports
+			}
+		}
+		if !boxyaml.IsBuiltin(baseTemplate) {
+			baseTemplate = "base"
+		}
+	}
+	// Defaults + validation.
+	if req.Spec.CPU <= 0 {
+		req.Spec.CPU = 1
+	}
+	if req.Spec.RAMMB <= 0 {
+		req.Spec.RAMMB = 1024
+	}
+	if req.Spec.DiskGB <= 0 {
+		req.Spec.DiskGB = 10
+	}
+	switch req.Lifecycle {
+	case "":
+		req.Lifecycle = model.LifecycleSession
+	case model.LifecycleTask, model.LifecycleSession, model.LifecycleService:
+	default:
+		return "", nil, model.E(model.ErrInvalid, "lifecycle must be task, session or service")
+	}
+	q := m.Quotas(ctx)
+	if req.Spec.CPU > q.MaxCPUPerBox || req.Spec.RAMMB > q.MaxRAMMBPerBox || req.Spec.DiskGB > q.MaxDiskGBPerBox {
+		return "", nil, model.EH(model.ErrPolicyDenied, "Request a smaller spec or ask the operator to raise quotas.",
+			"spec exceeds quota (max cpu %.0f, ram %d MB, disk %d GB)", q.MaxCPUPerBox, q.MaxRAMMBPerBox, q.MaxDiskGBPerBox)
+	}
+	existing, _ := m.Store.ListBoxes(ctx, store.BoxFilter{AgentID: agent.ID})
+	if len(existing) >= q.MaxBoxesPerAgent {
+		return "", nil, model.EH(model.ErrPolicyDenied, "Terminate unused boxes (box down) first.", "agent already has %d boxes (quota %d)", len(existing), q.MaxBoxesPerAgent)
+	}
+	for _, port := range req.Ports {
+		if port < 1 || port > 65535 {
+			return "", nil, model.E(model.ErrInvalid, "invalid port %d", port)
+		}
+	}
+	if len(req.Secrets) > 0 {
+		if err := p.Require(model.ScopeSecretUse); err != nil {
+			return "", nil, err
+		}
+		for _, name := range req.Secrets {
+			s, err := m.Store.GetSecret(ctx, name)
+			if err != nil {
+				return "", nil, model.EH(model.ErrInvalid, "Create it first with POST /secrets.", "secret %q not found", name)
+			}
+			if len(s.Agents) > 0 && !contains(s.Agents, agent.ID) {
+				return "", nil, model.E(model.ErrPolicyDenied, "secret %q is not shared with this agent", name)
+			}
+		}
+	}
+	if req.IdleMinutes <= 0 {
+		req.IdleMinutes = settings.Reaper.IdleMinutes
+	}
+	if req.TTLSeconds <= 0 && req.Lifecycle == model.LifecycleTask {
+		req.TTLSeconds = settings.Reaper.DefaultTTLSeconds
+	}
+	*reqp = req
+	return baseTemplate, tpl, nil
 }
 
 func nonNilInts(v []int) []int {
@@ -365,26 +381,6 @@ func (m *Manager) boxURL(ctx context.Context, b *model.Box, h *model.Host) strin
 		u += "?boxa_token=" + m.URLToken(b.ID)
 	}
 	return u
-}
-
-func (m *Manager) agentsMD(ctx context.Context, b *model.Box, a *model.Agent) string {
-	budget := "none"
-	if b.BudgetUSD > 0 {
-		budget = fmt.Sprintf("$%.2f for this box", b.BudgetUSD)
-	}
-	if a.BudgetDayUSD > 0 {
-		budget += fmt.Sprintf(", $%.2f/day for agent %s", a.BudgetDayUSD, a.Name)
-	}
-	return fmt.Sprintf(`# AGENTS.md — Boxa box %s
-
-- Agent: %s (%s)
-- Box: %s, lifecycle=%s, template=%s, spec cpu=%.1f ram=%dMB disk=%dGB
-- Work dir: /work (persists across sleep/wake). Agent memory: /memory (shared by all boxes of this agent).
-- Budget: %s. Idle %d min → sleep (session). TTL %ds (task).
-- Secrets are injected as environment variables on each exec: %s
-- Tools: box_exec, box_read, box_write, box_grep, box_observe, box_snapshot, box_sleep, box_down (MCP) or the `+"`box`"+` CLI.
-- Output of exec is trimmed to the last 60 lines; full logs via log_id.
-`, b.Slug, a.Name, a.Kind, b.ID, b.Lifecycle, b.Template, b.Spec.CPU, b.Spec.RAMMB, b.Spec.DiskGB, budget, b.IdleMinutes, b.TTLSeconds, strings.Join(b.Secrets, ", "))
 }
 
 // setStatus persists a transition, emits an event and publishes box.updated.
@@ -606,7 +602,14 @@ func (m *Manager) execSync(ctx context.Context, actor string, b *model.Box, in E
 	if out.TimedOut {
 		msg = "TIMEOUT " + msg
 	}
-	m.Emit(context.Background(), actor, b.ID, b.AgentID, "box.exec", msg, nil)
+	data := map[string]any{"exit_code": out.ExitCode, "duration_ms": out.DurationMS, "tokens_saved": out.TokensSaved, "truncated": out.Truncated, "log_id": nil}
+	if res.LogID != nil {
+		data["log_id"] = *res.LogID
+	}
+	if out.TimedOut {
+		data["timed_out"] = true
+	}
+	m.EmitData(context.Background(), actor, b.ID, b.AgentID, "box.exec", msg, nil, data)
 	return res, nil
 }
 

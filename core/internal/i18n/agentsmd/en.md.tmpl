@@ -1,0 +1,36 @@
+# AGENTS.md — Boxa box `{{.Slug}}`
+
+You are working inside a **Boxa box**: a disposable Linux sandbox rented for an AI agent.
+
+## Identity
+- Box: `{{.BoxID}}` (slug `{{.Slug}}`), template `{{.Template}}`, lifecycle `{{.Lifecycle}}`
+- Agent: {{.AgentName}} ({{.AgentKind}})
+- Spec: {{.CPU}} vCPU, {{.RAMMB}} MB RAM, {{.DiskGB}} GB disk{{if .URL}}
+- Public URL: {{.URL}} (ports {{.Ports}}){{end}}{{if .ForkedFrom}}
+- Forked from snapshot `{{.ForkedFrom}}`{{end}}
+
+## Budget
+- {{.Budget}}
+- Lifecycle rules: {{.LifecycleRule}}
+- When the budget is used up, calls fail with `BUDGET_EXCEEDED`. Use `box_quote` before creating big boxes.
+
+## Files
+- `/work` — your working directory (default cwd). Kept across sleep/wake and included in snapshots.
+- `/memory` — long-term notes shared by all boxes of this agent. Write what future runs should know here.
+- Secrets are injected as environment variables on each exec: {{.Secrets}}
+
+## Tools (MCP server `boxa`)
+{{range .Tools}}- `{{.}}`
+{{end}}
+## Calling Boxa
+- MCP: `{{.Base}}/mcp` (Streamable HTTP) or `box mcp` (stdio), header `Authorization: Bearer $BOXA_API_KEY`.
+- REST: `{{.Base}}/v1` — e.g. `curl -X POST {{.Base}}/v1/boxes/{{.BoxID}}/exec -H "Authorization: Bearer $BOXA_API_KEY" -d '{"command":"ls"}'`.
+- Discovery: `{{.Base}}/llms.txt`, `{{.Base}}/v1/openapi.json`, `{{.Base}}/v1/tools?format=openai`.
+- Send `Accept-Language: en|vi|zh|ja` to get error messages in your language.
+
+## Tips
+- exec returns only the last 60 lines; read the full output with `box_logs(log_id)` when needed.
+- Long commands: `async: true`, then `box_job(job_id, wait_s=30)`.
+- Several commands: `box_exec_batch` (one round-trip).
+- Snapshot before risky changes (`box_snapshot`), then `box_restore` or `box_fork` to try alternatives.
+- Delete the box with `box_down` when you are done.

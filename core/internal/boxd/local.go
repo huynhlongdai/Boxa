@@ -530,3 +530,93 @@ func (d *LocalDriver) Addr(ctx context.Context, id string, port int) (string, er
 	}
 	return fmt.Sprintf("127.0.0.1:%d", port), nil
 }
+
+// Restore untars a snapshot into the box dir. In place: /work and /memory are
+// replaced (the box keeps its own metadata). Fork (p.Create): a new box dir is
+// created from the snapshot with the new box's metadata and AGENTS.md.
+func (d *LocalDriver) Restore(ctx context.Context, p proto.RestoreParams) error {
+	src := strings.TrimPrefix(p.Location, "local://")
+	if src == "" || strings.Contains(p.Location, "://") && !strings.HasPrefix(p.Location, "local://") {
+		src = filepath.Join(d.Root, "snapshots", filepath.Base(p.SnapshotID)+".tar.gz")
+	}
+	f, err := os.Open(src)
+	if err != nil {
+		return boxErr("NOT_FOUND", "snapshot file not on this host: "+p.SnapshotID)
+	}
+	defer f.Close()
+	dir := d.dir(p.BoxID)
+	if p.Create {
+		if _, err := os.Stat(dir); err == nil {
+			return boxErr("INVALID", "box already exists: "+p.BoxID)
+		}
+		for _, sub := range []string{"work", "memory"} {
+			if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+				return err
+			}
+		}
+		m := &localMeta{ID: p.BoxID, CPU: p.Box.Spec.CPU, RAMMB: p.Box.Spec.RAMMB, DiskGB: p.Box.Spec.DiskGB, Env: p.Box.Env}
+		if err := d.saveMeta(m); err != nil {
+			return err
+		}
+	} else {
+		if _, err := d.meta(p.BoxID); err != nil {
+			return err
+		}
+		d.killBoxProcs(p.BoxID)
+		for _, sub := range []string{"work", "memory"} {
+			os.RemoveAll(filepath.Join(dir, sub))
+			os.MkdirAll(filepath.Join(dir, sub), 0o755)
+		}
+	}
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return boxErr("INVALID", "snapshot is not a tar.gz: "+err.Error())
+	}
+	tr := tar.NewReader(gz)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return boxErr("INVALID", "corrupt snapshot: "+err.Error())
+		}
+		name := filepath.Clean(filepath.FromSlash(hdr.Name))
+		if name == ".boxa.json" || name == "." || strings.HasPrefix(name, "..") || filepath.IsAbs(name) {
+			continue
+		}
+		if !p.Create && name == "AGENTS.md" {
+			continue // in-place restore keeps the box's current AGENTS.md
+		}
+		dst := filepath.Join(dir, name)
+		if !strings.HasPrefix(dst, dir+string(os.PathSeparator)) {
+			continue
+		}
+		switch hdr.Typeflag {
+		case tar.TypeDir:
+			os.MkdirAll(dst, os.FileMode(hdr.Mode)|0o700)
+		case tar.TypeSymlink:
+			if filepath.IsAbs(hdr.Linkname) || strings.Contains(hdr.Linkname, "..") {
+				continue
+			}
+			os.MkdirAll(filepath.Dir(dst), 0o755)
+			os.Remove(dst)
+			os.Symlink(hdr.Linkname, dst)
+		case tar.TypeReg:
+			os.MkdirAll(filepath.Dir(dst), 0o755)
+			out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.FileMode(hdr.Mode)&0o777|0o600)
+			if err != nil {
+				return err
+			}
+			_, err = io.Copy(out, io.LimitReader(tr, 20<<30))
+			out.Close()
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if p.Create && p.Box.AgentsMD != "" {
+		os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte(p.Box.AgentsMD), 0o644)
+	}
+	return nil
+}

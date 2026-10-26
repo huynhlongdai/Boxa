@@ -44,7 +44,7 @@ func (s *Server) terminal(w http.ResponseWriter, r *http.Request) {
 	p := pr(r)
 	id := chi.URLParam(r, "id")
 	if _, err := s.M.GetBox(r.Context(), p, id); err != nil {
-		writeErr(w, err)
+		writeErr(w, r, err)
 		return
 	}
 	cols, _ := strconv.Atoi(r.URL.Query().Get("cols"))

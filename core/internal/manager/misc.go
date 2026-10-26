@@ -155,7 +155,7 @@ func (m *Manager) PutTemplate(ctx context.Context, p *Principal, in TemplateInpu
 	t := &model.Template{Name: in.Name, Description: in.Description, YAML: in.YAML, CreatedAt: time.Now().UTC()}
 	if old != nil {
 		if old.Builtin {
-			return nil, model.EH(model.ErrInvalid, "Create a new template that uses `template: "+old.Name+"` instead.", "built-in templates are read-only")
+			return nil, model.EH(model.ErrInvalid, "Create a new template that extends the built-in one (template: <name>) instead.", "built-in templates are read-only")
 		}
 		t.CreatedAt, t.Uses = old.CreatedAt, old.Uses
 	}
@@ -178,60 +178,6 @@ func (m *Manager) DeleteTemplate(ctx context.Context, p *Principal, name string)
 		return model.E(model.ErrInvalid, "built-in templates cannot be deleted")
 	}
 	return m.Store.DeleteTemplate(ctx, name)
-}
-
-// ---- snippets ----
-
-func (m *Manager) Snippet(ctx context.Context, p *Principal, agentID, kind string) (map[string]string, error) {
-	a, err := m.GetAgent(ctx, p, agentID)
-	if err != nil {
-		return nil, err
-	}
-	if kind == "" {
-		kind = a.Kind
-	}
-	base := m.Cfg.PublicURL
-	if base == "" {
-		base = "http://localhost:8080"
-	}
-	var lang, s string
-	switch kind {
-	case "claude-code":
-		lang = "bash"
-		s = fmt.Sprintf("# Claude Code — remote MCP over HTTP\nclaude mcp add --transport http boxa %s/mcp --header \"Authorization: Bearer $BOXA_API_KEY\"\n\n# or local stdio via the CLI\nBOXA_URL=%s BOXA_API_KEY=$BOXA_API_KEY claude mcp add boxa -- box mcp\n", base, base)
-	case "openai-agents":
-		lang = "python"
-		s = fmt.Sprintf(`import os
-from agents import Agent
-from agents.mcp import MCPServerStreamableHttp
-
-boxa = MCPServerStreamableHttp(params={
-    "url": "%s/mcp",
-    "headers": {"Authorization": f"Bearer {os.environ['BOXA_API_KEY']}"},
-})
-agent = Agent(name="%s", instructions="Use Boxa boxes to run code.", mcp_servers=[boxa])
-`, base, a.Name)
-	case "n8n":
-		lang = "json"
-		s = fmt.Sprintf(`{
-  "node": "MCP Client Tool",
-  "endpoint": "%s/mcp",
-  "transport": "httpStreamable",
-  "authentication": "headerAuth",
-  "header": {"name": "Authorization", "value": "Bearer {{$env.BOXA_API_KEY}}"}
-}`, base)
-	case "hark":
-		lang = "json"
-		s = fmt.Sprintf(`{"mcpServers": {"boxa": {"url": "%s/mcp", "headers": {"Authorization": "Bearer ${BOXA_API_KEY}"}}}}`, base)
-	default:
-		lang = "bash"
-		s = fmt.Sprintf(`export BOXA_URL=%s BOXA_API_KEY=...
-curl -s -X POST $BOXA_URL/v1/boxes -H "Authorization: Bearer $BOXA_API_KEY" -H "Content-Type: application/json" \
-  -d '{"template":"python","lifecycle":"task","spec":{"cpu":1,"ram_mb":1024,"disk_gb":10}}'
-curl -s -X POST $BOXA_URL/v1/boxes/<id>/exec -H "Authorization: Bearer $BOXA_API_KEY" -d '{"command":"echo hi"}'
-`, base)
-	}
-	return map[string]string{"kind": kind, "language": lang, "snippet": s}, nil
 }
 
 // ---- admin ----

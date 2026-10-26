@@ -75,11 +75,12 @@ func allowed(list []string, v string) bool {
 	return false
 }
 
-// Schedule picks a host (or offer) for a box.
-func (m *Manager) Schedule(ctx context.Context, b *model.Box, agent *model.Agent, exclude map[string]bool) (*Placement, error) {
+// candidates evaluates every pool host and burst offer for a box without side
+// effects (shared by Schedule and the dry-run Quote).
+func (m *Manager) candidates(ctx context.Context, b *model.Box, agent *model.Agent, exclude map[string]bool) (cands, offerCands []candidate, rejected []string, err error) {
 	hosts, err := m.Store.ListHosts(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	active, _ := m.Store.ListBoxes(ctx, store.BoxFilter{})
 	type alloc struct {
@@ -102,8 +103,6 @@ func (m *Manager) Schedule(ctx context.Context, b *model.Box, agent *model.Agent
 		a.disk += x.Spec.DiskGB
 	}
 	hours := expectedHours(b)
-	var cands []candidate
-	var rejected []string
 	for _, h := range hosts {
 		if exclude[h.ID] {
 			continue
@@ -160,7 +159,6 @@ func (m *Manager) Schedule(ctx context.Context, b *model.Box, agent *model.Agent
 			label: fmt.Sprintf("%s host %s (%s/%s) load %.0f%%→%.0f%% marginal %s", billing, h.ID, h.Provider, h.Region, before*100, after*100, fmtUSD(cost))})
 	}
 	// Burst offers from the price feed / provider APIs.
-	var offerCands []candidate
 	offers, _ := m.Store.ListOffers(ctx, "")
 	verified := map[string]bool{}
 	for _, o := range offers {
@@ -197,6 +195,16 @@ func (m *Manager) Schedule(ctx context.Context, b *model.Box, agent *model.Agent
 		return cands[i].loadAfter < cands[j].loadAfter
 	})
 	sort.SliceStable(offerCands, func(i, j int) bool { return offerCands[i].cost < offerCands[j].cost })
+	return cands, offerCands, rejected, nil
+}
+
+// Schedule picks a host (or offer) for a box.
+func (m *Manager) Schedule(ctx context.Context, b *model.Box, agent *model.Agent, exclude map[string]bool) (*Placement, error) {
+	cands, offerCands, rejected, err := m.candidates(ctx, b, agent, exclude)
+	if err != nil {
+		return nil, err
+	}
+	hours := expectedHours(b)
 
 	var best *candidate
 	if len(cands) > 0 {
