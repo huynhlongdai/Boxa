@@ -1,0 +1,643 @@
+{
+ "id": "hetzner-cloud",
+ "name": "Hetzner Cloud",
+ "category": "hyperscaler",
+ "isolation": "vm",
+ "features_resolved": {
+  "snapshot_any": true,
+  "snapshot_mem": false,
+  "fork": true,
+  "pause_resume": true,
+  "persistent_disk": true,
+  "whole_disk": null,
+  "persist_scope": null,
+  "volumes": true,
+  "auto_stop_idle": false,
+  "long_sessions": true,
+  "custom_image": true,
+  "image_snapshot": true,
+  "image_oci": false,
+  "vm_isolation": true,
+  "docker_inside": true,
+  "nested_virt": false,
+  "root": true,
+  "systemd": true,
+  "browser": false,
+  "desktop": false,
+  "computer_use": false,
+  "code_interpreter": false,
+  "browser_control": null,
+  "desktop_control": null,
+  "browser_and_desktop": false,
+  "anti_bot": false,
+  "captcha_solving": false,
+  "residential_ip": false,
+  "agent_harnesses": false,
+  "ssh": true,
+  "public_ipv4": true,
+  "inbound_https": false,
+  "custom_domain": true,
+  "raw_tcp_inbound": true,
+  "egress_allowlist": true,
+  "open_internet": true,
+  "static_egress_ip": true,
+  "private_network": true,
+  "self_host": false,
+  "byoc": false,
+  "open_source": false,
+  "soc2": false,
+  "hipaa": false,
+  "sso": false,
+  "gpu": false,
+  "arm64": true,
+  "windows": false,
+  "macos": false,
+  "lang_python": true,
+  "lang_node": false,
+  "lang_go": null,
+  "lang_rust": null,
+  "lang_java": null,
+  "gpu_desktop": false,
+  "credential_injection": false,
+  "egress_http_rules": false,
+  "wake_on_request": false,
+  "live_resize": false,
+  "fork_running": true,
+  "memory_snapshot_fork": false,
+  "webhooks": false,
+  "scheduled_wakeups": null,
+  "audit_logs": null,
+  "eu_data_residency": true,
+  "zero_data_retention": null,
+  "scoped_api_keys": null,
+  "spend_limits": false,
+  "mcp_server": false,
+  "usage_api": false,
+  "snapshot_auto": false,
+  "snapshot_on_demand": true,
+  "harness_api": false,
+  "own_agent_api": false,
+  "fast_boot": null,
+  "strong_isolation": true,
+  "ingress_rules": true,
+  "guest_firewall": true,
+  "secret_proxy": false,
+  "secret_proxy_any": false,
+  "volume_attach": true,
+  "volume_shared": false,
+  "sidecar": null,
+  "fuse": true,
+  "kernel_features": true,
+  "burst": null
+ },
+ "modes": [
+  {
+   "key": "shared-regular-eu",
+   "label": "Shared vCPU, Regular Performance (CPX, AMD), EU (NBG1/HEL1)",
+   "pricing": "sizes",
+   "regions": [
+    "eu"
+   ],
+   "flags": [],
+   "gpu_only": false,
+   "min_billed_seconds": 3600,
+   "start_fee": 0,
+   "sizes": [
+    {
+     "name": "CPX22",
+     "vcpu": 2,
+     "ram_gib": 4,
+     "disk_gib": 80,
+     "hour": 0.0368,
+     "month_cap": 22.99
+    },
+    {
+     "name": "CPX32",
+     "vcpu": 4,
+     "ram_gib": 8,
+     "disk_gib": 160,
+     "hour": 0.0673,
+     "month_cap": 41.99
+    },
+    {
+     "name": "CPX42",
+     "vcpu": 8,
+     "ram_gib": 16,
+     "disk_gib": 320,
+     "hour": 0.1314,
+     "month_cap": 81.99
+    }
+   ]
+  },
+  {
+   "key": "shared-regular-us",
+   "label": "Shared vCPU, Regular Performance (CPX, AMD), US (ASH1/HIL1)",
+   "pricing": "sizes",
+   "regions": [
+    "us"
+   ],
+   "flags": [],
+   "gpu_only": false,
+   "min_billed_seconds": 3600,
+   "start_fee": 0,
+   "sizes": [
+    {
+     "name": "CPX11",
+     "vcpu": 2,
+     "ram_gib": 2,
+     "disk_gib": 40,
+     "hour": 0.0328,
+     "month_cap": 20.49
+    },
+    {
+     "name": "CPX21",
+     "vcpu": 3,
+     "ram_gib": 4,
+     "disk_gib": 80,
+     "hour": 0.0601,
+     "month_cap": 37.49
+    },
+    {
+     "name": "CPX31",
+     "vcpu": 4,
+     "ram_gib": 8,
+     "disk_gib": 160,
+     "hour": 0.1178,
+     "month_cap": 73.49
+    }
+   ]
+  },
+  {
+   "key": "shared-regular-sin",
+   "label": "Shared vCPU, Regular Performance (CPX, AMD), Singapore (SIN1)",
+   "pricing": "sizes",
+   "regions": [
+    "asia"
+   ],
+   "flags": [],
+   "gpu_only": false,
+   "min_billed_seconds": 3600,
+   "start_fee": 0,
+   "sizes": [
+    {
+     "name": "CPX12",
+     "vcpu": 1,
+     "ram_gib": 2,
+     "disk_gib": 40,
+     "hour": 0.0288,
+     "month_cap": 17.99
+    },
+    {
+     "name": "CPX22",
+     "vcpu": 2,
+     "ram_gib": 4,
+     "disk_gib": 80,
+     "hour": 0.0497,
+     "month_cap": 30.99
+    },
+    {
+     "name": "CPX32",
+     "vcpu": 4,
+     "ram_gib": 8,
+     "disk_gib": 160,
+     "hour": 0.0929,
+     "month_cap": 57.99
+    }
+   ]
+  },
+  {
+   "key": "dedicated-eu",
+   "label": "Dedicated vCPU, General Purpose (CCX, AMD), EU (NBG1/HEL1)",
+   "pricing": "sizes",
+   "regions": [
+    "eu"
+   ],
+   "flags": [],
+   "gpu_only": false,
+   "min_billed_seconds": 3600,
+   "start_fee": 0,
+   "sizes": [
+    {
+     "name": "CCX13",
+     "vcpu": 2,
+     "ram_gib": 8,
+     "disk_gib": 80,
+     "hour": 0.0809,
+     "month_cap": 50.49
+    },
+    {
+     "name": "CCX23",
+     "vcpu": 4,
+     "ram_gib": 16,
+     "disk_gib": 160,
+     "hour": 0.1626,
+     "month_cap": 101.49
+    },
+    {
+     "name": "CCX33",
+     "vcpu": 8,
+     "ram_gib": 32,
+     "disk_gib": 240,
+     "hour": 0.2612,
+     "month_cap": 162.99
+    }
+   ]
+  },
+  {
+   "key": "dedicated-us",
+   "label": "Dedicated vCPU, General Purpose (CCX, AMD), US (ASH1/HIL1)",
+   "pricing": "sizes",
+   "regions": [
+    "us"
+   ],
+   "flags": [],
+   "gpu_only": false,
+   "min_billed_seconds": 3600,
+   "start_fee": 0,
+   "sizes": [
+    {
+     "name": "CCX13",
+     "vcpu": 2,
+     "ram_gib": 8,
+     "disk_gib": 80,
+     "hour": 0.0817,
+     "month_cap": 50.99
+    },
+    {
+     "name": "CCX23",
+     "vcpu": 4,
+     "ram_gib": 16,
+     "disk_gib": 160,
+     "hour": 0.165,
+     "month_cap": 102.99
+    },
+    {
+     "name": "CCX33",
+     "vcpu": 8,
+     "ram_gib": 32,
+     "disk_gib": 240,
+     "hour": 0.266,
+     "month_cap": 165.99
+    }
+   ]
+  },
+  {
+   "key": "dedicated-sin",
+   "label": "Dedicated vCPU, General Purpose (CCX, AMD), Singapore (SIN1)",
+   "pricing": "sizes",
+   "regions": [
+    "asia"
+   ],
+   "flags": [],
+   "gpu_only": false,
+   "min_billed_seconds": 3600,
+   "start_fee": 0,
+   "sizes": [
+    {
+     "name": "CCX13",
+     "vcpu": 2,
+     "ram_gib": 8,
+     "disk_gib": 80,
+     "hour": 0.1017,
+     "month_cap": 63.49
+    },
+    {
+     "name": "CCX23",
+     "vcpu": 4,
+     "ram_gib": 16,
+     "disk_gib": 160,
+     "hour": 0.2051,
+     "month_cap": 127.99
+    },
+    {
+     "name": "CCX33",
+     "vcpu": 8,
+     "ram_gib": 32,
+     "disk_gib": 240,
+     "hour": 0.3301,
+     "month_cap": 205.99
+    }
+   ]
+  },
+  {
+   "key": "shared-cost-optimized-eu",
+   "label": "Shared vCPU, Cost-Optimized (CX, Intel/AMD), EU",
+   "pricing": "sizes",
+   "regions": [
+    "eu"
+   ],
+   "flags": [
+    "stock"
+   ],
+   "gpu_only": false,
+   "min_billed_seconds": 3600,
+   "start_fee": 0,
+   "sizes": [
+    {
+     "name": "CX23",
+     "vcpu": 2,
+     "ram_gib": 4,
+     "disk_gib": 40,
+     "hour": 0.0104,
+     "month_cap": 6.49
+    },
+    {
+     "name": "CX33",
+     "vcpu": 4,
+     "ram_gib": 8,
+     "disk_gib": 80,
+     "hour": 0.016,
+     "month_cap": 9.99
+    },
+    {
+     "name": "CX43",
+     "vcpu": 8,
+     "ram_gib": 16,
+     "disk_gib": 160,
+     "hour": 0.0296,
+     "month_cap": 18.49
+    }
+   ]
+  },
+  {
+   "key": "shared-arm-eu",
+   "label": "Shared vCPU, Cost-Optimized ARM (CAX, Ampere Altra), EU - arm64",
+   "pricing": "sizes",
+   "regions": [
+    "eu"
+   ],
+   "flags": [
+    "stock"
+   ],
+   "gpu_only": false,
+   "min_billed_seconds": 3600,
+   "start_fee": 0,
+   "sizes": [
+    {
+     "name": "CAX11",
+     "vcpu": 2,
+     "ram_gib": 4,
+     "disk_gib": 40,
+     "hour": 0.0112,
+     "month_cap": 6.99
+    },
+    {
+     "name": "CAX21",
+     "vcpu": 4,
+     "ram_gib": 8,
+     "disk_gib": 80,
+     "hour": 0.02,
+     "month_cap": 12.49
+    },
+    {
+     "name": "CAX31",
+     "vcpu": 8,
+     "ram_gib": 16,
+     "disk_gib": 160,
+     "hour": 0.04,
+     "month_cap": 24.99
+    }
+   ]
+  },
+  {
+   "key": "legacy-shared-regular-eu",
+   "label": "LEGACY price (servers ordered before 2026-06-15, never rescaled): CPX EU",
+   "pricing": "sizes",
+   "regions": [
+    "eu"
+   ],
+   "flags": [
+    "alt"
+   ],
+   "gpu_only": false,
+   "min_billed_seconds": 3600,
+   "start_fee": 0,
+   "sizes": [
+    {
+     "name": "CPX22",
+     "vcpu": 2,
+     "ram_gib": 4,
+     "disk_gib": 80,
+     "hour": 0.0152,
+     "month_cap": 9.49
+    },
+    {
+     "name": "CPX32",
+     "vcpu": 4,
+     "ram_gib": 8,
+     "disk_gib": 160,
+     "hour": 0.0256,
+     "month_cap": 15.99
+    },
+    {
+     "name": "CPX42",
+     "vcpu": 8,
+     "ram_gib": 16,
+     "disk_gib": 320,
+     "hour": 0.0481,
+     "month_cap": 29.99
+    }
+   ]
+  },
+  {
+   "key": "legacy-dedicated-eu",
+   "label": "LEGACY price (ordered before 2026-06-15, never rescaled): CCX EU",
+   "pricing": "sizes",
+   "regions": [
+    "eu"
+   ],
+   "flags": [
+    "alt"
+   ],
+   "gpu_only": false,
+   "min_billed_seconds": 3600,
+   "start_fee": 0,
+   "sizes": [
+    {
+     "name": "CCX13",
+     "vcpu": 2,
+     "ram_gib": 8,
+     "disk_gib": 80,
+     "hour": 0.0296,
+     "month_cap": 18.49
+    },
+    {
+     "name": "CCX23",
+     "vcpu": 4,
+     "ram_gib": 16,
+     "disk_gib": 160,
+     "hour": 0.0593,
+     "month_cap": 36.99
+    },
+    {
+     "name": "CCX33",
+     "vcpu": 8,
+     "ram_gib": 32,
+     "disk_gib": 240,
+     "hour": 0.1186,
+     "month_cap": 73.99
+    }
+   ]
+  },
+  {
+   "key": "legacy-shared-regular-us",
+   "label": "LEGACY price (ordered before 2026-06-15, never rescaled): CPX US",
+   "pricing": "sizes",
+   "regions": [
+    "us"
+   ],
+   "flags": [
+    "alt"
+   ],
+   "gpu_only": false,
+   "min_billed_seconds": 3600,
+   "start_fee": 0,
+   "sizes": [
+    {
+     "name": "CPX11",
+     "vcpu": 2,
+     "ram_gib": 2,
+     "disk_gib": 40,
+     "hour": 0.0112,
+     "month_cap": 6.99
+    },
+    {
+     "name": "CPX21",
+     "vcpu": 3,
+     "ram_gib": 4,
+     "disk_gib": 80,
+     "hour": 0.0224,
+     "month_cap": 13.99
+    },
+    {
+     "name": "CPX31",
+     "vcpu": 4,
+     "ram_gib": 8,
+     "disk_gib": 160,
+     "hour": 0.04,
+     "month_cap": 24.99
+    }
+   ]
+  },
+  {
+   "key": "legacy-dedicated-us",
+   "label": "LEGACY price (ordered before 2026-06-15, never rescaled): CCX US",
+   "pricing": "sizes",
+   "regions": [
+    "us"
+   ],
+   "flags": [
+    "alt"
+   ],
+   "gpu_only": false,
+   "min_billed_seconds": 3600,
+   "start_fee": 0,
+   "sizes": [
+    {
+     "name": "CCX13",
+     "vcpu": 2,
+     "ram_gib": 8,
+     "disk_gib": 80,
+     "hour": 0.032,
+     "month_cap": 19.99
+    },
+    {
+     "name": "CCX23",
+     "vcpu": 4,
+     "ram_gib": 16,
+     "disk_gib": 160,
+     "hour": 0.0641,
+     "month_cap": 39.99
+    },
+    {
+     "name": "CCX33",
+     "vcpu": 8,
+     "ram_gib": 32,
+     "disk_gib": 240,
+     "hour": 0.1234,
+     "month_cap": 76.99
+    }
+   ]
+  },
+  {
+   "key": "legacy-shared-regular-sin",
+   "label": "LEGACY price (ordered before 2026-06-15, never rescaled): CPX Singapore",
+   "pricing": "sizes",
+   "regions": [
+    "asia"
+   ],
+   "flags": [
+    "alt"
+   ],
+   "gpu_only": false,
+   "min_billed_seconds": 3600,
+   "start_fee": 0,
+   "sizes": [
+    {
+     "name": "CPX12",
+     "vcpu": 1,
+     "ram_gib": 2,
+     "disk_gib": 40,
+     "hour": 0.0152,
+     "month_cap": 9.49
+    },
+    {
+     "name": "CPX22",
+     "vcpu": 2,
+     "ram_gib": 4,
+     "disk_gib": 80,
+     "hour": 0.0296,
+     "month_cap": 18.49
+    },
+    {
+     "name": "CPX32",
+     "vcpu": 4,
+     "ram_gib": 8,
+     "disk_gib": 160,
+     "hour": 0.0617,
+     "month_cap": 38.49
+    }
+   ]
+  },
+  {
+   "key": "legacy-dedicated-sin",
+   "label": "LEGACY price (ordered before 2026-06-15, never rescaled): CCX Singapore",
+   "pricing": "sizes",
+   "regions": [
+    "asia"
+   ],
+   "flags": [
+    "alt"
+   ],
+   "gpu_only": false,
+   "min_billed_seconds": 3600,
+   "start_fee": 0,
+   "sizes": [
+    {
+     "name": "CCX13",
+     "vcpu": 2,
+     "ram_gib": 8,
+     "disk_gib": 80,
+     "hour": 0.0521,
+     "month_cap": 32.49
+    },
+    {
+     "name": "CCX23",
+     "vcpu": 4,
+     "ram_gib": 16,
+     "disk_gib": 160,
+     "hour": 0.0969,
+     "month_cap": 60.49
+    },
+    {
+     "name": "CCX33",
+     "vcpu": 8,
+     "ram_gib": 32,
+     "disk_gib": 240,
+     "hour": 0.1835,
+     "month_cap": 114.49
+    }
+   ]
+  }
+ ]
+}
