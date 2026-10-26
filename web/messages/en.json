@@ -157,7 +157,8 @@
     "invalidKey": "The API key is invalid or lacks admin scope",
     "invalidKeyHint": "Create an admin-scope key with `box keys create --admin`.",
     "coreUnreachable": "Can't reach Boxa Core",
-    "coreUnreachableHint": "Check BOXA_API ({url}) or set BOXA_MOCK=1."
+    "coreUnreachableHint": "Check BOXA_API ({url}) or set BOXA_MOCK=1.",
+    "tryNext": "Try next:"
   },
   "approvals": {
     "type": {
@@ -421,7 +422,11 @@
     "noAlternatives": "No other option fits the policy.",
     "billingPool": "pool · monthly",
     "billingBurst": "burst · hourly",
-    "pickAgentFirst": "Pick an agent to quote against its policy."
+    "pickAgentFirst": "Pick an agent to quote against its policy.",
+    "descNeed": "Describe what the box needs; Boxa ranks the options by price, speed and reliability.",
+    "mode": "How to create",
+    "modeNeed": "By need",
+    "modeManual": "Manual spec"
   },
   "developers": {
     "title": "For agents",
@@ -579,6 +584,14 @@
       "digitalocean": "Personal access token with read and write scope.",
       "hetzner": "Read & Write API token of the Hetzner Cloud project.",
       "vultr": "API key with the manage_servers permission."
+    },
+    "connectWizard": "Connect provider",
+    "tabs": {
+      "providers": "Providers & hosts",
+      "health": "Health",
+      "catalog": "Price catalog",
+      "speed": "Speed",
+      "mesh": "Mesh"
     }
   },
   "kinds": {
@@ -654,7 +667,8 @@
     "onboardingShort": "Setup",
     "more": "More",
     "palette": "Commands",
-    "logout": "Sign out"
+    "logout": "Sign out",
+    "recommend": "Recommend"
   },
   "notFound": {
     "title": "Page not found",
@@ -989,5 +1003,367 @@
     "test": "Test connection",
     "testOk": "Bucket works ({ms} ms)",
     "saved": "Storage settings saved"
+  },
+  "score": {
+    "f": {
+      "cost": "Cost",
+      "health": "Health",
+      "speed": "Speed",
+      "latency": "Latency",
+      "capacity": "Capacity",
+      "reliability": "Reliability"
+    },
+    "help": {
+      "cost": "Expected total cost relative to the cheapest option",
+      "health": "Provider status right now (healthy/degraded/down)",
+      "speed": "Time until the box is running",
+      "latency": "Estimated round trip from the agent to the region",
+      "capacity": "Capacity left after placing the box",
+      "reliability": "Historical create success rate"
+    }
+  },
+  "pm": {
+    "status": {
+      "healthy": "Healthy",
+      "degraded": "Degraded",
+      "down": "Down",
+      "unknown": "Unknown"
+    },
+    "breaker": {
+      "closed": "Breaker closed",
+      "half_open": "Breaker half-open",
+      "open": "Breaker open"
+    },
+    "breakerHelp": {
+      "closed": "Normal: Boxa calls this provider as usual",
+      "half_open": "Trying one call to see whether the provider has recovered",
+      "open": "Skipped after repeated failures; Boxa fails over to the next provider"
+    },
+    "wizard": {
+      "title": "Connect a provider",
+      "desc": "Pick a provider, paste a token; Boxa checks it, then you set priority and cost caps.",
+      "steps": "Steps",
+      "step": {
+        "choose": "Choose",
+        "token": "Token",
+        "review": "Regions & sizes",
+        "prefs": "Priority & caps"
+      },
+      "connected": "Connected",
+      "notConnected": "Not connected",
+      "apiReady": "Rents servers automatically via API",
+      "feedOnly": "Price list only",
+      "tokenFor": "API token for {name}",
+      "paste": "Paste the API token…",
+      "keepToken": "Leave empty to re-check the stored token",
+      "where": {
+        "hetzner": "Hetzner Console → Security → API tokens → Generate (Read & Write).",
+        "vultr": "Vultr → Account → API → Enable API, and allow Core's IP.",
+        "digitalocean": "DigitalOcean → API → Generate New Token (write scope).",
+        "contabo": "Contabo: paste client_id:client_secret:user:password from Customer Control Panel → API.",
+        "netcup": "netcup SCP → Options → API: paste customer_number:api_key:api_password."
+      },
+      "validate": "Check token",
+      "valid": "Token is valid · {ms} ms",
+      "errClass": "error class {cls} · {ms} ms",
+      "regions": "{n, plural, one {# usable region} other {# usable regions}}",
+      "sizes": "{n} cheapest sizes (of {total})",
+      "back": "Back",
+      "next": "Next",
+      "save": "Save & connect",
+      "saved": "{name} connected"
+    },
+    "prefs": {
+      "title": "{name} settings",
+      "desc": "Priority and cost caps used when Boxa rents servers on its own.",
+      "enabled": "Allow use",
+      "enabledHint": "Turn off to make Boxa skip this provider when placing boxes.",
+      "priority": "Priority",
+      "priorityHint": "1 = try first; 0 = default chain order.",
+      "maxHourly": "Max $/hour per server",
+      "maxMonthly": "Max $/month (total)",
+      "maxServers": "Max servers",
+      "zeroNoLimit": "0 = no limit",
+      "regions": "Allowed regions",
+      "regionsHint": "None selected = all regions allowed.",
+      "defaultRegion": "Default region",
+      "auto": "Automatic",
+      "saved": "Provider settings saved"
+    },
+    "health": {
+      "title": "Provider health",
+      "desc": "Core probes each provider API on a schedule and records latency, errors and server provisioning time. Repeated failures open the breaker so Boxa fails over to the next provider.",
+      "samples": "{n, plural, one {# sample} other {# samples}}",
+      "hosts": "{n, plural, one {# host} other {# hosts}}",
+      "priority": "priority {n}",
+      "apiLatency": "API latency p50",
+      "p95": "p95 {v}",
+      "apiSuccess": "API success",
+      "createSuccess": "Create success",
+      "attempts": "{n, plural, one {# attempt} other {# attempts}}",
+      "provision": "Provisioning p50",
+      "lastOk": "Last OK",
+      "rateLimit": "Rate limit",
+      "remaining": "{n} left",
+      "hits": "{n, plural, one {# 429} other {# 429s}}",
+      "breakerInfo": "{n, plural, one {# failure in a row} other {# failures in a row}} · reason: {reason}",
+      "until": "retry {time}",
+      "lastError": "Last error {time}",
+      "score": "Score",
+      "scoreHint": "Score for a reference 1 vCPU / 1 GB box, from the same engine as Recommend.",
+      "noScore": "No score yet: needs a connected token and prices.",
+      "check": "Check now",
+      "checked": "{name} checked",
+      "reset": "Reset breaker",
+      "resetHint": "Close the breaker so Boxa uses this provider again right away",
+      "resetDone": "{name} breaker reset",
+      "prefs": "Settings"
+    },
+    "cat": {
+      "title": "Merged price catalog",
+      "desc": "Community price feed merged with live prices from connected provider APIs. Live API prices win; old sources are flagged.",
+      "generated": "Updated {time} · stale after {stale}",
+      "sourceTitle": "{n} items · fetched {time}",
+      "live": "Live API",
+      "feed": "Price feed",
+      "stale": "stale",
+      "staleNote": "{n, plural, one {# source is stale} other {# sources are stale}}",
+      "allProviders": "All providers",
+      "arch": "Architecture",
+      "anyArch": "Any architecture",
+      "minCpu": "Minimum vCPU",
+      "anyCpu": "Any vCPU",
+      "usableOnly": "Only usable offers",
+      "empty": "Nothing matches the filters",
+      "sku": "SKU",
+      "config": "Config",
+      "hour": "$/hour",
+      "month": "$/month",
+      "source": "Source",
+      "age": "Age",
+      "state": "State",
+      "feedPrice": "Community feed price",
+      "notConnected": "Not connected",
+      "count": "{n} / {total} items"
+    }
+  },
+  "mesh": {
+    "title": "WireGuard mesh (headscale)",
+    "desc": "Hosts and service boxes reach each other over a private WireGuard network; ACLs are generated from agents and box ports.",
+    "disabled": "Mesh is off",
+    "disabledHint": "Set BOXA_MESH_URL and BOXA_MESH_API_KEY for Core to turn it on.",
+    "server": "Server",
+    "online": "Nodes online",
+    "hostsJoined": "Hosts joined",
+    "aclRules": "ACL rules",
+    "node": "Node",
+    "ips": "IP",
+    "tags": "Tags",
+    "lastSeen": "Last seen",
+    "now": "online now",
+    "preview": "Config preview",
+    "createKey": "Create pre-auth key",
+    "keyTitle": "Create a pre-auth key",
+    "keyDesc": "A one-time key that lets a host or box join the mesh with the right tags.",
+    "target": "For",
+    "newHost": "New host (tag:boxa-host)",
+    "hosts": "Hosts",
+    "boxes": "Boxes",
+    "ttl": "Valid for (minutes)",
+    "ttlHint": "1–10080 minutes",
+    "reusable": "Reusable",
+    "create": "Create key",
+    "keyCreated": "Key created, expires {time}",
+    "ephemeral": "Ephemeral",
+    "runOnNode": "Run on the machine that should join:",
+    "keyOnce": "The key is shown only once. Copy it now."
+  },
+  "speed": {
+    "title": "Start-up speed",
+    "binpack": "Bin-packing",
+    "spread": "Spread",
+    "warmReady": "Warm containers",
+    "hitRate": "{pct}% hit · {hits} hits / {misses} misses",
+    "claim": "Warm claim",
+    "cold": "cold start {v}",
+    "speedup": "Speed-up",
+    "speedupHint": "cold start ÷ warm claim",
+    "compact": "Exec output compaction",
+    "compactHint": "fewer tokens sent to agents",
+    "on": "On",
+    "off": "Off",
+    "host": "Host",
+    "cow": "Copy-on-write",
+    "features": "Features",
+    "load": "RAM load",
+    "boxes": "Boxes",
+    "coldEta": "Cold start",
+    "cache": "cache",
+    "cacheEnv": "{n, plural, one {# package cache variable} other {# package cache variables}}",
+    "warmTitle": "Warm pool",
+    "warmDesc": "Keep a few started containers per template so new boxes are claimed in about a second. Min is always kept, max is the cap, TTL is how long a warm container is kept before it is replaced.",
+    "warmEnabled": "Warm pool on",
+    "template": "Template",
+    "profile": "Profile",
+    "spec": "Spec",
+    "min": "Min",
+    "max": "Max",
+    "ttlMin": "TTL (min)",
+    "ready": "Ready",
+    "addPool": "Add pool",
+    "invalid": "Each pool needs a template, 0 ≤ min ≤ max ≤ 10 and a TTL of 5–1440 minutes.",
+    "saved": "Warm pool saved",
+    "warmStats": "Created {created} · expired {expired} · holding {entries}",
+    "lastRefill": "refilled {time}",
+    "rsTitle": "Right-sizing suggestions",
+    "rsTotal": "Could save ~{usd}/month",
+    "rsEmpty": "No box has enough data yet",
+    "rsBoxTitle": "Right-sizing",
+    "box": "Box",
+    "suggestion": "Suggestion",
+    "usage": "p95 usage",
+    "saving": "Saving",
+    "why": "Why",
+    "perMonth": "{usd}/month",
+    "perHour": "{usd}/hour",
+    "window": "{n} samples over {time}",
+    "sug": {
+      "keep": "Keep",
+      "downsize": "Downsize",
+      "upsize": "Upsize",
+      "sleep": "Sleep sooner",
+      "stop": "Stop",
+      "insufficient_data": "Not enough data"
+    }
+  },
+  "rec": {
+    "title": "Recommend a box",
+    "desc": "Describe the job; Boxa compares the warm pool, existing pool hosts, VMs and new servers, then ranks them on six explained factors.",
+    "profile": "Workload",
+    "tip": "Tip:",
+    "agentKind": "Agent kind",
+    "kindNone": "None",
+    "kindHint": "Uses the {profile} defaults",
+    "optimize": "Optimize for",
+    "isolation": "Isolation",
+    "fromProfile": "From profile ({v})",
+    "ramMb": "RAM (MB)",
+    "diskGb": "Disk (GB)",
+    "lifetime": "Lifetime",
+    "more": "More requirements",
+    "durationH": "Duration (hours)",
+    "maxPrice": "Max $/hour",
+    "maxLatency": "Max latency (ms)",
+    "arch": "Architecture",
+    "region": "Region",
+    "regionHint": "Leave empty to let Boxa choose",
+    "location": "Where the agent runs",
+    "locationHint": "Country code (VN), region or lat,lon",
+    "publicUrl": "Needs a public URL",
+    "untrusted": "Runs untrusted code",
+    "submit": "Rank options",
+    "ranking": "Ranking…",
+    "reset": "Reset",
+    "opt": {
+      "balanced": "Balanced",
+      "cost": "Cheapest",
+      "speed": "Fastest",
+      "reliability": "Most reliable",
+      "latency": "Closest"
+    },
+    "life": {
+      "ephemeral": "Throwaway",
+      "persistent": "Long-lived"
+    },
+    "kind": {
+      "warm": "Warm",
+      "pool": "Pool",
+      "vm": "VM",
+      "burst": "New server",
+      "sandbox": "Sandbox",
+      "clone": "Clone"
+    },
+    "best": "Best pick",
+    "needsApproval": "Needs approval",
+    "priceStale": "Stale price",
+    "score": "score",
+    "eta": "Ready in",
+    "perHour": "$/hour",
+    "total": "Expected total",
+    "whyScore": "Why this score",
+    "createWith": "Create with this",
+    "pickAgent": "Pick an agent to create the box.",
+    "created": "Creating {slug}",
+    "effective": "Effective needs ({hours} h expected):",
+    "noOptions": "No matching option.",
+    "rejected": "{n, plural, one {# rejected option} other {# rejected options}}",
+    "agentsCall": "Agents call:",
+    "profiles": {
+      "general": {
+        "name": "General",
+        "desc": "Small all-purpose Linux box for scripts and quick experiments."
+      },
+      "coding-agent": {
+        "name": "Coding agent",
+        "desc": "Repo work (git, builds, tests). Fast start and low latency matter most."
+      },
+      "browser-automation": {
+        "name": "Browser automation",
+        "desc": "Headless Chromium/Playwright scraping and web tasks; needs RAM and outbound access."
+      },
+      "build": {
+        "name": "Build / CI",
+        "desc": "Short CPU-heavy compiles and tests; cheapest compute that finishes soon, then thrown away."
+      },
+      "data": {
+        "name": "Data processing",
+        "desc": "Pandas/DuckDB/ETL jobs: RAM and disk heavy, latency-insensitive."
+      },
+      "long-running-service": {
+        "name": "Long-running service",
+        "desc": "Bots, webhooks and APIs running 24/7 with a public URL; reliability and monthly cost dominate."
+      },
+      "sandbox-untrusted": {
+        "name": "Untrusted code sandbox",
+        "desc": "Run code you do not trust with the strongest isolation, offline by default, thrown away."
+      }
+    }
+  },
+  "estimate": {
+    "title": "Estimate at creation",
+    "toast": "~{eta} s · {hour}/hour · ~{total} total",
+    "warmHit": "Warm pool hit",
+    "score": "score {v}",
+    "eta": "Expected ready",
+    "actual": "Actual",
+    "measuring": "measuring…",
+    "perHour": "Price per hour",
+    "expected": "Total for {hours} h",
+    "profile": "Profile:",
+    "clonedFrom": "Cloned from"
+  },
+  "clone": {
+    "button": "Clone",
+    "hint": "Copy-on-write copy on the same host in seconds",
+    "onlyLive": "Only running or sleeping boxes can be cloned",
+    "title": "Clone {slug}",
+    "desc": "A copy-on-write copy on the same host: files and installed packages are there at once, no snapshot download.",
+    "slug": "Slug for the new box",
+    "confirm": "Create clone",
+    "done": "Cloning into {slug}"
+  },
+  "resume": {
+    "title": "Resume",
+    "woke": "The box was just woken.",
+    "idle": "Idle for {time}",
+    "recent": "Recent commands",
+    "jobs": "{n, plural, one {# running job} other {# running jobs}}",
+    "ports": "ports:",
+    "snapshot": "Latest snapshot:",
+    "files": "Changed files:",
+    "next": "Suggested next steps for the agent",
+    "sleeping": "The box is asleep. Loading the summary wakes it.",
+    "wakeResume": "Wake & show summary",
+    "resumed": "Box woken"
   }
 }

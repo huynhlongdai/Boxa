@@ -157,7 +157,8 @@
     "invalidKey": "API キーが無効か、admin 権限がありません",
     "invalidKeyHint": "`box keys create --admin` で admin スコープのキーを作成してください。",
     "coreUnreachable": "Boxa Core に接続できません",
-    "coreUnreachableHint": "BOXA_API（{url}）を確認するか、BOXA_MOCK=1 を設定してください。"
+    "coreUnreachableHint": "BOXA_API（{url}）を確認するか、BOXA_MOCK=1 を設定してください。",
+    "tryNext": "次に試すこと："
   },
   "approvals": {
     "type": {
@@ -421,7 +422,11 @@
     "noAlternatives": "ポリシーに合う他の候補はありません。",
     "billingPool": "プール・月額",
     "billingBurst": "バースト・時間課金",
-    "pickAgentFirst": "エージェントを選ぶと、そのポリシーで見積もります。"
+    "pickAgentFirst": "エージェントを選ぶと、そのポリシーで見積もります。",
+    "descNeed": "ボックスに必要なものを記述すると、Boxa が価格・速度・信頼性で候補を順位付けします。",
+    "mode": "作成方法",
+    "modeNeed": "要件から",
+    "modeManual": "手動で指定"
   },
   "developers": {
     "title": "エージェント連携",
@@ -579,6 +584,14 @@
       "digitalocean": "読み書き権限のある個人アクセストークン。",
       "hetzner": "Hetzner Cloud プロジェクトの Read & Write API トークン。",
       "vultr": "manage_servers 権限のある API キー。"
+    },
+    "connectWizard": "プロバイダーを接続",
+    "tabs": {
+      "providers": "プロバイダーとホスト",
+      "health": "ヘルス",
+      "catalog": "価格カタログ",
+      "speed": "速度",
+      "mesh": "メッシュ"
     }
   },
   "kinds": {
@@ -654,7 +667,8 @@
     "onboardingShort": "初期設定",
     "more": "その他",
     "palette": "コマンド",
-    "logout": "ログアウト"
+    "logout": "ログアウト",
+    "recommend": "ボックス提案"
   },
   "notFound": {
     "title": "ページが見つかりません",
@@ -989,5 +1003,367 @@
     "test": "接続テスト",
     "testOk": "バケットは正常です（{ms} ms）",
     "saved": "保存先の設定を保存しました"
+  },
+  "score": {
+    "f": {
+      "cost": "コスト",
+      "health": "ヘルス",
+      "speed": "速度",
+      "latency": "レイテンシ",
+      "capacity": "容量",
+      "reliability": "信頼性"
+    },
+    "help": {
+      "cost": "最安候補と比べた想定総コスト",
+      "health": "現在のプロバイダー状態（healthy/degraded/down）",
+      "speed": "ボックスが動き出すまでの時間",
+      "latency": "エージェントからリージョンまでの推定往復時間",
+      "capacity": "配置後に残る容量",
+      "reliability": "これまでの作成成功率"
+    }
+  },
+  "pm": {
+    "status": {
+      "healthy": "正常",
+      "degraded": "低下",
+      "down": "停止",
+      "unknown": "不明"
+    },
+    "breaker": {
+      "closed": "ブレーカー閉",
+      "half_open": "ブレーカー半開",
+      "open": "ブレーカー開"
+    },
+    "breakerHelp": {
+      "closed": "通常どおり：Boxa はこのプロバイダーを普段どおり呼び出します",
+      "half_open": "回復したか確かめるために 1 回だけ試しています",
+      "open": "連続失敗のため一時的にスキップ中。Boxa は次のプロバイダーへ自動で切り替えます"
+    },
+    "wizard": {
+      "title": "プロバイダーを接続",
+      "desc": "プロバイダーを選んでトークンを貼り付けると、Boxa が確認し、優先度とコスト上限を設定できます。",
+      "steps": "手順",
+      "step": {
+        "choose": "選択",
+        "token": "トークン",
+        "review": "リージョンとサイズ",
+        "prefs": "優先度と上限"
+      },
+      "connected": "接続済み",
+      "notConnected": "未接続",
+      "apiReady": "API でサーバーを自動レンタル",
+      "feedOnly": "価格表のみ",
+      "tokenFor": "{name} の API トークン",
+      "paste": "API トークンを貼り付け…",
+      "keepToken": "空のままなら保存済みトークンを再確認",
+      "where": {
+        "hetzner": "Hetzner Console → Security → API tokens → Generate（Read & Write）。",
+        "vultr": "Vultr → Account → API → Enable API で、Core の IP を許可してください。",
+        "digitalocean": "DigitalOcean → API → Generate New Token（write 権限）。",
+        "contabo": "Contabo：Customer Control Panel → API の client_id:client_secret:user:password を貼り付けます。",
+        "netcup": "netcup SCP → Options → API：customer_number:api_key:api_password を貼り付けます。"
+      },
+      "validate": "トークンを確認",
+      "valid": "トークンは有効 · {ms} ms",
+      "errClass": "エラー種別 {cls} · {ms} ms",
+      "regions": "{n, plural, other {利用できるリージョン # 件}}",
+      "sizes": "最安のサイズ {n} 件（全 {total} 件）",
+      "back": "戻る",
+      "next": "次へ",
+      "save": "保存して接続",
+      "saved": "{name} を接続しました"
+    },
+    "prefs": {
+      "title": "{name} の設定",
+      "desc": "Boxa が自動でサーバーを借りるときの優先度とコスト上限です。",
+      "enabled": "利用を許可",
+      "enabledHint": "オフにすると、ボックスの配置でこのプロバイダーを使いません。",
+      "priority": "優先度",
+      "priorityHint": "1 = 最初に試す、0 = 既定の順序。",
+      "maxHourly": "1 台あたりの上限 $/時",
+      "maxMonthly": "月額上限 $（合計）",
+      "maxServers": "最大サーバー数",
+      "zeroNoLimit": "0 = 無制限",
+      "regions": "許可するリージョン",
+      "regionsHint": "未選択 = すべて許可。",
+      "defaultRegion": "既定のリージョン",
+      "auto": "自動",
+      "saved": "プロバイダー設定を保存しました"
+    },
+    "health": {
+      "title": "プロバイダーのヘルス",
+      "desc": "Core は各プロバイダーの API を定期的に確認し、レイテンシ・エラー・サーバー構築時間を記録します。失敗が続くとブレーカーが開き、Boxa は次のプロバイダーへ切り替えます。",
+      "samples": "{n, plural, other {# サンプル}}",
+      "hosts": "{n, plural, other {# ホスト}}",
+      "priority": "優先度 {n}",
+      "apiLatency": "API レイテンシ p50",
+      "p95": "p95 {v}",
+      "apiSuccess": "API 成功率",
+      "createSuccess": "作成成功率",
+      "attempts": "{n, plural, other {# 回試行}}",
+      "provision": "構築時間 p50",
+      "lastOk": "最後の正常",
+      "rateLimit": "レート制限",
+      "remaining": "残り {n}",
+      "hits": "{n, plural, other {429 が # 回}}",
+      "breakerInfo": "{n, plural, other {# 回連続で失敗}} · 理由：{reason}",
+      "until": "{time}に再試行",
+      "lastError": "最後のエラー {time}",
+      "score": "スコア",
+      "scoreHint": "1 vCPU / 1 GB の参照ボックスでのスコア。ボックス提案と同じエンジンです。",
+      "noScore": "スコアなし：トークンの接続と価格データが必要です。",
+      "check": "今すぐ確認",
+      "checked": "{name} を確認しました",
+      "reset": "ブレーカーをリセット",
+      "resetHint": "ブレーカーを閉じて、このプロバイダーをすぐ再利用します",
+      "resetDone": "{name} のブレーカーをリセットしました",
+      "prefs": "設定"
+    },
+    "cat": {
+      "title": "統合価格カタログ",
+      "desc": "コミュニティの価格表と、接続済みプロバイダー API のリアルタイム価格を統合します。API の価格を優先し、古い情報源には印を付けます。",
+      "generated": "{time}に更新 · {stale}で古くなる",
+      "sourceTitle": "{n} 件 · {time}に取得",
+      "live": "リアルタイム API",
+      "feed": "価格表",
+      "stale": "古い",
+      "staleNote": "{n, plural, other {# 件の情報源が古い}}",
+      "allProviders": "すべてのプロバイダー",
+      "arch": "アーキテクチャ",
+      "anyArch": "すべてのアーキテクチャ",
+      "minCpu": "最小 vCPU",
+      "anyCpu": "すべての vCPU",
+      "usableOnly": "利用可能なものだけ",
+      "empty": "条件に合うものがありません",
+      "sku": "SKU",
+      "config": "構成",
+      "hour": "$/時",
+      "month": "$/月",
+      "source": "情報源",
+      "age": "経過",
+      "state": "状態",
+      "feedPrice": "コミュニティ価格表の価格",
+      "notConnected": "未接続",
+      "count": "{n} / {total} 件"
+    }
+  },
+  "mesh": {
+    "title": "WireGuard メッシュ（headscale）",
+    "desc": "ホストとサービス用ボックスがプライベートな WireGuard ネットワークでつながります。ACL はエージェントとボックスのポートから自動生成されます。",
+    "disabled": "メッシュはオフ",
+    "disabledHint": "Core に BOXA_MESH_URL と BOXA_MESH_API_KEY を設定するとオンになります。",
+    "server": "サーバー",
+    "online": "オンラインのノード",
+    "hostsJoined": "参加済みホスト",
+    "aclRules": "ACL ルール",
+    "node": "ノード",
+    "ips": "IP",
+    "tags": "タグ",
+    "lastSeen": "最終確認",
+    "now": "オンライン",
+    "preview": "設定のプレビュー",
+    "createKey": "事前認証キーを作成",
+    "keyTitle": "事前認証キーを作成",
+    "keyDesc": "ホストやボックスを正しいタグでメッシュに参加させる使い切りのキーです。",
+    "target": "対象",
+    "newHost": "新しいホスト（tag:boxa-host）",
+    "hosts": "ホスト",
+    "boxes": "ボックス",
+    "ttl": "有効期間（分）",
+    "ttlHint": "1–10080 分",
+    "reusable": "再利用可能",
+    "create": "キーを作成",
+    "keyCreated": "キーを作成しました。{time}に失効します",
+    "ephemeral": "一時的",
+    "runOnNode": "参加させるマシンで実行：",
+    "keyOnce": "キーは一度しか表示されません。今すぐコピーしてください。"
+  },
+  "speed": {
+    "title": "起動速度",
+    "binpack": "ビンパッキング",
+    "spread": "分散配置",
+    "warmReady": "ウォームコンテナ",
+    "hitRate": "ヒット率 {pct}% · ヒット {hits} / ミス {misses}",
+    "claim": "ウォーム取得",
+    "cold": "コールド起動 {v}",
+    "speedup": "高速化",
+    "speedupHint": "コールド起動 ÷ ウォーム取得",
+    "compact": "exec 出力の圧縮",
+    "compactHint": "エージェントへ送るトークンを削減",
+    "on": "オン",
+    "off": "オフ",
+    "host": "ホスト",
+    "cow": "コピーオンライト",
+    "features": "機能",
+    "load": "RAM 負荷",
+    "boxes": "ボックス",
+    "coldEta": "コールド起動",
+    "cache": "キャッシュ",
+    "cacheEnv": "{n, plural, other {パッケージキャッシュ変数 # 件}}",
+    "warmTitle": "ウォームプール",
+    "warmDesc": "テンプレートごとに起動済みのコンテナを数個保持し、新しいボックスを約 1 秒で取得できるようにします。Min は常に保持する数、Max は上限、TTL は入れ替えまで保持する時間です。",
+    "warmEnabled": "ウォームプールを有効化",
+    "template": "テンプレート",
+    "profile": "プロファイル",
+    "spec": "構成",
+    "min": "Min",
+    "max": "Max",
+    "ttlMin": "TTL（分）",
+    "ready": "準備完了",
+    "addPool": "プールを追加",
+    "invalid": "各プールにはテンプレート、0 ≤ min ≤ max ≤ 10、TTL 5–1440 分が必要です。",
+    "saved": "ウォームプールを保存しました",
+    "warmStats": "作成 {created} · 失効 {expired} · 保持中 {entries}",
+    "lastRefill": "{time}に補充",
+    "rsTitle": "サイズ最適化の提案",
+    "rsTotal": "月 約 {usd} 節約できます",
+    "rsEmpty": "十分なデータのあるボックスはまだありません",
+    "rsBoxTitle": "サイズ最適化",
+    "box": "ボックス",
+    "suggestion": "提案",
+    "usage": "p95 使用量",
+    "saving": "節約",
+    "why": "理由",
+    "perMonth": "{usd}/月",
+    "perHour": "{usd}/時",
+    "window": "{time}で {n} サンプル",
+    "sug": {
+      "keep": "そのまま",
+      "downsize": "縮小",
+      "upsize": "拡大",
+      "sleep": "早めにスリープ",
+      "stop": "停止",
+      "insufficient_data": "データ不足"
+    }
+  },
+  "rec": {
+    "title": "要件からボックスを提案",
+    "desc": "作業内容を記述すると、Boxa がウォームプール・既存プール・VM・新規サーバーを比較し、説明付きの 6 要素で順位付けします。",
+    "profile": "ワークロード",
+    "tip": "ヒント：",
+    "agentKind": "エージェントの種類",
+    "kindNone": "指定しない",
+    "kindHint": "{profile} の既定値を使用",
+    "optimize": "最適化の方針",
+    "isolation": "分離レベル",
+    "fromProfile": "プロファイルに従う（{v}）",
+    "ramMb": "RAM（MB）",
+    "diskGb": "ディスク（GB）",
+    "lifetime": "ライフタイム",
+    "more": "その他の要件",
+    "durationH": "期間（時間）",
+    "maxPrice": "上限 $/時",
+    "maxLatency": "最大レイテンシ（ms）",
+    "arch": "アーキテクチャ",
+    "region": "リージョン",
+    "regionHint": "空欄なら Boxa が選びます",
+    "location": "エージェントの場所",
+    "locationHint": "国コード（VN）、リージョン、または lat,lon",
+    "publicUrl": "公開 URL が必要",
+    "untrusted": "信頼できないコードを実行",
+    "submit": "候補を順位付け",
+    "ranking": "順位付け中…",
+    "reset": "リセット",
+    "opt": {
+      "balanced": "バランス",
+      "cost": "最安",
+      "speed": "最速",
+      "reliability": "最も安定",
+      "latency": "最も近い"
+    },
+    "life": {
+      "ephemeral": "使い捨て",
+      "persistent": "長期保持"
+    },
+    "kind": {
+      "warm": "ウォーム",
+      "pool": "プール",
+      "vm": "VM",
+      "burst": "新規サーバー",
+      "sandbox": "サンドボックス",
+      "clone": "クローン"
+    },
+    "best": "おすすめ",
+    "needsApproval": "承認が必要",
+    "priceStale": "価格が古い",
+    "score": "スコア",
+    "eta": "準備まで",
+    "perHour": "$/時",
+    "total": "想定合計",
+    "whyScore": "このスコアの理由",
+    "createWith": "この候補で作成",
+    "pickAgent": "ボックスを作成するにはエージェントを選んでください。",
+    "created": "{slug} を作成中",
+    "effective": "有効な要件（想定 {hours} 時間）：",
+    "noOptions": "条件に合う候補はありません。",
+    "rejected": "{n, plural, other {除外された候補 # 件}}",
+    "agentsCall": "エージェントの呼び出し：",
+    "profiles": {
+      "general": {
+        "name": "汎用",
+        "desc": "スクリプトや手早い実験向けの小さな汎用 Linux ボックス。"
+      },
+      "coding-agent": {
+        "name": "コーディングエージェント",
+        "desc": "リポジトリ作業（git、ビルド、テスト）。起動の速さと低レイテンシが最重要。"
+      },
+      "browser-automation": {
+        "name": "ブラウザ自動化",
+        "desc": "ヘッドレス Chromium/Playwright によるスクレイピングや Web 操作。RAM と外部への通信が必要。"
+      },
+      "build": {
+        "name": "ビルド / CI",
+        "desc": "短時間で CPU を多く使うコンパイルやテスト。安くてすぐ終わる計算資源を使い、終われば破棄。"
+      },
+      "data": {
+        "name": "データ処理",
+        "desc": "Pandas/DuckDB/ETL ジョブ。RAM とディスクを多く使い、レイテンシは重要でない。"
+      },
+      "long-running-service": {
+        "name": "常時稼働サービス",
+        "desc": "公開 URL 付きで 24 時間動くボット、Webhook、API。安定性と月額料金が重要。"
+      },
+      "sandbox-untrusted": {
+        "name": "信頼できないコード用サンドボックス",
+        "desc": "信頼できないコードを最も強い分離で実行。既定でオフライン、終われば破棄。"
+      }
+    }
+  },
+  "estimate": {
+    "title": "作成時の見積もり",
+    "toast": "約 {eta} 秒 · {hour}/時 · 合計 約 {total}",
+    "warmHit": "ウォームプールにヒット",
+    "score": "スコア {v}",
+    "eta": "準備完了の見込み",
+    "actual": "実測",
+    "measuring": "計測中…",
+    "perHour": "1 時間あたり",
+    "expected": "{hours} 時間の合計",
+    "profile": "プロファイル：",
+    "clonedFrom": "クローン元"
+  },
+  "clone": {
+    "button": "クローン",
+    "hint": "同じホスト上に数秒でコピーオンライトの複製を作成",
+    "onlyLive": "クローンできるのは実行中かスリープ中のボックスだけです",
+    "title": "{slug} をクローン",
+    "desc": "同じホスト上のコピーオンライト複製です。ファイルとインストール済みパッケージがすぐ使え、スナップショットのダウンロードは不要です。",
+    "slug": "新しいボックスの slug",
+    "confirm": "クローンを作成",
+    "done": "{slug} にクローン中"
+  },
+  "resume": {
+    "title": "作業を再開",
+    "woke": "ボックスを起こしたところです。",
+    "idle": "{time}アイドル",
+    "recent": "最近のコマンド",
+    "jobs": "{n, plural, other {実行中のジョブ # 件}}",
+    "ports": "ポート：",
+    "snapshot": "最新のスナップショット：",
+    "files": "変更されたファイル：",
+    "next": "エージェント向けの次の手順",
+    "sleeping": "ボックスはスリープ中です。概要を読み込むと起動します。",
+    "wakeResume": "起動して概要を表示",
+    "resumed": "ボックスを起動しました"
   }
 }

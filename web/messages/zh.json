@@ -157,7 +157,8 @@
     "invalidKey": "API 密钥无效或没有 admin 权限",
     "invalidKeyHint": "使用 `box keys create --admin` 创建 admin 权限的密钥。",
     "coreUnreachable": "无法连接 Boxa Core",
-    "coreUnreachableHint": "请检查 BOXA_API（{url}）或设置 BOXA_MOCK=1。"
+    "coreUnreachableHint": "请检查 BOXA_API（{url}）或设置 BOXA_MOCK=1。",
+    "tryNext": "可以尝试："
   },
   "approvals": {
     "type": {
@@ -421,7 +422,11 @@
     "noAlternatives": "没有其他符合策略的方案。",
     "billingPool": "资源池 · 按月",
     "billingBurst": "突发 · 按小时",
-    "pickAgentFirst": "请选择智能体，以按其策略报价。"
+    "pickAgentFirst": "请选择智能体，以按其策略报价。",
+    "descNeed": "描述盒子需要什么，Boxa 按价格、速度和可靠性为方案排序。",
+    "mode": "创建方式",
+    "modeNeed": "按需求",
+    "modeManual": "手动配置"
   },
   "developers": {
     "title": "接入智能体",
@@ -579,6 +584,14 @@
       "digitalocean": "具有读写权限的个人访问令牌。",
       "hetzner": "Hetzner Cloud 项目的读写 API 令牌。",
       "vultr": "具有 manage_servers 权限的 API 密钥。"
+    },
+    "connectWizard": "连接云厂商",
+    "tabs": {
+      "providers": "云厂商与主机",
+      "health": "健康状况",
+      "catalog": "价格目录",
+      "speed": "速度",
+      "mesh": "Mesh"
     }
   },
   "kinds": {
@@ -654,7 +667,8 @@
     "onboardingShort": "首次设置",
     "more": "更多",
     "palette": "命令面板",
-    "logout": "退出登录"
+    "logout": "退出登录",
+    "recommend": "推荐盒子"
   },
   "notFound": {
     "title": "找不到该页面",
@@ -989,5 +1003,367 @@
     "test": "测试连接",
     "testOk": "Bucket 正常（{ms} ms）",
     "saved": "存储设置已保存"
+  },
+  "score": {
+    "f": {
+      "cost": "成本",
+      "health": "健康",
+      "speed": "速度",
+      "latency": "延迟",
+      "capacity": "容量",
+      "reliability": "可靠性"
+    },
+    "help": {
+      "cost": "预计总成本与最便宜方案的比较",
+      "health": "云厂商当前状态（healthy/degraded/down）",
+      "speed": "盒子开始运行所需时间",
+      "latency": "从智能体到区域的估计往返延迟",
+      "capacity": "放置盒子后剩余的容量",
+      "reliability": "历史创建成功率"
+    }
+  },
+  "pm": {
+    "status": {
+      "healthy": "健康",
+      "degraded": "性能下降",
+      "down": "不可用",
+      "unknown": "未知"
+    },
+    "breaker": {
+      "closed": "熔断器关闭",
+      "half_open": "熔断器半开",
+      "open": "熔断器打开"
+    },
+    "breakerHelp": {
+      "closed": "正常：Boxa 照常调用该云厂商",
+      "half_open": "正在试探一次调用，看云厂商是否已恢复",
+      "open": "连续失败后暂时跳过；Boxa 自动切换到下一个云厂商"
+    },
+    "wizard": {
+      "title": "连接云厂商",
+      "desc": "选择云厂商并粘贴令牌，Boxa 检查后再由您设置优先级和费用上限。",
+      "steps": "步骤",
+      "step": {
+        "choose": "选择",
+        "token": "令牌",
+        "review": "区域与规格",
+        "prefs": "优先级与上限"
+      },
+      "connected": "已连接",
+      "notConnected": "未连接",
+      "apiReady": "通过 API 自动租用服务器",
+      "feedOnly": "仅有价格表",
+      "tokenFor": "{name} 的 API 令牌",
+      "paste": "粘贴 API 令牌…",
+      "keepToken": "留空则重新检查已保存的令牌",
+      "where": {
+        "hetzner": "Hetzner Console → Security → API tokens → Generate（Read & Write）。",
+        "vultr": "Vultr → Account → API → Enable API，并把 Core 的 IP 加入白名单。",
+        "digitalocean": "DigitalOcean → API → Generate New Token（write 权限）。",
+        "contabo": "Contabo：从 Customer Control Panel → API 粘贴 client_id:client_secret:user:password。",
+        "netcup": "netcup SCP → Options → API：粘贴 customer_number:api_key:api_password。"
+      },
+      "validate": "检查令牌",
+      "valid": "令牌有效 · {ms} ms",
+      "errClass": "错误类型 {cls} · {ms} ms",
+      "regions": "{n, plural, other {# 个可用区域}}",
+      "sizes": "最便宜的 {n} 个规格（共 {total} 个）",
+      "back": "上一步",
+      "next": "下一步",
+      "save": "保存并连接",
+      "saved": "已连接 {name}"
+    },
+    "prefs": {
+      "title": "{name} 设置",
+      "desc": "Boxa 自动租用服务器时使用的优先级和费用上限。",
+      "enabled": "允许使用",
+      "enabledHint": "关闭后，Boxa 放置盒子时会跳过该云厂商。",
+      "priority": "优先级",
+      "priorityHint": "1 = 最先尝试；0 = 默认顺序。",
+      "maxHourly": "每台服务器每小时上限 $",
+      "maxMonthly": "每月总上限 $",
+      "maxServers": "最多服务器数",
+      "zeroNoLimit": "0 = 不限制",
+      "regions": "允许的区域",
+      "regionsHint": "不选 = 允许所有区域。",
+      "defaultRegion": "默认区域",
+      "auto": "自动",
+      "saved": "云厂商设置已保存"
+    },
+    "health": {
+      "title": "云厂商健康状况",
+      "desc": "Core 定期探测每个云厂商的 API，记录延迟、错误和服务器开通时间。连续失败会打开熔断器，Boxa 随即切换到下一个云厂商。",
+      "samples": "{n, plural, other {# 个样本}}",
+      "hosts": "{n, plural, other {# 台主机}}",
+      "priority": "优先级 {n}",
+      "apiLatency": "API 延迟 p50",
+      "p95": "p95 {v}",
+      "apiSuccess": "API 成功率",
+      "createSuccess": "创建成功率",
+      "attempts": "{n, plural, other {# 次尝试}}",
+      "provision": "开通时间 p50",
+      "lastOk": "上次正常",
+      "rateLimit": "调用限额",
+      "remaining": "剩余 {n}",
+      "hits": "{n, plural, other {# 次 429}}",
+      "breakerInfo": "{n, plural, other {连续 # 次失败}} · 原因：{reason}",
+      "until": "{time}重试",
+      "lastError": "最近错误 {time}",
+      "score": "评分",
+      "scoreHint": "针对 1 vCPU / 1 GB 参考盒子的评分，与推荐页使用同一引擎。",
+      "noScore": "暂无评分：需要已连接的令牌和价格数据。",
+      "check": "立即检查",
+      "checked": "已检查 {name}",
+      "reset": "重置熔断器",
+      "resetHint": "关闭熔断器，让 Boxa 立即重新使用该云厂商",
+      "resetDone": "已重置 {name} 的熔断器",
+      "prefs": "设置"
+    },
+    "cat": {
+      "title": "合并价格目录",
+      "desc": "社区价格源与已连接云厂商 API 的实时价格合并，优先使用 API 价格，过旧的来源会被标记。",
+      "generated": "更新于 {time} · {stale} 后过期",
+      "sourceTitle": "{n} 项 · 获取于 {time}",
+      "live": "实时 API",
+      "feed": "价格源",
+      "stale": "过期",
+      "staleNote": "{n, plural, other {# 个来源已过期}}",
+      "allProviders": "所有云厂商",
+      "arch": "架构",
+      "anyArch": "任意架构",
+      "minCpu": "最少 vCPU",
+      "anyCpu": "任意 vCPU",
+      "usableOnly": "仅显示可用方案",
+      "empty": "没有符合筛选条件的项目",
+      "sku": "SKU",
+      "config": "配置",
+      "hour": "$/小时",
+      "month": "$/月",
+      "source": "来源",
+      "age": "时效",
+      "state": "状态",
+      "feedPrice": "社区价格源的价格",
+      "notConnected": "未连接",
+      "count": "{n} / {total} 项"
+    }
+  },
+  "mesh": {
+    "title": "WireGuard Mesh（headscale）",
+    "desc": "主机和服务盒子通过私有 WireGuard 网络互通；ACL 根据智能体和盒子端口自动生成。",
+    "disabled": "Mesh 未开启",
+    "disabledHint": "为 Core 设置 BOXA_MESH_URL 和 BOXA_MESH_API_KEY 即可开启。",
+    "server": "服务器",
+    "online": "在线节点",
+    "hostsJoined": "已加入主机",
+    "aclRules": "ACL 规则",
+    "node": "节点",
+    "ips": "IP",
+    "tags": "标签",
+    "lastSeen": "最后在线",
+    "now": "当前在线",
+    "preview": "配置预览",
+    "createKey": "创建预授权密钥",
+    "keyTitle": "创建预授权密钥",
+    "keyDesc": "一次性密钥，让主机或盒子以正确的标签加入 Mesh。",
+    "target": "用于",
+    "newHost": "新主机（tag:boxa-host）",
+    "hosts": "主机",
+    "boxes": "盒子",
+    "ttl": "有效期（分钟）",
+    "ttlHint": "1–10080 分钟",
+    "reusable": "可重复使用",
+    "create": "创建密钥",
+    "keyCreated": "密钥已创建，{time}过期",
+    "ephemeral": "临时",
+    "runOnNode": "在要加入的机器上运行：",
+    "keyOnce": "密钥只显示一次，请立即复制。"
+  },
+  "speed": {
+    "title": "启动速度",
+    "binpack": "装箱式放置",
+    "spread": "分散放置",
+    "warmReady": "预热容器",
+    "hitRate": "命中 {pct}% · 命中 {hits} / 未命中 {misses}",
+    "claim": "领取预热",
+    "cold": "冷启动 {v}",
+    "speedup": "提速",
+    "speedupHint": "冷启动 ÷ 领取预热",
+    "compact": "精简 exec 输出",
+    "compactHint": "减少发给智能体的 token",
+    "on": "开",
+    "off": "关",
+    "host": "主机",
+    "cow": "写时复制",
+    "features": "功能",
+    "load": "内存负载",
+    "boxes": "盒子",
+    "coldEta": "冷启动",
+    "cache": "缓存",
+    "cacheEnv": "{n, plural, other {# 个包缓存变量}}",
+    "warmTitle": "预热池",
+    "warmDesc": "按模板保留几个已启动的容器，新盒子约 1 秒即可领取。Min 为常驻数量，Max 为上限，TTL 为预热容器被替换前保留的时间。",
+    "warmEnabled": "开启预热池",
+    "template": "模板",
+    "profile": "配置",
+    "spec": "规格",
+    "min": "Min",
+    "max": "Max",
+    "ttlMin": "TTL（分钟）",
+    "ready": "就绪",
+    "addPool": "添加池",
+    "invalid": "每个池需要模板，0 ≤ min ≤ max ≤ 10，TTL 为 5–1440 分钟。",
+    "saved": "预热池已保存",
+    "warmStats": "已创建 {created} · 已过期 {expired} · 保留中 {entries}",
+    "lastRefill": "{time}补充",
+    "rsTitle": "规格调整建议",
+    "rsTotal": "每月约可节省 {usd}",
+    "rsEmpty": "暂无盒子有足够数据",
+    "rsBoxTitle": "规格建议",
+    "box": "盒子",
+    "suggestion": "建议",
+    "usage": "p95 用量",
+    "saving": "节省",
+    "why": "原因",
+    "perMonth": "{usd}/月",
+    "perHour": "{usd}/小时",
+    "window": "{time}内 {n} 个样本",
+    "sug": {
+      "keep": "保持",
+      "downsize": "降配",
+      "upsize": "升配",
+      "sleep": "提早休眠",
+      "stop": "停止",
+      "insufficient_data": "数据不足"
+    }
+  },
+  "rec": {
+    "title": "按需求推荐盒子",
+    "desc": "描述任务，Boxa 比较预热池、现有资源池、虚拟机和新服务器，并按 6 个可解释的因素排序。",
+    "profile": "工作负载",
+    "tip": "提示：",
+    "agentKind": "智能体类型",
+    "kindNone": "不选",
+    "kindHint": "使用 {profile} 的默认值",
+    "optimize": "优化目标",
+    "isolation": "隔离级别",
+    "fromProfile": "按配置（{v}）",
+    "ramMb": "内存（MB）",
+    "diskGb": "磁盘（GB）",
+    "lifetime": "生命周期",
+    "more": "更多需求",
+    "durationH": "时长（小时）",
+    "maxPrice": "最高 $/小时",
+    "maxLatency": "最大延迟（ms）",
+    "arch": "架构",
+    "region": "区域",
+    "regionHint": "留空则由 Boxa 选择",
+    "location": "智能体所在地",
+    "locationHint": "国家代码（VN）、区域或 lat,lon",
+    "publicUrl": "需要公开 URL",
+    "untrusted": "运行不可信代码",
+    "submit": "为方案排序",
+    "ranking": "排序中…",
+    "reset": "重置",
+    "opt": {
+      "balanced": "均衡",
+      "cost": "最便宜",
+      "speed": "最快",
+      "reliability": "最可靠",
+      "latency": "最近"
+    },
+    "life": {
+      "ephemeral": "用完即弃",
+      "persistent": "长期保留"
+    },
+    "kind": {
+      "warm": "预热",
+      "pool": "资源池",
+      "vm": "虚拟机",
+      "burst": "新服务器",
+      "sandbox": "沙箱",
+      "clone": "克隆"
+    },
+    "best": "推荐",
+    "needsApproval": "需批准",
+    "priceStale": "价格过期",
+    "score": "分",
+    "eta": "就绪时间",
+    "perHour": "$/小时",
+    "total": "预计总额",
+    "whyScore": "为什么是这个分数",
+    "createWith": "用此方案创建",
+    "pickAgent": "请选择智能体以创建盒子。",
+    "created": "正在创建 {slug}",
+    "effective": "生效需求（预计 {hours} 小时）：",
+    "noOptions": "没有合适的方案。",
+    "rejected": "{n, plural, other {# 个被排除的方案}}",
+    "agentsCall": "智能体调用：",
+    "profiles": {
+      "general": {
+        "name": "通用",
+        "desc": "用于脚本和快速试验的小型通用 Linux 盒子。"
+      },
+      "coding-agent": {
+        "name": "编程智能体",
+        "desc": "仓库开发（git、构建、测试），启动速度和低延迟最重要。"
+      },
+      "browser-automation": {
+        "name": "浏览器自动化",
+        "desc": "无头 Chromium/Playwright 抓取与网页任务；需要内存和出站网络。"
+      },
+      "build": {
+        "name": "构建 / CI",
+        "desc": "短时、CPU 密集的编译和测试；选便宜又能尽快完成的算力，用完即弃。"
+      },
+      "data": {
+        "name": "数据处理",
+        "desc": "Pandas/DuckDB/ETL 任务：内存和磁盘密集，对延迟不敏感。"
+      },
+      "long-running-service": {
+        "name": "长期运行服务",
+        "desc": "7×24 运行并有公开 URL 的机器人、Webhook 和 API；可靠性和月费最重要。"
+      },
+      "sandbox-untrusted": {
+        "name": "不可信代码沙箱",
+        "desc": "以最强隔离运行不可信代码，默认断网，用完即弃。"
+      }
+    }
+  },
+  "estimate": {
+    "title": "创建时的估算",
+    "toast": "约 {eta} 秒 · {hour}/小时 · 总计约 {total}",
+    "warmHit": "命中预热池",
+    "score": "评分 {v}",
+    "eta": "预计就绪",
+    "actual": "实际",
+    "measuring": "测量中…",
+    "perHour": "每小时价格",
+    "expected": "{hours} 小时总计",
+    "profile": "配置：",
+    "clonedFrom": "克隆自"
+  },
+  "clone": {
+    "button": "克隆",
+    "hint": "几秒内在同一主机上创建写时复制副本",
+    "onlyLive": "只能克隆运行中或休眠中的盒子",
+    "title": "克隆 {slug}",
+    "desc": "在同一主机上的写时复制副本：文件和已安装的包立即可用，无需下载快照。",
+    "slug": "新盒子的 slug",
+    "confirm": "创建克隆",
+    "done": "正在克隆为 {slug}"
+  },
+  "resume": {
+    "title": "继续工作",
+    "woke": "盒子刚被唤醒。",
+    "idle": "已空闲 {time}",
+    "recent": "最近的命令",
+    "jobs": "{n, plural, other {# 个运行中的任务}}",
+    "ports": "端口：",
+    "snapshot": "最新快照：",
+    "files": "变更的文件：",
+    "next": "给智能体的建议步骤",
+    "sleeping": "盒子正在休眠。查看摘要会唤醒它。",
+    "wakeResume": "唤醒并查看摘要",
+    "resumed": "已唤醒盒子"
   }
 }

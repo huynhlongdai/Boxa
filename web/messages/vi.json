@@ -157,7 +157,8 @@
     "invalidKey": "API key không hợp lệ hoặc không có quyền admin",
     "invalidKeyHint": "Tạo key scope admin bằng `box keys create --admin`.",
     "coreUnreachable": "Không kết nối được Boxa Core",
-    "coreUnreachableHint": "Kiểm tra BOXA_API ({url}) hoặc bật BOXA_MOCK=1."
+    "coreUnreachableHint": "Kiểm tra BOXA_API ({url}) hoặc bật BOXA_MOCK=1.",
+    "tryNext": "Thử tiếp:"
   },
   "approvals": {
     "type": {
@@ -421,7 +422,11 @@
     "noAlternatives": "Không có phương án khác khớp chính sách.",
     "billingPool": "pool · tháng",
     "billingBurst": "burst · giờ",
-    "pickAgentFirst": "Chọn agent để báo giá theo chính sách của agent."
+    "pickAgentFirst": "Chọn agent để báo giá theo chính sách của agent.",
+    "descNeed": "Mô tả box cần gì, Boxa xếp hạng các phương án theo giá, tốc độ và độ tin cậy.",
+    "mode": "Cách tạo",
+    "modeNeed": "Theo nhu cầu",
+    "modeManual": "Tự chọn cấu hình"
   },
   "developers": {
     "title": "Cho agent",
@@ -579,6 +584,14 @@
       "digitalocean": "Personal access token có quyền đọc và ghi.",
       "hetzner": "API token Read & Write của project Hetzner Cloud.",
       "vultr": "API key có quyền manage_servers."
+    },
+    "connectWizard": "Kết nối provider",
+    "tabs": {
+      "providers": "Provider & host",
+      "health": "Sức khỏe",
+      "catalog": "Catalog giá",
+      "speed": "Tốc độ",
+      "mesh": "Mesh"
     }
   },
   "kinds": {
@@ -654,7 +667,8 @@
     "onboardingShort": "Lần đầu",
     "more": "Thêm",
     "palette": "Bảng lệnh",
-    "logout": "Đăng xuất"
+    "logout": "Đăng xuất",
+    "recommend": "Gợi ý box"
   },
   "notFound": {
     "title": "Không tìm thấy trang này",
@@ -989,5 +1003,367 @@
     "test": "Kiểm tra kết nối",
     "testOk": "Bucket hoạt động ({ms} ms)",
     "saved": "Đã lưu cấu hình lưu trữ"
+  },
+  "score": {
+    "f": {
+      "cost": "Chi phí",
+      "health": "Sức khỏe",
+      "speed": "Tốc độ",
+      "latency": "Độ trễ",
+      "capacity": "Sức chứa",
+      "reliability": "Độ tin cậy"
+    },
+    "help": {
+      "cost": "Tổng chi phí dự kiến so với phương án rẻ nhất",
+      "health": "Trạng thái provider lúc này (healthy/degraded/down)",
+      "speed": "Thời gian tới khi box chạy",
+      "latency": "Độ trễ ước tính từ chỗ agent tới region",
+      "capacity": "Phần sức chứa còn lại sau khi đặt box",
+      "reliability": "Tỉ lệ tạo thành công trong lịch sử"
+    }
+  },
+  "pm": {
+    "status": {
+      "healthy": "Khỏe",
+      "degraded": "Suy giảm",
+      "down": "Ngừng",
+      "unknown": "Chưa rõ"
+    },
+    "breaker": {
+      "closed": "Cầu dao đóng",
+      "half_open": "Cầu dao nửa mở",
+      "open": "Cầu dao mở"
+    },
+    "breakerHelp": {
+      "closed": "Hoạt động bình thường, Boxa gọi provider này như thường lệ",
+      "half_open": "Đang thử lại một lệnh để xem provider đã ổn chưa",
+      "open": "Tạm bỏ qua provider này sau nhiều lỗi liên tiếp; Boxa tự chuyển sang provider kế tiếp"
+    },
+    "wizard": {
+      "title": "Kết nối provider",
+      "desc": "Chọn nhà cung cấp, dán token, Boxa kiểm tra rồi cho anh đặt ưu tiên và trần chi phí.",
+      "steps": "Các bước",
+      "step": {
+        "choose": "Chọn",
+        "token": "Token",
+        "review": "Region & size",
+        "prefs": "Ưu tiên & trần"
+      },
+      "connected": "Đã kết nối",
+      "notConnected": "Chưa kết nối",
+      "apiReady": "Thuê server tự động qua API",
+      "feedOnly": "Chỉ có bảng giá",
+      "tokenFor": "API token cho {name}",
+      "paste": "Dán API token…",
+      "keepToken": "Để trống để kiểm tra lại token đang lưu",
+      "where": {
+        "hetzner": "Hetzner Console → Security → API tokens → Generate (Read & Write).",
+        "vultr": "Vultr → Account → API → Enable API, thêm IP của Core vào allowlist.",
+        "digitalocean": "DigitalOcean → API → Generate New Token (quyền write).",
+        "contabo": "Contabo: dán client_id:client_secret:user:password từ Customer Control Panel → API.",
+        "netcup": "netcup SCP → Options → API: dán customer_number:api_key:api_password."
+      },
+      "validate": "Kiểm tra token",
+      "valid": "Token hợp lệ · {ms} ms",
+      "errClass": "loại lỗi {cls} · {ms} ms",
+      "regions": "{n, plural, other {# region dùng được}}",
+      "sizes": "{n} size rẻ nhất (trên tổng {total})",
+      "back": "Quay lại",
+      "next": "Tiếp",
+      "save": "Lưu & kết nối",
+      "saved": "Đã kết nối {name}"
+    },
+    "prefs": {
+      "title": "Thiết lập {name}",
+      "desc": "Ưu tiên và trần chi phí áp dụng khi Boxa tự thuê server.",
+      "enabled": "Cho phép dùng",
+      "enabledHint": "Tắt để Boxa bỏ qua provider này khi chọn chỗ đặt box.",
+      "priority": "Thứ tự ưu tiên",
+      "priorityHint": "1 = thử trước; 0 = theo chuỗi mặc định.",
+      "maxHourly": "Trần $/giờ mỗi server",
+      "maxMonthly": "Trần $/tháng (tổng)",
+      "maxServers": "Số server tối đa",
+      "zeroNoLimit": "0 = không giới hạn",
+      "regions": "Region cho phép",
+      "regionsHint": "Không chọn = cho phép mọi region.",
+      "defaultRegion": "Region mặc định",
+      "auto": "Tự chọn",
+      "saved": "Đã lưu thiết lập provider"
+    },
+    "health": {
+      "title": "Sức khỏe provider",
+      "desc": "Core gọi thử API của từng provider định kỳ và ghi lại độ trễ, lỗi và thời gian dựng server. Lỗi liên tiếp sẽ mở cầu dao để Boxa chuyển sang provider kế tiếp.",
+      "samples": "{n, plural, other {# mẫu}}",
+      "hosts": "{n, plural, other {# host}}",
+      "priority": "ưu tiên {n}",
+      "apiLatency": "Độ trễ API p50",
+      "p95": "p95 {v}",
+      "apiSuccess": "API thành công",
+      "createSuccess": "Tạo server thành công",
+      "attempts": "{n, plural, other {# lần thử}}",
+      "provision": "Thời gian dựng p50",
+      "lastOk": "Lần ổn gần nhất",
+      "rateLimit": "Giới hạn gọi",
+      "remaining": "còn {n}",
+      "hits": "{n, plural, other {# lần bị 429}}",
+      "breakerInfo": "{n, plural, other {# lỗi liên tiếp}} · lý do: {reason}",
+      "until": "thử lại {time}",
+      "lastError": "Lỗi gần nhất {time}",
+      "score": "Điểm",
+      "scoreHint": "Điểm cho một box tham chiếu 1 vCPU / 1 GB, cùng engine với trang Gợi ý box.",
+      "noScore": "Chưa có điểm: cần kết nối token và có bảng giá.",
+      "check": "Kiểm tra ngay",
+      "checked": "Đã kiểm tra {name}",
+      "reset": "Đặt lại cầu dao",
+      "resetHint": "Đóng cầu dao để Boxa dùng lại provider này ngay",
+      "resetDone": "Đã đặt lại cầu dao của {name}",
+      "prefs": "Thiết lập"
+    },
+    "cat": {
+      "title": "Catalog giá gộp",
+      "desc": "Gộp bảng giá cộng đồng với giá trực tiếp từ API của provider đã kết nối. Giá API được ưu tiên; nguồn quá cũ bị đánh dấu.",
+      "generated": "Cập nhật {time} · cũ sau {stale}",
+      "sourceTitle": "{n} mục · lấy {time}",
+      "live": "API trực tiếp",
+      "feed": "Bảng giá",
+      "stale": "cũ",
+      "staleNote": "{n, plural, other {# nguồn đã cũ}}",
+      "allProviders": "Mọi provider",
+      "arch": "Kiến trúc",
+      "anyArch": "Mọi kiến trúc",
+      "minCpu": "vCPU tối thiểu",
+      "anyCpu": "Mọi vCPU",
+      "usableOnly": "Chỉ hiện chỗ dùng được",
+      "empty": "Không có mục nào khớp bộ lọc",
+      "sku": "SKU",
+      "config": "Cấu hình",
+      "hour": "$/giờ",
+      "month": "$/tháng",
+      "source": "Nguồn",
+      "age": "Tuổi",
+      "state": "Trạng thái",
+      "feedPrice": "Giá trên bảng giá cộng đồng",
+      "notConnected": "Chưa kết nối",
+      "count": "{n} / {total} mục"
+    }
+  },
+  "mesh": {
+    "title": "Mesh WireGuard (headscale)",
+    "desc": "Host và box dịch vụ nối với nhau qua mạng riêng WireGuard; ACL sinh tự động theo agent và cổng của box.",
+    "disabled": "Mesh đang tắt",
+    "disabledHint": "Đặt BOXA_MESH_URL và BOXA_MESH_API_KEY cho Core để bật mesh.",
+    "server": "Máy chủ",
+    "online": "Node trực tuyến",
+    "hostsJoined": "Host đã tham gia",
+    "aclRules": "Luật ACL",
+    "node": "Node",
+    "ips": "IP",
+    "tags": "Tag",
+    "lastSeen": "Lần cuối thấy",
+    "now": "đang trực tuyến",
+    "preview": "Xem trước cấu hình",
+    "createKey": "Tạo pre-auth key",
+    "keyTitle": "Tạo pre-auth key",
+    "keyDesc": "Key dùng một lần để một host hoặc box tham gia mesh với đúng tag.",
+    "target": "Dành cho",
+    "newHost": "Host mới (tag:boxa-host)",
+    "hosts": "Host",
+    "boxes": "Box",
+    "ttl": "Hiệu lực (phút)",
+    "ttlHint": "1–10080 phút",
+    "reusable": "Dùng được nhiều lần",
+    "create": "Tạo key",
+    "keyCreated": "Đã tạo key, hết hạn {time}",
+    "ephemeral": "Tạm thời",
+    "runOnNode": "Chạy trên máy cần tham gia:",
+    "keyOnce": "Key chỉ hiện một lần. Hãy sao chép ngay."
+  },
+  "speed": {
+    "title": "Tốc độ khởi động",
+    "binpack": "Xếp dồn (bin-packing)",
+    "spread": "Rải đều",
+    "warmReady": "Container ấm sẵn",
+    "hitRate": "trúng {pct}% · {hits} trúng / {misses} trượt",
+    "claim": "Nhận box ấm",
+    "cold": "dựng mới {v}",
+    "speedup": "Nhanh hơn",
+    "speedupHint": "dựng mới ÷ nhận box ấm",
+    "compact": "Rút gọn output exec",
+    "compactHint": "giảm token gửi về agent",
+    "on": "Bật",
+    "off": "Tắt",
+    "host": "Host",
+    "cow": "Copy-on-write",
+    "features": "Tính năng",
+    "load": "Tải RAM",
+    "boxes": "Box",
+    "coldEta": "Dựng mới",
+    "cache": "cache",
+    "cacheEnv": "{n, plural, other {# biến môi trường cache gói}}",
+    "warmTitle": "Warm pool",
+    "warmDesc": "Giữ sẵn vài container đã khởi động theo template để box mới nhận trong khoảng 1 giây. Min là số luôn giữ, max là trần, TTL là thời gian một container ấm được giữ trước khi thay mới.",
+    "warmEnabled": "Bật warm pool",
+    "template": "Template",
+    "profile": "Profile",
+    "spec": "Cấu hình",
+    "min": "Min",
+    "max": "Max",
+    "ttlMin": "TTL (phút)",
+    "ready": "Sẵn",
+    "addPool": "Thêm pool",
+    "invalid": "Mỗi pool cần template, 0 ≤ min ≤ max ≤ 10 và TTL 5–1440 phút.",
+    "saved": "Đã lưu warm pool",
+    "warmStats": "Đã tạo {created} · hết hạn {expired} · đang giữ {entries}",
+    "lastRefill": "nạp lại {time}",
+    "rsTitle": "Gợi ý chỉnh cấu hình (right-sizing)",
+    "rsTotal": "Tiết kiệm được ~{usd}/tháng",
+    "rsEmpty": "Chưa có box nào đủ dữ liệu",
+    "rsBoxTitle": "Gợi ý cấu hình",
+    "box": "Box",
+    "suggestion": "Gợi ý",
+    "usage": "Mức dùng p95",
+    "saving": "Tiết kiệm",
+    "why": "Lý do",
+    "perMonth": "{usd}/tháng",
+    "perHour": "{usd}/giờ",
+    "window": "{n} mẫu trong {time}",
+    "sug": {
+      "keep": "Giữ nguyên",
+      "downsize": "Giảm cấu hình",
+      "upsize": "Tăng cấu hình",
+      "sleep": "Cho ngủ sớm",
+      "stop": "Dừng hẳn",
+      "insufficient_data": "Chưa đủ dữ liệu"
+    }
+  },
+  "rec": {
+    "title": "Gợi ý box theo nhu cầu",
+    "desc": "Mô tả việc cần làm, Boxa so sánh warm pool, pool sẵn có, VM và server thuê mới rồi xếp hạng theo 6 yếu tố có giải thích.",
+    "profile": "Loại công việc",
+    "tip": "Mẹo:",
+    "agentKind": "Loại agent",
+    "kindNone": "Không chọn",
+    "kindHint": "Dùng mặc định của {profile}",
+    "optimize": "Ưu tiên",
+    "isolation": "Mức cách ly",
+    "fromProfile": "Theo profile ({v})",
+    "ramMb": "RAM (MB)",
+    "diskGb": "Đĩa (GB)",
+    "lifetime": "Vòng đời",
+    "more": "Thêm yêu cầu",
+    "durationH": "Thời lượng (giờ)",
+    "maxPrice": "Giá tối đa $/giờ",
+    "maxLatency": "Độ trễ tối đa (ms)",
+    "arch": "Kiến trúc",
+    "region": "Region",
+    "regionHint": "Để trống để Boxa tự chọn",
+    "location": "Agent chạy ở đâu",
+    "locationHint": "Mã nước (VN), region hoặc lat,lon",
+    "publicUrl": "Cần URL công khai",
+    "untrusted": "Chạy code không tin cậy",
+    "submit": "Xếp hạng phương án",
+    "ranking": "Đang xếp hạng…",
+    "reset": "Làm lại",
+    "opt": {
+      "balanced": "Cân bằng",
+      "cost": "Rẻ nhất",
+      "speed": "Nhanh nhất",
+      "reliability": "Ổn định nhất",
+      "latency": "Gần nhất"
+    },
+    "life": {
+      "ephemeral": "Dùng xong bỏ",
+      "persistent": "Giữ lâu dài"
+    },
+    "kind": {
+      "warm": "Warm",
+      "pool": "Pool",
+      "vm": "VM",
+      "burst": "Thuê mới",
+      "sandbox": "Sandbox",
+      "clone": "Clone"
+    },
+    "best": "Nên chọn",
+    "needsApproval": "Cần duyệt",
+    "priceStale": "Giá cũ",
+    "score": "điểm",
+    "eta": "Sẵn sàng sau",
+    "perHour": "$/giờ",
+    "total": "Tổng dự kiến",
+    "whyScore": "Vì sao có điểm này",
+    "createWith": "Tạo với phương án này",
+    "pickAgent": "Chọn agent để tạo box.",
+    "created": "Đang tạo {slug}",
+    "effective": "Yêu cầu hiệu lực ({hours} giờ dự kiến):",
+    "noOptions": "Không có phương án phù hợp.",
+    "rejected": "{n, plural, other {# phương án bị loại}}",
+    "agentsCall": "Agent gọi:",
+    "profiles": {
+      "general": {
+        "name": "Đa dụng",
+        "desc": "Box Linux nhỏ cho script và thử nghiệm nhanh."
+      },
+      "coding-agent": {
+        "name": "Agent lập trình",
+        "desc": "Làm việc với repo (git, build, test). Khởi động nhanh và độ trễ thấp là quan trọng nhất."
+      },
+      "browser-automation": {
+        "name": "Tự động trình duyệt",
+        "desc": "Chromium/Playwright không giao diện để cào dữ liệu và thao tác web; cần RAM và mạng ra ngoài."
+      },
+      "build": {
+        "name": "Build / CI",
+        "desc": "Biên dịch và chạy test ngắn, nặng CPU; chọn chỗ rẻ mà xong sớm rồi bỏ."
+      },
+      "data": {
+        "name": "Xử lý dữ liệu",
+        "desc": "Pandas/DuckDB/ETL: nặng RAM và đĩa, không cần độ trễ thấp."
+      },
+      "long-running-service": {
+        "name": "Dịch vụ chạy lâu",
+        "desc": "Bot, webhook, API chạy 24/7 có URL công khai; độ ổn định và giá tháng là chính."
+      },
+      "sandbox-untrusted": {
+        "name": "Sandbox code lạ",
+        "desc": "Chạy code không tin cậy với mức cách ly mạnh nhất, mặc định không có mạng, dùng xong bỏ."
+      }
+    }
+  },
+  "estimate": {
+    "title": "Ước tính lúc tạo",
+    "toast": "~{eta} giây · {hour}/giờ · tổng ~{total}",
+    "warmHit": "Trúng warm pool",
+    "score": "điểm {v}",
+    "eta": "Dự kiến sẵn sàng",
+    "actual": "Thực tế",
+    "measuring": "đang đo…",
+    "perHour": "Giá mỗi giờ",
+    "expected": "Tổng cho {hours} giờ",
+    "profile": "Profile:",
+    "clonedFrom": "Clone từ"
+  },
+  "clone": {
+    "button": "Clone",
+    "hint": "Tạo bản sao copy-on-write trên cùng host trong vài giây",
+    "onlyLive": "Chỉ clone box đang chạy hoặc đang ngủ",
+    "title": "Clone {slug}",
+    "desc": "Bản sao copy-on-write trên cùng host: có ngay file và gói đã cài, không phải tải snapshot.",
+    "slug": "Slug cho box mới",
+    "confirm": "Tạo bản clone",
+    "done": "Đang clone thành {slug}"
+  },
+  "resume": {
+    "title": "Tiếp tục làm việc",
+    "woke": "Box vừa được đánh thức.",
+    "idle": "Rảnh {time}",
+    "recent": "Lệnh gần đây",
+    "jobs": "{n, plural, other {# job đang chạy}}",
+    "ports": "cổng:",
+    "snapshot": "Snapshot mới nhất:",
+    "files": "File đổi:",
+    "next": "Bước gợi ý cho agent",
+    "sleeping": "Box đang ngủ. Xem tóm tắt sẽ đánh thức box.",
+    "wakeResume": "Đánh thức & xem tóm tắt",
+    "resumed": "Đã đánh thức box"
   }
 }

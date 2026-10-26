@@ -119,7 +119,7 @@ console.log("== 2b. Mọi message biên dịch được (ICU + rich text) ở c�
         }
         n++;
         for (const m of errs) err(`${l}: ${k} không biên dịch được: ${m.slice(0, 140)}`);
-        const tags = [...msgs[l][k].matchAll(/<\/?([a-zA-Z][\w-]*)>/g)].map((m) => m[1]).filter((x) => !["mono", "b"].includes(x));
+        const tags = [...msgs[l][k].matchAll(/<\/?([a-zA-Z][\w-]*)>/g)].map((m) => m[1]).filter((x) => !["mono", "b", "g"].includes(x));
         if (tags.length) err(`${l}: ${k} có thẻ lạ <${tags[0]}> (dấu < > sẽ bị hiểu là rich text)`);
       }
     }
