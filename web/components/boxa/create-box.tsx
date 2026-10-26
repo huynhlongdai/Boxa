@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Field, Input, Select } from "@/components/ui/input";
 import { Mono } from "./status";
+import { toastError } from "@/lib/error-toast";
 
 /** Kết quả POST /quote: giá + lý do đặt chỗ + phương án khác. */
 export function QuoteView({ quote, stale }: { quote: Quote; stale?: boolean }) {
@@ -92,7 +93,7 @@ export function CreateBoxDialog() {
     try {
       setQuote({ q: await api.quote(body), sig });
     } catch (e) {
-      toast.error(errMsg(e));
+      toastError(e);
     } finally {
       setQuoting(false);
     }

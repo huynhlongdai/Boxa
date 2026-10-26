@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/input";
 import { CodeBlock, CopyButton } from "./code-block";
 import { SnippetViewer, useAgentKinds } from "./snippet-viewer";
+import { toastError } from "@/lib/error-toast";
 
 const PROVIDERS = ["hetzner", "vultr", "contabo", "digitalocean", "netcup"];
 const REGIONS = ["fsn1", "nbg1", "hel1", "sgp", "eu-de", "sin"];
@@ -144,7 +145,7 @@ export function AgentWizard({ onDone, defaultName = "", compact }: { onDone?: (r
       mutate(paths.keys);
       onDone?.({ agent, key });
     } catch (e) {
-      toast.error(errMsg(e));
+      toastError(e);
     } finally {
       setBusy(false);
     }

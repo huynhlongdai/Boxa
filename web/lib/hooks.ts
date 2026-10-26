@@ -3,6 +3,7 @@ import * as React from "react";
 import useSWR, { useSWRConfig, type SWRConfiguration } from "swr";
 import { toast } from "sonner";
 import { errMsg } from "./api";
+import { toastError } from "./error-toast";
 
 /** SWR với key là đường dẫn API (null = tạm không tải). */
 export function useApi<T>(path: string | null, opts?: SWRConfiguration<T>) {
@@ -25,7 +26,7 @@ export function useAction() {
         }
         return r;
       } catch (e) {
-        toast.error(errMsg(e));
+        toastError(e);
         return undefined;
       } finally {
         setPending(null);

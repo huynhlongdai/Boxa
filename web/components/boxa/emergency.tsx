@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/error-toast";
 
 const Ctx = React.createContext<{ open: () => void }>({ open: () => {} });
 export const useEmergency = () => React.useContext(Ctx);
@@ -34,7 +35,7 @@ export function EmergencyProvider({ children }: { children: React.ReactNode }) {
       await mutate(() => true);
       close();
     } catch (e) {
-      toast.error(errMsg(e));
+      toastError(e);
     } finally {
       setBusy(false);
     }

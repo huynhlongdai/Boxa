@@ -1,6 +1,6 @@
 // Bộ xử lý MOCK MODE: mô phỏng Boxa Core theo contract v1, trạng thái giữ trong bộ nhớ.
 import { parseDocument } from "yaml";
-import type { Agent, AgentKind, ApiKey, Approval, Box, BoxaEvent, Delivery, ErrorCode, Host, LedgerEntry, NotifySettings, NotifyView, Overview, ProviderRegion, Quote, QuoteOption, Settings, Snapshot, StorageView, Template } from "../types";
+import type { RecommendOption, Agent, AgentKind, ApiKey, Approval, Box, BoxaEvent, Delivery, ErrorCode, Host, LedgerEntry, NotifySettings, NotifyView, Overview, ProviderRegion, Quote, QuoteOption, Settings, Snapshot, StorageView, Template } from "../types";
 import { NOTIFY_EVENTS } from "../types";
 import type { Locale } from "@/i18n/config";
 import { FALLBACK_KINDS } from "../agent-kinds";
@@ -8,6 +8,7 @@ import { mt, seedText } from "./i18n";
 import { discovery } from "./discovery";
 import { DAY, HOUR, MIN, iso, makeSeed, r4, type MockState } from "./seed";
 import { makeSnippet } from "../snippets";
+import { estimateFor, handleV13, recommend, resolveNeeds } from "./v13";
 
 type G = typeof globalThis & { __boxaMock?: MockState };
 
@@ -29,9 +30,21 @@ const ok = (body: unknown, status = 200): MockResponse => ({ status, body });
 let L: Locale = "vi";
 const DOCS = "https://boxa.dev/docs/errors";
 /** Lỗi theo contract v1.1: message + hint dịch theo Accept-Language, code không đổi, kèm docs_url (+ retry_after_s nếu có). */
+/** v1.3: error.next — lệnh gợi ý thường gỡ được lỗi (giống nextForError ở core/internal/api/v13.go). */
+const NEXT: Partial<Record<ErrorCode, string[]>> = {
+  NO_CAPACITY: ["box_recommend(<same needs>)  # see ranked options and why others were rejected", "box_up(<smaller cpu/ram_mb>)"],
+  BUDGET_EXCEEDED: ["box_cost()  # see spend vs budget", "box_list(status=\"running\")  # then box_sleep / box_down unused boxes"],
+  BOX_SLEEPING: ["box_sleep(box_id=<id>, wake=true)", "box_ensure(name=<name>)  # wakes or recreates"],
+  NOT_FOUND: ["box_list()  # find the right id or slug", "box_ensure(name=<name>)  # get-or-create by name"],
+  PROVIDER_FAILED: ["box_recommend(<same needs>)  # Boxa already fails over; check other options", "retry after retry_after_s"],
+  POLICY_DENIED: ["box_quote(<smaller spec>)", "ask the operator to change the agent policy or quotas"],
+  TIMEOUT: ["box_exec(..., async=true) then box_job(job_id, wait_s=30)"],
+  INVALID: ["GET /v1/openapi.json or box_templates() / GET /v1/profiles for valid values"],
+  RATE_LIMITED: ["wait retry_after_s, then retry", "box_exec_batch(...)  # fewer round-trips"],
+};
 const err = (status: number, code: ErrorCode, key: string, params: Record<string, string | number> = {}, extra: { retry_after_s?: number } = {}): MockResponse => ({
   status,
-  body: { error: { code, message: mt(L, key, params), hint: mt(L, `${key}_hint`, params), docs_url: `${DOCS}#${code.toLowerCase()}`, ...extra } },
+  body: { error: { code, message: mt(L, key, params), hint: mt(L, `${key}_hint`, params), docs_url: `${DOCS}#${code.toLowerCase()}`, ...extra, ...(NEXT[code] ? { next: NEXT[code] } : {}) } },
   headers: extra.retry_after_s ? { "Retry-After": String(extra.retry_after_s) } : undefined,
 });
 const list = <T>(items: T[]) => ok({ items, next_cursor: null });
@@ -259,8 +272,24 @@ function createBox(s: MockState, body: Record<string, unknown>): MockResponse {
   const hAgent = hydrateAgent(s, agent);
   if (hAgent.spent_today_usd >= agent.budget_day_usd * 1.2)
     return err(402, "BUDGET_EXCEEDED", "over_budget", { agent: agent.name });
+  // v1.3: profile/requirements → tự chọn spec + chỗ đặt bằng cùng engine với POST /recommend
+  let pick: RecommendOption | null = null;
+  let profileId: string | undefined;
+  let requirements: Box["requirements"];
+  if (body.profile || body.requirements) {
+    const rq = (body.requirements ?? {}) as NonNullable<Box["requirements"]>;
+    const { req, profile } = resolveNeeds(rq, body.profile as string | undefined, agent.kind);
+    profileId = profile.id;
+    requirements = req;
+    if (!body.spec && typeof body.yaml !== "string") spec = { cpu: req.cpu ?? 1, ram_mb: req.ram_mb ?? 1024, disk_gb: req.disk_gb ?? 10 };
+    if (!body.template) template = profile.template;
+    if (!body.lifecycle) lifecycle = profile.lifecycle;
+    const rec = recommend(s, L, { requirements: rq, profile: profile.id, template, lifecycle, agent_id: agent.id });
+    pick = rec.pick;
+    if (!pick) return err(503, "NO_CAPACITY", "no_capacity", { cpu: spec?.cpu ?? 1, agent: agent.name, s: 60 }, { retry_after_s: 60 });
+  }
   spec = spec ?? { cpu: 2, ram_mb: 2048, disk_gb: 20 };
-  const host = s.hosts.find((h) => h.status === "ready" && h.billing === "pool" && agent.policy.providers.includes(h.provider)) ?? s.hosts.find((h) => h.status === "ready")!;
+  const host = (pick?.host_id && s.hosts.find((h) => h.id === pick!.host_id)) || (s.hosts.find((h) => h.status === "ready" && h.billing === "pool" && agent.policy.providers.includes(h.provider)) ?? s.hosts.find((h) => h.status === "ready")!);
   const id = nextId(s, "box");
   const b: MockState["boxes"][number] = {
     id,
@@ -285,8 +314,14 @@ function createBox(s: MockState, body: Record<string, unknown>): MockResponse {
     secrets: (body.secrets as string[]) ?? [],
     created_at: iso(Date.now()),
     last_active_at: null,
-    _ready_at: Date.now() + 8000,
+    _ready_at: Date.now() + (pick?.kind === "warm" ? 1400 : 8000),
   };
+  b.estimate = { ...estimateFor(pick && pick.kind !== "burst" ? pick.kind : host.billing === "pool" ? "pool" : "burst", b.cost_per_hour, lifecycle), ...(pick ? { score: pick.score } : {}) };
+  if (pick) {
+    b.profile = profileId;
+    b.requirements = requirements;
+    b.placement_reason = pick.reasons.join("; ");
+  }
   const eg = body.egress as { allow?: unknown[]; deny_by_default?: boolean } | undefined;
   if (eg && (eg.deny_by_default || (eg.allow?.length ?? 0) > 0)) {
     const allow = (eg.allow ?? []).map((x) => String(x).trim().toLowerCase());
@@ -401,6 +436,14 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
   if (disc) return disc;
   if (r0 === "agent-kinds") return list(FALLBACK_KINDS);
   if (r0 === "quote" && M === "POST") return quote(s, body);
+
+  // ---- v1.3: provider manager, recommend, speed, mesh, clone/ensure/resume ----
+  const v13 = handleV13(s, {
+    L, ok, list, err: (st, code, key, params) => err(st, code, key, params),
+    hydrateBox: (b) => hydrateBox(s, b), createBox: (b) => createBox(s, b), nextId: (p) => nextId(s, p),
+    pushEvent: (e) => pushEvent(s, e as Omit<BoxaEvent, "id" | "ts">), regions: PROVIDER_REGIONS,
+  }, M, segs, q, body);
+  if (v13) return v13;
 
   // ---- boxes ----
   if (r0 === "boxes") {

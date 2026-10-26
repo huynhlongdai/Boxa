@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/input";
 import { CodeBlock } from "./code-block";
+import { toastError } from "@/lib/error-toast";
 
 const PUBLIC_API = process.env.NEXT_PUBLIC_BOXA_API || "http://localhost:8080/v1";
 
@@ -53,7 +54,7 @@ export function SnippetViewer({ agentId, agentName, kind: initialKind, apiKey, k
       })
       .catch((e) => {
         if (off) return;
-        toast.error(errMsg(e));
+        toastError(e);
         setSnippet(makeSnippet(kind, agentName, PUBLIC_API, transport));
       });
     return () => {

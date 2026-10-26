@@ -17,7 +17,7 @@ export const ERROR_CODES: ErrorCode[] = ["BUDGET_EXCEEDED", "NO_CAPACITY", "PROV
 
 /** v1.1: message/hint đã được Core dịch theo Accept-Language; code không đổi. */
 export interface ApiErrorBody {
-  error: { code: ErrorCode; message: string; hint?: string; retry_after_s?: number; docs_url?: string };
+  error: { code: ErrorCode; message: string; hint?: string; retry_after_s?: number; docs_url?: string; next?: string[] };
 }
 
 export interface List<T> {
@@ -530,4 +530,397 @@ export interface StorageTestResult {
   error?: string;
   latency_ms: number;
   bucket: string;
+}
+
+// ---------------- v1.3: provider manager, recommend, speed, mesh ----------------
+// Shape bám theo boxa/core/internal (manager/provmgr.go, recommend.go, agent13.go, warmpool.go, speed.go, mesh.go).
+
+/** Requirements: "box cần gì" (POST /recommend, POST /boxes {requirements}). Bỏ trống = dùng mặc định của profile. */
+export interface Requirements {
+  cpu?: number;
+  ram_mb?: number;
+  disk_gb?: number;
+  gpu?: number;
+  arch?: "amd64" | "arm64" | "any" | string;
+  region?: string;
+  location?: string;
+  max_latency_ms?: number;
+  max_price_hour?: number;
+  lifetime?: "ephemeral" | "persistent" | string;
+  duration_hours?: number;
+  isolation?: "any" | "container" | "vm" | "sandbox" | string;
+  profile?: string;
+  optimize?: "balanced" | "cost" | "speed" | "reliability" | "latency" | string;
+  public_url?: boolean;
+  untrusted?: boolean;
+}
+
+/** Ước tính giá/ETA đi kèm mọi response tạo box. */
+export interface BoxEstimate {
+  kind: "warm" | "pool" | "vm" | "burst" | "clone" | string;
+  cost_per_hour: number;
+  expected_hours: number;
+  expected_total_usd: number;
+  eta_seconds: number;
+  actual_seconds?: number;
+  score?: number;
+  warm_hit: boolean;
+}
+
+export interface Box {
+  profile?: string;
+  requirements?: Requirements | null;
+  isolation?: string;
+  estimate?: BoxEstimate | null;
+  cloned_from?: string;
+  name?: string;
+  next?: string[];
+}
+
+export interface CreateBoxBody {
+  profile?: string;
+  requirements?: Requirements;
+}
+
+export interface ProviderPrefs {
+  enabled: boolean;
+  priority: number;
+  max_hourly_usd: number;
+  max_monthly_usd: number;
+  max_servers: number;
+  regions: string[];
+  default_region: string;
+  updated_at?: string;
+}
+
+export interface ValidateTokenResult {
+  provider: string;
+  ok: boolean;
+  error?: string;
+  error_class?: string;
+  latency_ms: number;
+  regions: ProviderRegion[];
+  sizes: Offer[];
+  size_count: number;
+  hint?: string;
+}
+
+export interface BreakerState {
+  state: "closed" | "open" | "half_open" | string;
+  consecutive_failures: number;
+  opened_at?: string | null;
+  open_until?: string | null;
+  opens: number;
+  last_reason?: string;
+}
+
+export interface HealthStats {
+  provider: string;
+  region?: string;
+  samples: number;
+  api_latency_p50_ms: number;
+  api_latency_p95_ms: number;
+  api_success_rate: number;
+  create_attempts: number;
+  create_success_rate: number;
+  provision_p50_s: number;
+  provision_p95_s: number;
+  error_classes: Record<string, number>;
+  last_ok_at: string | null;
+  last_error_at: string | null;
+  last_error?: string;
+  last_error_class?: string;
+  breaker: BreakerState;
+  rate_limit: { blocked_until?: string | null; hits: number; quota_hit_at?: string | null; remaining: number };
+  status: "healthy" | "degraded" | "down" | "unknown";
+  reliability: number;
+}
+
+export interface ScoreComponent {
+  score: number;
+  weight: number;
+  value: string;
+}
+export type ScoreFactor = "cost" | "health" | "speed" | "latency" | "capacity" | "reliability";
+
+export interface HealthSample {
+  ts: string;
+  kind: string;
+  region?: string;
+  ok: boolean;
+  latency_ms: number;
+  class: string;
+  error?: string;
+}
+
+export interface ProviderHealth {
+  provider: Provider;
+  stats: HealthStats;
+  regions: HealthStats[];
+  prefs: ProviderPrefs;
+  score: { score: number; region: string; sku: string; breakdown: Record<string, ScoreComponent>; reasons: string[] } | null;
+  recent?: HealthSample[];
+  usable: boolean;
+  blocked?: string;
+  hosts: number;
+  offer_age_s: number;
+}
+
+export interface CatalogItem {
+  provider: string;
+  sku: string;
+  region: string;
+  arch: string;
+  cpu: number;
+  ram_mb: number;
+  disk_gb: number;
+  price_hour: number;
+  price_month: number;
+  min_billing_minutes: number;
+  price_source: string;
+  sources: string[];
+  feed_price_hour?: number | null;
+  fetched_at: string;
+  age_s: number;
+  stale: boolean;
+  confidence: string;
+  health: string;
+  usable: boolean;
+  blocked?: string;
+}
+export interface CatalogSource {
+  source: string;
+  provider: string;
+  count: number;
+  fetched_at: string;
+  age_s: number;
+  stale: boolean;
+}
+export interface Catalog {
+  items: CatalogItem[];
+  sources: CatalogSource[];
+  capabilities: Record<string, Record<string, unknown>>;
+  generated_at: string;
+  stale_after_s: number;
+  cached: boolean;
+  total: number;
+}
+
+export interface WorkloadProfile {
+  id: string;
+  name: string;
+  description: string;
+  template: string;
+  lifecycle: Lifecycle;
+  idle_minutes: number;
+  ttl_seconds: number;
+  defaults: Requirements;
+  weights: Record<ScoreFactor, number>;
+  egress_deny_by_default: boolean;
+  egress_allow: string[] | null;
+  warm: boolean;
+  tips: string[] | null;
+}
+export interface KindProfile {
+  kind: string;
+  profile: string;
+  spec: Requirements;
+  why: string;
+}
+export interface ProfilesResponse {
+  items: WorkloadProfile[];
+  kinds: KindProfile[];
+  optimize: string[];
+  isolation: string[];
+  lifetime: string[];
+}
+
+export interface RecommendOption {
+  kind: "warm" | "pool" | "vm" | "burst" | "sandbox" | string;
+  provider: string;
+  region: string;
+  host_id?: string;
+  sku?: string;
+  arch?: string;
+  isolation: string;
+  cpu: number;
+  ram_mb: number;
+  disk_gb: number;
+  cost_per_hour: number;
+  expected_total_usd: number;
+  eta_seconds: number;
+  reliability: number;
+  health: string;
+  headroom: number;
+  latency_ms: number;
+  min_billing_h: number;
+  requires_approval: boolean;
+  price_stale: boolean;
+  blocked?: string;
+  notes?: string[] | null;
+  warm_id?: string;
+  rank: number;
+  score: number;
+  breakdown: Record<string, ScoreComponent>;
+  reasons: string[];
+}
+export interface Rejection {
+  kind: string;
+  provider?: string;
+  region?: string;
+  host_id?: string;
+  sku?: string;
+  reason: string;
+}
+export interface RecommendBody {
+  requirements: Requirements;
+  profile?: string;
+  template?: string;
+  lifecycle?: Lifecycle;
+  agent_id?: string;
+  kind?: string;
+  limit?: number;
+}
+export interface RecommendResult {
+  requirements: Requirements;
+  profile: WorkloadProfile;
+  template: string;
+  lifecycle: Lifecycle;
+  expected_hours: number;
+  options: RecommendOption[];
+  rejected: Rejection[];
+  pick: RecommendOption | null;
+  auto_pick: string;
+  explain: string;
+  box_up: Record<string, unknown>;
+  next?: string[];
+}
+
+export interface RightSize {
+  box_id: string;
+  slug: string;
+  spec: Spec;
+  samples: number;
+  window_s: number;
+  cpu_p95_pct: number;
+  ram_p95_mb: number;
+  ram_max_mb: number;
+  idle_s: number;
+  suggestion: "keep" | "downsize" | "upsize" | "sleep" | "stop" | "insufficient_data";
+  suggested_spec?: Spec | null;
+  savings_per_hour: number;
+  savings_per_month: number;
+  reasons: string[];
+}
+
+export interface WarmPoolSpec {
+  template: string;
+  profile?: string;
+  spec: Spec;
+  min: number;
+  max: number;
+  ttl_minutes: number;
+}
+export interface WarmStats {
+  hits: number;
+  misses: number;
+  hit_rate: number;
+  avg_claim_ms: number;
+  avg_cold_ms: number;
+  created: number;
+  expired: number;
+  last_refill?: string;
+  refill_error?: string;
+}
+export interface WarmView {
+  enabled: boolean;
+  pools: WarmPoolSpec[];
+  entries: { id: string; host_id: string; template: string; spec: Spec; status: "starting" | "ready"; created_at: string; ready_at?: string | null; start_ms: number }[];
+  stats: WarmStats;
+  ready: Record<string, number>;
+}
+
+export interface SpeedHost {
+  host_id: string;
+  provider: string;
+  region: string;
+  driver: string;
+  arch: string;
+  cow: string;
+  vm: boolean;
+  cache: boolean;
+  mesh: boolean;
+  load_pct: number;
+  boxes: number;
+  cold_eta_s: number;
+  features: string[];
+}
+export interface SpeedView {
+  placement: "binpack" | "spread" | string;
+  warm: WarmStats;
+  warm_enabled: boolean;
+  warm_ready: number;
+  avg_claim_ms: number;
+  avg_cold_ms: number;
+  speedup: number;
+  hosts: SpeedHost[];
+  cache_env: string[];
+  exec_compact: boolean;
+}
+
+export interface ResumeInfo {
+  box: Box;
+  woke: boolean;
+  idle_seconds: number;
+  recent_execs: { ts: string; command: string; exit_code: number | null; log_id: string | null }[];
+  running_jobs: Job[];
+  last_snapshot: Snapshot | null;
+  files_changed: string[];
+  listening_ports: number[];
+  next: string[];
+}
+
+export interface MeshNode {
+  id: string;
+  name: string;
+  givenName: string;
+  ipAddresses: string[];
+  online: boolean;
+  lastSeen: string;
+  forcedTags: string[];
+  validTags: string[];
+  user: { name: string };
+}
+export interface MeshView {
+  enabled: boolean;
+  url?: string;
+  user?: string;
+  nodes: MeshNode[];
+  online: number;
+  hosts_joined: number;
+  hosts: number;
+  acl_rules: number;
+  derp: string;
+  error?: string;
+  hint?: string;
+}
+export interface MeshConfigView {
+  enabled: boolean;
+  config: string;
+  derp: string;
+  acl: string;
+  paths: Record<string, string>;
+}
+export interface MeshACLView {
+  enabled: boolean;
+  policy: unknown;
+  notes: string[];
+}
+export interface MeshKeyResult {
+  key: string;
+  tags: string[];
+  ephemeral: boolean;
+  expires_at: string;
+  login_server: string;
+  command: string;
 }

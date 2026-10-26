@@ -45,6 +45,22 @@ import type {
   StorageView,
   Transport,
   ValidateResult,
+  Catalog,
+  MeshACLView,
+  MeshConfigView,
+  MeshKeyResult,
+  MeshView,
+  ProfilesResponse,
+  ProviderHealth,
+  ProviderPrefs,
+  RecommendBody,
+  RecommendResult,
+  ResumeInfo,
+  RightSize,
+  SpeedView,
+  ValidateTokenResult,
+  WarmPoolSpec,
+  WarmView,
 } from "./types";
 
 export const PROXY_BASE = "/api/boxa";
@@ -55,6 +71,8 @@ export class ApiError extends Error {
   status: number;
   retryAfter?: number;
   docsUrl?: string;
+  /** v1.3: các lệnh gợi ý tiếp theo thường gỡ được lỗi (error.next). */
+  next: string[];
   constructor(status: number, body: Partial<ApiErrorBody> | null, fallback: string) {
     super(body?.error?.message ?? fallback);
     this.status = status;
@@ -62,6 +80,7 @@ export class ApiError extends Error {
     this.hint = body?.error?.hint;
     this.retryAfter = body?.error?.retry_after_s;
     this.docsUrl = body?.error?.docs_url;
+    this.next = Array.isArray(body?.error?.next) ? body!.error!.next! : [];
   }
 }
 
@@ -164,6 +183,20 @@ export const paths = {
   storage: "/storage",
   notify: "/notify",
   providerRegions: (id: string) => `/providers/${id}/regions`,
+  // v1.3
+  providersHealth: "/providers/health",
+  providerHealth: (id: string) => `/providers/${id}/health`,
+  providerPrefs: (id: string) => `/providers/${id}/prefs`,
+  catalog: (f?: { provider?: string; region?: string; arch?: string; min_cpu?: number; min_ram_mb?: number; max_price_hour?: number; limit?: number }) => `/catalog${qs(f)}`,
+  profiles: "/profiles",
+  rightsize: "/rightsize",
+  boxRightsize: (id: string) => `/boxes/${id}/rightsize`,
+  boxResume: (id: string) => `/boxes/${id}/resume`,
+  warmPool: "/warm-pool",
+  speed: "/speed",
+  mesh: "/mesh",
+  meshConfig: "/mesh/config",
+  meshAcl: "/mesh/acl",
   adminSystem: "/admin/system",
   adminJobs: "/admin/jobs",
   adminAudit: (f?: { actor?: string; type?: string }) => `/admin/audit${qs(f)}`,
@@ -247,6 +280,32 @@ export const api = {
   getNotify: () => http.get<NotifyView>(paths.notify),
   saveNotify: (body: NotifyInput) => http.put<NotifyView>(paths.notify, body),
   testNotify: (channel: "telegram" | "email" | "all", kind: "test" | "daily_report" = "test") => http.post<NotifyTestResult>(`${paths.notify}/test`, { channel, kind }),
+
+  // v1.3: provider manager
+  providersHealth: () => http.get<List<ProviderHealth>>(paths.providersHealth),
+  providerHealth: (id: string) => http.get<ProviderHealth>(paths.providerHealth(id)),
+  validateProvider: (id: string, token: string) => http.post<ValidateTokenResult>(`/providers/${id}/validate`, { token }),
+  checkProvider: (id: string) => http.post<ProviderHealth>(`/providers/${id}/check`),
+  resetProvider: (id: string) => http.post<ProviderHealth>(`/providers/${id}/reset`),
+  getProviderPrefs: (id: string) => http.get<ProviderPrefs>(paths.providerPrefs(id)),
+  saveProviderPrefs: (id: string, body: Partial<ProviderPrefs>) => http.put<ProviderPrefs>(paths.providerPrefs(id), body),
+  catalog: () => http.get<Catalog>(paths.catalog()),
+  // v1.3: chọn box theo nhu cầu
+  profiles: () => http.get<ProfilesResponse>(paths.profiles),
+  recommend: (body: RecommendBody) => http.post<RecommendResult>("/recommend", body),
+  // v1.3: tốc độ + agent
+  rightsizeAll: () => http.get<List<RightSize>>(paths.rightsize),
+  rightsizeBox: (id: string) => http.get<RightSize>(paths.boxRightsize(id)),
+  getWarmPool: () => http.get<WarmView>(paths.warmPool),
+  saveWarmPool: (body: { enabled: boolean; pools: WarmPoolSpec[] }) => http.put<WarmView>(paths.warmPool, body),
+  speed: () => http.get<SpeedView>(paths.speed),
+  cloneBox: (id: string, slug?: string) => http.post<Box>(`/boxes/${id}/clone`, { slug: slug ?? "" }),
+  resumeBox: (id: string) => http.get<ResumeInfo>(paths.boxResume(id)),
+  // v1.3: mesh
+  mesh: () => http.get<MeshView>(paths.mesh),
+  meshConfig: () => http.get<MeshConfigView>(paths.meshConfig),
+  meshAcl: () => http.get<MeshACLView>(paths.meshAcl),
+  meshKey: (body: { host_id?: string; box_id?: string; reusable: boolean; ttl_minutes: number }) => http.post<MeshKeyResult>("/mesh/keys", body),
 
   // Templates
   templates: () => http.get<List<Template>>(paths.templates),

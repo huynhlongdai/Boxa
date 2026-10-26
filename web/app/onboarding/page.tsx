@@ -16,6 +16,7 @@ import { Field, Input } from "@/components/ui/input";
 import { AgentWizard, type WizardResult } from "@/components/boxa/agent-wizard";
 import { ConfidenceBadge } from "@/components/boxa/status";
 import { LocaleSelect } from "@/components/locale-switcher";
+import { toastError } from "@/lib/error-toast";
 
 const STEPS = ["token", "host", "agent", "call"] as const;
 const mono = (c: React.ReactNode) => <span className="font-mono">{c}</span>;
@@ -147,7 +148,7 @@ function HostStep({ onNext }: { onNext: () => void }) {
           try {
             const h = await api.createHost({ provider: "hetzner", sku: chosen!.sku, region: chosen!.region });
             setStartAt(Date.now()); setNow(Date.now()); setHostId(h.id);
-          } catch (e) { toast.error(errMsg(e)); }
+          } catch (e) { toastError(e); }
         }}><Server /> {t("createHost")} {chosen ? `(${tc("perMonth", { price: usd(chosen.price_month, 2) })})` : ""}</Button>
       </div>
     </div>

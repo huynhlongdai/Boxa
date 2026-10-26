@@ -17,6 +17,7 @@ import type { Box, List, Overview } from "@/lib/types";
 import { NAV } from "./nav";
 import { useEmergency } from "./boxa/emergency";
 import { BoxStatusChip } from "./boxa/status";
+import { toastError } from "@/lib/error-toast";
 
 const Ctx = React.createContext<{ open: () => void }>({ open: () => {} });
 export const usePalette = () => React.useContext(Ctx);
@@ -93,7 +94,7 @@ export function CommandPaletteProvider({ children }: { children: React.ReactNode
       mutate((k) => typeof k === "string" && k.startsWith("/boxes"));
       mutate("/overview");
     } catch (e) {
-      toast.error(errMsg(e));
+      toastError(e);
     }
   };
 

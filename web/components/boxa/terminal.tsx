@@ -14,6 +14,7 @@ import { useLive } from "@/components/live";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dot } from "./status";
+import { toastError } from "@/lib/error-toast";
 
 type ConnState = "connecting" | "open" | "closed" | "mock";
 
@@ -175,7 +176,7 @@ export function BoxTerminal({ box }: { box: Box }) {
       termRef.current?.focus();
       if (mock) termRef.current?.write(`\r\n\x1b[33m${t("tookOver")}\x1b[0m\r\n\x1b[32m${t("promptUser")}@${box.slug}\x1b[0m:\x1b[34m/work\x1b[0m$ `);
     } catch (e) {
-      toast.error(errMsg(e));
+      toastError(e);
     } finally {
       setBusy(false);
     }
@@ -188,7 +189,7 @@ export function BoxTerminal({ box }: { box: Box }) {
       toast.success(t("releaseToast"));
       termRef.current?.writeln(`\r\n\x1b[33m${t("released")}\x1b[0m`);
     } catch (e) {
-      toast.error(errMsg(e));
+      toastError(e);
     } finally {
       setBusy(false);
     }
