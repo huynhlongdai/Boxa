@@ -41,4 +41,10 @@ func TestRankSandboxCapabilities(t *testing.T) {
 	if len(ranked) != 1 || ranked[0].Provider != "forky" || !strings.Contains(strings.Join(ranked[0].Reasons, " "), "native fork") {
 		t.Fatalf("fork ranking %+v", ranked)
 	}
+	// explicit isolation=sandbox does not let a shared-kernel sandbox through for untrusted code
+	req, prof = Resolve(model.Requirements{CPU: 1, RAMMB: 1024, Untrusted: true, Isolation: "sandbox", Lifetime: "ephemeral"}, "")
+	ranked, rej = Rank(req, prof, []Option{forky, container})
+	if len(ranked) != 1 || ranked[0].Provider != "forky" || len(rej) != 1 || !strings.Contains(rej[0].Reason, "shared kernel") {
+		t.Fatalf("isolation=sandbox + untrusted: ranked %+v rej %+v", ranked, rej)
+	}
 }

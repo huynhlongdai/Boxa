@@ -69,6 +69,7 @@ func (m *Manager) SetProviderToken(ctx context.Context, p *Principal, id, token 
 		mp.TokenEnc, mp.Connected, mp.Error, mp.TokenSource = "", id == "local", nil, ""
 		m.Store.PutProvider(ctx, mp)
 		m.Emit(ctx, p.Actor(), "", "", "provider.disconnected", id+" token removed", nil)
+		m.fillProviderMeta(mp)
 		return mp, nil
 	}
 	if err := prov.Validate(ctx, token); err != nil {
@@ -97,6 +98,7 @@ func (m *Manager) SetProviderToken(ctx context.Context, p *Principal, id, token 
 		defer cancel()
 		m.refreshLiveOffers(c, id)
 	}()
+	m.fillProviderMeta(mp)
 	return mp, nil
 }
 

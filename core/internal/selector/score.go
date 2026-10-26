@@ -119,7 +119,8 @@ func Rank(req model.Requirements, prof Profile, opts []Option) ([]Scored, []Reje
 			// untrusted code may still run in a container, but only with an explicit opt-in
 			reject(o, "untrusted workload needs a VM or sandbox (containers share the host kernel)")
 			continue
-		case req.Isolation == "vm" && req.Untrusted && o.Kind == KindSandbox && !o.StrongIsolation:
+		case req.Untrusted && req.Isolation != "container" && o.Kind == KindSandbox && !o.StrongIsolation:
+			// also with isolation=sandbox: a container-based sandbox API shares its kernel
 			reject(o, "untrusted workload: this sandbox API runs containers on a shared kernel")
 			continue
 		case req.Isolation == "vm" && !req.Untrusted && o.Isolation == "container":
