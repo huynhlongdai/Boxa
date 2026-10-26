@@ -11,6 +11,7 @@ import (
 	"boxa/core/internal/boxd"
 	"boxa/core/internal/boxyaml"
 	"boxa/core/internal/hostlink"
+	"boxa/core/internal/i18n"
 	"boxa/core/internal/model"
 	"boxa/core/internal/proto"
 	"boxa/core/internal/provider"
@@ -65,6 +66,10 @@ func (m *Manager) CreateBox(ctx context.Context, p *Principal, req boxyaml.Reque
 	if err := m.checkBudget(ctx, agent); err != nil {
 		return nil, false, err
 	}
+	eg, err := m.effectiveEgress(ctx, agent, req.Egress)
+	if err != nil {
+		return nil, false, err
+	}
 	idle, ttl := req.IdleMinutes, req.TTLSeconds
 	slug, err := m.uniqueSlug(ctx, req.Slug, baseTemplate)
 	if err != nil {
@@ -76,7 +81,7 @@ func (m *Manager) CreateBox(ctx context.Context, p *Principal, req boxyaml.Reque
 		Lifecycle: req.Lifecycle, Template: req.Template, Spec: model.Spec{CPU: req.Spec.CPU, RAMMB: req.Spec.RAMMB, DiskGB: req.Spec.DiskGB},
 		Region: req.Region, TTLSeconds: ttl, IdleMinutes: idle, BudgetUSD: req.BudgetUSD,
 		Ports: nonNilInts(req.Ports), Secrets: nonNilStrs(req.Secrets), Setup: req.Setup, CreatedAt: now, LastActiveAt: now,
-		Locale: m.agentLocale(ctx, agent),
+		Locale: m.agentLocale(ctx, agent), Egress: eg,
 	}
 	if err := m.Store.PutBox(ctx, b); err != nil {
 		return nil, false, err
@@ -264,6 +269,7 @@ func (m *Manager) provisionWithTemplate(id, baseTemplate string) {
 	defer lock.Unlock()
 	exclude := map[string]bool{}
 	var lastErr error
+	burstFallbacks := 0
 	for attempt := 1; attempt <= maxProvisionAttempts; attempt++ {
 		b, err := m.Store.GetBox(ctx, id)
 		if err != nil || b.Status == model.StatusTerminated {
@@ -303,6 +309,13 @@ func (m *Manager) provisionWithTemplate(id, baseTemplate string) {
 			host, err = m.rentBurstHost(ctx, pl.Offer)
 			if err != nil {
 				lastErr = err
+				// fall through to the next provider in the chain
+				exclude["provider:"+pl.Offer.Provider] = true
+				if burstFallbacks < len(m.chain()) {
+					burstFallbacks++
+					attempt-- // a provider failure does not use up a host retry
+				}
+				m.Emit(ctx, "scheduler", b.ID, b.AgentID, "box.burst_failed", fmt.Sprintf("burst host at %s failed: %v; trying the next provider in the chain", pl.Offer.Provider, err), nil)
 				continue
 			}
 		}
@@ -320,6 +333,16 @@ func (m *Manager) provisionWithTemplate(id, baseTemplate string) {
 			lastErr = err
 			exclude[host.ID] = true
 			m.Emit(ctx, "system", b.ID, b.AgentID, "box.provision_failed", fmt.Sprintf("attempt %d on %s failed: %v", attempt, host.ID, err), nil)
+			dctx, dc := context.WithTimeout(ctx, time.Minute)
+			_ = m.Hub.Call(dctx, host.ID, proto.MDelete, proto.BoxRef{BoxID: b.ID}, nil)
+			dc()
+			continue
+		}
+		if err := m.applyEgress(ctx, b, false); err != nil {
+			// fail closed: never hand out a box whose allowlist could not be applied
+			lastErr = err
+			exclude[host.ID] = true
+			m.Emit(ctx, "system", b.ID, b.AgentID, "box.provision_failed", fmt.Sprintf("attempt %d on %s: egress policy failed: %v", attempt, host.ID, err), nil)
 			dctx, dc := context.WithTimeout(ctx, time.Minute)
 			_ = m.Hub.Call(dctx, host.ID, proto.MDelete, proto.BoxRef{BoxID: b.ID}, nil)
 			dc()
@@ -405,6 +428,10 @@ func (m *Manager) setStatus(ctx context.Context, b *model.Box, status, actor, ms
 			cost = &c
 		}
 		m.Emit(ctx, actor, b.ID, b.AgentID, "box."+status, text, cost)
+		if status == model.StatusFailed {
+			loc := m.Settings(ctx).Locale
+			m.notify("box_failed", i18n.T(loc, "notify.box_failed_title", b.Slug), i18n.T(loc, "notify.box_failed_body", b.ID, b.AgentName, msg))
+		}
 	}
 	m.publishBox(m.decorateBox(ctx, b))
 }
@@ -515,6 +542,7 @@ type ExecInput struct {
 	TimeoutS  int    `json:"timeout_s"`
 	Async     bool   `json:"async"`
 	TailLines int    `json:"tail_lines"`
+	jobID     string // set for async jobs (cancellable)
 }
 
 func (m *Manager) secretEnv(ctx context.Context, b *model.Box) (map[string]string, error) {
@@ -524,7 +552,7 @@ func (m *Manager) secretEnv(ctx context.Context, b *model.Box) (map[string]strin
 		if err != nil {
 			continue
 		}
-		if len(s.Agents) > 0 && !contains(s.Agents, b.AgentID) {
+		if s.System || (len(s.Agents) > 0 && !contains(s.Agents, b.AgentID)) {
 			continue
 		}
 		v, err := m.Crypt.Open(s.ValueEnc)
@@ -565,6 +593,7 @@ func (m *Manager) Exec(ctx context.Context, p *Principal, id string, in ExecInpu
 			return nil, err
 		}
 		m.Emit(ctx, p.Actor(), b.ID, b.AgentID, "job.queued", "job "+j.ID+": "+trunc(in.Command, 160), nil)
+		in.jobID = j.ID
 		go m.runJob(j, b, in)
 		return map[string]string{"job_id": j.ID}, nil
 	}
@@ -580,7 +609,7 @@ func (m *Manager) execSync(ctx context.Context, actor string, b *model.Box, in E
 	cctx, cancel := context.WithTimeout(ctx, time.Duration(in.TimeoutS+60)*time.Second)
 	defer cancel()
 	err = m.Hub.Call(cctx, b.HostID, proto.MExec, proto.ExecParams{
-		BoxID: b.ID, Command: in.Command, Cwd: in.Cwd, Env: env, TimeoutS: in.TimeoutS, TailLines: in.TailLines,
+		BoxID: b.ID, Command: in.Command, Cwd: in.Cwd, Env: env, TimeoutS: in.TimeoutS, TailLines: in.TailLines, JobID: in.jobID,
 	}, &out)
 	if err != nil {
 		return nil, mapHostErr(err)
@@ -617,9 +646,21 @@ func (m *Manager) runJob(j *model.Job, b *model.Box, in ExecInput) {
 	ctx := context.Background()
 	j.Status = "running"
 	m.Store.PutJob(ctx, j)
-	res, err := m.execSync(ctx, "job", b, in)
+	jctx, cancel := context.WithCancel(ctx)
+	m.jobCancel.Store(j.ID, cancel)
+	res, err := m.execSync(jctx, "job", b, in)
+	m.jobCancel.Delete(j.ID)
+	cancel()
 	now := time.Now().UTC()
 	j.FinishedAt = &now
+	if cur, _ := m.Store.GetJob(ctx, j.ID); cur != nil && cur.Status == "canceled" {
+		j.Status = "canceled"
+		if err == nil && res != nil {
+			j.Result = res
+		}
+		m.Store.PutJob(ctx, j)
+		return
+	}
 	if err != nil {
 		j.Status = "failed"
 		ae := model.AsAPIError(err)
@@ -647,6 +688,33 @@ func (m *Manager) GetJob(ctx context.Context, p *Principal, id string) (*model.J
 	return j, nil
 }
 
+// CancelJob stops a queued/running async job: the command is killed on the
+// host and the job ends with status "canceled".
+func (m *Manager) CancelJob(ctx context.Context, p *Principal, id string) (*model.Job, error) {
+	j, err := m.GetJob(ctx, p, id)
+	if err != nil {
+		return nil, err
+	}
+	if j.Status != "queued" && j.Status != "running" {
+		return j, nil
+	}
+	now := time.Now().UTC()
+	j.Status, j.FinishedAt = "canceled", &now
+	if err := m.Store.PutJob(ctx, j); err != nil {
+		return nil, err
+	}
+	if b, err := m.Store.GetBox(ctx, j.BoxID); err == nil && m.Hub.Connected(b.HostID) {
+		cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		m.Hub.Call(cctx, b.HostID, proto.MExecCancel, proto.ExecCancelParams{JobID: j.ID}, nil)
+		cancel()
+	}
+	if c, ok := m.jobCancel.Load(j.ID); ok {
+		c.(context.CancelFunc)()
+	}
+	m.Emit(ctx, p.Actor(), j.BoxID, j.AgentID, "job.canceled", "job "+j.ID+" canceled", nil)
+	return j, nil
+}
+
 // WaitJob polls until the job finishes or the timeout passes.
 func (m *Manager) WaitJob(ctx context.Context, p *Principal, id string, wait time.Duration) (*model.Job, error) {
 	deadline := time.Now().Add(wait)
@@ -655,7 +723,7 @@ func (m *Manager) WaitJob(ctx context.Context, p *Principal, id string, wait tim
 		if err != nil {
 			return nil, err
 		}
-		if j.Status == "done" || j.Status == "failed" || time.Now().After(deadline) {
+		if j.Status == "done" || j.Status == "failed" || j.Status == "canceled" || time.Now().After(deadline) {
 			return j, nil
 		}
 		select {
@@ -822,6 +890,13 @@ func (m *Manager) Wake(ctx context.Context, p *Principal, id string) (*model.Box
 	if err := m.Hub.Call(ctx, b.HostID, proto.MStart, proto.BoxRef{BoxID: b.ID}, nil); err != nil {
 		return nil, mapHostErr(err)
 	}
+	if b.Egress != nil {
+		// re-resolve allowlisted domains after a wake (addresses may have changed)
+		if err := m.applyEgress(ctx, b, false); err != nil {
+			m.Hub.Call(ctx, b.HostID, proto.MStop, proto.BoxRef{BoxID: b.ID}, nil)
+			return nil, err
+		}
+	}
 	b.LastActiveAt = time.Now().UTC()
 	m.setStatus(ctx, b, model.StatusRunning, p.Actor(), "woken")
 	return m.decorateBox(ctx, b), nil
@@ -855,26 +930,47 @@ func (m *Manager) snapshotBox(ctx context.Context, b *model.Box, actor string) (
 	}
 	m.setStatus(ctx, b, model.StatusSnapshotting, actor, "")
 	snapID := secret.ID("snap")
+	params := proto.SnapshotParams{BoxID: b.ID, SnapshotID: snapID}
+	ostore := m.objStore(ctx)
+	var key string
+	if ostore != nil {
+		key = snapshotKey(ostore, b.ID, snapID)
+		if u, err := ostore.Presign("PUT", key, 2*time.Hour); err == nil {
+			params.UploadURL = u
+		}
+	}
 	var res proto.SnapshotResult
 	cctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
-	err = m.Hub.Call(cctx, b.HostID, proto.MSnapshot, proto.SnapshotParams{BoxID: b.ID, SnapshotID: snapID}, &res)
+	err = m.Hub.Call(cctx, b.HostID, proto.MSnapshot, params, &res)
 	cancel()
 	m.setStatus(ctx, b, prev, actor, "snapshot finished")
 	if err != nil {
 		return nil, mapHostErr(err)
 	}
-	sn := &model.Snapshot{ID: snapID, BoxID: b.ID, SizeMB: float64(int(res.SizeMB*1000)) / 1000, CreatedAt: time.Now().UTC(), Location: res.Location, HostID: b.HostID}
+	sn := &model.Snapshot{ID: snapID, BoxID: b.ID, SizeMB: float64(int(res.SizeMB*1000)) / 1000, CreatedAt: time.Now().UTC(), Location: res.Location, HostID: b.HostID, Storage: "local"}
+	if res.Uploaded && ostore != nil {
+		sn.Storage, sn.RemoteURL = "s3", ostore.URI(key)
+		if res.UploadedBytes > 0 && sn.SizeMB == 0 {
+			sn.SizeMB = float64(int(float64(res.UploadedBytes)/(1<<20)*1000)) / 1000
+		}
+	} else if params.UploadURL != "" {
+		sn.UploadError = res.UploadError
+		if sn.UploadError == "" {
+			sn.UploadError = "host did not upload the snapshot"
+		}
+	}
 	if err := m.Store.PutSnapshot(ctx, sn); err != nil {
 		return nil, err
 	}
-	m.Emit(ctx, actor, b.ID, b.AgentID, "box.snapshot", fmt.Sprintf("snapshot %s (%.2f MB) at %s", sn.ID, sn.SizeMB, sn.Location), nil)
-	// Retention: keep newest N records.
-	keep := m.Settings(ctx).Reaper.KeepSnapshots
-	if snaps, err := m.Store.ListSnapshots(ctx, b.ID); err == nil && len(snaps) > keep {
-		for _, old := range snaps[keep:] {
-			m.Store.DeleteSnapshot(ctx, old.ID)
-		}
+	where := sn.Location
+	if sn.RemoteURL != "" {
+		where += " + " + sn.RemoteURL
 	}
+	m.EmitData(ctx, actor, b.ID, b.AgentID, "box.snapshot", fmt.Sprintf("snapshot %s (%.2f MB) at %s", sn.ID, sn.SizeMB, where), nil, map[string]any{"snapshot_id": sn.ID, "storage": sn.Storage})
+	if sn.UploadError != "" {
+		m.Emit(ctx, "system", b.ID, b.AgentID, "snapshot.upload_failed", fmt.Sprintf("snapshot %s kept locally; upload failed: %s", sn.ID, sn.UploadError), nil)
+	}
+	m.applySnapshotRetention(ctx, b.ID)
 	return sn, nil
 }
 
@@ -1006,6 +1102,8 @@ func (m *Manager) EmergencyStop(ctx context.Context, p *Principal, confirm strin
 		}
 	}
 	m.Emit(ctx, p.Actor(), "", "", "emergency_stop", fmt.Sprintf("emergency stop: %d boxes put to sleep", n), nil)
+	loc := m.Settings(ctx).Locale
+	m.notify("emergency_stop", i18n.T(loc, "notify.emergency_title"), i18n.T(loc, "notify.emergency_body", n, p.Actor()))
 	return n, nil
 }
 

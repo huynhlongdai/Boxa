@@ -18,6 +18,16 @@ import (
 //   - host tunnel down > 2 min               → host down + "host_down" approval
 func (m *Manager) reap(ctx context.Context) error {
 	now := time.Now().UTC()
+	// Snapshot retention (keep_snapshots / snapshot_retention_days), hourly.
+	m.mu.Lock()
+	due := now.Sub(m.lastRetention) > time.Hour
+	if due {
+		m.lastRetention = now
+	}
+	m.mu.Unlock()
+	if due {
+		m.applySnapshotRetention(ctx, "")
+	}
 	boxes, err := m.Store.ListBoxes(ctx, store.BoxFilter{Statuses: []string{model.StatusRunning, model.StatusSleeping}})
 	if err != nil {
 		return err

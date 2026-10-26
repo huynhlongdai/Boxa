@@ -208,6 +208,7 @@ func (m *Manager) createApproval(ctx context.Context, typ, dedupe, title, detail
 	}
 	m.Emit(ctx, "system", boxID, agentID, "approval.created", title, amount)
 	m.Broker.Publish(events.Msg{Type: "approval.created", Data: a, AgentID: ""})
+	m.notifyApproval(a)
 	return a
 }
 

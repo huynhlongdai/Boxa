@@ -309,6 +309,16 @@ func specBody(a args) map[string]any {
 			body[k] = a[k]
 		}
 	}
+	if a.has("egress_allow") || a.has("egress_deny_by_default") {
+		eg := map[string]any{"allow": []any{}}
+		if v, ok := a["egress_allow"].([]any); ok {
+			eg["allow"] = v
+		}
+		if a.has("egress_deny_by_default") {
+			eg["deny_by_default"] = a.b("egress_deny_by_default")
+		}
+		body["egress"] = eg
+	}
 	return body
 }
 

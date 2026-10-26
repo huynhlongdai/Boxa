@@ -42,7 +42,7 @@ func (s *Server) llmsTxt(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(b, "- [Tools (Anthropic)](%s/v1/tools?format=anthropic)\n", base)
 	fmt.Fprintf(b, "- [Tools (Gemini)](%s/v1/tools?format=gemini)\n", base)
 	fmt.Fprintf(b, "- [MCP server card](%s/.well-known/mcp.json): %s\n", base, t("llms.d_mcp"))
-	fmt.Fprintf(b, "- [A2A agent card](%s/.well-known/agent.json)\n", base)
+	fmt.Fprintf(b, "- [A2A agent card](%s/.well-known/agent.json): %s\n", base, t("llms.d_a2a", base))
 	fmt.Fprintf(b, "- [Agent kinds](%s/v1/agent-kinds): %s\n", base, t("llms.d_kinds"))
 	fmt.Fprintf(b, "- [Errors](%s/v1/errors): %s\n\n", base, t("llms.d_errors"))
 	fmt.Fprintf(b, "## %s\n\n", t("llms.h_tools"))
@@ -66,6 +66,7 @@ func (s *Server) llmsFull(w http.ResponseWriter, r *http.Request) {
 	t := func(k string, a ...any) string { return i18n.T(loc, k, a...) }
 	fmt.Fprintf(b, "## %s\n\n%s\n\n", t("llms.h_auth"), t("llms.auth", base))
 	fmt.Fprintf(b, "## %s\n\n%s\n\n", t("llms.h_concepts"), t("llms.concepts"))
+	fmt.Fprintf(b, "## A2A\n\n%s\n\n", t("llms.a2a", base))
 
 	fmt.Fprintf(b, "## %s\n\n", t("llms.h_tools"))
 	for _, tl := range mcp.Tools {
@@ -164,15 +165,23 @@ func (s *Server) mcpCard(w http.ResponseWriter, r *http.Request) {
 }
 
 // agentCard serves /.well-known/agent.json (A2A AgentCard, protocol 0.3).
-// Boxa exposes its skills over REST/MCP; the A2A message/send task endpoint
-// is not implemented, so the card advertises the HTTP+JSON interface.
+// The JSON-RPC task API lives at POST /a2a (message/send, message/stream,
+// tasks/get, tasks/cancel, tasks/resubscribe + the ≤0.2 aliases tasks/send
+// and tasks/sendSubscribe). Every Boxa tool is a skill: send a data part
+// {"tool": "<name>", "arguments": {...}}; commands run as async jobs.
 func (s *Server) agentCard(w http.ResponseWriter, r *http.Request) {
 	base := s.publicBase(r)
 	loc := reqLocale(r)
-	var skills []any
+	skills := []any{map[string]any{
+		"id": "exec", "name": "Run a command in a box",
+		"description": "Send the shell command as a text part with metadata.box_id (or a data part {box_id, command, cwd?, timeout_s?}). Runs as an async job; the task id is the job id. Stream progress with message/stream, cancel with tasks/cancel.",
+		"tags":        []string{"sandbox", "linux", "code-execution", "exec"},
+		"examples":    []string{`{"role":"user","parts":[{"kind":"text","text":"pytest -q"}],"metadata":{"box_id":"box_123"}}`},
+		"inputModes":  []string{"text/plain", "application/json"}, "outputModes": []string{"application/json", "text/plain"},
+	}}
 	for _, t := range mcp.Tools {
 		skills = append(skills, map[string]any{
-			"id": t.Name, "name": t.Title, "description": t.Description,
+			"id": t.Name, "name": t.Title, "description": t.Description + ` A2A: data part {"tool":"` + t.Name + `","arguments":{…}}.`,
 			"tags":       []string{"sandbox", "linux", "code-execution", strings.TrimPrefix(t.Name, "box_")},
 			"inputModes": []string{"application/json"}, "outputModes": []string{"application/json"},
 		})
@@ -181,16 +190,17 @@ func (s *Server) agentCard(w http.ResponseWriter, r *http.Request) {
 		"protocolVersion":    "0.3.0",
 		"name":               "Boxa",
 		"description":        i18n.T(loc, "llms.summary"),
-		"url":                base + "/v1",
-		"preferredTransport": "HTTP+JSON",
+		"url":                base + "/a2a",
+		"preferredTransport": "JSONRPC",
 		"additionalInterfaces": []any{
+			map[string]any{"url": base + "/a2a", "transport": "JSONRPC"},
 			map[string]any{"url": base + "/v1", "transport": "HTTP+JSON"},
 		},
 		"provider":                          map[string]any{"organization": "Boxa", "url": base},
 		"version":                           manager.Version,
 		"documentationUrl":                  base + "/llms-full.txt",
 		"iconUrl":                           nil,
-		"capabilities":                      map[string]any{"streaming": false, "pushNotifications": false, "stateTransitionHistory": false},
+		"capabilities":                      map[string]any{"streaming": true, "pushNotifications": false, "stateTransitionHistory": false},
 		"securitySchemes":                   map[string]any{"bearer": map[string]any{"type": "http", "scheme": "bearer", "description": "Boxa API key"}},
 		"security":                          []any{map[string]any{"bearer": []string{}}},
 		"defaultInputModes":                 []string{"application/json", "text/plain"},
@@ -198,6 +208,6 @@ func (s *Server) agentCard(w http.ResponseWriter, r *http.Request) {
 		"skills":                            skills,
 		"supportsAuthenticatedExtendedCard": false,
 		"x-boxa": map[string]any{"mcp": base + "/mcp", "openapi": base + "/v1/openapi.json", "tools": base + "/v1/tools?format=openai",
-			"note": "A2A JSON-RPC task methods (message/send) are not implemented; call the REST/MCP interfaces."},
+			"a2a_methods": []string{"message/send", "message/stream", "tasks/get", "tasks/cancel", "tasks/resubscribe", "tasks/send", "tasks/sendSubscribe"}},
 	})
 }

@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"boxa/core/internal/egress"
 )
 
 // Request is the normalized create-box request (same shape as POST /boxes body).
@@ -28,6 +30,8 @@ type Request struct {
 	Region      string   `json:"region,omitempty"`
 	YAML        string   `json:"yaml,omitempty"`
 	Wait        *bool    `json:"wait,omitempty"`
+	// Egress restricts outbound traffic (enforced by the incus driver).
+	Egress *egress.Policy `json:"egress,omitempty"`
 }
 
 type Spec struct {
@@ -61,7 +65,7 @@ var (
 var knownKeys = map[string]bool{
 	"name": true, "template": true, "spec": true, "lifecycle": true, "idle_minutes": true,
 	"ttl": true, "ttl_seconds": true, "budget_usd": true, "ports": true, "secrets": true,
-	"setup": true, "region": true, "description": true,
+	"setup": true, "region": true, "description": true, "egress": true,
 }
 
 // ParseSize parses "4G", "512M", "4GB", "4096" (MB for ram) into MB.
@@ -236,6 +240,49 @@ func Parse(src string) (*Request, Errors) {
 				}
 				r.Secrets = append(r.Secrets, s.Value)
 			}
+		case "egress":
+			// egress: [pypi.org, "*.github.com"]        (allowlist, deny everything else)
+			// egress: { allow: [...], deny_by_default: true }
+			pol := &egress.Policy{}
+			var list *yaml.Node
+			switch v.Kind {
+			case yaml.SequenceNode:
+				list = v
+			case yaml.MappingNode:
+				for j := 0; j+1 < len(v.Content); j += 2 {
+					ek, ev := v.Content[j], v.Content[j+1]
+					switch ek.Value {
+					case "allow":
+						if ev.Kind != yaml.SequenceNode {
+							add(ev, "egress.allow must be a list of domains/IPs/CIDRs")
+							continue
+						}
+						list = ev
+					case "deny_by_default":
+						b, err := strconv.ParseBool(ev.Value)
+						if err != nil {
+							add(ev, "egress.deny_by_default must be true or false")
+						}
+						pol.DenyByDefault = b
+					default:
+						add(ek, "unknown egress key %q (allowed: allow, deny_by_default)", ek.Value)
+					}
+				}
+			default:
+				add(v, "egress must be a list or { allow: [...], deny_by_default: true }")
+				continue
+			}
+			if list != nil {
+				for _, e := range list.Content {
+					r, err := egress.ParseEntry(e.Value)
+					if err != nil {
+						add(e, "egress entry: %s", err.Error())
+						continue
+					}
+					pol.Allow = append(pol.Allow, r.String())
+				}
+			}
+			r.Egress = pol
 		case "setup":
 			if v.Kind != yaml.SequenceNode {
 				add(v, "setup must be a list of shell commands")

@@ -61,7 +61,9 @@ func main() {
 	var drv boxd.Driver
 	switch driverName {
 	case "incus":
-		drv = boxd.NewIncusDriver(env("BOXD_MEMORY_ROOT", "/var/lib/boxa/memory"), os.Getenv("BOXD_SNAPSHOT_EXPORT_DIR"))
+		d := boxd.NewIncusDriver(env("BOXD_MEMORY_ROOT", "/var/lib/boxa/memory"), os.Getenv("BOXD_SNAPSHOT_EXPORT_DIR"))
+		d.EgressMode = env("BOXD_EGRESS_MODE", "acl") // acl (Incus network ACL) | nft (nftables)
+		drv = d
 	case "local":
 		d, err := boxd.NewLocalDriver(env("BOXD_ROOT", filepath.Join(stateDir, "root")))
 		if err != nil {

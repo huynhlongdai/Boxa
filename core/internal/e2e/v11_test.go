@@ -103,7 +103,7 @@ func TestDiscoveryAndI18n(t *testing.T) {
 				t.Fatalf("kinds: %d", len(v["items"].([]any)))
 			}
 		case "/.well-known/agent.json":
-			if v["protocolVersion"] != "0.3.0" || len(v["skills"].([]any)) != 18 {
+			if v["protocolVersion"] != "0.3.0" || len(v["skills"].([]any)) != 19 || !strings.HasSuffix(v["url"].(string), "/a2a") || v["capabilities"].(map[string]any)["streaming"] != true {
 				t.Fatalf("agent card %+v", v)
 			}
 		case "/.well-known/mcp.json":

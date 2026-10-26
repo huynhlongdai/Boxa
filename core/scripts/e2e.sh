@@ -94,9 +94,9 @@ echo "== v1.1 discovery (no auth)"
 curl -sf "$BOXA_URL/v1/openapi.json" | jq -e '.openapi=="3.1.0" and (.paths|has("/v1/quote")) and (.paths|has("/v1/boxes/{id}/fork"))' >/dev/null \
   && pass "openapi.json 3.1 ($(curl -s $BOXA_URL/v1/openapi.json | jq '[.paths[]|keys[]]|length') operations)" || fail openapi
 curl -sf "$BOXA_URL/llms.txt" | head -1 | grep -q '^# Boxa' && pass "llms.txt" || fail llms
-curl -sf -H 'Accept-Language: vi' "$BOXA_URL/llms-full.txt" | grep -q 'Bắt đầu nhanh' && pass "llms-full.txt localized (vi)" || fail llms-full
+LF=$(curl -sf -H 'Accept-Language: vi' "$BOXA_URL/llms-full.txt"); grep -q 'Bắt đầu nhanh' <<<"$LF" && grep -q '/a2a' <<<"$LF" && pass "llms-full.txt localized (vi)" || fail llms-full
 curl -sf "$BOXA_URL/.well-known/mcp.json" | jq -e '.transport.url|endswith("/mcp")' >/dev/null && pass ".well-known/mcp.json" || fail mcpcard
-curl -sf "$BOXA_URL/.well-known/agent.json" | jq -e '.protocolVersion=="0.3.0" and (.skills|length)==18' >/dev/null && pass ".well-known/agent.json (A2A card, 18 skills)" || fail agentcard
+curl -sf "$BOXA_URL/.well-known/agent.json" | jq -e '.protocolVersion=="0.3.0" and (.skills|length)==19' >/dev/null && pass ".well-known/agent.json (A2A card, exec + 18 tool skills)" || fail agentcard
 for F in openai anthropic gemini mcp; do
   N=$(curl -sf "$BOXA_URL/v1/tools?format=$F" | jq 'if type=="array" then (if .[0].functionDeclarations then .[0].functionDeclarations|length else length end) else .tools|length end')
   [ "$N" = 18 ] && pass "tools?format=$F → $N" || fail "tools $F ($N)"
@@ -138,6 +138,25 @@ R=$(curl -s -X POST "$BOXA_URL/mcp" -H "Authorization: Bearer $AKEY" -H 'Accept-
 echo "$R" | jq -e '.result.messages[0].content.text|test("调试")' >/dev/null && pass "MCP prompts/get localized (zh)" || fail prompt
 R=$(curl -s -X POST "$BOXA_URL/mcp" -H "Authorization: Bearer $AKEY" -d "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"resources/read\",\"params\":{\"uri\":\"boxa://box/$BOX/file/work/state.txt\"}}")
 echo "$R" | jq -e '.result.contents[0].text=="v1\n"' >/dev/null && pass "MCP resources/read boxa://box/…/file/work/state.txt" || fail resource
+
+echo "== v1.2 providers / egress / A2A / notify / storage"
+P=$(api GET /providers); echo "    providers: $(echo "$P" | jq -c '[.items[]|{id,implemented,chain_rank}]')"
+echo "$P" | jq -e '[.items[]|select(.implemented and (.id=="digitalocean" or .id=="contabo" or .id=="netcup"))]|length==3' >/dev/null && pass "DigitalOcean / Contabo / netcup adapters registered (fallback chain)" || fail providers
+[ "$(api GET /providers/netcup/regions | jq '.items|length')" = 4 ] && pass "provider regions" || fail regions
+EB=$(KEY=$AKEY api POST /boxes -d '{"template":"base","slug":"e2e-egress","spec":{"ram_mb":256},"egress":{"allow":["pypi.org","*.github.com"],"deny_by_default":true}}')
+echo "    egress: $(echo "$EB" | jq -c .egress)"
+echo "$EB" | jq -e '.egress.enforced==false and .egress.mode=="none" and (.egress.warning|test("NOT enforced"))' >/dev/null && pass "egress allowlist on local driver → clear warning (not enforced)" || fail egress
+"$BIN/box" down "$(echo "$EB" | jq -r .id)" >/dev/null
+A=$(curl -s -X POST "$BOXA_URL/a2a" -H "Authorization: Bearer $AKEY" -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"message/send\",\"params\":{\"message\":{\"role\":\"user\",\"parts\":[{\"kind\":\"text\",\"text\":\"echo a2a-ok\"}]},\"metadata\":{\"box_id\":\"$BOX\"}}}")
+echo "$A" | jq -e '.result.status.state=="completed" and (.result.artifacts[0].parts[1].text|test("a2a-ok"))' >/dev/null && pass "A2A message/send → task $(echo "$A" | jq -r .result.id) completed" || { echo "$A"; fail a2a; }
+TID=$(echo "$A" | jq -r .result.id)
+curl -s -X POST "$BOXA_URL/a2a" -H "Authorization: Bearer $AKEY" -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tasks/get\",\"params\":{\"id\":\"$TID\"}}" | jq -e '.result.status.state=="completed"' >/dev/null && pass "A2A tasks/get" || fail a2aget
+S=$(curl -sN -X POST "$BOXA_URL/a2a" -H "Authorization: Bearer $AKEY" -d "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tasks/sendSubscribe\",\"params\":{\"message\":{\"role\":\"user\",\"parts\":[{\"type\":\"text\",\"text\":\"echo sse\"}]},\"metadata\":{\"box_id\":\"$BOX\"}}}")
+echo "$S" | grep '^data: ' | tail -1 | sed 's/^data: //' | jq -e '.result.final==true and .result.status.state=="completed"' >/dev/null && pass "A2A tasks/sendSubscribe (SSE, $(echo "$S" | grep -c '^data: ') events)" || { echo "$S"; fail a2asse; }
+curl -sf "$BOXA_URL/.well-known/agent.json" | jq -e '.capabilities.streaming and (.url|endswith("/a2a"))' >/dev/null && pass "agent card advertises /a2a + streaming" || fail card
+api GET /notify | jq -e '(.events_available|length)==6 and .telegram_configured==false' >/dev/null && pass "GET /notify" || fail notify
+api POST /notify/test -d '{"channel":"telegram"}' | jq -e '.results[0].ok==false' >/dev/null && pass "notify test reports unconfigured channel" || fail notifytest
+api GET /storage | jq -e '.configured==false and .provider=="local"' >/dev/null && pass "storage: local fallback when unconfigured" || fail storage
 
 echo "== ledger / overview"
 sleep 2.5

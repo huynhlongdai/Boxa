@@ -17,6 +17,7 @@ import (
 
 	"boxa/core/internal/api"
 	"boxa/core/internal/manager"
+	"boxa/core/internal/objstore"
 	"boxa/core/internal/provider"
 	"boxa/core/internal/secret"
 	"boxa/core/internal/store"
@@ -88,6 +89,24 @@ func main() {
 			}
 		}
 	}
+	var chain []string
+	for _, p := range strings.Split(os.Getenv("BOXA_PROVIDER_CHAIN"), ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			chain = append(chain, p)
+		}
+	}
+	var objCfg *objstore.Config
+	if os.Getenv("BOXA_S3_BUCKET") != "" {
+		objCfg = &objstore.Config{
+			Provider: env("BOXA_S3_PROVIDER", "s3"), Endpoint: os.Getenv("BOXA_S3_ENDPOINT"), Region: os.Getenv("BOXA_S3_REGION"),
+			Bucket: os.Getenv("BOXA_S3_BUCKET"), Prefix: env("BOXA_S3_PREFIX", "boxa"),
+			AccessKeyID: os.Getenv("BOXA_S3_ACCESS_KEY_ID"), SecretAccessKey: os.Getenv("BOXA_S3_SECRET_ACCESS_KEY"), PathStyle: true,
+		}
+		if !objCfg.Enabled() {
+			log.Printf("warning: BOXA_S3_BUCKET set but BOXA_S3_ENDPOINT / BOXA_S3_ACCESS_KEY_ID / BOXA_S3_SECRET_ACCESS_KEY incomplete: snapshots stay local")
+			objCfg = nil
+		}
+	}
 	cfg := manager.Config{
 		PublicURL:          os.Getenv("BOXA_PUBLIC_URL"),
 		BaseDomain:         os.Getenv("BASE_DOMAIN"),
@@ -107,6 +126,8 @@ func main() {
 		HostDownAfter:      envDur("BOXA_HOST_DOWN_AFTER", 2*time.Minute),
 		CreateWait:         envDur("BOXA_CREATE_WAIT", 120*time.Second),
 		URLKey:             secret.Hash("url:" + master),
+		ProviderChain:      chain,
+		ObjectStore:        objCfg,
 	}
 	m := manager.New(st, provider.Default(nil), crypt, cfg)
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -123,6 +144,9 @@ func main() {
 	}
 	if cfg.BootstrapToken == "" {
 		log.Printf("BOXA_BOOTSTRAP_TOKEN not set: only hosts created by core (or pre-registered via POST /v1/hosts provider=local) can connect")
+	}
+	if ids := m.ConfigureProvidersFromEnv(ctx, os.Getenv); len(ids) > 0 {
+		log.Printf("providers connected from env: %s", strings.Join(ids, ", "))
 	}
 	m.Start(ctx)
 	srv := &http.Server{

@@ -167,6 +167,10 @@ func renderBoxYAML(b *model.Box) string {
 		Ports       []int    `yaml:"ports,omitempty"`
 		Secrets     []string `yaml:"secrets,omitempty"`
 		Setup       []string `yaml:"setup,omitempty"`
+		Egress      *struct {
+			Allow         []string `yaml:"allow"`
+			DenyByDefault bool     `yaml:"deny_by_default"`
+		} `yaml:"egress,omitempty"`
 	}{
 		Name: b.Slug, Template: b.Template, Lifecycle: b.Lifecycle,
 		Spec:       spec{CPU: b.Spec.CPU, RAM: fmt.Sprintf("%dM", b.Spec.RAMMB), Disk: fmt.Sprintf("%dG", b.Spec.DiskGB)},
@@ -178,6 +182,12 @@ func renderBoxYAML(b *model.Box) string {
 	}
 	if b.Lifecycle != model.LifecycleTask {
 		doc.TTLSeconds = 0
+	}
+	if b.Egress != nil && b.Egress.Source == "box" {
+		doc.Egress = &struct {
+			Allow         []string `yaml:"allow"`
+			DenyByDefault bool     `yaml:"deny_by_default"`
+		}{Allow: b.Egress.Allow, DenyByDefault: b.Egress.DenyByDefault}
 	}
 	out, _ := yaml.Marshal(doc)
 	return string(out)
@@ -468,8 +478,11 @@ func (m *Manager) Restore(ctx context.Context, p *Principal, id string, in Resto
 	if b.Status != model.StatusRunning && b.Status != model.StatusSleeping {
 		return nil, model.EH(model.ErrInvalid, "Use box_fork to start a new box from this snapshot.", "cannot restore a box in status %s", b.Status)
 	}
+	download := ""
 	if sn.HostID != "" && sn.HostID != b.HostID {
-		return nil, model.EH(model.ErrInvalid, "Use box_fork to start a new box from this snapshot.", "snapshot %s is on another host", sn.ID)
+		if download = m.presignSnapshot(ctx, sn, "GET"); download == "" {
+			return nil, model.EH(model.ErrInvalid, "Use box_fork to start a new box from this snapshot.", "snapshot %s is on another host", sn.ID)
+		}
 	}
 	if !m.Hub.Connected(b.HostID) {
 		return nil, model.EH(model.ErrProviderFailed, "The host is offline; retry later.", "host %s offline", b.HostID)
@@ -479,7 +492,7 @@ func (m *Manager) Restore(ctx context.Context, p *Principal, id string, in Resto
 	defer lock.Unlock()
 	cctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 	defer cancel()
-	if err := m.Hub.Call(cctx, b.HostID, proto.MRestore, proto.RestoreParams{BoxID: b.ID, SourceBoxID: src.ID, SnapshotID: sn.ID, Location: sn.Location}, nil); err != nil {
+	if err := m.Hub.Call(cctx, b.HostID, proto.MRestore, proto.RestoreParams{BoxID: b.ID, SourceBoxID: src.ID, SnapshotID: sn.ID, Location: sn.Location, DownloadURL: download}, nil); err != nil {
 		return nil, mapHostErr(err)
 	}
 	b, _ = m.Store.GetBox(ctx, b.ID)
@@ -534,7 +547,10 @@ func (m *Manager) Fork(ctx context.Context, p *Principal, id string, in RestoreI
 	if hostID == "" {
 		hostID = src.HostID
 	}
-	if !m.Hub.Connected(hostID) {
+	// Snapshots in object storage can be forked onto any host; local ones
+	// only on the host that holds them.
+	download := m.presignSnapshot(ctx, sn, "GET")
+	if download == "" && !m.Hub.Connected(hostID) {
 		return nil, model.EH(model.ErrProviderFailed, "The host is offline; retry later.", "host %s offline", hostID)
 	}
 	slug, err := m.uniqueSlug(ctx, in.Slug, src.Slug+"-fork")
@@ -548,12 +564,20 @@ func (m *Manager) Fork(ctx context.Context, p *Principal, id string, in RestoreI
 		IdleMinutes: src.IdleMinutes, BudgetUSD: src.BudgetUSD, Ports: nonNilInts(src.Ports), Secrets: nonNilStrs(src.Secrets),
 		Setup: src.Setup, CreatedAt: now, LastActiveAt: now, Locale: src.Locale, ForkedFrom: sn.ID,
 	}
-	// Place on the snapshot host (snapshots are host-local).
+	if src.Egress != nil {
+		eg := *src.Egress
+		eg.Allow = append([]string{}, src.Egress.Allow...)
+		eg.Enforced, eg.AppliedAt = false, nil
+		b.Egress = &eg
+	}
+	// Local snapshot: place on its host. Remote (s3): any host, preferring the snapshot host on ties.
 	exclude := map[string]bool{}
-	hosts, _ := m.Store.ListHosts(ctx)
-	for _, h := range hosts {
-		if h.ID != hostID {
-			exclude[h.ID] = true
+	if download == "" {
+		hosts, _ := m.Store.ListHosts(ctx)
+		for _, h := range hosts {
+			if h.ID != hostID {
+				exclude[h.ID] = true
+			}
 		}
 	}
 	cands, _, _, err := m.candidates(ctx, b, agent, exclude)
@@ -564,6 +588,15 @@ func (m *Manager) Fork(ctx context.Context, p *Principal, id string, in RestoreI
 		return nil, model.EH(model.ErrNoCapacity, "Free capacity on that host (terminate boxes) or restore into an existing box.", "snapshot host %s has no room for the fork", hostID)
 	}
 	c := cands[0]
+	for _, x := range cands {
+		if x.host.ID == hostID && x.cost <= c.cost {
+			c = x // same host: no download needed
+			break
+		}
+	}
+	if c.host.ID == hostID {
+		download = ""
+	}
 	b.HostID, b.Provider, b.Region = c.host.ID, c.host.Provider, c.host.Region
 	b.CostPerHour, b.Billing = model.Round6(c.costPerHour), c.host.Billing
 	b.PlacementReason = "fork of " + src.ID + " from snapshot " + sn.ID + ": " + c.label
@@ -585,13 +618,19 @@ func (m *Manager) Fork(ctx context.Context, p *Principal, id string, in RestoreI
 	cctx, cancel := context.WithTimeout(ctx, 20*time.Minute)
 	defer cancel()
 	err = m.Hub.Call(cctx, b.HostID, proto.MRestore, proto.RestoreParams{
-		BoxID: b.ID, SourceBoxID: src.ID, SnapshotID: sn.ID, Location: sn.Location, Create: true,
+		BoxID: b.ID, SourceBoxID: src.ID, SnapshotID: sn.ID, Location: sn.Location, Create: true, DownloadURL: download,
 		Box: proto.CreateParams{BoxID: b.ID, Template: b.Template, Spec: b.Spec, AgentID: b.AgentID, AgentsMD: m.agentsMD(ctx, b, agent)},
 	}, nil)
 	if err != nil {
 		b.Error = err.Error()
 		m.setStatus(ctx, b, model.StatusFailed, "system", b.Error)
 		return nil, mapHostErr(err)
+	}
+	if err := m.applyEgress(ctx, b, false); err != nil {
+		b.Error = err.Error()
+		m.Hub.Call(ctx, b.HostID, proto.MDelete, proto.BoxRef{BoxID: b.ID}, nil)
+		m.setStatus(ctx, b, model.StatusFailed, "system", "egress policy failed: "+b.Error)
+		return nil, err
 	}
 	b.LastActiveAt = time.Now().UTC()
 	m.setStatus(ctx, b, model.StatusRunning, "system", fmt.Sprintf("forked from snapshot %s on %s", sn.ID, b.HostID))

@@ -23,6 +23,15 @@ func (m *Manager) ListProviders(ctx context.Context) ([]*model.Provider, error) 
 		if caps, err := m.Store.GetCapabilities(ctx, p.ID); err == nil {
 			p.Capabilities = caps
 		}
+		if r := m.chainRank(p.ID); r < len(m.chain()) {
+			p.ChainRank = r + 1
+		}
+		if pr, ok := m.Providers.Get(p.ID); ok {
+			p.Implemented = pr.Implemented() // stubs from older DBs became real adapters
+		}
+		if p.TokenEnc != "" && p.TokenSource == "" {
+			p.TokenSource = "api"
+		}
 	}
 	sort.Slice(ps, func(i, j int) bool { return order[ps[i].ID] < order[ps[j].ID] })
 	return ps, nil
@@ -55,7 +64,7 @@ func (m *Manager) SetProviderToken(ctx context.Context, p *Principal, id, token 
 	token = strings.TrimSpace(token)
 	if token == "" {
 		// empty token = disconnect
-		mp.TokenEnc, mp.Connected, mp.Error = "", id == "local", nil
+		mp.TokenEnc, mp.Connected, mp.Error, mp.TokenSource = "", id == "local", nil, ""
 		m.Store.PutProvider(ctx, mp)
 		m.Emit(ctx, p.Actor(), "", "", "provider.disconnected", id+" token removed", nil)
 		return mp, nil
@@ -75,7 +84,7 @@ func (m *Manager) SetProviderToken(ctx context.Context, p *Principal, id, token 
 	if err != nil {
 		return nil, err
 	}
-	mp.TokenEnc, mp.Connected, mp.Error = enc, true, nil
+	mp.TokenEnc, mp.Connected, mp.Error, mp.TokenSource = enc, true, nil, "api"
 	if err := m.Store.PutProvider(ctx, mp); err != nil {
 		return nil, err
 	}

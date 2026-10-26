@@ -5,6 +5,7 @@ package e2e
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -32,7 +33,10 @@ type env struct {
 	ctx   context.Context
 }
 
-func setup(t *testing.T) *env {
+func setup(t *testing.T) *env { return setupWith(t, nil, 1) }
+
+// setupWith starts core with a config hook and n local boxd hosts.
+func setupWith(t *testing.T, mut func(*manager.Config), hosts int) *env {
 	t.Helper()
 	dir := t.TempDir()
 	st, err := store.Open(filepath.Join(dir, "boxa.db"))
@@ -41,12 +45,16 @@ func setup(t *testing.T) *env {
 	}
 	t.Cleanup(func() { st.Close() })
 	crypt, _ := secret.New("test-master")
-	m := manager.New(st, provider.Default(nil), crypt, manager.Config{
+	cfg := manager.Config{
 		BootstrapToken: "boot-token", DisablePriceFeed: true,
 		LedgerInterval: 150 * time.Millisecond, ReaperInterval: 150 * time.Millisecond,
 		LocalPriceMonth: 730, // $1/h host → visible ledger amounts
 		CreateWait:      30 * time.Second,
-	})
+	}
+	if mut != nil {
+		mut(&cfg)
+	}
+	m := manager.New(st, provider.Default(nil), crypt, cfg)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	if _, err := m.Init(ctx, "bx_admin_e2e"); err != nil {
@@ -56,26 +64,33 @@ func setup(t *testing.T) *env {
 	srv := httptest.NewServer(api.New(m, "", "*"))
 	t.Cleanup(srv.Close)
 
-	drv, err := boxd.NewLocalDriver(filepath.Join(dir, "boxd-root"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	agent, err := boxd.NewAgent(boxd.Config{
-		CoreURL: "ws" + strings.TrimPrefix(srv.URL, "http") + "/v1/hosts/connect", BootstrapToken: "boot-token",
-		StateDir: filepath.Join(dir, "boxd-state"), Provider: "local", IP: "127.0.0.1", MetricsEvery: time.Second, Version: "test",
-	}, drv)
-	if err != nil {
-		t.Fatal(err)
-	}
-	go agent.Run(ctx)
-	e := &env{t: t, m: m, srv: srv, admin: client.New(srv.URL, "bx_admin_e2e"), ctx: ctx}
-	deadline := time.Now().Add(10 * time.Second)
-	for m.Hub.Count() == 0 {
-		if time.Now().After(deadline) {
-			t.Fatal("boxd did not connect")
+	for i := 0; i < hosts; i++ {
+		sfx := ""
+		if i > 0 {
+			sfx = fmt.Sprintf("-%d", i)
 		}
-		time.Sleep(50 * time.Millisecond)
+		drv, err := boxd.NewLocalDriver(filepath.Join(dir, "boxd-root"+sfx))
+		if err != nil {
+			t.Fatal(err)
+		}
+		agent, err := boxd.NewAgent(boxd.Config{
+			CoreURL: "ws" + strings.TrimPrefix(srv.URL, "http") + "/v1/hosts/connect", BootstrapToken: "boot-token",
+			StateDir: filepath.Join(dir, "boxd-state"+sfx), Provider: "local", IP: "127.0.0.1", MetricsEvery: time.Second, Version: "test",
+		}, drv)
+		if err != nil {
+			t.Fatal(err)
+		}
+		go agent.Run(ctx)
+		want := i + 1
+		deadline := time.Now().Add(10 * time.Second)
+		for m.Hub.Count() < want {
+			if time.Now().After(deadline) {
+				t.Fatal("boxd did not connect")
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
 	}
+	e := &env{t: t, m: m, srv: srv, admin: client.New(srv.URL, "bx_admin_e2e"), ctx: ctx}
 	return e
 }
 

@@ -61,6 +61,7 @@ func (s *Server) routes() http.Handler {
 		},
 	}
 	r.With(s.authMW).Handle("/mcp", mcpHandler)
+	r.With(s.authMW).Post("/a2a", s.a2a) // A2A JSON-RPC (message/send, tasks/get, tasks/cancel, message/stream)
 	// Discovery (no auth).
 	r.Get("/llms.txt", s.llmsTxt)
 	r.Get("/llms-full.txt", s.llmsFull)
@@ -103,6 +104,8 @@ func (s *Server) routes() http.Handler {
 			r.Get("/boxes/{id}/terminal", s.terminal)
 
 			r.Get("/jobs/{id}", s.getJob)
+			r.Post("/jobs/{id}/cancel", s.cancelJob)
+			r.Put("/boxes/{id}/egress", s.putEgress)
 			r.Get("/logs/{id}", s.getLog)
 
 			r.Get("/agents", s.listAgents)
@@ -122,6 +125,8 @@ func (s *Server) routes() http.Handler {
 
 			r.Get("/providers", s.providers)
 			r.Put("/providers/{id}/token", s.providerToken)
+			r.Get("/providers/{id}/regions", s.providerRegions)
+			r.Get("/providers/{id}/servers", s.providerServers)
 			r.Get("/hosts", s.hosts)
 			r.Post("/hosts", s.createHost)
 			r.Post("/hosts/{id}/drain", s.drainHost)
@@ -146,6 +151,12 @@ func (s *Server) routes() http.Handler {
 			r.Post("/emergency-stop", s.emergencyStop)
 			r.Get("/settings", s.getSettings)
 			r.Put("/settings", s.putSettings)
+			r.Get("/storage", s.getStorage)
+			r.Put("/storage", s.putStorage)
+			r.Post("/storage/test", s.testStorage)
+			r.Get("/notify", s.getNotify)
+			r.Put("/notify", s.putNotify)
+			r.Post("/notify/test", s.testNotify)
 
 			r.Route("/admin", func(r chi.Router) {
 				r.Use(s.adminOnly)

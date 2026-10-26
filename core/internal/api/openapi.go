@@ -19,6 +19,7 @@ import (
 	"boxa/core/internal/manager"
 	"boxa/core/internal/model"
 	"boxa/core/internal/proto"
+	"boxa/core/internal/provider"
 )
 
 type param struct {
@@ -216,6 +217,21 @@ var ops = []op{
 	{Method: "PUT", Path: "/v1/admin/quotas", Summary: "Update quotas", Tag: "admin", Req: model.Quotas{}, Resp: model.Quotas{}},
 	{Method: "GET", Path: "/v1/admin/users", Summary: "Users", Tag: "admin"},
 	{Method: "POST", Path: "/v1/admin/price-feed/refresh", Summary: "Refresh price feed now", Tag: "admin"},
+	// v1.2: storage, notifications, egress, providers, jobs, A2A
+	{Method: "GET", Path: "/v1/storage", Summary: "Snapshot object storage (R2/B2/S3) config (admin)", Tag: "storage", Resp: manager.StorageView{}},
+	{Method: "PUT", Path: "/v1/storage", Summary: "Configure snapshot object storage (secret write-only)", Tag: "storage", Req: manager.StorageInput{}, Resp: manager.StorageView{},
+		Desc: "provider: local | r2 | b2 | s3 | minio. Unconfigured = snapshots stay on their host."},
+	{Method: "POST", Path: "/v1/storage/test", Summary: "Write/read/delete a probe object", Tag: "storage", Resp: manager.StorageTestResult{}},
+	{Method: "GET", Path: "/v1/notify", Summary: "Notification settings + recent deliveries (admin)", Tag: "notify", Resp: manager.NotifyView{}},
+	{Method: "PUT", Path: "/v1/notify", Summary: "Configure Telegram / email notifications (secrets write-only)", Tag: "notify", Req: manager.NotifyInput{}, Resp: manager.NotifyView{}},
+	{Method: "POST", Path: "/v1/notify/test", Summary: "Send a test message (or the daily report) now", Tag: "notify", Req: manager.NotifyTestInput{}, Resp: manager.NotifyTestResult{}},
+	{Method: "PUT", Path: "/v1/boxes/{id}/egress", Summary: "Set the box egress allowlist (domains/IPs/CIDRs)", Tag: "boxes", Req: manager.EgressInput{}, Resp: model.Box{}, Params: []param{idP},
+		Desc: "Empty input falls back to the agent's egress_allowlist / settings.egress_deny_by_default. Enforced on incus hosts; local hosts report enforced=false."},
+	{Method: "POST", Path: "/v1/jobs/{id}/cancel", Summary: "Cancel an async job (kills the command)", Tag: "exec", Resp: model.Job{}, Params: []param{{"id", "path", "string", "job id", true}}},
+	{Method: "GET", Path: "/v1/providers/{id}/regions", Summary: "Provider regions", Tag: "infra", Resp: provider.Region{}, List: true, Params: []param{{"id", "path", "string", "provider id", true}}},
+	{Method: "GET", Path: "/v1/providers/{id}/servers", Summary: "Servers at the provider (connected token)", Tag: "infra", Resp: provider.Server{}, List: true, Params: []param{{"id", "path", "string", "provider id", true}}},
+	{Method: "POST", Path: "/a2a", Summary: "A2A JSON-RPC 2.0 task API", Tag: "a2a",
+		Desc: "Methods: message/send (alias tasks/send), message/stream (alias tasks/sendSubscribe, SSE), tasks/get, tasks/cancel, tasks/resubscribe. Text part = command (metadata.box_id); data part {box_id, command} or {tool, arguments}. Task id of a command = job id."},
 }
 
 // ---- reflection → JSON Schema ----

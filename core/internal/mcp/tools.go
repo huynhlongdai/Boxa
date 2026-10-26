@@ -4,7 +4,11 @@ package mcp
 // server (tools/list), GET /v1/tools?format=openai|anthropic|gemini|mcp, the
 // llms-full.txt reference and the SDK helpers are all generated from it.
 
-import "strings"
+import (
+	"context"
+	"fmt"
+	"strings"
+)
 
 // Tool definition (MCP shape).
 type Tool struct {
@@ -56,20 +60,22 @@ func dest() *ToolAnnotations { return &ToolAnnotations{DestructiveHint: true, Id
 
 func specProps(withIdem bool) map[string]any {
 	p := map[string]any{
-		"template":     str("base | python | node | python-browser | custom template name (see box_templates)"),
-		"lifecycle":    enum("task = one-off job, auto-terminated at TTL; session = interactive, sleeps when idle; service = long-running server", "task", "session", "service"),
-		"cpu":          num("vCPUs (default 1)"),
-		"ram_mb":       intg("RAM in MB (default 1024)"),
-		"disk_gb":      intg("Disk in GB (default 10)"),
-		"ttl_seconds":  intg("Task TTL in seconds"),
-		"idle_minutes": intg("Session idle minutes before sleep"),
-		"budget_usd":   num("Max spend for this box in USD"),
-		"region":       str("Preferred region (optional)"),
-		"slug":         str("Readable name (lowercase, digits, '-')"),
-		"ports":        arr("Ports to expose over HTTPS", "integer"),
-		"secrets":      arr("Secret names to inject as env vars", "string"),
-		"setup":        arr("Shell commands run once at creation", "string"),
-		"yaml":         str("Full box.yaml instead of the fields above"),
+		"template":               str("base | python | node | python-browser | custom template name (see box_templates)"),
+		"lifecycle":              enum("task = one-off job, auto-terminated at TTL; session = interactive, sleeps when idle; service = long-running server", "task", "session", "service"),
+		"cpu":                    num("vCPUs (default 1)"),
+		"ram_mb":                 intg("RAM in MB (default 1024)"),
+		"disk_gb":                intg("Disk in GB (default 10)"),
+		"ttl_seconds":            intg("Task TTL in seconds"),
+		"idle_minutes":           intg("Session idle minutes before sleep"),
+		"budget_usd":             num("Max spend for this box in USD"),
+		"region":                 str("Preferred region (optional)"),
+		"slug":                   str("Readable name (lowercase, digits, '-')"),
+		"ports":                  arr("Ports to expose over HTTPS", "integer"),
+		"secrets":                arr("Secret names to inject as env vars", "string"),
+		"setup":                  arr("Shell commands run once at creation", "string"),
+		"yaml":                   str("Full box.yaml instead of the fields above"),
+		"egress_allow":           arr("Outbound allowlist: domains (pypi.org, *.github.com), IPs or CIDRs, optional :port. When set, all other outbound traffic is blocked (incus hosts; local dev hosts only warn)", "string"),
+		"egress_deny_by_default": boolean("Block all outbound traffic except egress_allow (true with an empty list = fully offline box)"),
 	}
 	if withIdem {
 		p["idempotency_key"] = str("Same key returns the same box instead of creating a new one")
@@ -214,4 +220,25 @@ func geminiSchema(s map[string]any) map[string]any {
 		}
 	}
 	return out
+}
+
+// CallTool runs one tool through c (used by the A2A task API).
+func CallTool(ctx context.Context, c Caller, name string, a map[string]any) (int, []byte, error) {
+	if !HasTool(name) {
+		return 0, nil, fmt.Errorf("unknown tool %q", name)
+	}
+	if a == nil {
+		a = map[string]any{}
+	}
+	return callTool(ctx, c, name, args(a))
+}
+
+// HasTool reports whether name is a Boxa tool.
+func HasTool(name string) bool {
+	for _, t := range Tools {
+		if t.Name == name {
+			return true
+		}
+	}
+	return false
 }

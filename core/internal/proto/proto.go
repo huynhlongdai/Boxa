@@ -25,24 +25,42 @@ const (
 
 // RPC methods (core → boxd).
 const (
-	MCreate    = "box.create"
-	MStart     = "box.start"
-	MStop      = "box.stop"
-	MDelete    = "box.delete"
-	MExec      = "box.exec"
-	MRead      = "file.read"
-	MWrite     = "file.write"
-	MGrep      = "file.grep"
-	MObserve   = "box.observe"
-	MSnapshot  = "box.snapshot"
-	MLogRead   = "log.read"
-	MPtyOpen   = "pty.open"
-	MPtyResize = "pty.resize"
-	MPtyClose  = "pty.close"
-	MList      = "box.list"
-	MHTTP      = "http.do"
-	MRestore   = "box.restore" // v1.1: restore a snapshot into the same box, or fork it into a new one
+	MCreate     = "box.create"
+	MStart      = "box.start"
+	MStop       = "box.stop"
+	MDelete     = "box.delete"
+	MExec       = "box.exec"
+	MRead       = "file.read"
+	MWrite      = "file.write"
+	MGrep       = "file.grep"
+	MObserve    = "box.observe"
+	MSnapshot   = "box.snapshot"
+	MLogRead    = "log.read"
+	MPtyOpen    = "pty.open"
+	MPtyResize  = "pty.resize"
+	MPtyClose   = "pty.close"
+	MList       = "box.list"
+	MHTTP       = "http.do"
+	MRestore    = "box.restore"     // v1.1: restore a snapshot into the same box, or fork it into a new one
+	MEgress     = "box.egress"      // v1.2: apply (or clear) the box egress allowlist
+	MExecCancel = "box.exec_cancel" // v1.2: kill a running async job (A2A tasks/cancel)
 )
+
+// EgressParams applies an egress policy to a box (inactive policy = clear).
+type EgressParams struct {
+	BoxID         string   `json:"box_id"`
+	Allow         []string `json:"allow"`
+	DenyByDefault bool     `json:"deny_by_default"`
+}
+
+// EgressResult reports how the host enforced the policy.
+type EgressResult struct {
+	Enforced bool     `json:"enforced"`
+	Mode     string   `json:"mode"` // incus-acl | nftables | none
+	Warning  string   `json:"warning,omitempty"`
+	Rules    int      `json:"rules"`
+	Warnings []string `json:"warnings,omitempty"`
+}
 
 type Frame struct {
 	ID     string          `json:"id,omitempty"`
@@ -111,6 +129,12 @@ type ExecParams struct {
 	Env       map[string]string `json:"env"`
 	TimeoutS  int               `json:"timeout_s"`
 	TailLines int               `json:"tail_lines"`
+	JobID     string            `json:"job_id,omitempty"` // async job: cancellable with MExecCancel
+}
+
+// ExecCancelParams kills the running command of an async job.
+type ExecCancelParams struct {
+	JobID string `json:"job_id"`
 }
 
 type ReadParams struct {
@@ -171,11 +195,17 @@ type ObserveResult struct {
 type SnapshotParams struct {
 	BoxID      string `json:"box_id"`
 	SnapshotID string `json:"snapshot_id"`
+	// UploadURL is a presigned S3 PUT URL; when set boxd uploads the snapshot
+	// tarball there (incus: exported first). Failure keeps the local copy.
+	UploadURL string `json:"upload_url,omitempty"`
 }
 
 type SnapshotResult struct {
-	Location string  `json:"location"`
-	SizeMB   float64 `json:"size_mb"`
+	Location      string  `json:"location"`
+	SizeMB        float64 `json:"size_mb"`
+	Uploaded      bool    `json:"uploaded,omitempty"`
+	UploadedBytes int64   `json:"uploaded_bytes,omitempty"`
+	UploadError   string  `json:"upload_error,omitempty"`
 }
 
 type LogReadParams struct {
@@ -230,4 +260,7 @@ type RestoreParams struct {
 	Location    string       `json:"location"`
 	Create      bool         `json:"create"`
 	Box         CreateParams `json:"box"`
+	// DownloadURL is a presigned S3 GET URL for the snapshot tarball, used
+	// when the snapshot is not on this host (restore/fork across hosts).
+	DownloadURL string `json:"download_url,omitempty"`
 }

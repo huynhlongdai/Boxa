@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"boxa/core/internal/events"
 	"boxa/core/internal/hostlink"
 	"boxa/core/internal/model"
+	"boxa/core/internal/objstore"
 	"boxa/core/internal/pricefeed"
 	"boxa/core/internal/provider"
 	"boxa/core/internal/secret"
@@ -44,7 +46,10 @@ type Config struct {
 	BurstEmptyAfter    time.Duration
 	HostDownAfter      time.Duration
 	CreateWait         time.Duration
-	URLKey             string // HMAC key for box URL tokens (defaults to a random per-process key)
+	URLKey             string           // HMAC key for box URL tokens (defaults to a random per-process key)
+	ProviderChain      []string         // burst fallback order (default hetzner, vultr, digitalocean, contabo, netcup)
+	ObjectStore        *objstore.Config // snapshot storage from env (nil = settings/local)
+	TelegramAPI        string           // override https://api.telegram.org (tests)
 }
 
 func (c *Config) defaults() {
@@ -95,14 +100,21 @@ type Manager struct {
 	Feed      *pricefeed.Fetcher
 	Cfg       Config
 
-	mu        sync.Mutex
-	sysjobs   map[string]*SysJob
-	lastTick  time.Time
-	rate      map[string]*bucket
-	boxLocks  sync.Map // box id → *sync.Mutex
-	startedAt time.Time
-	ctx       context.Context
+	mu            sync.Mutex
+	sysjobs       map[string]*SysJob
+	lastTick      time.Time
+	lastRetention time.Time
+	rate          map[string]*bucket
+	boxLocks      sync.Map // box id → *sync.Mutex
+	startedAt     time.Time
+	ctx           context.Context
+	objHTTP       *http.Client // object storage client (tests inject the fake's client)
+	jobCancel     sync.Map     // job id → context.CancelFunc (A2A tasks/cancel)
+	notif         notifier
 }
+
+// SetObjectStoreHTTP overrides the HTTP client used for object storage (tests).
+func (m *Manager) SetObjectStoreHTTP(c *http.Client) { m.objHTTP = c }
 
 func New(st store.Store, reg *provider.Registry, crypt *secret.Box, cfg Config) *Manager {
 	cfg.defaults()
@@ -168,6 +180,7 @@ func (m *Manager) Start(ctx context.Context) {
 	m.ctx = ctx
 	go m.loop(ctx, "reaper", m.Cfg.ReaperInterval, m.reap)
 	go m.loop(ctx, "ledger", m.Cfg.LedgerInterval, m.ledgerTick)
+	go m.loop(ctx, "notify", time.Minute, m.notifyTick)
 	if !m.Cfg.DisablePriceFeed {
 		go m.loop(ctx, "price_feed", m.Cfg.PriceFeedInterval, m.refreshPrices)
 	} else {
@@ -224,7 +237,7 @@ func (m *Manager) SysJobs() []SysJob {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var out []SysJob
-	for _, n := range []string{"reaper", "ledger", "price_feed"} {
+	for _, n := range []string{"reaper", "ledger", "price_feed", "notify"} {
 		if j, ok := m.sysjobs[n]; ok {
 			out = append(out, *j)
 		}
@@ -302,6 +315,10 @@ func (m *Manager) PutSettings(ctx context.Context, s model.Settings) (model.Sett
 	}
 	if s.Notify.Events == nil {
 		s.Notify.Events = []string{}
+	}
+	// Older clients send notify without smtp/timezone: keep the stored ones.
+	if prev := m.Settings(ctx).Notify; s.Notify.SMTP.Host == "" && s.Notify.SMTP.From == "" && s.Notify.Timezone == "" {
+		s.Notify.SMTP, s.Notify.Timezone = prev.SMTP, prev.Timezone
 	}
 	if s.Locale == "" {
 		s.Locale = "vi"

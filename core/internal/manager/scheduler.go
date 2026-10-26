@@ -181,7 +181,7 @@ func (m *Manager) candidates(ctx context.Context, b *model.Box, agent *model.Age
 			continue
 		}
 		prov, ok := m.Providers.Get(o.Provider)
-		if !ok || !prov.Implemented() || o.Provider == "local" {
+		if !ok || !prov.Implemented() || o.Provider == "local" || exclude["provider:"+o.Provider] {
 			continue
 		}
 		cost := provider.Quote(o, hours, m.Cfg.SetupCostUSD)
@@ -210,15 +210,17 @@ func (m *Manager) Schedule(ctx context.Context, b *model.Box, agent *model.Agent
 	if len(cands) > 0 {
 		best = &cands[0]
 	}
-	var bestOffer *candidate
-	if len(offerCands) > 0 {
-		bestOffer = &offerCands[0]
-	}
 	connected := func(pid string) bool {
 		mp, err := m.Store.GetProvider(ctx, pid)
 		return err == nil && mp.Connected && mp.TokenEnc != ""
 	}
+	// Fallback chain (Hetzner pool → Vultr burst → DO / Contabo / netcup):
+	// among CONNECTED providers the first one in the chain with a fitting
+	// offer wins (cheapest within that provider). With nothing connected the
+	// cheapest offer overall is reported (pool_expand proposal / NO_CAPACITY).
+	bestOffer := m.chainOffer(offerCands, connected)
 	if bestOffer != nil && (best == nil || bestOffer.cost < best.cost) && m.Cfg.AutoBurst && connected(bestOffer.offer.Provider) {
+		bestOffer.label += fmt.Sprintf(" [chain #%d %s]", m.chainRank(bestOffer.offer.Provider)+1, strings.Join(m.chain(), "→"))
 		best = bestOffer
 	}
 	if best == nil {
@@ -268,4 +270,45 @@ func (m *Manager) proposePoolExpand(ctx context.Context, b *model.Box, c *candid
 		"Thêm host "+c.offer.Provider+" "+c.offer.SKU,
 		fmt.Sprintf("Box %s (%s) không có chỗ. Gợi ý thuê %s %s ở %s (%s/giờ, %s/tháng). Duyệt = đồng ý, sau đó tạo host trong mục Hạ tầng.", b.Slug, b.ID, c.offer.Provider, c.offer.SKU, c.offer.Region, fmtUSD(c.offer.PriceHour), fmtUSD(c.offer.PriceMonth)),
 		&amt, b.ID, b.AgentID)
+}
+
+// chain returns the configured provider fallback chain.
+func (m *Manager) chain() []string {
+	if len(m.Cfg.ProviderChain) > 0 {
+		return m.Cfg.ProviderChain
+	}
+	return provider.DefaultChain
+}
+
+// chainRank is the provider's position in the fallback chain (unknown = last).
+func (m *Manager) chainRank(id string) int {
+	for i, p := range m.chain() {
+		if p == id {
+			return i
+		}
+	}
+	return len(m.chain())
+}
+
+// chainOffer picks the burst offer following the fallback chain: the first
+// connected provider (by chain rank) with a fitting offer, cheapest within it.
+// offerCands must be sorted by cost. Falls back to the cheapest offer.
+func (m *Manager) chainOffer(offerCands []candidate, connected func(string) bool) *candidate {
+	if len(offerCands) == 0 {
+		return nil
+	}
+	var best *candidate
+	for i := range offerCands {
+		c := &offerCands[i]
+		if !connected(c.offer.Provider) {
+			continue
+		}
+		if best == nil || m.chainRank(c.offer.Provider) < m.chainRank(best.offer.Provider) {
+			best = c
+		}
+	}
+	if best == nil {
+		best = &offerCands[0]
+	}
+	return best
 }

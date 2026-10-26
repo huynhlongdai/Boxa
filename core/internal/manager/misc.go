@@ -32,6 +32,9 @@ func (m *Manager) ListSecrets(ctx context.Context, p *Principal) ([]*model.Secre
 	}
 	out := []*model.Secret{}
 	for _, s := range all {
+		if s.System {
+			continue
+		}
 		if len(s.Agents) == 0 || contains(s.Agents, p.AgentID) {
 			out = append(out, s)
 		}
@@ -48,6 +51,9 @@ func (m *Manager) CreateSecret(ctx context.Context, p *Principal, in SecretInput
 	}
 	if in.Value == "" {
 		return nil, model.E(model.ErrInvalid, "value is required")
+	}
+	if strings.HasPrefix(in.Name, model.SystemSecretPrefix) {
+		return nil, model.EH(model.ErrInvalid, "Configure Boxa credentials in Settings (notifications, storage) instead.", "secret names starting with BOXA_SYS_ are reserved")
 	}
 	if _, err := m.Store.GetSecret(ctx, in.Name); err == nil {
 		return nil, model.EH(model.ErrInvalid, "Use POST /secrets/:name/rotate to change the value.", "secret %s already exists", in.Name)

@@ -57,3 +57,18 @@ func TestSizes(t *testing.T) {
 		t.Fatal(d, err)
 	}
 }
+
+func TestEgressYAML(t *testing.T) {
+	r, errs := Parse("template: base\negress:\n  allow: [PyPI.org, \"*.github.com\", 10.0.0.0/8]\n  deny_by_default: true\n")
+	if errs != nil || r.Egress == nil || !r.Egress.DenyByDefault || len(r.Egress.Allow) != 3 || r.Egress.Allow[0] != "pypi.org" {
+		t.Fatalf("%+v %v", r, errs)
+	}
+	r, errs = Parse("template: base\negress: [api.openai.com:443]\n")
+	if errs != nil || r.Egress.Allow[0] != "api.openai.com:443" || r.Egress.DenyByDefault {
+		t.Fatalf("list form %+v %v", r.Egress, errs)
+	}
+	_, errs = Parse("template: base\negress:\n  allow: [\"bad host\"]\n  deny: true\n")
+	if len(errs) != 2 || errs[0].Line != 3 || errs[1].Line != 4 {
+		t.Fatalf("errors %+v", errs)
+	}
+}

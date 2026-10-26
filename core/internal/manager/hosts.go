@@ -199,7 +199,7 @@ func (m *Manager) CreateHost(ctx context.Context, p *Principal, provID, sku, reg
 		return m.newLocalHostToken(ctx, p, region)
 	}
 	if !prov.Implemented() {
-		return nil, model.EH(model.ErrProviderFailed, "Use hetzner or vultr; this adapter is planned for P3.", "%s adapter not implemented", provID)
+		return nil, model.EH(model.ErrProviderFailed, "Use hetzner, vultr, digitalocean, contabo or netcup.", "%s adapter not implemented", provID)
 	}
 	token, err := m.providerToken(ctx, provID)
 	if err != nil {

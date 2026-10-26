@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"boxa/core/internal/egress"
 	"boxa/core/internal/proto"
 )
 
@@ -25,7 +26,10 @@ type IncusDriver struct {
 	MemoryRoot string // host dir holding per-agent /memory volumes
 	Images     map[string]string
 	ExportDir  string // if set, snapshots are also exported as tarballs here
+	EgressMode string // "acl" (default: Incus network ACL) | "nft" (nftables table per box)
+	Resolver   egress.Resolver
 	run        func(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args ...string) error
+	nft        func(ctx context.Context, script string) error // test hook
 }
 
 func NewIncusDriver(memRoot, exportDir string) *IncusDriver {
@@ -419,6 +423,21 @@ func (d *IncusDriver) Snapshot(ctx context.Context, id, snapID string) (string, 
 		}
 	}
 	return loc, size, nil
+}
+
+// ExportSnapshot exports the instance (with its snapshot) to a tar.gz for
+// object storage upload. When ExportDir already produced a tarball it is reused.
+func (d *IncusDriver) ExportSnapshot(ctx context.Context, id, snapID, dst string) error {
+	if d.ExportDir != "" {
+		src := filepath.Join(d.ExportDir, incusSnapName(snapID)+".tar.gz")
+		if _, err := os.Stat(src); err == nil {
+			if err := os.Link(src, dst); err == nil {
+				return nil
+			}
+		}
+	}
+	_, err := d.incus(ctx, "export", cname(id), dst, "--instance-only", "--compression", "gzip")
+	return err
 }
 
 func (d *IncusDriver) ShellCmd(ctx context.Context, id string) (*exec.Cmd, error) {

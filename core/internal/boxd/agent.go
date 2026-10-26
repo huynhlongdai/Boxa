@@ -54,6 +54,7 @@ type Agent struct {
 	ptys    map[string]*ptySession
 	observe map[string]time.Time
 	cpuPrev [2]uint64
+	jobs    sync.Map // job id → context.CancelFunc
 }
 
 type ptySession struct {
@@ -272,7 +273,23 @@ func (a *Agent) handle(ctx context.Context, f proto.Frame) (any, error) {
 		if err != nil {
 			return nil, err
 		}
+		if p.JobID != "" {
+			jctx, cancel := context.WithCancel(ctx)
+			a.jobs.Store(p.JobID, cancel)
+			defer func() { a.jobs.Delete(p.JobID); cancel() }()
+			ctx = jctx
+		}
 		return a.exec(ctx, p)
+	case proto.MExecCancel:
+		p, err := decode[proto.ExecCancelParams](f)
+		if err != nil {
+			return nil, err
+		}
+		c, ok := a.jobs.Load(p.JobID)
+		if ok {
+			c.(context.CancelFunc)()
+		}
+		return map[string]bool{"canceled": ok}, nil
 	case proto.MRead:
 		p, err := decode[proto.ReadParams](f)
 		if err != nil {
@@ -306,13 +323,44 @@ func (a *Agent) handle(ctx context.Context, f proto.Frame) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		return proto.SnapshotResult{Location: loc, SizeMB: float64(size) / (1 << 20)}, nil
+		res := proto.SnapshotResult{Location: loc, SizeMB: float64(size) / (1 << 20)}
+		if p.UploadURL != "" {
+			n, err := a.uploadSnapshot(ctx, p, loc)
+			if err != nil {
+				res.UploadError = err.Error() // local copy stays usable
+				log.Printf("snapshot %s upload failed: %v", p.SnapshotID, err)
+			} else {
+				res.Uploaded, res.UploadedBytes = true, n
+				if res.SizeMB == 0 {
+					res.SizeMB = float64(n) / (1 << 20)
+				}
+			}
+		}
+		return res, nil
 	case proto.MRestore:
 		p, err := decode[proto.RestoreParams](f)
 		if err != nil {
 			return nil, err
 		}
+		if needsDownload(p) {
+			loc, err := a.downloadSnapshot(ctx, p)
+			if err != nil {
+				return nil, err
+			}
+			p.Location = loc
+			defer os.Remove(localFile(loc))
+		}
 		return map[string]bool{"ok": true}, a.drv.Restore(ctx, p)
+	case proto.MEgress:
+		p, err := decode[proto.EgressParams](f)
+		if err != nil {
+			return nil, err
+		}
+		ea, ok := a.drv.(EgressApplier)
+		if !ok {
+			return proto.EgressResult{Mode: "none", Warning: "driver " + a.drv.Name() + " cannot enforce egress"}, nil
+		}
+		return ea.ApplyEgress(ctx, p)
 	case proto.MLogRead:
 		p, err := decode[proto.LogReadParams](f)
 		if err != nil {

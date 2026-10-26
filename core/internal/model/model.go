@@ -77,6 +77,19 @@ type Box struct {
 	Billing      string     `json:"billing,omitempty"`
 	Locale       string     `json:"locale,omitempty"`      // agent-facing language (AGENTS.md)
 	ForkedFrom   string     `json:"forked_from,omitempty"` // snapshot id this box was forked from
+	Egress       *BoxEgress `json:"egress,omitempty"`      // outbound allowlist (nil = unrestricted)
+}
+
+// BoxEgress is the effective egress policy of a box and how it is enforced.
+type BoxEgress struct {
+	Allow         []string   `json:"allow"`
+	DenyByDefault bool       `json:"deny_by_default"`
+	Source        string     `json:"source"`   // box | agent | settings
+	Enforced      bool       `json:"enforced"` // rules applied on the host
+	Mode          string     `json:"mode"`     // incus-acl | nftables | none
+	Warning       string     `json:"warning,omitempty"`
+	Rules         int        `json:"rules"`
+	AppliedAt     *time.Time `json:"applied_at,omitempty"`
 }
 
 // Active reports whether the box still occupies host capacity.
@@ -204,6 +217,8 @@ type Provider struct {
 	Implemented  bool           `json:"implemented"`
 	Capabilities map[string]any `json:"capabilities,omitempty"`
 	TokenEnc     string         `json:"-"`
+	TokenSource  string         `json:"token_source,omitempty"` // env | api
+	ChainRank    int            `json:"chain_rank,omitempty"`   // 1-based position in the burst fallback chain (0 = not in chain)
 }
 
 type Offer struct {
@@ -251,7 +266,14 @@ type Secret struct {
 	CreatedAt time.Time  `json:"created_at"`
 	RotatedAt *time.Time `json:"rotated_at"`
 	ValueEnc  string     `json:"-"`
+	// System secrets (BOXA_SYS_*) hold Boxa's own credentials (Telegram bot
+	// token, SMTP password, S3 secret key). They are never injected into boxes
+	// and only admins see them listed.
+	System bool `json:"system,omitempty"`
 }
+
+// SystemSecretPrefix marks secrets reserved for Boxa itself.
+const SystemSecretPrefix = "BOXA_SYS_"
 
 type Snapshot struct {
 	ID        string    `json:"id"`
@@ -260,6 +282,11 @@ type Snapshot struct {
 	CreatedAt time.Time `json:"created_at"`
 	Location  string    `json:"location"`
 	HostID    string    `json:"host_id,omitempty"`
+	// Storage is where the snapshot can be restored from: "local" (only on
+	// HostID) or "s3" (object storage, restorable/forkable on any host).
+	Storage     string `json:"storage"`
+	RemoteURL   string `json:"remote_url,omitempty"` // s3://bucket/key
+	UploadError string `json:"upload_error,omitempty"`
 }
 
 type Approval struct {
@@ -275,22 +302,39 @@ type Approval struct {
 	AgentID   string    `json:"agent_id,omitempty"`
 }
 
+// NotifySettings configures reports/alerts. Secrets (bot token, SMTP
+// password) are stored separately in the encrypted secrets store.
+type NotifySettings struct {
+	TelegramChatID  string   `json:"telegram_chat_id"`
+	Email           string   `json:"email"` // comma separated recipients
+	Events          []string `json:"events"`
+	DailyReportHour int      `json:"daily_report_hour"`
+	Timezone        string   `json:"timezone"` // IANA zone for daily_report_hour (default UTC)
+	SMTP            struct {
+		Host     string `json:"host"`
+		Port     int    `json:"port"`
+		Username string `json:"username"`
+		From     string `json:"from"`
+		TLS      string `json:"tls"` // starttls | tls | none
+	} `json:"smtp"`
+}
+
 type Settings struct {
-	Notify struct {
-		TelegramChatID  string   `json:"telegram_chat_id"`
-		Email           string   `json:"email"`
-		Events          []string `json:"events"`
-		DailyReportHour int      `json:"daily_report_hour"`
-	} `json:"notify"`
+	Notify NotifySettings `json:"notify"`
 	Reaper struct {
 		IdleMinutes       int `json:"idle_minutes"`
 		DefaultTTLSeconds int `json:"default_ttl_seconds"`
 		KeepSnapshots     int `json:"keep_snapshots"`
+		// SnapshotRetentionDays deletes snapshots (and their objects) older than N days; 0 = count-based only.
+		SnapshotRetentionDays int `json:"snapshot_retention_days"`
 	} `json:"reaper"`
-	BaseDomain      string  `json:"base_domain"`
-	URLTokenProtect bool    `json:"url_token_protect"`
-	BudgetMonthUSD  float64 `json:"budget_month_usd"`
-	Maintenance     struct {
+	BaseDomain      string `json:"base_domain"`
+	URLTokenProtect bool   `json:"url_token_protect"`
+	// EgressDenyByDefault: boxes without an explicit egress policy get
+	// deny-by-default (only their agent's egress_allowlist is reachable).
+	EgressDenyByDefault bool    `json:"egress_deny_by_default"`
+	BudgetMonthUSD      float64 `json:"budget_month_usd"`
+	Maintenance         struct {
 		Enabled bool   `json:"enabled"`
 		Message string `json:"message"`
 	} `json:"maintenance"`
@@ -304,7 +348,7 @@ type Settings struct {
 
 func DefaultSettings() Settings {
 	var s Settings
-	s.Notify.Events = []string{"budget", "host_down", "box_failed"}
+	s.Notify.Events = []string{"daily_report", "budget", "approval", "emergency_stop", "box_failed", "host_down"}
 	s.Notify.DailyReportHour = 8
 	s.Reaper.IdleMinutes = 5
 	s.Reaper.DefaultTTLSeconds = 3600
