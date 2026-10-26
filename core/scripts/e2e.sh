@@ -14,7 +14,7 @@ pass() { printf '  \033[32mPASS\033[0m %s\n' "$*"; }
 fail() { printf '  \033[31mFAIL\033[0m %s\n' "$*"; echo "--- core.log"; tail -30 "$WORK/core.log"; echo "--- boxd.log"; tail -30 "$WORK/boxd.log"; exit 1; }
 api() { local m=$1 p=$2; shift 2; curl -sS -X "$m" "$BOXA_URL/v1$p" -H "Authorization: Bearer ${KEY:-$ADMIN}" -H 'Content-Type: application/json' "$@"; }
 
-cleanup() { kill ${CORE_PID:-} ${BOXD_PID:-} 2>/dev/null || true; wait 2>/dev/null || true; [ -n "${KEEP:-}" ] || rm -rf "$WORK"; }
+cleanup() { kill ${CORE_PID:-} ${BOXD_PID:-} ${FSB_PID:-} 2>/dev/null || true; wait 2>/dev/null || true; [ -n "${KEEP:-}" ] || rm -rf "$WORK"; }
 trap cleanup EXIT
 
 if [ -z "${SKIP_BUILD:-}" ]; then
@@ -22,9 +22,44 @@ if [ -z "${SKIP_BUILD:-}" ]; then
   go build -o "$BIN/" ./cmd/...
 fi
 
+# v1.4: a declarative (YAML) sandbox adapter pointed at scripts/fake-sandbox.py, an exec-only REST
+# service on localhost — exercises the YAML engine + T3 shim end to end without any cloud account.
+FSB_PORT=${FSB_PORT:-18766}
+mkdir -p "$WORK/adapters" "$WORK/fsb" "$WORK/sbxhome"
+cat >"$WORK/adapters/fakesbx.yaml" <<YAML
+id: fakesbx
+name: Fake Sandbox (e2e)
+tier: T3
+verification: live-verified
+verified_note: "scripts/fake-sandbox.py, driven end to end by scripts/e2e.sh"
+docs: http://127.0.0.1:$FSB_PORT/v1
+initials: FS
+color: "#334155"
+base_url: http://127.0.0.1:$FSB_PORT/v1
+auth: {Authorization: "Bearer {{cred.token}}"}
+credentials: [{name: token, label: API key, secret: true}]
+env_vars: [FAKESBX_KEY]
+capabilities: {background: false, pause: false, fork: false, ports: false, files: false, boot_ms: 50, isolation: microvm}
+pricing: {cpu_second: 0.000005, gb_second: 0.000001, source: "http://127.0.0.1:$FSB_PORT/pricing", confidence: docs}
+sizes: [{sku: small, cpu: 2, ram_mb: 2048, disk_gb: 20}]
+regions: [{id: local, name: Local}]
+workdir: $WORK/sbxhome
+states: {running: running, deleted: deleted}
+validate: {method: GET, path: /sandboxes}
+create: {method: POST, path: /sandboxes, body: {cpu: "{{int:spec.cpu}}"}, capture: {id: \$.id, state: \$.status}}
+get: {method: GET, path: "/sandboxes/{{p:id}}", capture: {state: \$.status}}
+delete: {method: DELETE, path: "/sandboxes/{{p:id}}"}
+exec:
+  - method: POST
+    path: "/sandboxes/{{p:id}}/exec"
+    body: {command: "{{cmd}}", timeout: "{{int:timeout_s}}"}
+    capture: {stdout: \$.stdout, stderr: \$.stderr, exit_code: \$.exit_code}
+YAML
+python3 "$ROOT/scripts/fake-sandbox.py" "$FSB_PORT" "$WORK/fsb" >"$WORK/fsb.log" 2>&1 & FSB_PID=$!
+
 echo "== start core + boxd (workdir $WORK)"
 BOXA_DATA_DIR=$WORK/data BOXA_ADMIN_KEY=$ADMIN BOXA_BOOTSTRAP_TOKEN=boot-e2e BOXA_ADDR=127.0.0.1:$PORT \
-BOXA_PRICE_FEED=off BOXA_LEDGER_INTERVAL=1s BOXA_LOCAL_PRICE_MONTH=73 BOXA_WARM_INTERVAL=1s BOXA_CLIENT_LOCATION=VN \
+BOXA_SANDBOX_ADAPTERS_DIR=$WORK/adapters BOXA_AUTO_SANDBOX=1 BOXA_PRICE_FEED=off BOXA_LEDGER_INTERVAL=1s BOXA_LOCAL_PRICE_MONTH=73 BOXA_WARM_INTERVAL=1s BOXA_CLIENT_LOCATION=VN \
   "$BIN/boxa-core" >"$WORK/core.log" 2>&1 & CORE_PID=$!
 for i in $(seq 50); do curl -sf "$BOXA_URL/v1/health" >/dev/null && break; sleep 0.1; done
 curl -sf "$BOXA_URL/v1/health" | jq -e '.ok == true' >/dev/null && pass "core healthy: $(curl -s $BOXA_URL/v1/health | jq -c .components)" || fail health
@@ -93,7 +128,7 @@ R=$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"prot
 echo "== v1.1 discovery (no auth)"
 curl -sf "$BOXA_URL/v1/openapi.json" | jq -e '.openapi=="3.1.0" and (.paths|has("/v1/quote")) and (.paths|has("/v1/boxes/{id}/fork"))' >/dev/null \
   && pass "openapi.json 3.1 ($(curl -s $BOXA_URL/v1/openapi.json | jq '[.paths[]|keys[]]|length') operations)" || fail openapi
-curl -sf "$BOXA_URL/llms.txt" | head -1 | grep -q '^# Boxa' && pass "llms.txt" || fail llms
+LT=$(curl -sf "$BOXA_URL/llms.txt"); [[ $LT == "# Boxa"* ]] && pass "llms.txt" || fail llms
 LF=$(curl -sf -H 'Accept-Language: vi' "$BOXA_URL/llms-full.txt"); grep -q 'Bắt đầu nhanh' <<<"$LF" && grep -q '/a2a' <<<"$LF" && pass "llms-full.txt localized (vi)" || fail llms-full
 curl -sf "$BOXA_URL/.well-known/mcp.json" | jq -e '.transport.url|endswith("/mcp")' >/dev/null && pass ".well-known/mcp.json" || fail mcpcard
 curl -sf "$BOXA_URL/.well-known/agent.json" | jq -e '.protocolVersion=="0.3.0" and (.skills|length)==22' >/dev/null && pass ".well-known/agent.json (A2A card, exec + 21 tool skills)" || fail agentcard
@@ -190,13 +225,51 @@ api GET /speed | jq -e '.placement=="binpack" and .warm.hits>=1' >/dev/null && p
 for b in $(echo "$C1 $W1 $CL" | jq -r .id) $(echo "$E1" | jq -r .box.id); do "$BIN/box" down "$b" >/dev/null; done
 api PUT /warm-pool -d '{"enabled":false,"pools":[]}' >/dev/null
 
+echo "== v1.4 sandbox API providers (T2/T3) / YAML adapters / recommend"
+SP=$(api GET /sandbox/providers)
+echo "    sandbox providers: $(echo "$SP" | jq -c '[.items[]|"\(.id):\(.tier)/\(.mode)/\(.verification)"]')"
+echo "$SP" | jq -e '[.items[].id]|contains(["e2b","novita","daytona","prized","boxdsh","runloop","blaxel","vercel","boat","agent37","upstash-box","fakesbx"])' >/dev/null && pass "GET /sandbox/providers: 11 built-in adapters + custom YAML from BOXA_SANDBOX_ADAPTERS_DIR" || fail sbxlist
+echo "$SP" | jq -e '(.items[]|select(.id=="prized")|.verification=="live-verified") and (.items[]|select(.id=="upstash-box")|.tier=="T3" and .mode=="shim") and all(.items[]; .docs!="" and .initials!="" and .from_usd_h>0 and (.capabilities|has("boot_ms") and has("fork") and has("max_lifetime_s")))' >/dev/null && pass "adapter metadata: verification level, docs, initials, capabilities, per-second price" || fail sbxmeta
+api GET /providers | jq -e '([.items[]|select(.group=="sandbox")]|length)>=12 and (.items[]|select(.id=="runloop")|.adapter=="yaml") and (.items[]|select(.id=="hetzner")|.group=="vps")' >/dev/null && pass "GET /providers groups vps / sandbox (native | yaml adapters)" || fail sbxgroups
+CT=$(api GET "/catalog?provider=e2b")
+echo "$CT" | jq -e '(.items|length)>0 and all(.items[]; .tier=="T2" and .group=="sandbox" and .min_billing_minutes==0)' >/dev/null && pass "catalog: E2B sizes as T2 per-second offers before connecting" || fail sbxcatalog
+L1=$(api POST /sandbox/adapters/lint -d '{"yaml":"id: x\nname: X\n"}')
+echo "$L1" | jq -e '.ok==false and (.error|test("missing"))' >/dev/null && pass "adapter lint reports missing calls: $(echo "$L1" | jq -r .error)" || fail lint1
+L2=$(jq -Rs '{yaml:.}' "$WORK/adapters/fakesbx.yaml" | api POST /sandbox/adapters/lint -d @-)
+echo "$L2" | jq -e '.ok and .info.id=="fakesbx" and .info.adapter=="yaml" and .info.tier=="T3"' >/dev/null && pass "adapter lint accepts a valid YAML adapter (info echoed)" || fail lint2
+KEY=$AKEY api POST /sandbox/adapters/lint -d '{"yaml":"id: x"}' | jq -e '.error.code=="UNAUTHORIZED" or .error.code=="POLICY_DENIED"' >/dev/null && pass "adapter lint needs an admin key" || fail lintscope
+[ "$(api PUT /providers/fakesbx/token -d '{"token":"wrong"}' | jq -r .error.code)" = UNAUTHORIZED ] && pass "sandbox token validated against the provider (wrong key refused)" || fail sbxbadtoken
+api PUT /providers/fakesbx/token -d '{"token":"fsb_e2e_0123456789"}' | jq -e '.connected and .group=="sandbox" and .adapter=="yaml"' >/dev/null && pass "fakesbx connected (YAML adapter, validate call)" || fail sbxtoken
+api PUT /providers/fakesbx/prefs -d '{"sandbox_mode":"shim"}' | jq -e '.sandbox_mode=="shim"' >/dev/null && pass "provider prefs sandbox_mode=shim" || fail sbxmode
+SBXREQ='"requirements":{"isolation":"sandbox","untrusted":true,"cpu":1,"ram_mb":1024,"lifetime":"ephemeral","duration_hours":0.5}'
+R=$(KEY=$AKEY api POST /recommend -d "{\"template\":\"base\",$SBXREQ}")
+echo "    recommend(untrusted, sandbox): pick=$(echo "$R" | jq -c '.pick|{provider,tier,kind,requires_approval,strong_isolation,cost_per_hour}') rejected=$(echo "$R" | jq -c '[.rejected[]|select(.kind=="sandbox")|.provider]')"
+echo "$R" | jq -e '.pick.provider=="fakesbx" and .pick.tier=="T3" and .pick.requires_approval==false and .pick.min_billing_h==0' >/dev/null && pass "recommend: connected sandbox is the pick for untrusted ephemeral work" || fail sbxrec
+RA=$(api POST /recommend -d "{\"template\":\"base\",$SBXREQ}")  # admin view also ranks providers that are not connected yet
+echo "$RA" | jq -e 'any(.rejected[]; .provider=="daytona" and (.reason|test("shared kernel"))) and any(.rejected[]; .provider=="upstash-box") and all(.options[]; .strong_isolation)' >/dev/null && pass "recommend: shared-kernel sandboxes (Daytona, Upstash Box) rejected for untrusted code, even with isolation=sandbox" || fail sbxrej
+R2=$(api POST /recommend -d '{"template":"base","requirements":{"isolation":"sandbox","fork":true,"cpu":1,"ram_mb":1024}}')
+echo "$R2" | jq -e '(.options|length)>0 and all(.options[]; .fork) and any(.rejected[]; .reason|test("fork"))' >/dev/null && pass "recommend fork=true keeps only fork-capable options" || fail sbxfork
+SB=$(KEY=$AKEY api POST /boxes -d "{\"template\":\"base\",\"slug\":\"e2e-sbx\",$SBXREQ}")
+SBID=$(echo "$SB" | jq -r .id)
+for i in $(seq 40); do [ "$(KEY=$AKEY api GET /boxes/$SBID | jq -r .status)" = running ] && break; sleep 0.25; done
+echo "    sandbox box: $(KEY=$AKEY api GET /boxes/$SBID | jq -c '{id,status,provider,host_id,est:.estimate.kind}')"
+SHID=$(echo "$SB" | jq -r .host_id)
+SH=$(api GET /hosts | jq -c --arg h "$SHID" '[.items[]|select(.id==$h)][0]|{billing,driver,provider}')
+[ "$SH" = '{"billing":"sandbox","driver":"shim","provider":"fakesbx"}' ] && pass "box placed on a single-box sandbox host (T3 shim): $SH" || fail "sbxhost $SH"
+J=$(KEY=$AKEY api POST /boxes/$SBID/exec -d '{"command":"echo sbx-ok > f.txt && cat f.txt && pwd"}')
+echo "$J" | jq -e '.exit_code==0 and (.stdout_tail|test("sbx-ok")) and (.stdout_tail|test("sbxhome/work"))' >/dev/null && pass "exec through the YAML adapter + T3 shim (/work mapped into the sandbox)" || { echo "$J"; fail sbxexec; }
+"$BIN/box" down "$SBID" >/dev/null
+for i in $(seq 40); do grep -q '^DELETE /v1/sandboxes/' "$WORK/fsb/calls.log" && break; sleep 0.25; done
+grep -q '^DELETE /v1/sandboxes/' "$WORK/fsb/calls.log" && pass "box down → sandbox deleted at the provider (per-second billing stops)" || fail sbxdelete
+echo "    fake provider calls: $(awk '{print $1" "$2}' "$WORK/fsb/calls.log" | sed 's/sbx-[0-9a-f]*/:id/' | sort | uniq -c | awk '{print $2" "$3"×"$1}' | paste -sd, -)"
+
 echo "== ledger / overview"
 sleep 2.5
 C=$(KEY=$ADMIN api GET /costs); echo "    summary: $(echo "$C" | jq -c .summary) entries=$(echo "$C" | jq '.items|length')"
 echo "$C" | jq -e '.summary.total > 0 and (.items|length) > 0 and .summary.pool_usd > 0' >/dev/null && pass "per-tick ledger entries" || fail ledger
 O=$(KEY=$ADMIN api GET /overview); echo "    overview: $(echo "$O" | jq -c '{spent_today,budget_day,boxes_running,boxes_sleeping,saved_vs_247_usd,top_tasks}')"
 echo "$O" | jq -e '.spent_today > 0 and .boxes_running >= 1 and (.cost_7d|length)==7' >/dev/null && pass "overview aggregates" || fail overview
-KEY=$ADMIN api GET /costs.csv | head -1 | grep -q '^id,ts,agent_id' && pass "costs.csv" || fail csv
+CSV=$(KEY=$ADMIN api GET /costs.csv); [[ $CSV == "id,ts,agent_id"* ]] && pass "costs.csv" || fail csv
 
 echo "== down"
 [[ $("$BIN/box" down "$BOX") == *terminated* ]] && pass "down" || fail down
