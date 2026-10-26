@@ -200,7 +200,14 @@ func bearer(r *http.Request) string {
 		return strings.TrimSpace(a[7:])
 	}
 	// EventSource and browser WebSockets cannot set headers.
-	return r.URL.Query().Get("token")
+	if t := r.URL.Query().Get("token"); t != "" {
+		return t
+	}
+	// Dashboard keeps the key in an httpOnly cookie (boxa_key).
+	if c, err := r.Cookie("boxa_key"); err == nil {
+		return c.Value
+	}
+	return ""
 }
 
 func (s *Server) authMW(next http.Handler) http.Handler {
