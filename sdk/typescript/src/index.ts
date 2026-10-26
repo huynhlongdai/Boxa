@@ -78,7 +78,29 @@ export interface Requirements {
   location?: string; max_latency_ms?: number; max_price_hour?: number; lifetime?: "ephemeral" | "persistent";
   duration_hours?: number; isolation?: "any" | "container" | "vm" | "sandbox"; profile?: string;
   optimize?: "balanced" | "cost" | "speed" | "reliability" | "latency"; public_url?: boolean; untrusted?: boolean;
+  /** v1.4: the workload forks/clones the box (keeps only fork-capable options). */
+  fork?: boolean;
 }
+
+/** v1.4 sandbox API provider (GET /sandbox/providers). */
+export interface SandboxCapabilities {
+  background: boolean; pause: boolean; snapshot: boolean; fork: boolean; ports: boolean; pty: boolean; files: boolean; gpu: boolean;
+  boot_ms: number; max_lifetime_s: number; max_cpu: number; max_ram_mb: number; isolation: "microvm" | "gvisor" | "container" | "vm" | string;
+}
+export interface SandboxInfo {
+  id: string; name: string; tier: "T2" | "T3"; adapter: "native" | "yaml"; verification: "live-verified" | "docs-verified" | "sdk-source" | string;
+  verified_note?: string; docs: string; website: string; initials: string; color: string; capabilities: SandboxCapabilities;
+  pricing: { cpu_second: number; gb_second: number; disk_gb_second: number; flat_second: number; source: string; confidence: "docs" | "estimated" | string; note?: string };
+  sizes: { sku: string; cpu: number; ram_mb: number; disk_gb: number }[]; regions: { id: string; name: string }[];
+  templates: string[]; default_template: string; workdir: string;
+  credentials: { name: string; label: string; secret: boolean; optional: boolean; default?: string; hint?: string }[];
+  env_vars: string[]; notes?: string[] | null;
+}
+export interface SandboxProvider extends SandboxInfo {
+  /** dial = T2 (boxd dials in from the sandbox), shim = T3 (exec-only shim at the gateway). */
+  mode: "dial" | "shim"; connected: boolean; usable: boolean; blocked?: string; health: string; from_usd_h: number; chain_rank?: number;
+}
+export interface AdapterLintResult { ok: boolean; error?: string | null; info?: SandboxInfo | null }
 
 export interface BoxEstimate {
   kind: "warm" | "pool" | "vm" | "burst" | "clone"; cost_per_hour: number; expected_hours: number; expected_total_usd: number;
@@ -89,6 +111,9 @@ export interface ScoredOption {
   kind: string; provider: string; region: string; host_id?: string; sku?: string; isolation: string; cost_per_hour: number;
   expected_total_usd: number; eta_seconds: number; latency_ms: number; rank: number; score: number;
   breakdown: Record<string, { score: number; weight: number; value: string }>; reasons: string[]; requires_approval: boolean;
+  /** v1.4 */
+  tier?: "T1" | "T2" | "T3"; fork?: boolean; pause?: boolean; ports?: boolean; gpu?: boolean; max_lifetime_h?: number;
+  boot_ms?: number; verification?: string; strong_isolation?: boolean; min_billing_h?: number;
 }
 
 export interface Recommendation {
@@ -312,9 +337,18 @@ export class Boxa {
   /** Workload profiles + per-agent-kind defaults (no auth needed). */
   profiles() { return this.request<{ items: { id: string; name: string; description: string; template: string; lifecycle: Lifecycle }[]; kinds: { kind: string; profile: string }[] }>("GET", "/profiles"); }
   /** Rank placement options with price, ETA, score and reasons. Creates nothing. */
-  recommend(input: { profile?: string; template?: string; lifecycle?: Lifecycle; requirements?: Requirements } = {}) {
-    return this.request<Recommendation>("POST", "/recommend", { body: input });
+  recommend(input: { profile?: string; template?: string; lifecycle?: Lifecycle; requirements?: Requirements; untrusted?: boolean; fork?: boolean } = {}) {
+    const { untrusted, fork, ...rest } = input;
+    const requirements = untrusted === undefined && fork === undefined ? rest.requirements
+      : { ...rest.requirements, ...(untrusted === undefined ? {} : { untrusted }), ...(fork === undefined ? {} : { fork }) };
+    return this.request<Recommendation>("POST", "/recommend", { body: { ...rest, ...(requirements ? { requirements } : {}) } });
   }
+
+  // ---- v1.4: sandbox API providers (T2 dial-in / T3 exec-only shim) ----
+  /** Sandbox providers with adapter, tier, effective mode, capabilities, per-second pricing and verification level. */
+  sandboxProviders() { return this.request<List<SandboxProvider>>("GET", "/sandbox/providers"); }
+  /** Check a declarative (YAML) sandbox adapter without loading it (admin key). */
+  lintAdapter(yaml: string) { return this.request<AdapterLintResult>("POST", "/sandbox/adapters/lint", { body: { yaml } }); }
   /** Get-or-create a box by name (idempotent); a sleeping box is woken and returned with a resume summary. */
   ensure(name: string, input: CreateBoxInput = {}) { return this.request<EnsureResult>("POST", "/boxes/ensure", { body: { ...input, name } }); }
   /** Wake if needed and summarise recent execs, jobs, files and ports. */

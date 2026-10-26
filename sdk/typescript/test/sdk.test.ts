@@ -160,3 +160,27 @@ test("v1.3 recommend / ensure / clone / session exec", { skip }, async () => {
   await bx.down(c.id);
   await bx.down(e1.box.id);
 });
+
+test("v1.4 sandbox providers / adapter lint / recommend untrusted+fork", { skip }, async () => {
+  const bx = new Boxa({ apiKey: key, baseUrl: url });
+  const sp = await bx.sandboxProviders();
+  const ids = new Map(sp.items.map((p) => [p.id, p]));
+  for (const id of ["e2b", "novita", "daytona", "prized", "boxdsh", "runloop", "blaxel", "vercel", "boat", "agent37", "upstash-box"]) assert.ok(ids.has(id), id);
+  assert.equal(ids.get("prized")?.verification, "live-verified");
+  assert.equal(ids.get("upstash-box")?.mode, "shim");
+  assert.ok(sp.items.every((p) => p.docs && p.initials && p.from_usd_h > 0 && typeof p.capabilities.fork === "boolean"));
+  await assert.rejects(bx.lintAdapter("id: x"), (e: unknown) => e instanceof BoxaError && ["UNAUTHORIZED", "POLICY_DENIED"].includes(e.code));
+  const adm = new Boxa({ apiKey: admin, baseUrl: url });
+  const bad = await adm.lintAdapter("id: x\nname: X\n");
+  assert.equal(bad.ok, false);
+  assert.match(bad.error ?? "", /missing/);
+  const good = await adm.lintAdapter("id: acme\nname: Acme\nbase_url: https://api.acme.test\nvalidate: {method: GET, path: /x}\ncreate: {method: POST, path: /x, capture: {id: $.id}}\nget: {method: GET, path: /x}\ndelete: {method: DELETE, path: /x}\nexec: [{method: POST, path: /x}]\n");
+  assert.equal(good.ok, true);
+  assert.equal(good.info?.adapter, "yaml");
+  const rec = await adm.recommend({ template: "base", untrusted: true, fork: true, requirements: { isolation: "sandbox", cpu: 1, ram_mb: 1024, lifetime: "ephemeral" } });
+  assert.equal(rec.requirements.untrusted, true);
+  assert.equal(rec.requirements.fork, true);
+  assert.ok(rec.options.length > 0 && rec.options.every((o) => o.kind === "sandbox" && o.fork && o.strong_isolation && (o.tier === "T2" || o.tier === "T3")));
+  assert.ok(rec.rejected.some((r) => r.provider === "daytona" && /shared kernel/.test(r.reason)));
+  assert.ok(rec.rejected.some((r) => /fork/.test(r.reason)));
+});

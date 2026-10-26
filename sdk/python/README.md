@@ -32,6 +32,17 @@ Async: `AsyncBoxa` has the same methods (`await bx.exec(...)`, `async with Async
 Retryable codes (`NO_CAPACITY`, `PROVIDER_FAILED`, `RATE_LIMITED`, `INTERNAL`) are retried `max_retries`
 times (default 2), honouring `retry_after_s`. Loopback URLs bypass `HTTP(S)_PROXY`.
 
+### v1.4 — sandbox API providers (T2/T3)
+
+```python
+for p in bx.sandbox_providers()["items"]:          # E2B, Daytona, Prized, Runloop, Vercel Sandbox, Upstash Box…
+    print(p["id"], p["tier"], p["mode"], p["verification"], p["from_usd_h"], p["capabilities"]["fork"])
+rec = bx.recommend(template="base", untrusted=True, fork=True, isolation="sandbox", lifetime="ephemeral")
+print(rec["pick"]["provider"], rec["pick"]["tier"], [r["reason"] for r in rec["rejected"]])
+admin = Boxa(admin_key, base_url)
+print(admin.lint_adapter(open("my-sandbox.yaml").read()))   # {ok, error?, info?} — admin key
+```
+
 ## Function calling with any LLM
 
 Tool schemas come from the server (`GET /v1/tools`, the same source as the MCP server); tool calls are

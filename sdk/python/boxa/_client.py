@@ -244,12 +244,35 @@ class _Base:
         return self._call("GET", "/profiles")
 
     def recommend(self, profile: Optional[str] = None, *, template: Optional[str] = None,
-                  lifecycle: Optional[str] = None, **requirements: Any) -> Dict[str, Any]:
-        """Rank placement options (warm pool / pool container / VM / new server) with price, ETA,
-        score and reasons. ``requirements``: cpu, ram_mb, disk_gb, max_price_hour, location,
-        max_latency_ms, optimize, isolation, arch, region, lifetime, duration_hours. Creates nothing."""
+                  lifecycle: Optional[str] = None, untrusted: Optional[bool] = None, fork: Optional[bool] = None,
+                  **requirements: Any) -> Dict[str, Any]:
+        """Rank placement options (warm pool / pool container / VM / new server / v1.4 sandbox API)
+        with price, ETA, score and reasons. ``requirements``: cpu, ram_mb, disk_gb, max_price_hour,
+        location, max_latency_ms, optimize, isolation (any|container|vm|sandbox), arch, region,
+        lifetime, duration_hours, public_url. ``untrusted=True`` keeps only own-kernel options
+        (VM, microVM/gVisor sandboxes); ``fork=True`` keeps only options that can fork/clone.
+        Sandbox options carry ``tier`` (T2/T3), ``fork``, ``pause``, ``ports``, ``max_lifetime_h``,
+        ``verification`` and ``strong_isolation``. Creates nothing."""
+        req = dict(requirements)
+        if untrusted is not None:
+            req["untrusted"] = untrusted
+        if fork is not None:
+            req["fork"] = fork
         return self._call("POST", "/recommend", _clean({"profile": profile, "template": template, "lifecycle": lifecycle,
-                                                        "requirements": _clean(requirements) or None}))
+                                                        "requirements": _clean(req) or None}))
+
+    # -- v1.4: sandbox API providers (T2 dial-in / T3 exec-only shim) ---------
+    def sandbox_providers(self) -> Dict[str, List[Dict[str, Any]]]:
+        """Every sandbox provider Core knows: adapter (native|yaml), tier, effective ``mode``
+        (dial = T2, shim = T3), capabilities (boot_ms, fork, pause, ports, gpu, max_lifetime_s,
+        isolation), per-second ``pricing``, sizes, regions, ``verification`` level
+        (live-verified | docs-verified | sdk-source) and connection state."""
+        return self._call("GET", "/sandbox/providers")
+
+    def lint_adapter(self, yaml: str) -> Dict[str, Any]:
+        """Check a declarative (YAML) sandbox adapter without loading it (admin key).
+        Returns ``{ok, error?, info?}``; ``info`` is the provider metadata the adapter declares."""
+        return self._call("POST", "/sandbox/adapters/lint", {"yaml": yaml})
 
     def ensure(self, name: str, profile: Optional[str] = None, *, template: Optional[str] = None,
                lifecycle: Optional[str] = None, cpu: Optional[float] = None, ram_mb: Optional[int] = None,

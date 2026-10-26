@@ -28,6 +28,15 @@ try { await bx.getBox("box_nope"); }
 catch (e) { if (e instanceof BoxaError) console.log(e.code, e.apiMessage, e.hint, e.retryAfterS, e.docsUrl); }
 ```
 
+### v1.4 — sandbox API providers (T2/T3)
+
+```ts
+const { items } = await bx.sandboxProviders();          // tier, mode (dial|shim), capabilities, per-second pricing, verification
+const rec = await bx.recommend({ template: "base", untrusted: true, fork: true, requirements: { isolation: "sandbox" } });
+console.log(rec.pick?.provider, rec.pick?.tier, rec.rejected.map((r) => r.reason));
+const lint = await new Boxa({ apiKey: adminKey }).lintAdapter(yamlText);   // { ok, error?, info? } — admin key
+```
+
 ## Function calling
 
 ```ts

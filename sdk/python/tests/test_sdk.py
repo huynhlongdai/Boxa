@@ -137,3 +137,34 @@ def test_v13_selection_helpers(core):
         assert bx.rightsize(bid)["box_id"] == bid
         bx.down(c["id"])
         bx.down(bid)
+
+
+def test_v14_sandbox_helpers(core):
+    from boxa import Boxa, BoxaError
+    url, admin, akey = core["url"], core["admin"], core["key"]
+    with Boxa(akey, url) as bx:
+        sp = bx.sandbox_providers()["items"]
+        ids = {p["id"]: p for p in sp}
+        assert {"e2b", "novita", "daytona", "prized", "boxdsh", "runloop", "blaxel", "vercel", "boat", "agent37", "upstash-box"} <= set(ids)
+        assert ids["prized"]["verification"] == "live-verified" and ids["upstash-box"]["tier"] == "T3" and ids["upstash-box"]["mode"] == "shim"
+        assert all(p["docs"] and p["initials"] and p["from_usd_h"] > 0 and "fork" in p["capabilities"] for p in sp)
+        # agents cannot lint adapters (admin scope)
+        try:
+            bx.lint_adapter("id: x")
+            raise AssertionError("agent key must not lint adapters")
+        except BoxaError as e:
+            assert e.code in ("UNAUTHORIZED", "POLICY_DENIED")
+    with Boxa(admin, url) as adm:
+        bad = adm.lint_adapter("id: x\nname: X\n")
+        assert bad["ok"] is False and "missing" in bad["error"]
+        good = adm.lint_adapter(
+            "id: acme\nname: Acme\nbase_url: https://api.acme.test\nvalidate: {method: GET, path: /x}\n"
+            "create: {method: POST, path: /x, capture: {id: $.id}}\nget: {method: GET, path: /x}\n"
+            "delete: {method: DELETE, path: /x}\nexec: [{method: POST, path: /x}]\n")
+        assert good["ok"] is True and good["info"]["id"] == "acme" and good["info"]["adapter"] == "yaml"
+        # untrusted + fork, sandbox only: every option is own-kernel and fork-capable; shared-kernel ones are explained
+        rec = adm.recommend(template="base", untrusted=True, fork=True, isolation="sandbox", cpu=1, ram_mb=1024, lifetime="ephemeral")
+        assert rec["requirements"]["untrusted"] is True and rec["requirements"]["fork"] is True
+        assert rec["options"] and all(o["kind"] == "sandbox" and o["fork"] and o["strong_isolation"] and o["tier"] in ("T2", "T3") for o in rec["options"])
+        assert any(r.get("provider") == "daytona" and "shared kernel" in r["reason"] for r in rec["rejected"])
+        assert any("fork" in r["reason"] for r in rec["rejected"])
