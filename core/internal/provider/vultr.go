@@ -206,3 +206,49 @@ func (v *Vultr) Wake(ctx context.Context, token, ref string) error {
 	}
 	return nil
 }
+
+func (v *Vultr) Regions(ctx context.Context, token string) ([]Region, error) {
+	var out struct {
+		Regions []struct {
+			ID      string `json:"id"`
+			City    string `json:"city"`
+			Country string `json:"country"`
+		} `json:"regions"`
+	}
+	if err := doJSON(ctx, v.c, "GET", v.BaseURL+"/regions?per_page=500", token, nil, &out); err != nil {
+		return nil, authErr(err, "Vultr")
+	}
+	var rs []Region
+	for _, r := range out.Regions {
+		rs = append(rs, Region{ID: r.ID, Name: r.City + " (" + r.Country + ")", Available: true})
+	}
+	return rs, nil
+}
+
+func (v *Vultr) List(ctx context.Context, token string) ([]Server, error) {
+	var out struct {
+		Instances []struct {
+			ID          string `json:"id"`
+			Label       string `json:"label"`
+			MainIP      string `json:"main_ip"`
+			Plan        string `json:"plan"`
+			Region      string `json:"region"`
+			Status      string `json:"status"`
+			PowerStatus string `json:"power_status"`
+		} `json:"instances"`
+	}
+	if err := doJSON(ctx, v.c, "GET", v.BaseURL+"/instances?per_page=500&tag=boxa", token, nil, &out); err != nil {
+		return nil, authErr(err, "Vultr")
+	}
+	var ss []Server
+	for _, in := range out.Instances {
+		st := "down"
+		if in.Status == "active" && in.PowerStatus == "running" {
+			st = "ready"
+		} else if in.Status == "pending" {
+			st = "provisioning"
+		}
+		ss = append(ss, Server{Ref: in.ID, Name: in.Label, IP: in.MainIP, SKU: in.Plan, Region: in.Region, Status: st})
+	}
+	return ss, nil
+}

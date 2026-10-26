@@ -181,3 +181,58 @@ func (h *Hetzner) Snapshot(ctx context.Context, token, ref, name string) (string
 	}
 	return "hetzner-image:" + strconv.FormatInt(out.Image.ID, 10), nil
 }
+
+func (h *Hetzner) Regions(ctx context.Context, token string) ([]Region, error) {
+	var out struct {
+		Locations []struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+		} `json:"locations"`
+	}
+	if err := doJSON(ctx, h.c, "GET", h.BaseURL+"/locations", token, nil, &out); err != nil {
+		return nil, authErr(err, "Hetzner")
+	}
+	var rs []Region
+	for _, l := range out.Locations {
+		rs = append(rs, Region{ID: l.Name, Name: l.Description, Available: true})
+	}
+	return rs, nil
+}
+
+func (h *Hetzner) List(ctx context.Context, token string) ([]Server, error) {
+	var out struct {
+		Servers []struct {
+			ID         int64  `json:"id"`
+			Name       string `json:"name"`
+			Status     string `json:"status"`
+			ServerType struct {
+				Name string `json:"name"`
+			} `json:"server_type"`
+			Datacenter struct {
+				Location struct {
+					Name string `json:"name"`
+				} `json:"location"`
+			} `json:"datacenter"`
+			PublicNet struct {
+				IPv4 struct {
+					IP string `json:"ip"`
+				} `json:"ipv4"`
+			} `json:"public_net"`
+		} `json:"servers"`
+	}
+	if err := doJSON(ctx, h.c, "GET", h.BaseURL+"/servers?per_page=50&label_selector=boxa", token, nil, &out); err != nil {
+		return nil, authErr(err, "Hetzner")
+	}
+	var ss []Server
+	for _, s := range out.Servers {
+		st := "down"
+		switch s.Status {
+		case "running":
+			st = "ready"
+		case "initializing", "starting":
+			st = "provisioning"
+		}
+		ss = append(ss, Server{Ref: strconv.FormatInt(s.ID, 10), Name: s.Name, IP: s.PublicNet.IPv4.IP, SKU: s.ServerType.Name, Region: s.Datacenter.Location.Name, Status: st})
+	}
+	return ss, nil
+}

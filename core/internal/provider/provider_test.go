@@ -130,11 +130,14 @@ func TestVultrAdapter(t *testing.T) {
 
 func TestStubsAreHonest(t *testing.T) {
 	r := Default(nil)
-	p, _ := r.Get("contabo")
-	if p.Implemented() {
-		t.Fatal("contabo should be a stub")
+	for _, id := range []string{"hetzner", "vultr", "digitalocean", "contabo", "netcup"} {
+		p, ok := r.Get(id)
+		if !ok || !p.Implemented() {
+			t.Fatalf("%s should have a real adapter", id)
+		}
 	}
-	if err := p.Validate(context.Background(), "x"); err == nil {
+	s := &Stub{id: "x", name: "X"}
+	if err := s.Validate(context.Background(), "x"); err == nil {
 		t.Fatal("stub validate should fail")
 	}
 }

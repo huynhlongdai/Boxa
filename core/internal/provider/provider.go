@@ -112,9 +112,9 @@ func Default(httpc *http.Client) *Registry {
 		&Local{},
 		NewHetzner(httpc),
 		NewVultr(httpc),
-		&Stub{id: "digitalocean", name: "DigitalOcean"},
-		&Stub{id: "contabo", name: "Contabo"},
-		&Stub{id: "netcup", name: "netcup"},
+		NewDigitalOcean(httpc),
+		NewContabo(httpc),
+		NewNetcup(httpc),
 	)
 }
 
@@ -139,7 +139,9 @@ func (*Local) Status(ctx context.Context, token, ref string) (string, error) { r
 
 // ---- stub ----
 
-// Stub is a provider known to the price feed but without an adapter yet (P3).
+// Stub is a provider known to the price feed but without an adapter yet.
+// (DigitalOcean, Contabo and netcup have real adapters since v1.2; Stub stays
+// for feed-only providers added through BOXA_PRICE_FEED_PROVIDERS.)
 type Stub struct{ id, name string }
 
 func (s *Stub) ID() string        { return s.id }
@@ -148,7 +150,7 @@ func (s *Stub) Tier() string      { return "T1" }
 func (s *Stub) Implemented() bool { return false }
 func (s *Stub) Caps() Caps        { return Caps{} }
 func (s *Stub) err() error {
-	return model.EH(model.ErrProviderFailed, "This provider adapter ships in P3; use hetzner or vultr for now.", "%s adapter not implemented yet", s.name)
+	return model.EH(model.ErrProviderFailed, "This provider has no adapter yet; use hetzner, vultr, digitalocean, contabo or netcup.", "%s adapter not implemented yet", s.name)
 }
 func (s *Stub) Validate(ctx context.Context, token string) error                { return s.err() }
 func (s *Stub) Offers(ctx context.Context, token string) ([]model.Offer, error) { return nil, s.err() }
@@ -170,6 +172,11 @@ type apiErr struct {
 func (e *apiErr) Error() string { return fmt.Sprintf("HTTP %d: %s", e.Status, e.Body) }
 
 func doJSON(ctx context.Context, c *http.Client, method, url, token string, body, out any) error {
+	return doJSONH(ctx, c, method, url, map[string]string{"Authorization": "Bearer " + token}, body, out)
+}
+
+// doJSONH is doJSON with explicit headers (Authorization included by caller).
+func doJSONH(ctx context.Context, c *http.Client, method, url string, headers map[string]string, body, out any) error {
 	var rd io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -182,8 +189,10 @@ func doJSON(ctx context.Context, c *http.Client, method, url, token string, body
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
 	req.Header.Set("User-Agent", "boxa-core/0.1")
 	resp, err := c.Do(req)
 	if err != nil {
