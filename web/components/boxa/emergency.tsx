@@ -5,7 +5,7 @@ import { OctagonX } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { useSWRConfig } from "swr";
-import { api, errMsg } from "@/lib/api";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";

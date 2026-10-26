@@ -47,7 +47,7 @@ check_page() {
   ok "[$l] 200 $path"
 }
 
-ROUTES="/ /boxes /boxes/box_7f3a91 /boxes/box_7f3a91?tab=logs /agents /agents/agt_kecon /costs /infra /templates /secrets /settings /admin /developers /onboarding /login"
+ROUTES="/ /boxes /boxes/box_7f3a91 /boxes/box_7f3a91?tab=logs /recommend /infra?s=health /infra?s=catalog /infra?s=speed /infra?s=mesh /agents /agents/agt_kecon /costs /infra /templates /secrets /settings /admin /developers /onboarding /login"
 
 echo "== Trang × ngôn ngữ (cookie boxa_locale)"
 for l in $LOCALES; do
@@ -127,6 +127,47 @@ tr=$(curl -s -X POST "$BASE/api/boxa/notify/test" -H 'content-type: application/
 [ "$tr" = "telegram:true,email:false" ] && ok "POST /notify/test → $tr" || bad "notify/test: $tr"
 ac=$(curl -s "$BASE/api/boxa/_root/.well-known/agent.json" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log(j.url.endsWith("/a2a")+"|"+j.capabilities.streaming+"|"+j.preferredTransport)})')
 [ "$ac" = "true|true|JSONRPC" ] && ok "A2A agent card $ac" || bad "agent card: $ac"
+
+echo "== v1.3: provider manager, recommend, right-sizing, warm pool, speed, clone/ensure/resume, mesh, error.next"
+# jq <method> <path> <body|-> <node-expr trên biến j, in ra chuỗi>
+jx() {
+  local m="$1" p="$2" b="$3" e="$4"
+  if [ "$b" = "-" ]; then curl -s -X "$m" "$BASE/api/boxa/$p"; else curl -s -X "$m" "$BASE/api/boxa/$p" -H 'content-type: application/json' -d "$b"; fi \
+    | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{let j;try{j=JSON.parse(s)}catch{console.log('NOJSON '+s.slice(0,80));return};try{console.log($e)}catch(x){console.log('ERR '+x.message)}})"
+}
+expect() { local name="$1" got="$2" want="$3"; if [[ "$got" == $want ]]; then ok "$name → $got"; else bad "$name → $got (muốn $want)"; fi; }
+expect "GET /providers/health" "$(jx GET providers/health - 'j.items.length+"|"+j.items.find(x=>x.provider.id==="contabo").stats.breaker.state+"|"+Object.keys(j.items.find(x=>x.provider.id==="hetzner").score.breakdown).length')" "6|open|6"
+expect "GET /providers/hetzner/health" "$(jx GET providers/hetzner/health - 'j.provider.id+"|"+(j.recent.length>0)+"|"+(j.stats.api_latency_p95_ms>=j.stats.api_latency_p50_ms)')" "hetzner|true|true"
+expect "POST validate (token sai)" "$(jx POST providers/digitalocean/validate '{"token":"sai"}' 'j.ok+"|"+j.error_class')" "false|auth"
+expect "POST validate (token đúng)" "$(jx POST providers/digitalocean/validate '{"token":"dop_v1_0123456789abcdef0123"}' 'j.ok+"|"+(j.regions.length>0)+"|"+(j.sizes.length>0)')" "true|true|true"
+expect "GET /profiles" "$(jx GET profiles - 'j.items.length+"|"+j.kinds.length+"|"+j.optimize.length')" "7|22|5"
+expect "POST /recommend coding-agent" "$(jx POST recommend '{"profile":"coding-agent","agent_id":"agt_hark"}' 'j.profile.id+"|"+(j.options.length>0)+"|"+j.options.every(o=>Object.keys(o.breakdown).length===6&&o.reasons.length>0&&o.eta_seconds>0)+"|"+(j.pick?j.pick.rank:0)+"|"+Array.isArray(j.rejected)')" "coding-agent|true|true|1|true"
+expect "POST /recommend untrusted → không container" "$(jx POST recommend '{"profile":"sandbox-untrusted"}' 'j.options.every(o=>o.isolation!=="container")+"|"+j.rejected.some(r=>/kernel|VM/i.test(r.reason))')" "true|true"
+expect "POST /recommend có lý do loại contabo" "$(jx POST recommend '{"profile":"build"}' 'j.rejected.some(r=>r.provider==="contabo")')" "true"
+expect "POST /recommend profile lạ → 400 + next" "$(jx POST recommend '{"requirements":{"profile":"khong-co"}}' 'j.error.code+"|"+(j.error.next.length>0)')" "INVALID|true"
+expect "POST /providers/contabo/reset" "$(jx POST providers/contabo/reset - 'j.stats.breaker.state')" "closed"
+expect "POST /providers/vultr/check" "$(jx POST providers/vultr/check - 'j.provider.id+"|"+j.stats.breaker.state')" "vultr|closed"
+expect "PUT /providers/hetzner/prefs" "$(jx PUT providers/hetzner/prefs '{"max_servers":6}' 'j.max_servers+"|"+j.priority+"|"+j.regions.length')" "6|1|3"
+expect "PUT prefs âm → 400" "$(jx PUT providers/hetzner/prefs '{"max_hourly_usd":-1}' 'j.error.code')" "INVALID"
+expect "GET /catalog" "$(jx GET catalog - '(j.items.length>0)+"|"+j.sources.some(s=>s.stale)+"|"+j.items.some(i=>i.price_source.endsWith("-api"))+"|"+(j.total===j.items.length)')" "true|true|true|true"
+expect "POST /boxes với profile → estimate" "$(jx POST boxes '{"agent_id":"agt_hark","profile":"browser-automation"}' 'j.profile+"|"+(j.estimate?j.estimate.kind:"none")+"|"+(j.estimate&&j.estimate.eta_seconds>0)')" "browser-automation|*|true"
+expect "POST /boxes thường cũng có estimate" "$(jx POST boxes '{"agent_id":"agt_kecon","template":"python","spec":{"cpu":1,"ram_mb":1024,"disk_gb":10}}' '(j.estimate&&j.estimate.cost_per_hour>=0)+"|"+j.estimate.kind')" "true|pool"
+expect "GET /rightsize" "$(jx GET rightsize - '(j.items.length>0)+"|"+j.items.some(r=>r.suggestion==="downsize"&&r.savings_per_month>0)')" "true|true"
+expect "GET /boxes/:id/rightsize" "$(jx GET boxes/box_a9d054/rightsize - 'j.suggestion+"|"+j.suggested_spec.cpu')" "downsize|2"
+expect "GET /warm-pool" "$(jx GET warm-pool - 'j.enabled+"|"+j.pools.length+"|"+(j.entries.length>0)')" "true|2|true"
+expect "PUT /warm-pool" "$(jx PUT warm-pool '{"enabled":true,"pools":[{"template":"python","spec":{"cpu":2,"ram_mb":4096,"disk_gb":20},"min":2,"max":4,"ttl_minutes":45}]}' 'j.pools.length+"|"+j.pools[0].min+"|"+j.pools[0].ttl_minutes')" "1|2|45"
+expect "PUT /warm-pool sai → 400" "$(jx PUT warm-pool '{"enabled":true,"pools":[{"template":"python","min":5,"max":2,"ttl_minutes":30}]}' 'j.error.code')" "INVALID"
+expect "GET /speed" "$(jx GET speed - 'j.placement+"|"+(j.speedup>1)+"|"+(j.hosts.length>0)')" "binpack|true|true"
+expect "POST /boxes/:id/clone" "$(jx POST boxes/box_a9d054/clone '{"slug":"kecon-story-gen-thu"}' 'j.slug+"|"+j.cloned_from+"|"+j.estimate.kind')" "kecon-story-gen-thu|box_a9d054|clone"
+expect "clone box đã hỏng → 409" "$(jx POST boxes/box_b18f6e/clone '{}' 'j.error.code')" "INVALID"
+expect "GET /boxes/:id/resume" "$(jx GET boxes/box_7f3a91/resume - 'j.woke+"|"+Array.isArray(j.recent_execs)+"|"+(j.next.length>0)')" "false|true|true"
+expect "POST /boxes/ensure (tạo)" "$(jx POST boxes/ensure '{"name":"smoke-ensure","agent_id":"agt_hark","template":"base"}' 'j.action+"|"+j.created')" "created|true"
+expect "POST /boxes/ensure (dùng lại)" "$(jx POST boxes/ensure '{"name":"smoke-ensure","agent_id":"agt_hark"}' 'j.action+"|"+j.created')" "reused|false"
+expect "GET /mesh" "$(jx GET mesh - 'j.enabled+"|"+(j.nodes.length>0)+"|"+(j.acl_rules>0)')" "true|true|true"
+expect "GET /mesh/config" "$(jx GET mesh/config - '/server_url/.test(j.config)+"|"+(JSON.parse(j.acl).acls.length>0)')" "true|true"
+expect "GET /mesh/acl" "$(jx GET mesh/acl - 'Array.isArray(j.notes)+"|"+(j.policy.acls.length>0)')" "true|true"
+expect "POST /mesh/keys" "$(jx POST mesh/keys '{"box_id":"box_9a6d13","reusable":false,"ttl_minutes":30}' 'j.key.startsWith("hskey-")+"|"+/tailscale up --login-server/.test(j.command)+"|"+j.ephemeral')" "true|true|true"
+expect "error.next khi NOT_FOUND" "$(jx GET boxes/khong-co - 'j.error.code+"|"+(j.error.next.length>0)')" "NOT_FOUND|true"
 
 echo "== Lỗi được dịch theo ngôn ngữ (code không đổi)"
 declare -A NF=([vi]="Không tìm thấy" [en]="not found" [zh]="未找到" [ja]="見つかりません")

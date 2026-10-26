@@ -9,7 +9,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Moon, OctagonX, Rocket, Sun, Wallet, Search } from "lucide-react";
 import { toast } from "sonner";
 import { useSWRConfig } from "swr";
-import { api, errMsg, paths } from "@/lib/api";
+import { api, paths } from "@/lib/api";
 import { useApi } from "@/lib/hooks";
 import { useFmt } from "@/lib/format";
 import { strip } from "@/lib/text";

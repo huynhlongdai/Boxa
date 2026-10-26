@@ -2,7 +2,6 @@
 import * as React from "react";
 import useSWR, { useSWRConfig, type SWRConfiguration } from "swr";
 import { toast } from "sonner";
-import { errMsg } from "./api";
 import { toastError } from "./error-toast";
 
 /** SWR với key là đường dẫn API (null = tạm không tải). */

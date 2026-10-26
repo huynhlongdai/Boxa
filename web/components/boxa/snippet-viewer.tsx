@@ -3,8 +3,7 @@
 // Lấy từ GET /agents/:id/snippet?kind=&lang=<transport>; Core cũ không phân biệt transport → sinh tại chỗ (lib/snippets).
 import * as React from "react";
 import { useTranslations } from "next-intl";
-import { toast } from "sonner";
-import { api, errMsg, paths } from "@/lib/api";
+import { api, paths } from "@/lib/api";
 import { useApi } from "@/lib/hooks";
 import { FALLBACK_KINDS, kindInfo } from "@/lib/agent-kinds";
 import { KEY_PLACEHOLDER, makeSnippet } from "@/lib/snippets";
