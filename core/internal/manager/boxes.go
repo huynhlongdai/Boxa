@@ -860,7 +860,7 @@ func (m *Manager) snapshotBox(ctx context.Context, b *model.Box, actor string) (
 	if err != nil {
 		return nil, mapHostErr(err)
 	}
-	sn := &model.Snapshot{ID: snapID, BoxID: b.ID, SizeMB: float64(int(res.SizeMB*100)) / 100, CreatedAt: time.Now().UTC(), Location: res.Location, HostID: b.HostID}
+	sn := &model.Snapshot{ID: snapID, BoxID: b.ID, SizeMB: float64(int(res.SizeMB*1000)) / 1000, CreatedAt: time.Now().UTC(), Location: res.Location, HostID: b.HostID}
 	if err := m.Store.PutSnapshot(ctx, sn); err != nil {
 		return nil, err
 	}

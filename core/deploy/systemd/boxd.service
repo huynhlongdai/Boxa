@@ -1,0 +1,14 @@
+[Unit]
+Description=Boxa host agent (boxd) — dials out to core, runs boxes in Incus
+After=network-online.target incus.service
+Wants=network-online.target
+
+[Service]
+# boxd drives the incus CLI, so it runs as root (or a member of incus-admin).
+EnvironmentFile=/etc/boxd.env
+ExecStart=/usr/local/bin/boxd
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

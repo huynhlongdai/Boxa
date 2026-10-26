@@ -1,0 +1,32 @@
+# Boxa ingress + API TLS.
+#   - Core API/dashboard at {$BOXA_CORE_HOST} (e.g. core-1-2-3-4.sslip.io or core.example.com)
+#   - Box URLs <slug>-<ip>.sslip.io or <slug>.box.{$BASE_DOMAIN}: certificates are issued
+#     on demand, only for hosts that core confirms (ask endpoint).
+{
+	email {$ACME_EMAIL}
+	on_demand_tls {
+		ask http://127.0.0.1:8080/v1/internal/tls-ask
+	}
+}
+
+{$BOXA_CORE_HOST} {
+	encode gzip
+	# Next.js dashboard (boxa/web) when deployed on the same host; API stays on core.
+	@api path /v1/* /mcp /dl/*
+	handle @api {
+		reverse_proxy 127.0.0.1:8080 {
+			flush_interval -1
+		}
+	}
+	handle {
+		reverse_proxy 127.0.0.1:{$BOXA_WEB_PORT:3000}
+	}
+}
+
+# Every other HTTPS host: box ingress (core reverse-tunnels to the box via boxd).
+https:// {
+	tls {
+		on_demand
+	}
+	reverse_proxy 127.0.0.1:8080
+}

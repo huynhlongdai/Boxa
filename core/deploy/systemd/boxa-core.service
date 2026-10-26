@@ -1,0 +1,20 @@
+[Unit]
+Description=Boxa core (control plane)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=boxa
+Group=boxa
+EnvironmentFile=/etc/boxa/core.env
+ExecStart=/usr/local/bin/boxa-core
+WorkingDirectory=/var/lib/boxa
+Restart=always
+RestartSec=3
+LimitNOFILE=65536
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/boxa
+
+[Install]
+WantedBy=multi-user.target

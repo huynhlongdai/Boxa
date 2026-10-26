@@ -1,0 +1,32 @@
+# Optional: run core (+ Postgres, + Caddy) in containers. boxd still runs on
+# each host with Incus (deploy/install.sh or cloud-init), dialing out to core.
+#   cd deploy && BOXA_ADMIN_KEY=... BOXA_MASTER_KEY=... docker compose up -d
+services:
+  core:
+    build: ..
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://boxa:boxa@postgres:5432/boxa?sslmode=disable
+      BOXA_ADDR: ":8080"
+      BOXA_PUBLIC_URL: ${BOXA_PUBLIC_URL:-}
+      BASE_DOMAIN: ${BASE_DOMAIN:-}
+      BOXA_ADMIN_KEY: ${BOXA_ADMIN_KEY:?set BOXA_ADMIN_KEY}
+      BOXA_MASTER_KEY: ${BOXA_MASTER_KEY:?set BOXA_MASTER_KEY}
+      BOXA_BOOTSTRAP_TOKEN: ${BOXA_BOOTSTRAP_TOKEN:-}
+    volumes: ["core-data:/data"]
+    ports: ["127.0.0.1:8080:8080"]
+    depends_on: [postgres]
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment: { POSTGRES_USER: boxa, POSTGRES_PASSWORD: boxa, POSTGRES_DB: boxa }
+    volumes: ["pg-data:/var/lib/postgresql/data"]
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      BOXA_CORE_HOST: ${BOXA_CORE_HOST:?e.g. core-1-2-3-4.sslip.io}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@example.com}
+    volumes: ["./Caddyfile:/etc/caddy/Caddyfile:ro", "caddy-data:/data"]
+volumes: { core-data: {}, pg-data: {}, caddy-data: {} }
