@@ -1,0 +1,6 @@
+bin/
+data/
+boxd-state/
+*.db
+*.db-*
+/e2e-tmp/

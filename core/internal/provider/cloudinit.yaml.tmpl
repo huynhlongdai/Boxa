@@ -1,0 +1,38 @@
+#cloud-config
+# Boxa T1 host bootstrap: installs Incus + boxd, boxd dials OUT to core.
+# No inbound port is required on the host.
+package_update: true
+packages:
+  - incus
+  - curl
+  - ca-certificates
+write_files:
+  - path: /etc/boxd.env
+    permissions: "0600"
+    content: |
+      BOXD_CORE_URL={{.CoreURL}}
+      BOXD_TOKEN={{.BootstrapToken}}
+      BOXD_DRIVER=incus
+      BOXD_PROVIDER={{.Provider}}
+      BOXD_REGION={{.Region}}
+      BOXD_STATE_DIR=/var/lib/boxd
+  - path: /etc/systemd/system/boxd.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Boxa host agent (boxd)
+      After=network-online.target incus.service
+      Wants=network-online.target
+      [Service]
+      EnvironmentFile=/etc/boxd.env
+      ExecStart=/usr/local/bin/boxd
+      Restart=always
+      RestartSec=3
+      [Install]
+      WantedBy=multi-user.target
+runcmd:
+  - [sh, -c, "incus admin init --minimal || true"]
+  - [sh, -c, "mkdir -p /var/lib/boxd /var/lib/boxa/memory"]
+  - [sh, -c, "ARCH=$(dpkg --print-architecture); curl -fsSL '{{.BoxdURL}}'-linux-$ARCH -o /usr/local/bin/boxd && chmod +x /usr/local/bin/boxd"]
+  - [systemctl, daemon-reload]
+  - [systemctl, enable, --now, boxd]
