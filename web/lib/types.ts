@@ -70,6 +70,20 @@ export interface Box {
   retries?: number;
   taken_over?: boolean;
   billing?: string;
+  /** v1.2: allowlist egress hiệu lực (null/undefined = không giới hạn). */
+  egress?: BoxEgress | null;
+}
+
+/** v1.2: chính sách egress của box và cách host thực thi nó. */
+export interface BoxEgress {
+  allow: string[];
+  deny_by_default: boolean;
+  source: "box" | "agent" | "settings";
+  enforced: boolean;
+  mode: "incus-acl" | "nftables" | "none" | string;
+  warning?: string;
+  rules: number;
+  applied_at?: string | null;
 }
 
 export interface CreateBoxBody {
@@ -85,6 +99,7 @@ export interface CreateBoxBody {
   secrets?: string[];
   setup?: string[];
   yaml?: string;
+  egress?: { allow: string[]; deny_by_default?: boolean };
 }
 
 /** v1.1: 22 kind (GET /agent-kinds). Giữ kiểu string để không vỡ khi Core thêm kind mới. */
@@ -148,7 +163,7 @@ export interface Job {
   id: string;
   box_id: string;
   command: string;
-  status: "queued" | "running" | "done" | "failed";
+  status: "queued" | "running" | "done" | "failed" | "canceled";
   result: ExecResult | null;
   created_at: string;
   finished_at: string | null;
@@ -198,6 +213,18 @@ export interface Provider {
   tier: "T1" | "T2" | "T3";
   last_check_at: string | null;
   error: string | null;
+  /** v1.2 */
+  implemented?: boolean;
+  /** Vị trí (1-based) trong chuỗi dự phòng burst của Scheduler; 0/undefined = không nằm trong chuỗi. */
+  chain_rank?: number;
+  /** env = token lấy từ biến môi trường, api = dán trên dashboard. */
+  token_source?: "env" | "api";
+}
+
+export interface ProviderRegion {
+  id: string;
+  name: string;
+  available: boolean;
 }
 
 export interface Offer {
@@ -271,6 +298,10 @@ export interface Snapshot {
   size_mb: number;
   created_at: string;
   location: string;
+  /** v1.2: local = chỉ khôi phục trên host gốc; s3 = R2/B2, khôi phục/fork ở host bất kỳ. */
+  storage?: "local" | "s3";
+  remote_url?: string;
+  upload_error?: string;
 }
 
 export interface Approval {
@@ -302,16 +333,25 @@ export interface Overview {
   approvals_pending: number;
 }
 
+export type SmtpTls = "starttls" | "tls" | "none" | "";
+
+export interface NotifySettings {
+  telegram_chat_id: string;
+  email: string;
+  events: string[];
+  daily_report_hour: number;
+  /** v1.2 */
+  timezone?: string;
+  smtp?: { host: string; port: number; username: string; from: string; tls: SmtpTls };
+}
+
 export interface Settings {
-  notify: {
-    telegram_chat_id: string;
-    email: string;
-    events: string[];
-    daily_report_hour: number;
-  };
-  reaper: { idle_minutes: number; default_ttl_seconds: number; keep_snapshots: number };
+  notify: NotifySettings;
+  reaper: { idle_minutes: number; default_ttl_seconds: number; keep_snapshots: number; snapshot_retention_days?: number };
   base_domain: string;
   url_token_protect: boolean;
+  /** v1.2: box không khai báo egress thì chặn hết (chỉ còn allowlist của agent). */
+  egress_deny_by_default?: boolean;
   budget_month_usd: number;
   maintenance: { enabled: boolean; message: string };
   features: { gpu: boolean };
@@ -421,3 +461,73 @@ export interface ExecBatchResult {
 }
 
 export type StreamEventName = "box.updated" | "event.created" | "approval.created" | "overview.updated";
+
+// ---- v1.2: thông báo, lưu trữ snapshot ----
+export const NOTIFY_EVENTS = ["daily_report", "budget", "approval", "emergency_stop", "box_failed", "host_down"] as const;
+export type NotifyEvent = (typeof NOTIFY_EVENTS)[number];
+
+export interface Delivery {
+  ts: string;
+  kind: string;
+  channel: "telegram" | "email";
+  ok: boolean;
+  error?: string;
+  title: string;
+}
+
+/** GET /notify */
+export interface NotifyView extends NotifySettings {
+  has_telegram_token: boolean;
+  has_smtp_password: boolean;
+  telegram_configured: boolean;
+  email_configured: boolean;
+  events_available: string[];
+  recent: Delivery[];
+}
+
+/** PUT /notify: secret chỉ ghi (để trống = giữ nguyên). */
+export interface NotifyInput extends NotifySettings {
+  telegram_bot_token?: string;
+  smtp_password?: string;
+  clear_telegram_token?: boolean;
+  clear_smtp_password?: boolean;
+}
+
+export interface NotifyTestResult {
+  results: Delivery[];
+}
+
+export type StorageProvider = "local" | "r2" | "b2" | "s3" | "minio";
+
+/** GET /storage */
+export interface StorageView {
+  provider: StorageProvider;
+  endpoint: string;
+  region: string;
+  bucket: string;
+  prefix: string;
+  access_key_id: string;
+  configured: boolean;
+  source: "env" | "settings" | "none";
+  has_secret: boolean;
+  keep_snapshots: number;
+  snapshot_retention_days: number;
+  fallback: string;
+}
+
+export interface StorageInput {
+  provider: StorageProvider;
+  endpoint?: string;
+  region?: string;
+  bucket?: string;
+  prefix?: string;
+  access_key_id?: string;
+  secret_access_key?: string;
+}
+
+export interface StorageTestResult {
+  ok: boolean;
+  error?: string;
+  latency_ms: number;
+  bucket: string;
+}

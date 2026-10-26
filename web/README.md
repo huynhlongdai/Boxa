@@ -48,6 +48,13 @@ pnpm start       # next start (xem ghi chú standalone bên dưới)
 pnpm lint        # ESLint (next/core-web-vitals + typescript)
 pnpm typecheck   # tsc --noEmit
 pnpm smoke       # sau khi build: chạy server mock trên :3199, curl mọi trang + API, kiểm SSE
+pnpm i18n:check  # key/placeholder đủ ở vi/en/zh/ja, không còn chuỗi tiếng Việt cứng
+```
+
+Kiểm tra tràn layout + tiêu đề mồ côi (vi/en) ở 390/1366/1600 px, cả 4 ngôn ngữ (cần Chromium + `playwright-core`):
+
+```bash
+BASE=http://localhost:3199 CHROMIUM_PATH=… node scripts/overflow-check.mjs   # VIEWPORTS=390x844,1366x900,1600x900 mặc định
 ```
 
 Chụp màn hình (tuỳ chọn, cần Chromium + `playwright-core`):
@@ -73,14 +80,15 @@ docker run -p 3000:3000 -e BOXA_MOCK=1 boxa-web
 |---|---|
 | `/` Tổng quan | 4 thẻ chỉ số kèm thanh ngân sách; hộp **Cần anh** (Duyệt / Từ chối); chi phí 7 ngày xếp chồng theo agent; top 5 task tốn nhất hôm nay; nút đỏ **Dừng khẩn cấp** (2 bước, gõ `DUNG`) |
 | `/boxes` | Bảng lọc theo trạng thái / agent / provider / lifecycle (lọc lưu trên URL), thẻ trên mobile, nút nhanh wake / sleep / snapshot / xoá; tạo box thủ công (có `Idempotency-Key`) |
-| `/boxes/[id]` | Tab Tổng quan (spec, URL, lý do Scheduler chọn, chi phí giờ, ngân sách còn lại, CPU/RAM/đĩa) · Terminal (xterm + WebSocket, **Chiếm quyền / Trả quyền**) · Timeline (lệnh, exit code, thời lượng, token tiết kiệm) · Files (`/work`, `/memory`, xem + tải về) · Logs · Snapshots (khôi phục / fork) · Cấu hình (box.yaml chỉ đọc + **Lưu thành template**) |
+| `/boxes/[id]` | Tab Tổng quan (spec, URL, lý do Scheduler chọn, **egress allowlist** — đang thực thi bằng incus ACL/nftables hay chỉ cảnh báo trên driver local, sửa danh sách —, chi phí giờ, ngân sách còn lại, CPU/RAM/đĩa) · Terminal (xterm + WebSocket, **Chiếm quyền / Trả quyền**) · Timeline (lệnh, exit code, thời lượng, token tiết kiệm) · Files (`/work`, `/memory`, xem + tải về) · Logs · Snapshots (khôi phục / fork, nơi lưu: R2/B2/S3 hay tại host, lỗi upload) · Cấu hình (box.yaml chỉ đọc + **Lưu thành template**) |
 | `/agents` | Danh sách + **wizard 3 bước**: tên + kind → ngân sách + chính sách (provider, vùng, egress) → API key hiện một lần + đoạn cấu hình sinh sẵn theo kind (Claude Code MCP JSON, OpenAI Agents Python, n8n HTTP node, Hark, cURL) có nút Copy |
 | `/agents/[id]` | Keys (tạo / thu hồi), ngân sách, chính sách, dung lượng /memory, lịch sử box |
 | `/costs` | Ledger lọc theo agent / task / provider / ngày, xuất CSV (`/costs.csv`), biểu đồ theo provider, pool vs burst, 7 ngày; thẻ gợi ý tiết kiệm |
-| `/infra` | Thẻ provider (nhập + kiểm tra token, tier T1/T2/T3), host với thanh CPU/RAM/đĩa + drain / xoá, thêm host pool, bảng giá sắp theo $/vCPU-giờ với nhãn độ tin cậy, đề xuất mở rộng pool |
+| `/infra` | Chuỗi dự phòng (pool → Hetzner → Vultr → DigitalOcean → Contabo → netcup), thẻ provider (nhập + kiểm tra token có gợi ý định dạng riêng cho Contabo/netcup, nhãn “Dự phòng #n”, token từ env, danh sách vùng), host với thanh CPU/RAM/đĩa + drain / xoá, thêm host pool, bảng giá sắp theo $/vCPU-giờ với nhãn độ tin cậy, đề xuất mở rộng pool |
 | `/templates` | Danh sách + trình sửa YAML (đánh số dòng, kiểm tra qua `/templates/validate`), Lưu, **Dựng thử** |
 | `/secrets` | Chỉ tên, agent được dùng, ngày tạo / xoay vòng; thêm, xoay vòng, xoá (không bao giờ hiện giá trị) |
-| `/settings` | Thông báo (Telegram, email, loại sự kiện, giờ báo cáo), mặc định Reaper, `BASE_DOMAIN`, bảo vệ URL bằng token, ngân sách tháng |
+| `/settings` | Ngôn ngữ; **Thông báo** (Telegram bot token + chat ID, SMTP, người nhận, sự kiện, giờ + múi giờ báo cáo, nút **Gửi thử** Telegram / email / báo cáo ngày, lịch sử gửi; secret chỉ ghi); **Lưu trữ snapshot** (R2/B2/S3/MinIO, kiểm tra kết nối); Reaper (giữ N snapshot, xoá sau N ngày); Mạng (chặn egress mặc định); `BASE_DOMAIN`, bảo vệ URL bằng token, ngân sách tháng |
+| `/developers` | Discovery (OpenAPI, llms.txt, MCP card, A2A card), schema tool, quick start, SDK/CLI, **A2A JSON-RPC** (message/send, message/stream, tasks/get, tasks/cancel), bảng mã lỗi |
 | `/admin` | Hệ thống · Hàng đợi job · Audit log · API keys · Quota & giới hạn · Tính năng / bảo trì (GPU khoá, nhãn P5; bật bảo trì hiện banner toàn cục) · Người dùng |
 | `/onboarding` | Token Hetzner → tạo host pool đầu tiên (có tiến trình) → tạo agent → copy cấu hình → chờ “lệnh đầu tiên” → thành công |
 | `/login` | Nhập API key admin → cookie httpOnly |
@@ -113,11 +121,12 @@ lib/mock/              seed + handler + SSE giả lập
 - `GET /costs/suggestions` = `{kind, title, detail, saving_usd, box_id?, agent_id?}`; `GET /boxes/:id/observe` = `{files_changed, processes:[{pid,cmd}], ports, since}`.
 - Timeline đọc event `box.exec` có message dạng `exit=<code> <ms>ms: <lệnh>` (tiền tố `TIMEOUT ` nếu quá giờ).
 - Snippet của Core tham chiếu biến môi trường `BOXA_API_KEY`; wizard hiện thêm khối `export BOXA_API_KEY=…` với key vừa tạo.
-- Tên sự kiện thông báo: `budget`, `approval`, `box_failed`, `host_down`, `reaper`, `emergency_stop`.
+- Tên sự kiện thông báo (v1.2): `daily_report`, `budget`, `approval`, `emergency_stop`, `box_failed`, `host_down`. Cấu hình qua `GET/PUT /notify`, gửi thử `POST /notify/test`.
+- v1.2: `GET/PUT /storage` + `POST /storage/test`, `PUT /boxes/:id/egress`, `POST /jobs/:id/cancel`, `GET /providers/:id/regions`; Provider có `implemented`, `chain_rank`, `token_source`; Snapshot có `storage`, `remote_url`, `upload_error`; Box có `egress`.
 
 ## Điểm cần Core bổ sung
 
 1. **Xác thực WebSocket terminal**: Core hiện nhận key qua header hoặc `?token=`. Web không nhúng key vào JS nên **không** dùng `?token=`; nó mở thẳng `NEXT_PUBLIC_BOXA_WS` (hoặc suy từ `NEXT_PUBLIC_BOXA_API`) và dựa vào cookie httpOnly `boxa_key` mà trình duyệt tự gửi khi cùng site. Cần thêm vào `bearer()` của Core: đọc cookie `boxa_key` nếu không có header. Chưa có thì terminal (chế độ thật) báo không kết nối được; MOCK MODE vẫn mô phỏng đầy đủ. Route handler của Next không proxy được WebSocket.
-2. **Khôi phục / fork snapshot**: chưa có endpoint. Web gọi `POST /boxes/:id/restore {snapshot_id}` và `POST /boxes/:id/fork {snapshot_id}` (fork trả Box mới), mock đã hỗ trợ.
+2. ~~Khôi phục / fork snapshot~~: Core đã có từ v1.1; từ v1.2 snapshot trên R2/B2 khôi phục/fork được ở host bất kỳ.
 3. **Token tiết kiệm & log theo lệnh**: event `box.exec` chưa có `tokens_saved` và `log_id`. Web đọc được đuôi tuỳ chọn ` tokens_saved=<n> log=<id>` nếu Core thêm vào message (mock đã làm vậy); không có thì tab Logs hiện nhật ký sự kiện của box và ô mở log theo `log_id`.
 4. **box.yaml gốc**: tab Cấu hình dựng lại YAML từ object Box vì contract chưa có endpoint trả YAML gốc.

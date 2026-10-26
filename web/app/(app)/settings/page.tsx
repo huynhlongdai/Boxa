@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { Bell, Globe, Languages, PiggyBank, Recycle, Save } from "lucide-react";
+import { Globe, Languages, Network, PiggyBank, Recycle, Save } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { api, paths } from "@/lib/api";
 import { useAction, useApi } from "@/lib/hooks";
@@ -15,9 +15,8 @@ import { ErrorBox, PageHeader } from "@/components/boxa/page";
 import { cn } from "@/lib/utils";
 import { LocaleGrid } from "@/components/locale-switcher";
 import { LOCALES, LOCALE_NATIVE } from "@/i18n/config";
-
-// Tên sự kiện theo Core (model.Settings.Notify.Events)
-const EVENTS = ["budget", "approval", "box_failed", "host_down", "reaper", "emergency_stop"] as const;
+import { NotifySettingsCard } from "@/components/boxa/notify-settings";
+import { StorageSettingsCard } from "@/components/boxa/storage-settings";
 
 function Form({ initial }: { initial: Settings }) {
   const [s, setS] = React.useState<Settings>(initial);
@@ -48,36 +47,27 @@ function Form({ initial }: { initial: Settings }) {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><Bell className="size-4" /> {t("notify")}</CardTitle><CardDescription>{t("notifyDesc")}</CardDescription></CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          <Field label={t("telegram")}><Input value={s.notify.telegram_chat_id} onChange={(e) => upd("notify", { ...s.notify, telegram_chat_id: e.target.value })} className="font-mono" /></Field>
-          <Field label={t("email")}><Input type="email" value={s.notify.email} onChange={(e) => upd("notify", { ...s.notify, email: e.target.value })} /></Field>
-          <Field label={t("reportHour")} hint={t("reportHourHint")}>
-            <Select value={s.notify.daily_report_hour} onChange={(e) => upd("notify", { ...s.notify, daily_report_hour: Number(e.target.value) })}>
-              {Array.from({ length: 24 }).map((_, h) => <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>)}
-            </Select>
-          </Field>
-          <div className="flex flex-col gap-2 md:col-span-2">
-            <span className="text-[13px] font-medium">{t("events")}</span>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {EVENTS.map((id) => (
-                <label key={id} className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-[13px]">
-                  <span className="min-w-0">{t(`event.${id}`)} <span className="block font-mono text-[11px] text-muted-foreground">{id}</span></span>
-                  <Switch checked={s.notify.events.includes(id)} onCheckedChange={(c) => upd("notify", { ...s.notify, events: c ? [...s.notify.events, id] : s.notify.events.filter((x) => x !== id) })} />
-                </label>
-              ))}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <NotifySettingsCard />
+
+      <StorageSettingsCard />
 
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><Recycle className="size-4" /> {t("reaper")}</CardTitle><CardDescription>{t("reaperDesc")}</CardDescription></CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-3">
+        <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Field label={t("idle")}><Input type="number" min={1} value={s.reaper.idle_minutes} onChange={(e) => upd("reaper", { ...s.reaper, idle_minutes: Number(e.target.value) })} className="font-mono" /></Field>
           <Field label={t("ttl")} hint={t("ttlHint")}><Input type="number" min={1} value={Math.round(s.reaper.default_ttl_seconds / 3600)} onChange={(e) => upd("reaper", { ...s.reaper, default_ttl_seconds: Number(e.target.value) * 3600 })} className="font-mono" /></Field>
           <Field label={t("keepSnapshots")}><Input type="number" min={0} value={s.reaper.keep_snapshots} onChange={(e) => upd("reaper", { ...s.reaper, keep_snapshots: Number(e.target.value) })} className="font-mono" /></Field>
+          <Field label={t("retentionDays")} hint={t("retentionDaysHint")}><Input type="number" min={0} value={s.reaper.snapshot_retention_days ?? 0} onChange={(e) => upd("reaper", { ...s.reaper, snapshot_retention_days: Number(e.target.value) })} className="font-mono" /></Field>
+        </CardContent>
+      </Card>
+
+      <Card id="network">
+        <CardHeader><CardTitle className="flex items-center gap-2"><Network className="size-4" /> {t("network")}</CardTitle><CardDescription>{t("networkDesc")}</CardDescription></CardHeader>
+        <CardContent>
+          <label className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2.5 text-[13px]">
+            <span className="min-w-0">{t("egressDeny")}<span className="block text-xs text-muted-foreground">{t("egressDenyHint")}</span></span>
+            <Switch checked={!!s.egress_deny_by_default} onCheckedChange={(c) => upd("egress_deny_by_default", c)} />
+          </label>
         </CardContent>
       </Card>
 

@@ -23,6 +23,7 @@ import { CodeBlock } from "@/components/boxa/code-block";
 import { ConfirmButton } from "@/components/boxa/confirm";
 import { Empty, ErrorBox, LoadingRows } from "@/components/boxa/page";
 import { Mono } from "@/components/boxa/status";
+import { EgressCard } from "@/components/boxa/egress";
 
 function Row({ k, children }: { k: string; children: React.ReactNode }) {
   return (
@@ -77,6 +78,7 @@ export function OverviewTab({ box }: { box: Box }) {
         </CardContent>
       </Card>
       <div className="flex min-w-0 flex-col gap-4">
+        <EgressCard box={box} />
         <Card>
           <CardHeader><CardTitle>{t("cost")}</CardTitle></CardHeader>
           <CardContent className="flex flex-col gap-3">
@@ -358,14 +360,17 @@ export function SnapshotsTab({ box }: { box: Box }) {
       {!data.items.length ? <Empty title={t("empty")} desc={t("emptyDesc")} /> : (
         <Card>
           <Table>
-            <THead><TR className="hover:bg-transparent"><TH>{t("id")}</TH><TH>{t("size")}</TH><TH>{tc("createdAt")}</TH><TH className="hidden md:table-cell">{t("location")}</TH><TH className="text-right">{tc("actions")}</TH></TR></THead>
+            <THead><TR className="hover:bg-transparent"><TH>{t("id")}</TH><TH>{t("size")}</TH><TH>{tc("createdAt")}</TH><TH>{t("storage")}</TH><TH className="hidden md:table-cell">{t("location")}</TH><TH className="text-right">{tc("actions")}</TH></TR></THead>
             <TBody>
               {data.items.map((s) => (
                 <TR key={s.id}>
                   <TD><Mono>{s.id}</Mono></TD>
                   <TD className="whitespace-nowrap font-mono text-[12.5px]">{f.mb(s.size_mb)}</TD>
                   <TD className="whitespace-nowrap text-[13px]">{f.dateTime(s.created_at)}</TD>
-                  <TD className="hidden max-w-[260px] truncate md:table-cell"><Mono className="text-muted-foreground">{s.location}</Mono></TD>
+                  <TD>
+                    {s.storage === "s3" ? <Badge variant="green" title={s.remote_url}>{t("storageS3")}</Badge> : <Badge variant={s.upload_error ? "yellow" : "gray"} title={s.upload_error || t("storageLocalHint")}>{t("storageLocal")}</Badge>}
+                  </TD>
+                  <TD className="hidden max-w-[260px] truncate md:table-cell"><Mono className="text-muted-foreground">{s.remote_url || s.location}</Mono></TD>
                   <TD>
                     <div className="flex justify-end gap-1">
                       <ConfirmButton size="xs" variant="outline" disabled={!!pending} title={t("restoreTitle", { slug: box.slug, id: s.id })} desc={t("restoreDesc")} confirmLabel={t("restore")}

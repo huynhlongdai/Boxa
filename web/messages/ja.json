@@ -271,7 +271,11 @@
       "fork": "フォーク",
       "forkTitle": "{id} から新しい box をフォークしますか？",
       "forkDesc": "このスナップショットから同じスペックの新しい box を作成します。現在の box はそのままです。",
-      "forked": "{slug} としてフォークしました"
+      "forked": "{slug} としてフォークしました",
+      "storage": "保存先",
+      "storageS3": "R2/B2/S3",
+      "storageLocal": "ホスト上",
+      "storageLocalHint": "撮影したホストでのみ復元できます。"
     },
     "config": {
       "readOnly": "box.yaml — 読み取り専用",
@@ -437,7 +441,7 @@
       "mcp": "MCP サーバーカード",
       "mcpDesc": "/.well-known/mcp.json：トランスポート（HTTP・stdio）、認証、ツール一覧。",
       "a2a": "A2A エージェントカード",
-      "a2aDesc": "/.well-known/agent.json：他のエージェントが Boxa に作業を委任するため（Agent2Agent）。",
+      "a2aDesc": "/.well-known/agent.json: 他のエージェントが /a2a で Boxa にタスクを任せられます。",
       "mcpEndpoint": "MCP エンドポイント",
       "mcpEndpointDesc": "Streamable HTTP、ヘッダー Authorization: Bearer $BOXA_API_KEY。"
     },
@@ -487,6 +491,17 @@
       "INTERNAL": "Core 内部の予期しないエラー。",
       "INTERNALHint": "一度だけ再試行し、続く場合は停止して運用者に知らせます。",
       "NO_CAPACITYHint": "スペックを下げる、retry_after_s 待って再試行、または box_quote で代替案を確認。"
+    },
+    "a2a": "A2A: Boxa にタスクを任せる",
+    "a2aDesc": "他のエージェントは <mono>/a2a</mono> に JSON-RPC を送ります。text part はコマンド（<mono>metadata.box_id</mono> 付き）、<mono>tool</mono> + <mono>arguments</mono> の data part で任意のツールを呼べます。コマンドの task id は job id です。",
+    "a2aColMethod": "メソッド",
+    "a2aColDoes": "内容",
+    "a2aMethods": {
+      "message_send": "コマンドかツールを実行し、最大 30 秒待って Task を返します。",
+      "message_stream": "同じ処理を完了まで SSE で配信します。",
+      "tasks_get": "タスクの状態と結果を取得します。",
+      "tasks_cancel": "実行中のジョブを取り消します（コマンドを停止）。",
+      "tasks_resubscribe": "実行中タスクの SSE に再接続します。"
     }
   },
   "emergency": {
@@ -548,7 +563,23 @@
     "colMin": "最低課金",
     "colConfidence": "信頼度",
     "oneMonth": "1 か月",
-    "unverifiedNote": "「未検証」のプランは、Scheduler が実際に使う前に必ず自己テストされます。"
+    "unverifiedNote": "「未検証」のプランは、Scheduler が実際に使う前に必ず自己テストされます。",
+    "regions": "リージョン",
+    "chainRank": "フォールバック #{n}",
+    "chainHint": "バーストホストが必要なときに Scheduler が試す順番です。接続済みで先頭のプロバイダーが選ばれます。",
+    "envToken": "環境変数のトークン",
+    "envTokenHint": "Core の環境変数で設定されています。ここで新しいトークンを貼ると次回の再起動まで上書きされます。",
+    "feedOnly": "価格のみ",
+    "localHint": "ホストは boxd とブートストラップトークンで自己登録します。API トークンは不要です。",
+    "chainTitle": "配置の順番:",
+    "chainPool": "既存プール",
+    "tokenHint": {
+      "contabo": "Contabo の API ページの client_id:client_secret:api_user:api_password（または 4 項目の JSON）を貼り付けてください。",
+      "netcup": "SCP のリフレッシュトークン（クライアント scp）を貼り付けてください。予備サーバーのニックネームを boxa-spare-1 にすると Boxa が引き取り再インストールします。",
+      "digitalocean": "読み書き権限のある個人アクセストークン。",
+      "hetzner": "Hetzner Cloud プロジェクトの Read & Write API トークン。",
+      "vultr": "manage_servers 権限のある API キー。"
+    }
   },
   "kinds": {
     "category": {
@@ -737,23 +768,8 @@
   },
   "settings": {
     "title": "設定",
-    "desc": "言語、通知、Reaper、ドメイン、予算。",
+    "desc": "言語・通知・保存先・Reaper・ネットワーク・ドメイン・予算。",
     "language": "言語",
-    "notify": "通知",
-    "notifyDesc": "Telegram ボットのメッセージ内に「承認 / 却下」ボタンがあります。",
-    "telegram": "Telegram チャット ID",
-    "email": "メール",
-    "reportHour": "日次レポートの時刻",
-    "reportHourHint": "ベトナム時間（UTC+7）",
-    "events": "通知するイベント",
-    "event": {
-      "budget": "エージェントが予算の 80% を超えた",
-      "approval": "承認待ちのリクエストがある",
-      "box_failed": "box が失敗した",
-      "host_down": "ホストが停止した",
-      "reaper": "Reaper が box をスリープ / 削除した",
-      "emergency_stop": "緊急停止"
-    },
     "reaper": "Reaper の既定値",
     "reaperDesc": "エージェントが指定しない場合に適用されます。",
     "idle": "スリープまでのアイドル時間（分）",
@@ -770,7 +786,13 @@
     "budgetHint": "1 日の予算 = 月額 / 30",
     "spentMonth": "今月の支出",
     "save": "設定を保存",
-    "savedToast": "設定を保存しました"
+    "savedToast": "設定を保存しました",
+    "retentionDays": "スナップショット保持日数",
+    "retentionDaysHint": "0 = 件数のみで保持",
+    "network": "外向きネットワーク",
+    "networkDesc": "各 box の許可リストは box ページで設定します。ここは未指定の box の既定値です。",
+    "egressDeny": "既定で egress を拒否",
+    "egressDenyHint": "egress 未指定の box はエージェントの許可リストのみに接続できます。許可リストがなければすべて遮断します。"
   },
   "shell": {
     "searchPlaceholder": "検索またはコマンド入力…",
@@ -880,5 +902,92 @@
     "checking": "確認中…",
     "valid": "YAML は有効です",
     "lineError": "{line} 行目：{message}"
+  },
+  "egress": {
+    "title": "Egress",
+    "edit": "編集",
+    "editTitle": "<g>{slug} の</g> <g>egress 許可リスト</g>",
+    "editDesc": "1 行に 1 つのドメイン・IP・CIDR（:port 可）。リストがあると他の宛先はすべて遮断されます。",
+    "entries": "許可する宛先",
+    "denyDefault": "それ以外をすべて遮断",
+    "denyDefaultHint": "オンでリストが空なら box はインターネットに出られません。",
+    "emptyMeans": "空のまま遮断オフにすると、エージェントまたは設定の既定値を使います。",
+    "apply": "適用",
+    "saved": "egress を更新しました",
+    "unrestricted": "制限なし: box はどこにでも接続できます。",
+    "enforced": "適用中 · {mode}",
+    "notEnforced": "未適用",
+    "source": {
+      "box": "box で指定",
+      "agent": "エージェント由来",
+      "settings": "設定由来"
+    },
+    "denyOthers": "他は遮断",
+    "offline": "リストが空: box はインターネットに出られません。",
+    "applied": "{time} に適用 · ルール {rules} 件"
+  },
+  "notify": {
+    "title": "通知",
+    "desc": "Telegram ボットとメールで日次コストレポートとアラートを送ります。トークンとパスワードはシークレットストアに暗号化して保存され、再表示されません。",
+    "ready": "準備完了",
+    "notSet": "未設定",
+    "botToken": "ボットトークン",
+    "botTokenHint": "@BotFather から取得します。",
+    "secretStored": "保存済み（暗号化）。空欄なら変更しません。",
+    "chatId": "チャット ID",
+    "chatIdHint": "ユーザー・グループ・チャンネルの ID（例 -100…）。",
+    "emailTitle": "メール（SMTP）",
+    "recipients": "宛先",
+    "recipientsHint": "カンマ区切り。",
+    "smtpHost": "SMTP ホスト",
+    "smtpPort": "ポート",
+    "smtpTls": "暗号化",
+    "tlsNone": "なし（ローカルリレー）",
+    "smtpUser": "ユーザー名",
+    "smtpPass": "パスワード",
+    "smtpFrom": "差出人（From）",
+    "reportHour": "日次レポートの時刻",
+    "timezone": "タイムゾーン",
+    "events": "通知するイベント",
+    "event": {
+      "daily_report": "日次コストレポート",
+      "budget": "エージェントが予算の 80% / 100% に到達",
+      "approval": "承認が必要な項目",
+      "emergency_stop": "緊急停止",
+      "box_failed": "Box の失敗",
+      "host_down": "ホストの停止"
+    },
+    "save": "通知を保存",
+    "testTelegram": "Telegram をテスト",
+    "testEmail": "メールをテスト",
+    "sendReport": "今すぐレポート送信",
+    "clearToken": "ボットトークンを削除",
+    "saveFirst": "テストは保存済みの設定を使います。先に保存してください。",
+    "recent": "最近の送信",
+    "saved": "通知設定を保存しました",
+    "testSent": "テストメッセージを送信しました"
+  },
+  "storage": {
+    "title": "スナップショット保存先",
+    "active": "{bucket} を使用中",
+    "localOnly": "ホストのみ",
+    "fromEnv": "環境変数で設定",
+    "desc": "スナップショットを Cloudflare R2・Backblaze B2・S3 にアップロードし、どのホストでも復元・fork できます。未設定なら撮影したホストに残ります。",
+    "provider": "保存先",
+    "pLocal": "ホスト上（既定）",
+    "endpoint": "エンドポイント",
+    "bucket": "バケット",
+    "region": "リージョン",
+    "regionHint": "R2: auto。B2: エンドポイントから取得。",
+    "prefix": "プレフィックス",
+    "accessKey": "アクセスキー ID",
+    "secretKey": "シークレットアクセスキー",
+    "secretStored": "保存済み（暗号化）。空欄なら変更しません。",
+    "localDesc": "スナップショットは撮影したホストに残り、そのホストでのみ復元・fork できます。",
+    "retentionNote": "box ごとに {keep} 件を保持し、{days} 日後に削除します（Reaper で設定）。バケットのコピーも同時に削除されます。",
+    "save": "保存",
+    "test": "接続テスト",
+    "testOk": "バケットは正常です（{ms} ms）",
+    "saved": "保存先の設定を保存しました"
   }
 }

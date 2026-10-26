@@ -208,6 +208,36 @@ cd boxa/core && go install ./cmd/box
 box mcp            # MCP over stdio for local agents
 box up --template python && box exec BOX_ID -- python -V`;
 
+const A2A_SEND = `# A2A JSON-RPC 2.0 (protocol 0.3) — POST ${ROOT}/a2a
+# 1) Run a command in a box (task id = job id; blocks up to 30s)
+curl -s -X POST $BOXA_URL/a2a -H "Authorization: Bearer $BOXA_API_KEY" -d '{
+  "jsonrpc": "2.0", "id": 1, "method": "message/send",
+  "params": {
+    "message": { "role": "user", "messageId": "m1", "parts": [{ "kind": "text", "text": "pytest -q" }] },
+    "metadata": { "box_id": "BOX_ID" }
+  }
+}'
+
+# 2) Call any Boxa tool as a skill
+curl -s -X POST $BOXA_URL/a2a -H "Authorization: Bearer $BOXA_API_KEY" -d '{
+  "jsonrpc": "2.0", "id": 2, "method": "message/send",
+  "params": { "message": { "role": "user", "parts": [{ "kind": "data",
+    "data": { "tool": "box_up", "arguments": { "template": "python", "lifecycle": "task" } } }] } }
+}'`;
+
+const A2A_TASKS = `# Poll, cancel and stream
+curl -s -X POST $BOXA_URL/a2a -H "Authorization: Bearer $BOXA_API_KEY" \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tasks/get","params":{"id":"JOB_ID"}}'
+curl -s -X POST $BOXA_URL/a2a -H "Authorization: Bearer $BOXA_API_KEY" \
+  -d '{"jsonrpc":"2.0","id":4,"method":"tasks/cancel","params":{"id":"JOB_ID"}}'
+
+# SSE: Task → status-update → artifact-update → status-update (final: true)
+curl -N -X POST $BOXA_URL/a2a -H "Authorization: Bearer $BOXA_API_KEY" -d '{
+  "jsonrpc":"2.0","id":5,"method":"message/stream",
+  "params":{"message":{"role":"user","parts":[{"kind":"text","text":"make test"}]},"metadata":{"box_id":"BOX_ID"}}
+}'
+# Older clients: tasks/send and tasks/sendSubscribe are accepted as aliases.`;
+
 const ERROR_ENVELOPE = `{
   "error": {
     "code": "NO_CAPACITY",
@@ -263,6 +293,32 @@ export default function DevelopersPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card id="a2a" className="mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><Network className="size-4" /> {t("a2a")}</CardTitle>
+          <CardDescription>{t.rich("a2aDesc", { mono })}</CardDescription>
+        </CardHeader>
+        <CardContent className="grid min-w-0 gap-4 lg:grid-cols-2">
+          <div className="min-w-0">
+            <CodeBlock code={A2A_SEND} language="bash" maxHeight={420} />
+          </div>
+          <div className="flex min-w-0 flex-col gap-3">
+            <CodeBlock code={A2A_TASKS} language="bash" maxHeight={300} />
+            <Table>
+              <THead><TR className="hover:bg-transparent"><TH>{t("a2aColMethod")}</TH><TH>{t("a2aColDoes")}</TH></TR></THead>
+              <TBody>
+                {(["message/send", "message/stream", "tasks/get", "tasks/cancel", "tasks/resubscribe"] as const).map((m) => (
+                  <TR key={m}>
+                    <TD className="whitespace-nowrap align-top"><code className="font-mono text-[12px]">{m}</code></TD>
+                    <TD className="align-top text-[13px] text-muted-foreground">{t(`a2aMethods.${m.replace("/", "_")}`)}</TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

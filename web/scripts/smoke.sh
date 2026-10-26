@@ -64,7 +64,7 @@ done
 
 echo "== API (qua proxy, mock)"
 for a in health overview boxes boxes/box_7f3a91 boxes/box_7f3a91/events boxes/box_7f3a91/snapshots "boxes/box_7f3a91/files?path=/work" boxes/box_7f3a91/observe \
-  agents agents/agt_kecon "agents/agt_kecon/snippet?kind=n8n" keys costs costs.csv costs/suggestions providers hosts offers templates secrets approvals settings \
+  agents agents/agt_kecon "agents/agt_kecon/snippet?kind=n8n" keys costs costs.csv costs/suggestions providers hosts offers templates secrets approvals settings storage notify \
   admin/system admin/jobs admin/audit admin/quotas admin/users logs/log_0002 jobs/job_0001 api/session; do
   case "$a" in api/*) check "/$a" ;; *) check "/api/boxa/$a" ;; esac
 done
@@ -108,6 +108,25 @@ for f in openai anthropic gemini mcp; do
 done
 for p in _root/llms.txt _root/llms-full.txt _root/.well-known/mcp.json _root/.well-known/agent.json; do check "/api/boxa/$p"; done
 curl -s "$BASE/api/boxa/_root/llms.txt" | grep -q "^# Boxa" && ok "llms.txt có tiêu đề" || bad "llms.txt"
+
+echo "== v1.2: providers (chuỗi dự phòng), egress, lưu trữ snapshot, thông báo, A2A card"
+pc=$(curl -s "$BASE/api/boxa/providers" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log(j.items.filter(p=>p.chain_rank).sort((a,b)=>a.chain_rank-b.chain_rank).map(p=>p.id).join(">"))})')
+[ "$pc" = "hetzner>vultr>digitalocean>contabo>netcup" ] && ok "chuỗi provider $pc" || bad "chuỗi provider: $pc"
+n=$(curl -s "$BASE/api/boxa/providers/contabo/regions" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).items.length))')
+[ "$n" = "9" ] && ok "providers/contabo/regions → 9" || bad "regions: $n"
+eg=$(curl -s -X PUT "$BASE/api/boxa/boxes/box_7f3a91/egress" -H 'content-type: application/json' -d '{"allow":["pypi.org","*.github.com"],"deny_by_default":true}' | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const e=JSON.parse(s).egress;console.log(e&&e.source+"|"+e.allow.length+"|"+e.mode)})')
+[[ "$eg" == box\|2\|* ]] && ok "PUT boxes/:id/egress → $eg" || bad "egress: $eg"
+code=$(curl -s -o /dev/null -w '%{http_code}' -X PUT "$BASE/api/boxa/boxes/box_7f3a91/egress" -H 'content-type: application/json' -d '{"allow":["không hợp lệ"]}')
+[ "$code" = "400" ] && ok "400 egress sai định dạng" || bad "egress sai $code"
+st=$(curl -s "$BASE/api/boxa/storage" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log(j.provider+"|"+j.configured+"|"+("secret_access_key" in j))})')
+[ "$st" = "r2|true|false" ] && ok "GET /storage (secret không lộ) $st" || bad "storage: $st"
+curl -s -X POST "$BASE/api/boxa/storage/test" | grep -q '"ok":true' && ok "POST /storage/test" || bad "storage/test"
+nv=$(curl -s "$BASE/api/boxa/notify" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log(j.events_available.length+"|"+j.telegram_configured+"|"+("telegram_bot_token" in j))})')
+[ "$nv" = "6|true|false" ] && ok "GET /notify $nv" || bad "notify: $nv"
+tr=$(curl -s -X POST "$BASE/api/boxa/notify/test" -H 'content-type: application/json' -d '{"channel":"all"}' | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log(j.results.map(r=>r.channel+":"+r.ok).join(","))})')
+[ "$tr" = "telegram:true,email:false" ] && ok "POST /notify/test → $tr" || bad "notify/test: $tr"
+ac=$(curl -s "$BASE/api/boxa/_root/.well-known/agent.json" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log(j.url.endsWith("/a2a")+"|"+j.capabilities.streaming+"|"+j.preferredTransport)})')
+[ "$ac" = "true|true|JSONRPC" ] && ok "A2A agent card $ac" || bad "agent card: $ac"
 
 echo "== Lỗi được dịch theo ngôn ngữ (code không đổi)"
 declare -A NF=([vi]="Không tìm thấy" [en]="not found" [zh]="未找到" [ja]="見つかりません")

@@ -4,7 +4,7 @@ import { ArrowDownUp, CheckCircle2, Cpu, Plug, Plus, ServerCog, Trash2, Trending
 import { useTranslations } from "next-intl";
 import { api, paths } from "@/lib/api";
 import { useAction, useApi } from "@/lib/hooks";
-import type { Host, List, Offer, Provider } from "@/lib/types";
+import type { Host, List, Offer, Provider, ProviderRegion } from "@/lib/types";
 import { useFmt } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,9 +19,27 @@ import { ConfidenceBadge, HostStatusChip, Mono, ProviderChip } from "@/component
 import { ErrorBox, LoadingRows, PageHeader, SectionTitle } from "@/components/boxa/page";
 
 
+const TOKEN_HINT: Record<string, string> = { contabo: "contabo", netcup: "netcup", digitalocean: "digitalocean", hetzner: "hetzner", vultr: "vultr" };
+
+function Regions({ id }: { id: string }) {
+  const [open, setOpen] = React.useState(false);
+  const { data } = useApi<List<ProviderRegion>>(open ? paths.providerRegions(id) : null, { refreshInterval: 0 });
+  const t = useTranslations("infra");
+  return (
+    <details className="mt-2 text-xs" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+      <summary className="cursor-pointer select-none text-muted-foreground hover:text-foreground">{t("regions")}{data ? ` (${data.items.length})` : ""}</summary>
+      <div className="mt-1.5 flex flex-wrap gap-1">
+        {!data ? <span className="text-muted-foreground">…</span> : data.items.length === 0 ? <span className="text-muted-foreground">—</span> : data.items.map((r) => (
+          <Badge key={r.id} variant="outline" title={r.name} className="font-mono">{r.id}</Badge>
+        ))}
+      </div>
+    </details>
+  );
+}
+
 function ProviderCard({ p }: { p: Provider }) {
   const [token, setToken] = React.useState("");
-  const [editing, setEditing] = React.useState(!p.connected);
+  const [editing, setEditing] = React.useState(!p.connected && p.id !== "local");
   const { run, pending } = useAction();
   const t = useTranslations("infra");
   const tc = useTranslations("common");
@@ -37,10 +55,20 @@ function ProviderCard({ p }: { p: Provider }) {
         </div>
         <ProviderChip p={p} />
       </div>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {p.chain_rank ? <Badge variant="blue" title={t("chainHint")}>{t("chainRank", { n: p.chain_rank })}</Badge> : null}
+        {p.token_source === "env" && <Badge variant="outline" title={t("envTokenHint")}>{t("envToken")}</Badge>}
+        {p.implemented === false && <Badge variant="yellow">{t("feedOnly")}</Badge>}
+      </div>
       {p.error && <p className="mt-2 text-[12.5px] text-st-error">{p.error}</p>}
       <p className="mt-2 text-xs text-muted-foreground">{t("lastCheck", { time: relTime(p.last_check_at) })}</p>
+      {p.id !== "local" && <Regions id={p.id} />}
       <div className="mt-auto pt-3">
-        {editing ? (
+        {p.id === "local" ? (
+          <p className="text-xs text-muted-foreground">{t("localHint")}</p>
+        ) : editing ? (
+          <>
+          {TOKEN_HINT[p.id] && <p className="mb-1.5 text-xs text-muted-foreground">{t(`tokenHint.${TOKEN_HINT[p.id]}`)}</p>}
           <form className="flex gap-2" onSubmit={async (e) => {
             e.preventDefault();
             const r = await run("tok", () => api.setProviderToken(p.id, token), { success: t("connectedToast", { name: p.name }), revalidate: [paths.providers] });
@@ -49,6 +77,7 @@ function ProviderCard({ p }: { p: Provider }) {
             <Input type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} placeholder={t("pasteToken")} className="min-w-0 font-mono" aria-label={t("tokenFor", { name: p.name })} />
             <Button type="submit" size="sm" disabled={!token || !!pending}>{pending ? tc("checking") : t("check")}</Button>
           </form>
+          </>
         ) : (
           <Button size="sm" variant="outline" onClick={() => setEditing(true)}><Plug /> {t("changeToken")}</Button>
         )}
@@ -122,9 +151,21 @@ export default function InfraPage() {
 
       <SectionTitle>{t("providers")}</SectionTitle>
       {pe ? <ErrorBox error={pe} /> : !providers ? <LoadingRows rows={2} /> : (
-        <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {providers.items.map((p) => <ProviderCard key={p.id} p={p} />)}
-        </div>
+        <>
+          <p className="mb-3 flex flex-wrap items-center gap-1.5 text-[13px] text-muted-foreground">
+            <span>{t("chainTitle")}</span>
+            <Badge variant="green">{t("chainPool")}</Badge>
+            {[...providers.items].filter((p) => p.chain_rank).sort((a, b) => (a.chain_rank ?? 0) - (b.chain_rank ?? 0)).map((p) => (
+              <React.Fragment key={p.id}>
+                <span aria-hidden>→</span>
+                <Badge variant={p.connected ? "default" : "outline"} className={p.connected ? "" : "opacity-70"}>{p.name}</Badge>
+              </React.Fragment>
+            ))}
+          </p>
+          <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {providers.items.map((p) => <ProviderCard key={p.id} p={p} />)}
+          </div>
+        </>
       )}
 
       <SectionTitle right={providers && offers && <AddHostDialog offers={offers.items} providers={providers.items} />}>

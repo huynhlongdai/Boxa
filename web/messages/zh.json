@@ -271,7 +271,11 @@
       "fork": "派生",
       "forkTitle": "从 {id} 派生新 box？",
       "forkDesc": "以此快照创建相同规格的新 box，当前 box 不受影响。",
-      "forked": "已派生为 {slug}"
+      "forked": "已派生为 {slug}",
+      "storage": "存储于",
+      "storageS3": "R2/B2/S3",
+      "storageLocal": "主机本地",
+      "storageLocalHint": "只能在拍摄它的主机上恢复。"
     },
     "config": {
       "readOnly": "box.yaml — 只读",
@@ -437,7 +441,7 @@
       "mcp": "MCP 服务器卡片",
       "mcpDesc": "/.well-known/mcp.json：传输方式（HTTP、stdio）、认证、工具列表。",
       "a2a": "A2A 智能体卡片",
-      "a2aDesc": "/.well-known/agent.json：供其他智能体向 Boxa 委派任务（Agent2Agent）。",
+      "a2aDesc": "/.well-known/agent.json：让其他 agent 通过 /a2a 把任务交给 Boxa。",
       "mcpEndpoint": "MCP 端点",
       "mcpEndpointDesc": "Streamable HTTP，请求头 Authorization: Bearer $BOXA_API_KEY。"
     },
@@ -487,6 +491,17 @@
       "INTERNAL": "Core 内部意外错误。",
       "INTERNALHint": "重试一次；若仍失败，停止并通知运维者。",
       "NO_CAPACITYHint": "降低规格，等待 retry_after_s 后重试，或调用 box_quote 查看备选。"
+    },
+    "a2a": "A2A：把任务交给 Boxa",
+    "a2aDesc": "其他 agent 向 <mono>/a2a</mono> 发送 JSON-RPC：text part 是命令（附 <mono>metadata.box_id</mono>），带 <mono>tool</mono> + <mono>arguments</mono> 的 data part 可调用任意工具。命令的 task id 就是 job id。",
+    "a2aColMethod": "方法",
+    "a2aColDoes": "作用",
+    "a2aMethods": {
+      "message_send": "运行命令或工具，最多等待 30 秒后返回 Task。",
+      "message_stream": "同上，以 SSE 推送直到完成。",
+      "tasks_get": "查看任务状态和结果。",
+      "tasks_cancel": "取消运行中的作业（终止命令）。",
+      "tasks_resubscribe": "重新订阅运行中任务的 SSE。"
     }
   },
   "emergency": {
@@ -548,7 +563,23 @@
     "colMin": "最低计费",
     "colConfidence": "可信度",
     "oneMonth": "1 个月",
-    "unverifiedNote": "“未验证”的报价在调度器真正使用前都会先自测。"
+    "unverifiedNote": "“未验证”的报价在调度器真正使用前都会先自测。",
+    "regions": "区域",
+    "chainRank": "备用 #{n}",
+    "chainHint": "Scheduler 需要突发主机时的尝试顺序，排在前面且已连接的服务商优先。",
+    "envToken": "令牌来自环境变量",
+    "envTokenHint": "通过 Core 环境变量设置。在此粘贴新令牌会覆盖它，直到下次重启。",
+    "feedOnly": "仅价格",
+    "localHint": "主机通过 boxd 和引导令牌自行注册，无需 API 令牌。",
+    "chainTitle": "调度链：",
+    "chainPool": "现有资源池",
+    "tokenHint": {
+      "contabo": "粘贴 Contabo API 页面中的 client_id:client_secret:api_user:api_password（或 4 个字段的 JSON）。",
+      "netcup": "粘贴 SCP 刷新令牌（客户端 scp）。将备用服务器昵称设为 boxa-spare-1，Boxa 会认领并重装。",
+      "digitalocean": "具有读写权限的个人访问令牌。",
+      "hetzner": "Hetzner Cloud 项目的读写 API 令牌。",
+      "vultr": "具有 manage_servers 权限的 API 密钥。"
+    }
   },
   "kinds": {
     "category": {
@@ -737,23 +768,8 @@
   },
   "settings": {
     "title": "设置",
-    "desc": "语言、通知、Reaper、域名与预算。",
+    "desc": "语言、通知、存储、Reaper、网络、域名和预算。",
     "language": "语言",
-    "notify": "通知",
-    "notifyDesc": "Telegram 机器人消息内直接带有“批准 / 拒绝”按钮。",
-    "telegram": "Telegram 聊天 ID",
-    "email": "邮箱",
-    "reportHour": "每日报告时间",
-    "reportHourHint": "越南时间（UTC+7）",
-    "events": "发送通知的事件类型",
-    "event": {
-      "budget": "智能体超过 80% 预算",
-      "approval": "有请求需要你批准",
-      "box_failed": "box 失败",
-      "host_down": "主机断开",
-      "reaper": "box 被 Reaper 休眠 / 删除",
-      "emergency_stop": "紧急停止"
-    },
     "reaper": "Reaper 默认值",
     "reaperDesc": "在智能体未自行声明时使用。",
     "idle": "空闲多少分钟后休眠",
@@ -770,7 +786,13 @@
     "budgetHint": "每日预算 = 每月 / 30",
     "spentMonth": "本月已花费",
     "save": "保存设置",
-    "savedToast": "设置已保存"
+    "savedToast": "设置已保存",
+    "retentionDays": "快照保留天数",
+    "retentionDaysHint": "0 = 仅按数量保留",
+    "network": "出站网络",
+    "networkDesc": "每个 box 的允许列表在 box 页面设置，这里是未声明时的默认值。",
+    "egressDeny": "默认拒绝出站",
+    "egressDenyHint": "未声明出站策略的 box 只能访问 agent 允许列表中的地址；没有允许列表则全部拒绝。"
   },
   "shell": {
     "searchPlaceholder": "搜索或输入命令…",
@@ -880,5 +902,92 @@
     "checking": "检查中…",
     "valid": "YAML 有效",
     "lineError": "第 {line} 行：{message}"
+  },
+  "egress": {
+    "title": "出站",
+    "edit": "编辑",
+    "editTitle": "<g>{slug}</g> <g>的出站允许列表</g>",
+    "editDesc": "每行一个域名、IP 或 CIDR，可附加 :port。设置列表后，其他目标都会被拒绝。",
+    "entries": "允许的目标",
+    "denyDefault": "拒绝其他所有目标",
+    "denyDefaultHint": "开启且列表为空 = box 无法访问互联网。",
+    "emptyMeans": "列表为空且关闭拒绝时，使用 agent 或设置的默认值。",
+    "apply": "应用",
+    "saved": "出站策略已更新",
+    "unrestricted": "不限制：box 可以访问任何地址。",
+    "enforced": "已执行 · {mode}",
+    "notEnforced": "未执行",
+    "source": {
+      "box": "box 自定义",
+      "agent": "来自 agent",
+      "settings": "来自设置"
+    },
+    "denyOthers": "其他已拒绝",
+    "offline": "列表为空：box 无法访问互联网。",
+    "applied": "{time} 应用 · {rules} 条规则"
+  },
+  "notify": {
+    "title": "通知",
+    "desc": "通过 Telegram 机器人和邮件发送每日费用报告和告警。令牌和密码加密保存在密钥库中，不会再次显示。",
+    "ready": "已就绪",
+    "notSet": "未配置",
+    "botToken": "机器人令牌",
+    "botTokenHint": "从 @BotFather 获取。",
+    "secretStored": "已保存（加密）。留空则保持不变。",
+    "chatId": "Chat ID",
+    "chatIdHint": "用户、群组或频道 ID（如 -100…）。",
+    "emailTitle": "邮件（SMTP）",
+    "recipients": "收件人",
+    "recipientsHint": "用逗号分隔。",
+    "smtpHost": "SMTP 主机",
+    "smtpPort": "端口",
+    "smtpTls": "加密",
+    "tlsNone": "无（本地中继）",
+    "smtpUser": "用户名",
+    "smtpPass": "密码",
+    "smtpFrom": "发件人（From）",
+    "reportHour": "每日报告时间",
+    "timezone": "时区",
+    "events": "通知以下事件",
+    "event": {
+      "daily_report": "每日费用报告",
+      "budget": "agent 达到预算的 80% / 100%",
+      "approval": "有事项待你批准",
+      "emergency_stop": "紧急停止",
+      "box_failed": "Box 失败",
+      "host_down": "主机断开"
+    },
+    "save": "保存通知设置",
+    "testTelegram": "测试 Telegram",
+    "testEmail": "测试邮件",
+    "sendReport": "立即发送报告",
+    "clearToken": "删除机器人令牌",
+    "saveFirst": "测试按钮使用已保存的配置，请先保存。",
+    "recent": "最近发送",
+    "saved": "通知设置已保存",
+    "testSent": "测试消息已发送"
+  },
+  "storage": {
+    "title": "快照存储",
+    "active": "正在使用 {bucket}",
+    "localOnly": "仅存于主机",
+    "fromEnv": "由环境变量配置",
+    "desc": "快照会上传到 Cloudflare R2、Backblaze B2 或 S3，可在任意主机恢复和 fork。未配置时快照留在拍摄它的主机上。",
+    "provider": "存储位置",
+    "pLocal": "主机本地（默认）",
+    "endpoint": "Endpoint",
+    "bucket": "Bucket",
+    "region": "区域",
+    "regionHint": "R2：auto。B2：从 endpoint 获取。",
+    "prefix": "前缀",
+    "accessKey": "Access key ID",
+    "secretKey": "Secret access key",
+    "secretStored": "已保存（加密）。留空则保持不变。",
+    "localDesc": "快照留在拍摄它的主机上，只能在该主机恢复或 fork。",
+    "retentionNote": "每个 box 保留 {keep} 个快照，{days} 天后删除（在 Reaper 中设置）。bucket 中的副本同时删除。",
+    "save": "保存",
+    "test": "测试连接",
+    "testOk": "Bucket 正常（{ms} ms）",
+    "saved": "存储设置已保存"
   }
 }

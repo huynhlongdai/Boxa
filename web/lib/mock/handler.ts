@@ -1,6 +1,7 @@
 // Bộ xử lý MOCK MODE: mô phỏng Boxa Core theo contract v1, trạng thái giữ trong bộ nhớ.
 import { parseDocument } from "yaml";
-import type { Agent, AgentKind, ApiKey, Approval, Box, BoxaEvent, ErrorCode, Host, LedgerEntry, Overview, Quote, QuoteOption, Settings, Template } from "../types";
+import type { Agent, AgentKind, ApiKey, Approval, Box, BoxaEvent, Delivery, ErrorCode, Host, LedgerEntry, NotifySettings, NotifyView, Overview, ProviderRegion, Quote, QuoteOption, Settings, Snapshot, StorageView, Template } from "../types";
+import { NOTIFY_EVENTS } from "../types";
 import type { Locale } from "@/i18n/config";
 import { FALLBACK_KINDS } from "../agent-kinds";
 import { mt, seedText } from "./i18n";
@@ -34,6 +35,15 @@ const err = (status: number, code: ErrorCode, key: string, params: Record<string
   headers: extra.retry_after_s ? { "Retry-After": String(extra.retry_after_s) } : undefined,
 });
 const list = <T>(items: T[]) => ok({ items, next_cursor: null });
+
+const reg = (id: string, name: string): ProviderRegion => ({ id, name, available: true });
+const PROVIDER_REGIONS: Record<string, ProviderRegion[]> = {
+  hetzner: [reg("fsn1", "Falkenstein DC Park 1"), reg("nbg1", "Nuremberg DC Park 1"), reg("hel1", "Helsinki DC Park 1"), reg("ash", "Ashburn, VA"), reg("hil", "Hillsboro, OR"), reg("sin", "Singapore")],
+  vultr: [reg("sgp", "Singapore (SG)"), reg("nrt", "Tokyo (JP)"), reg("ewr", "New Jersey (US)"), reg("fra", "Frankfurt (DE)")],
+  digitalocean: [reg("sgp1", "Singapore 1"), reg("fra1", "Frankfurt 1"), reg("nyc3", "New York 3"), reg("blr1", "Bangalore 1")],
+  contabo: [reg("EU", "European Union (Germany)"), reg("UK", "United Kingdom"), reg("US-central", "US Central (St. Louis)"), reg("US-east", "US East (New York)"), reg("US-west", "US West (Seattle)"), reg("SIN", "Singapore"), reg("JPN", "Japan (Tokyo)"), reg("AUS", "Australia (Sydney)"), reg("IND", "India (Mumbai)")],
+  netcup: [reg("nue", "Nuremberg (DE)"), reg("vie", "Vienna (AT)"), reg("ams", "Amsterdam (NL)"), reg("man", "Manassas (US)")],
+};
 const notFound = (what: string) => err(404, "NOT_FOUND", "not_found", { what });
 
 function nextId(s: MockState, prefix: string) {
@@ -118,10 +128,24 @@ function hydrateAgent(s: MockState, a: Agent): Agent {
   };
 }
 
+/** v1.2: egress hiệu lực — box tự khai báo, hoặc allowlist của agent, hoặc settings chặn mặc định. */
+function egressFor(s: MockState, b: MockState["boxes"][number]): Box["egress"] {
+  if (b.egress !== undefined) return b.egress;
+  const agent = s.agents.find((a) => a.id === b.agent_id);
+  const host = s.hosts.find((h) => h.id === b.host_id);
+  const enforced = host?.provider !== "local";
+  const base = { enforced, mode: enforced ? "incus-acl" : "none", warning: enforced ? undefined : "local driver has no network isolation: the egress allowlist is NOT enforced", applied_at: b.created_at };
+  if (agent?.policy.egress_allowlist?.length) return { allow: [...agent.policy.egress_allowlist].sort(), deny_by_default: true, source: "agent", rules: agent.policy.egress_allowlist.length * 2, ...base };
+  if (s.settings.egress_deny_by_default) return { allow: [], deny_by_default: true, source: "settings", rules: 0, ...base };
+  return null;
+}
+
+const EGRESS_RE = /^(\*\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}(:\d{1,5})?$|^\d{1,3}(\.\d{1,3}){3}(\/\d{1,2})?(:\d{1,5})?$|^\[?[0-9a-f:]+\]?(\/\d{1,3})?(:\d{1,5})?$/i;
+
 function hydrateBox(s: MockState, b: MockState["boxes"][number]): Box {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { _ready_at, _taken_over, ...rest } = b;
-  return { ...rest, spent_usd: sum(s.ledger.filter((l) => l.box_id === b.id)) };
+  return { ...rest, egress: egressFor(s, b), spent_usd: sum(s.ledger.filter((l) => l.box_id === b.id)) };
 }
 
 function hydrateHost(s: MockState, h: MockState["hosts"][number]): Host {
@@ -263,6 +287,14 @@ function createBox(s: MockState, body: Record<string, unknown>): MockResponse {
     last_active_at: null,
     _ready_at: Date.now() + 8000,
   };
+  const eg = body.egress as { allow?: unknown[]; deny_by_default?: boolean } | undefined;
+  if (eg && (eg.deny_by_default || (eg.allow?.length ?? 0) > 0)) {
+    const allow = (eg.allow ?? []).map((x) => String(x).trim().toLowerCase());
+    const bad = allow.find((x) => !EGRESS_RE.test(x));
+    if (bad) return err(400, "INVALID", "bad_egress", { entry: bad });
+    const enforced = host.provider !== "local";
+    b.egress = { allow: [...new Set(allow)].sort(), deny_by_default: true, source: "box", enforced, mode: enforced ? "incus-acl" : "none", rules: allow.length * 2, applied_at: iso(Date.now()) };
+  }
   s.boxes.push(b);
   s.files[id] = { "/work/README.md": `# ${b.slug}\n`, "/memory/notes.md": `# Ghi nhớ của ${agent.name}\n` };
   pushEvent(s, { actor: "user:anh", box_id: id, agent_id: agent.id, type: "box.created", message: `Tạo box ${b.slug} (${template}) tại ${host.provider}/${host.region}`, cost_usd: null });
@@ -408,8 +440,12 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
         pushEvent(s, { actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "box.waking", message: `Đánh thức ${b.slug}`, cost_usd: null });
         return ok(hydrateBox(s, b));
       case "snapshot": {
-        const snap = { id: nextId(s, "snp"), box_id: b.id, size_mb: Math.round(400 + Math.random() * 1500), created_at: iso(Date.now()), location: `r2://boxa-snapshots/${b.id}/` };
-        snap.location += snap.id;
+        const sid = nextId(s, "snp");
+        const remote = s.storage.configured;
+        const snap: Snapshot = {
+          id: sid, box_id: b.id, size_mb: Math.round(400 + Math.random() * 1500), created_at: iso(Date.now()), location: `local:///var/lib/boxd/snapshots/${sid}.tar.gz`,
+          storage: remote ? "s3" : "local", ...(remote ? { remote_url: `s3://${s.storage.bucket}/${s.storage.prefix ? s.storage.prefix + "/" : ""}snapshots/${b.id}/${sid}.tar.gz` } : {}),
+        };
         s.snapshots.push(snap);
         pushEvent(s, { actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "box.snapshot", message: `Snapshot ${snap.id} (${snap.size_mb} MB)`, cost_usd: 0.001 });
         return ok(snap, 201);
@@ -435,6 +471,25 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
       }
       case "yaml":
         return ok({ yaml: toYaml(hydrateBox(s, b)) });
+      case "egress": {
+        if (M !== "PUT") break;
+        const allow = Array.isArray(body.allow) ? (body.allow as unknown[]).map((x) => String(x).trim().toLowerCase()).filter(Boolean) : [];
+        const bad = allow.find((x) => !EGRESS_RE.test(x));
+        if (bad) return err(400, "INVALID", "bad_egress", { entry: bad });
+        const deny = Boolean(body.deny_by_default) || allow.length > 0;
+        if (!deny) {
+          delete b.egress;
+          const eff = egressFor(s, b);
+          b.egress = eff ?? null;
+        } else {
+          const host = s.hosts.find((h) => h.id === b.host_id);
+          const enforced = host?.provider !== "local";
+          b.egress = { allow: [...new Set(allow)].sort(), deny_by_default: true, source: "box", enforced, mode: enforced ? "incus-acl" : "none", rules: allow.length * 2, applied_at: iso(Date.now()),
+            ...(enforced ? {} : { warning: "local driver has no network isolation: the egress allowlist is NOT enforced" }) };
+        }
+        pushEvent(s, { actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: b.egress?.enforced ? "box.egress_applied" : "box.egress_not_enforced", message: `egress: ${b.egress ? b.egress.allow.join(", ") || "deny all" : "unrestricted"}`, cost_usd: null });
+        return ok(hydrateBox(s, b));
+      }
       case "exec-batch": {
         if (b.status === "sleeping") return err(409, "BOX_SLEEPING", "sleeping", {}, { retry_after_s: 5 });
         const cmds = body.commands;
@@ -510,7 +565,12 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
 
   if (r0 === "jobs" && r1) {
     const j = s.jobs.find((x) => x.id === r1);
-    return j ? ok(j) : notFound(`job ${r1}`);
+    if (!j) return notFound(`job ${r1}`);
+    if (r2 === "cancel" && M === "POST" && (j.status === "queued" || j.status === "running")) {
+      j.status = "canceled";
+      j.finished_at = iso(Date.now());
+    }
+    return ok(j);
   }
   if (r0 === "logs" && r1) {
     const l = s.logs[r1];
@@ -607,6 +667,7 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
     if (!r1) return list(s.providers);
     const p = s.providers.find((x) => x.id === r1);
     if (!p) return notFound(`provider ${r1}`);
+    if (r2 === "regions") return list(PROVIDER_REGIONS[p.id] ?? []);
     if (r2 === "token" && M === "PUT") {
       const token = String(body.token ?? "");
       p.last_check_at = iso(Date.now());
@@ -730,7 +791,80 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
     let n = 0;
     for (const b of s.boxes) if (["running", "provisioning", "placing"].includes(b.status)) { b.status = "sleeping"; b.url = null; delete b._ready_at; n++; }
     pushEvent(s, { actor: "user:anh", box_id: null, agent_id: null, type: "emergency.stop", message: `Dừng khẩn cấp: cho ngủ ${n} box`, cost_usd: null });
+    if (s.settings.notify.events.includes("emergency_stop") && s.notify_secrets.telegram) {
+      s.deliveries.unshift({ ts: iso(Date.now()), kind: "emergency_stop", channel: "telegram", ok: true, title: mt(L, "n_emergency_title") });
+    }
     return ok({ ok: true, slept: n });
+  }
+
+  // ---- v1.2: lưu trữ snapshot ----
+  if (r0 === "storage") {
+    if (r1 === "test" && M === "POST") {
+      if (!s.storage.configured) return ok({ ok: false, error: "object storage not configured (snapshots stay local)", latency_ms: 0, bucket: "" });
+      return ok({ ok: true, latency_ms: 140 + Math.round(Math.random() * 60), bucket: s.storage.bucket });
+    }
+    if (M === "PUT") {
+      const prov = String(body.provider ?? "local");
+      if (prov === "local") {
+        s.storage = { ...s.storage, provider: "local", endpoint: "", region: "", bucket: "", prefix: "", access_key_id: "", configured: false, source: "none", has_secret: false };
+      } else {
+        if (!["r2", "b2", "s3", "minio"].includes(prov)) return err(400, "INVALID", "bad_storage");
+        if (!body.endpoint || !body.bucket || !body.access_key_id) return err(400, "INVALID", "storage_fields");
+        const hasSecret = Boolean(body.secret_access_key) || s.storage.has_secret;
+        if (!hasSecret) return err(400, "INVALID", "storage_secret");
+        let endpoint = String(body.endpoint).trim().replace(/\/+$/, "");
+        if (!endpoint.includes("://")) endpoint = `https://${endpoint}`;
+        const region = String(body.region || (prov === "r2" ? "auto" : (endpoint.match(/s3\.([a-z0-9-]+)\.backblazeb2/)?.[1] ?? "us-east-1")));
+        s.storage = { ...s.storage, provider: prov as StorageView["provider"], endpoint, region, bucket: String(body.bucket), prefix: String(body.prefix ?? "").replace(/^\/+|\/+$/g, ""), access_key_id: String(body.access_key_id), configured: true, source: "settings", has_secret: true };
+      }
+      pushEvent(s, { actor: "user:anh", box_id: null, agent_id: null, type: "storage.updated", message: `snapshot storage: ${s.storage.provider} ${s.storage.bucket}`, cost_usd: null });
+    }
+    s.storage.keep_snapshots = s.settings.reaper.keep_snapshots;
+    s.storage.snapshot_retention_days = s.settings.reaper.snapshot_retention_days ?? 0;
+    return ok(s.storage);
+  }
+
+  // ---- v1.2: thông báo ----
+  if (r0 === "notify") {
+    const view = (): NotifyView => {
+      const n = s.settings.notify;
+      return {
+        ...n, has_telegram_token: s.notify_secrets.telegram, has_smtp_password: s.notify_secrets.smtp,
+        telegram_configured: s.notify_secrets.telegram && !!n.telegram_chat_id,
+        email_configured: !!n.smtp?.host && !!n.smtp?.from && /@/.test(n.email),
+        events_available: [...NOTIFY_EVENTS], recent: s.deliveries.slice(0, 30),
+      };
+    };
+    if (r1 === "test" && M === "POST") {
+      const ch = String(body.channel ?? "all");
+      const kind = body.kind === "daily_report" ? "daily_report" : "test";
+      const v = view();
+      const title = kind === "daily_report" ? mt(L, "n_daily_title") : mt(L, "n_test_title");
+      const results: Delivery[] = [];
+      const now = iso(Date.now());
+      if (ch === "all" || ch === "telegram") results.push(v.telegram_configured ? { ts: now, kind, channel: "telegram", ok: true, title } : { ts: now, kind, channel: "telegram", ok: false, error: "telegram not configured (bot token + chat id)", title });
+      if (ch === "all" || ch === "email") results.push(v.email_configured && s.notify_secrets.smtp ? { ts: now, kind, channel: "email", ok: true, title } : { ts: now, kind, channel: "email", ok: false, error: v.email_configured ? "smtp auth: 535 authentication failed" : "email not configured (smtp host, from, recipients)", title });
+      s.deliveries = [...results, ...s.deliveries].slice(0, 30);
+      return ok({ results });
+    }
+    if (M === "PUT") {
+      const events = Array.isArray(body.events) ? (body.events as string[]) : s.settings.notify.events;
+      const unknown = events.find((e) => !(NOTIFY_EVENTS as readonly string[]).includes(e));
+      if (unknown) return err(400, "INVALID", "bad_event", { event: unknown });
+      const hour = Number(body.daily_report_hour ?? s.settings.notify.daily_report_hour);
+      if (!(hour >= 0 && hour <= 23)) return err(400, "INVALID", "bad_hour");
+      const smtpIn = (body.smtp ?? s.settings.notify.smtp) as NotifySettings["smtp"];
+      s.settings.notify = {
+        telegram_chat_id: String(body.telegram_chat_id ?? "").trim(), email: String(body.email ?? ""), events: [...new Set(events)], daily_report_hour: hour,
+        timezone: String(body.timezone ?? s.settings.notify.timezone ?? ""), smtp: smtpIn,
+      };
+      if (body.clear_telegram_token) s.notify_secrets.telegram = false;
+      else if (String(body.telegram_bot_token ?? "").trim()) s.notify_secrets.telegram = true;
+      if (body.clear_smtp_password) s.notify_secrets.smtp = false;
+      else if (String(body.smtp_password ?? "")) s.notify_secrets.smtp = true;
+      pushEvent(s, { actor: "user:anh", box_id: null, agent_id: null, type: "notify.updated", message: "notification settings changed", cost_usd: null });
+    }
+    return ok(view());
   }
 
   if (r0 === "settings") {

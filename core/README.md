@@ -17,7 +17,7 @@ Boxa là hạ tầng cloud cá nhân: cấp **box** (sandbox Linux) cho AI agent
  │ Store: SQLite (mặc định) | Postgres (DATABASE_URL)         │
  └───────────────▲────────────────────────────┬──────────────┘
                  │ WebSocket dial-OUT (wss)    │ Provider adapters (BPI)
-                 │ exec/file/PTY/metrics/http  │ hetzner · vultr · local (+ stub DO/Contabo/netcup)
+                 │ exec/file/PTY/metrics/http  │ hetzner · vultr · digitalocean · contabo · netcup · local
  ┌───────────────┴──────────┐                 ▼
  │ boxd trên mỗi host       │     battleships.dev (giá + capability mở)
  │ driver incus | local     │
@@ -177,6 +177,10 @@ Backup: thư mục `/var/lib/boxa` (SQLite + master key). Nếu dùng Postgres, 
 | `BOXA_HOST_DOWN_AFTER` | `2m` | mất tunnel thì đánh dấu down |
 | `BOXA_CREATE_WAIT` | `120s` | `POST /boxes` chờ tối đa (dùng `?wait=false` để trả ngay) |
 | `BOXA_CORS_ORIGINS` | `*` | CORS cho dashboard |
+| `HETZNER_TOKEN` · `VULTR_API_KEY` · `DIGITALOCEAN_TOKEN` · `NETCUP_REFRESH_TOKEN` | — | v1.2: kết nối provider lúc khởi động (token mã hoá vào DB, `token_source=env`) |
+| `CONTABO_CLIENT_ID` · `CONTABO_CLIENT_SECRET` · `CONTABO_API_USER` · `CONTABO_API_PASSWORD` | — | v1.2: thông tin OAuth Contabo (đủ 4 biến mới kết nối) |
+| `BOXA_PROVIDER_CHAIN` | `hetzner,vultr,digitalocean,contabo,netcup` | v1.2: thứ tự dự phòng burst của scheduler |
+| `BOXA_S3_PROVIDER` · `BOXA_S3_ENDPOINT` · `BOXA_S3_REGION` · `BOXA_S3_BUCKET` · `BOXA_S3_PREFIX` · `BOXA_S3_ACCESS_KEY_ID` · `BOXA_S3_SECRET_ACCESS_KEY` | — (prefix `boxa`) | v1.2: lưu snapshot lên R2/B2/S3; đặt bằng env thì dashboard chỉ xem được |
 
 ### boxd
 
@@ -191,6 +195,7 @@ Backup: thư mục `/var/lib/boxa` (SQLite + master key). Nếu dùng Postgres, 
 | `BOXD_MEMORY_ROOT` | `/var/lib/boxa/memory` | volume `/memory` theo agent (incus) |
 | `BOXD_SNAPSHOT_EXPORT_DIR` | — | nếu đặt thì snapshot incus được export thêm ra tar.gz |
 | `BOXD_LOCAL_ULIMIT_MEM` | — | `1` để áp `ulimit -v` theo RAM (driver local) |
+| `BOXD_EGRESS_MODE` | `acl` | v1.2 (incus): `acl` = Incus network ACL trên NIC của box, `nft` = bảng nftables `inet boxa_<box>` trên host |
 
 ### box (CLI)
 
@@ -215,10 +220,7 @@ Backup: thư mục `/var/lib/boxa` (SQLite + master key). Nếu dùng Postgres, 
 - Postgres (SQL portable, chưa chạy với Postgres thật).
 
 **Stub / chưa làm:**
-- adapter DigitalOcean/Contabo/netcup (chỉ có giá từ feed);
-- snapshot lên R2/B2 (local = tar.gz, incus = snapshot tại chỗ);
-- headscale mesh, GPU, báo cáo Telegram/email (mới lưu cài đặt);
-- egress allowlist chưa được thực thi;
+- headscale mesh, GPU;
 - `memory_mb` của agent chưa đo;
 - ingress chỉ hỗ trợ HTTP có buffer, không hỗ trợ WebSocket/streaming.
 
@@ -249,3 +251,23 @@ Theo `docs/api-contract-v1.md` mục "v1.1 additions".
 **CLI mới:** `box quote …`, `box batch <box> -- cmd1 ;; cmd2`, `box restore <box> [snap]`, `box fork <box> [snap] [--slug]`, `box yaml <box>`.
 
 **SDK:** `../sdk/python` (gói `boxa`) và `../sdk/typescript` (`@boxa/sdk`) — xem README từng gói.
+
+## 9. v1.2 — thêm provider, snapshot lên R2/B2, thông báo, egress, A2A
+
+Theo `docs/api-contract-v1.md` mục "v1.2 additions". Mọi thứ dưới đây đã có test với server giả (httptest) — **chưa gọi API thật** của DigitalOcean/Contabo/netcup/R2/B2/Telegram/SMTP.
+
+**Provider mới (`internal/provider`).** Cùng interface với Hetzner/Vultr: `Create/Delete/Status/ValidateToken` + `Regions` + `List` (server do Boxa tạo, theo tag/nickname), giá lấy từ price feed.
+- **DigitalOcean**: `/v2/droplets` (tag `boxa`, `boxa-host-<id>`), cloud-init qua `user_data`, size `s-*`, region `sgp1/fra1/…`.
+- **Contabo**: OAuth2 password grant (token cache tới khi hết hạn), `POST /v1/compute/instances` với `x-request-id`, tìm image Ubuntu theo tên; token có dạng `client_id:client_secret:api_user:api_password` hoặc JSON. Lưu ý: Contabo tính tiền theo tháng nên chỉ hợp làm pool.
+- **netcup (SCP REST)**: không có API đặt mua server — Boxa *nhận* server dự phòng đã đặt sẵn có nickname `boxa-spare-*`, cài lại image kèm cloud-init và đổi nickname thành `boxa-<host>`; xoá = trả về `boxa-spare-*` (không huỷ hợp đồng). Token = refresh token SCP (đổi lấy access token qua Keycloak).
+- **Chuỗi dự phòng**: pool hiện có → burst theo `BOXA_PROVIDER_CHAIN` (mặc định Hetzner → Vultr → DigitalOcean → Contabo → netcup), chỉ dùng provider đã kết nối và nằm trong policy của agent. Tạo host lỗi thì loại provider đó (`provider:<id>`) và thử provider kế tiếp. `GET /v1/providers` trả thêm `implemented`, `chain_rank`, `token_source`; `GET /v1/providers/:id/regions`, `GET /v1/providers/:id/servers`.
+
+**Snapshot lên object storage (`internal/objstore`, `manager/storage.go`, `boxd/objsync.go`).** Client S3 tự viết (SigV4 + presigned URL, không thêm dependency) cho R2/B2/S3/MinIO. Core ký URL `PUT` lúc snapshot và `GET` lúc restore/fork rồi gửi cho boxd; boxd stream tar.gz thẳng lên/xuống bucket, **secret không bao giờ rời core**. Snapshot có `storage: local|s3`, `remote_url`, `upload_error`. Có bản trên bucket thì restore/fork chạy được ở **host bất kỳ** (trước đây phải cùng host). Retention: `reaper.keep_snapshots` (theo box) + `reaper.snapshot_retention_days`; reaper xoá cả object trên bucket. Không cấu hình (hoặc upload lỗi) → giữ hành vi cũ, snapshot nằm tại host. Cấu hình: env `BOXA_S3_*` hoặc `PUT /v1/storage {provider, endpoint, region, bucket, prefix, access_key_id, secret_access_key}` (secret lưu trong kho secret mã hoá với tên dành riêng `BOXA_SYS_*`, ẩn khỏi `GET /secrets`); `POST /v1/storage/test` ghi/đọc/xoá một object thử. Test chỉ dùng S3 giả chạy trong process (`objstore.NewFake`, có kiểm chữ ký).
+
+**Thông báo (`internal/notify`, `manager/notify.go`).** Telegram `sendMessage` (HTML) và email SMTP (STARTTLS / TLS / none, PLAIN auth). Sự kiện: `daily_report` (giờ + múi giờ trong settings), `budget` (80% và 100% ngân sách ngày của agent, tổng tháng), `approval` (mục "Cần anh" mới), `emergency_stop`, `box_failed`, `host_down`. Nội dung dịch theo `settings.locale`. Bot token và mật khẩu SMTP lưu trong kho secret mã hoá (`BOXA_SYS_TELEGRAM_BOT_TOKEN`, `BOXA_SYS_SMTP_PASSWORD`), API chỉ trả `has_*`. `GET/PUT /v1/notify`, `POST /v1/notify/test {channel: telegram|email|all, kind: test|daily_report}`; 30 lần gửi gần nhất nằm trong `recent`.
+
+**Egress allowlist (`internal/egress`, `boxd/egress.go`).** Khai báo theo box: `egress: {allow: [...], deny_by_default}` (JSON, box.yaml dạng map hoặc list, tham số `egress` của tool MCP `box_up`), sửa sau bằng `PUT /v1/boxes/:id/egress`. Mục hợp lệ: tên miền, `*.wildcard`, IPv4/IPv6, CIDR, kèm `:port` tuỳ chọn. Thứ tự áp dụng: box → `policy.egress_allowlist` của agent (là trần: box không được xin ngoài danh sách agent → `POLICY_DENIED`) → `settings.egress_deny_by_default`. boxd (incus) phân giải tên miền thành IP và áp **Incus network ACL** (mặc định) hoặc bảng **nftables** riêng cho box, luôn cho phép DNS tới resolver; rule được sinh thuần (có unit test). Driver local **không thực thi** — box trả `egress.enforced=false` kèm `warning` rõ ràng và chỉ xuất `BOXA_EGRESS_ALLOW` cho tool tự tuân thủ. Box hiển thị `egress {allow, deny_by_default, source, enforced, mode, rules, warning, applied_at}`.
+
+**A2A JSON-RPC (`internal/api/a2a.go`).** `POST /a2a` (cùng Bearer key): `message/send` (= `tasks/send`), `message/stream` (= `tasks/sendSubscribe`, SSE), `tasks/get`, `tasks/cancel`, `tasks/resubscribe`. Text part = lệnh + `metadata.box_id` (hoặc data part `{box_id, command, cwd?, timeout_s?}`) → job exec async, **task id = job id**; data part `{tool, arguments}` gọi bất kỳ tool nào trong 18 tool (chạy đồng bộ). Trạng thái job → A2A: `queued→submitted`, `running→working`, `done→completed`, `failed→failed`, `canceled→canceled`. `tasks/cancel` = `POST /v1/jobs/:id/cancel` (kill lệnh trên host). Agent card (`/.well-known/agent.json`) giờ có `url: <base>/a2a`, `preferredTransport: JSONRPC`, `capabilities.streaming: true`, skill `exec` + 18 tool.
+
+**Kiểm thử v1.2.** `go test ./...` (thêm `internal/{objstore,notify,egress}`, `provider/more_providers_test.go`, `boxd/egress_test.go`, `e2e/v12_test.go`: snapshot qua S3 giả giữa 2 host + retention, egress, Telegram giả, A2A send/get/cancel/stream, chuỗi provider) và `scripts/e2e.sh` (thêm mục v1.2).

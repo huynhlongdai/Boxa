@@ -36,6 +36,13 @@ import type {
   Suggestion,
   Template,
   ToolFormat,
+  NotifyInput,
+  NotifyTestResult,
+  NotifyView,
+  ProviderRegion,
+  StorageInput,
+  StorageTestResult,
+  StorageView,
   Transport,
   ValidateResult,
 } from "./types";
@@ -154,6 +161,9 @@ export const paths = {
   secrets: "/secrets",
   approvals: "/approvals",
   settings: "/settings",
+  storage: "/storage",
+  notify: "/notify",
+  providerRegions: (id: string) => `/providers/${id}/regions`,
   adminSystem: "/admin/system",
   adminJobs: "/admin/jobs",
   adminAudit: (f?: { actor?: string; type?: string }) => `/admin/audit${qs(f)}`,
@@ -201,6 +211,8 @@ export const api = {
 
   getJob: (id: string, wait?: number) => http.get<Job>(`${paths.job(id)}${qs({ wait })}`),
   getLog: (id: string) => http.get<string>(paths.log(id)),
+  cancelJob: (id: string) => http.post<Job>(`/jobs/${id}/cancel`),
+  setEgress: (id: string, body: { allow: string[]; deny_by_default: boolean }) => http.put<Box>(`/boxes/${id}/egress`, body),
 
   // Agents
   listAgents: () => http.get<List<Agent>>(paths.agents),
@@ -228,6 +240,13 @@ export const api = {
   drainHost: (id: string) => http.post<Host>(`/hosts/${id}/drain`),
   deleteHost: (id: string) => http.del<{ ok: boolean }>(`/hosts/${id}`),
   offers: () => http.get<List<Offer>>(paths.offers),
+  providerRegions: (id: string) => http.get<List<ProviderRegion>>(paths.providerRegions(id)),
+  getStorage: () => http.get<StorageView>(paths.storage),
+  saveStorage: (body: StorageInput) => http.put<StorageView>(paths.storage, body),
+  testStorage: () => http.post<StorageTestResult>(`${paths.storage}/test`),
+  getNotify: () => http.get<NotifyView>(paths.notify),
+  saveNotify: (body: NotifyInput) => http.put<NotifyView>(paths.notify, body),
+  testNotify: (channel: "telegram" | "email" | "all", kind: "test" | "daily_report" = "test") => http.post<NotifyTestResult>(`${paths.notify}/test`, { channel, kind }),
 
   // Templates
   templates: () => http.get<List<Template>>(paths.templates),

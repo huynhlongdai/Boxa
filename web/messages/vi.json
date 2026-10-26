@@ -271,7 +271,11 @@
       "fork": "Fork",
       "forkTitle": "Fork {id} thành box mới?",
       "forkDesc": "Tạo box mới cùng spec từ snapshot này; box hiện tại giữ nguyên.",
-      "forked": "Đã fork thành {slug}"
+      "forked": "Đã fork thành {slug}",
+      "storage": "Lưu ở",
+      "storageS3": "R2/B2/S3",
+      "storageLocal": "Tại host",
+      "storageLocalHint": "Chỉ khôi phục được trên host đã chụp."
     },
     "config": {
       "readOnly": "box.yaml — chỉ đọc",
@@ -437,7 +441,7 @@
       "mcp": "MCP server card",
       "mcpDesc": "/.well-known/mcp.json: transport (HTTP, stdio), xác thực, danh sách tool.",
       "a2a": "A2A agent card",
-      "a2aDesc": "/.well-known/agent.json: cho agent khác giao việc cho Boxa (Agent2Agent).",
+      "a2aDesc": "/.well-known/agent.json: cho agent khác giao việc cho Boxa qua /a2a.",
       "mcpEndpoint": "MCP endpoint",
       "mcpEndpointDesc": "Streamable HTTP, header Authorization: Bearer $BOXA_API_KEY."
     },
@@ -487,6 +491,17 @@
       "INTERNAL": "Lỗi bất ngờ trong Core.",
       "INTERNALHint": "Thử lại một lần; nếu vẫn lỗi, dừng và báo người vận hành.",
       "NO_CAPACITYHint": "Giảm spec, đợi retry_after_s rồi thử lại, hoặc gọi box_quote xem phương án khác."
+    },
+    "a2a": "A2A: giao việc cho Boxa",
+    "a2aDesc": "Agent khác gửi JSON-RPC tới <mono>/a2a</mono>: text part là lệnh (kèm <mono>metadata.box_id</mono>), data part <mono>tool</mono> + <mono>arguments</mono> để gọi bất kỳ tool nào. Task id của lệnh chính là job id.",
+    "a2aColMethod": "Method",
+    "a2aColDoes": "Tác dụng",
+    "a2aMethods": {
+      "message_send": "Chạy lệnh hoặc tool, chờ tối đa 30 giây rồi trả Task.",
+      "message_stream": "Như trên nhưng trả SSE tới khi xong.",
+      "tasks_get": "Xem trạng thái và kết quả của task.",
+      "tasks_cancel": "Huỷ job đang chạy (dừng lệnh trên host).",
+      "tasks_resubscribe": "Nghe lại SSE của task đang chạy."
     }
   },
   "emergency": {
@@ -548,7 +563,23 @@
     "colMin": "Tính tối thiểu",
     "colConfidence": "Độ tin cậy",
     "oneMonth": "1 tháng",
-    "unverifiedNote": "Offer “Chưa kiểm chứng” luôn được self-test trước khi Scheduler dùng thật."
+    "unverifiedNote": "Offer “Chưa kiểm chứng” luôn được self-test trước khi Scheduler dùng thật.",
+    "regions": "Vùng",
+    "chainRank": "Dự phòng #{n}",
+    "chainHint": "Thứ tự Scheduler thử khi cần thuê host burst. Provider đã kết nối đứng trước được chọn trước.",
+    "envToken": "Token từ biến môi trường",
+    "envTokenHint": "Đặt qua biến môi trường của Core. Dán token mới ở đây sẽ ghi đè tới lần khởi động lại.",
+    "feedOnly": "Chỉ có bảng giá",
+    "localHint": "Host tự đăng ký bằng boxd và bootstrap token, không cần API token.",
+    "chainTitle": "Chuỗi chọn chỗ:",
+    "chainPool": "Pool đang có",
+    "tokenHint": {
+      "contabo": "Dán client_id:client_secret:api_user:api_password (hoặc JSON 4 trường) từ trang API của Contabo.",
+      "netcup": "Dán refresh token SCP (client scp). Đặt nickname server dự phòng là boxa-spare-1, Boxa sẽ nhận và cài lại.",
+      "digitalocean": "Personal access token có quyền đọc và ghi.",
+      "hetzner": "API token Read & Write của project Hetzner Cloud.",
+      "vultr": "API key có quyền manage_servers."
+    }
   },
   "kinds": {
     "category": {
@@ -737,23 +768,8 @@
   },
   "settings": {
     "title": "Cài đặt",
-    "desc": "Ngôn ngữ, thông báo, Reaper, domain và ngân sách.",
+    "desc": "Ngôn ngữ, thông báo, lưu trữ, Reaper, mạng, domain và ngân sách.",
     "language": "Ngôn ngữ",
-    "notify": "Thông báo",
-    "notifyDesc": "Telegram bot có nút Duyệt / Từ chối ngay trong tin nhắn.",
-    "telegram": "Telegram chat ID",
-    "email": "Email",
-    "reportHour": "Giờ gửi báo cáo ngày",
-    "reportHourHint": "Giờ Việt Nam (UTC+7)",
-    "events": "Loại sự kiện gửi thông báo",
-    "event": {
-      "budget": "Agent vượt 80% ngân sách",
-      "approval": "Có yêu cầu cần anh duyệt",
-      "box_failed": "Box lỗi",
-      "host_down": "Host mất kết nối",
-      "reaper": "Box bị Reaper cho ngủ / xoá",
-      "emergency_stop": "Dừng khẩn cấp"
-    },
     "reaper": "Mặc định Reaper",
     "reaperDesc": "Áp dụng khi agent không tự khai báo.",
     "idle": "Ngủ sau (phút rảnh)",
@@ -770,7 +786,13 @@
     "budgetHint": "Ngân sách ngày = tháng / 30",
     "spentMonth": "Đã chi tháng này",
     "save": "Lưu cài đặt",
-    "savedToast": "Đã lưu cài đặt"
+    "savedToast": "Đã lưu cài đặt",
+    "retentionDays": "Xoá snapshot sau (ngày)",
+    "retentionDaysHint": "0 = chỉ giữ theo số lượng",
+    "network": "Mạng ra ngoài",
+    "networkDesc": "Allowlist của từng box nằm ở trang box. Ở đây là mặc định cho box không khai báo.",
+    "egressDeny": "Chặn egress mặc định",
+    "egressDenyHint": "Box không khai báo egress chỉ được ra địa chỉ trong allowlist của agent; không có allowlist thì chặn hết."
   },
   "shell": {
     "searchPlaceholder": "Tìm hoặc gõ lệnh…",
@@ -880,5 +902,92 @@
     "checking": "Đang kiểm tra…",
     "valid": "YAML hợp lệ",
     "lineError": "Dòng {line}: {message}"
+  },
+  "egress": {
+    "title": "Egress",
+    "edit": "Sửa",
+    "editTitle": "<g>Allowlist egress</g> <g>của {slug}</g>",
+    "editDesc": "Mỗi dòng một tên miền, IP hoặc CIDR, có thể kèm :port. Có danh sách thì mọi đích khác bị chặn.",
+    "entries": "Danh sách cho phép",
+    "denyDefault": "Chặn mọi đích khác",
+    "denyDefaultHint": "Bật mà để trống danh sách thì box không ra được Internet.",
+    "emptyMeans": "Để trống và tắt chặn thì box dùng mặc định của agent hoặc cài đặt.",
+    "apply": "Áp dụng",
+    "saved": "Đã cập nhật egress",
+    "unrestricted": "Không giới hạn: box ra được mọi địa chỉ.",
+    "enforced": "Đang thực thi · {mode}",
+    "notEnforced": "Chưa thực thi",
+    "source": {
+      "box": "Box tự khai báo",
+      "agent": "Theo agent",
+      "settings": "Theo cài đặt"
+    },
+    "denyOthers": "Chặn đích khác",
+    "offline": "Danh sách trống: box không ra được Internet.",
+    "applied": "Áp dụng {time} · {rules} luật"
+  },
+  "notify": {
+    "title": "Thông báo",
+    "desc": "Báo cáo chi phí hằng ngày và cảnh báo qua Telegram bot và email. Token và mật khẩu được mã hoá trong kho secret, không hiển thị lại.",
+    "ready": "Sẵn sàng",
+    "notSet": "Chưa cấu hình",
+    "botToken": "Bot token",
+    "botTokenHint": "Lấy từ @BotFather.",
+    "secretStored": "Đã lưu (mã hoá). Để trống để giữ nguyên.",
+    "chatId": "Chat ID",
+    "chatIdHint": "ID người dùng, nhóm hoặc kênh (vd -100…).",
+    "emailTitle": "Email (SMTP)",
+    "recipients": "Người nhận",
+    "recipientsHint": "Cách nhau bằng dấu phẩy.",
+    "smtpHost": "SMTP host",
+    "smtpPort": "Cổng",
+    "smtpTls": "Mã hoá",
+    "tlsNone": "Không (relay nội bộ)",
+    "smtpUser": "Tài khoản",
+    "smtpPass": "Mật khẩu",
+    "smtpFrom": "Người gửi (From)",
+    "reportHour": "Giờ gửi báo cáo ngày",
+    "timezone": "Múi giờ",
+    "events": "Gửi thông báo khi",
+    "event": {
+      "daily_report": "Báo cáo chi phí hằng ngày",
+      "budget": "Agent chạm 80% / 100% ngân sách",
+      "approval": "Có việc cần anh duyệt",
+      "emergency_stop": "Dừng khẩn cấp",
+      "box_failed": "Box lỗi",
+      "host_down": "Host mất kết nối"
+    },
+    "save": "Lưu thông báo",
+    "testTelegram": "Gửi thử Telegram",
+    "testEmail": "Gửi thử email",
+    "sendReport": "Gửi báo cáo ngay",
+    "clearToken": "Xoá bot token",
+    "saveFirst": "Nút gửi thử dùng cấu hình đã lưu, hãy lưu trước khi thử.",
+    "recent": "Lần gửi gần đây",
+    "saved": "Đã lưu cài đặt thông báo",
+    "testSent": "Đã gửi tin thử"
+  },
+  "storage": {
+    "title": "Lưu trữ snapshot",
+    "active": "Đang dùng {bucket}",
+    "localOnly": "Chỉ lưu tại host",
+    "fromEnv": "Cấu hình bằng biến môi trường",
+    "desc": "Snapshot được tải lên Cloudflare R2, Backblaze B2 hoặc S3 để khôi phục và fork ở host bất kỳ. Không cấu hình thì snapshot nằm tại host đã chụp.",
+    "provider": "Nơi lưu",
+    "pLocal": "Tại host (mặc định)",
+    "endpoint": "Endpoint",
+    "bucket": "Bucket",
+    "region": "Vùng",
+    "regionHint": "R2: auto. B2: lấy từ endpoint.",
+    "prefix": "Tiền tố",
+    "accessKey": "Access key ID",
+    "secretKey": "Secret access key",
+    "secretStored": "Đã lưu (mã hoá). Để trống để giữ nguyên.",
+    "localDesc": "Snapshot nằm trên host đã chụp và chỉ khôi phục, fork được trên host đó.",
+    "retentionNote": "Giữ {keep} snapshot mỗi box, xoá sau {days} ngày (chỉnh ở mục Reaper). Bản trên bucket bị xoá cùng lúc.",
+    "save": "Lưu",
+    "test": "Kiểm tra kết nối",
+    "testOk": "Bucket hoạt động ({ms} ms)",
+    "saved": "Đã lưu cấu hình lưu trữ"
   }
 }

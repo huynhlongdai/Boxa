@@ -16,6 +16,8 @@ import type {
   Settings,
   Snapshot,
   Template,
+  Delivery,
+  StorageView,
 } from "../types";
 
 export const MIN = 60_000;
@@ -51,6 +53,10 @@ export interface MockState {
   logs: Record<string, string>;
   files: Record<string, Record<string, string>>; // box_id -> path -> content
   settings: Settings;
+  /** v1.2: secret thông báo (chỉ biết có/không), lịch sử gửi, cấu hình lưu trữ snapshot. */
+  notify_secrets: { telegram: boolean; smtp: boolean };
+  deliveries: Delivery[];
+  storage: StorageView;
   quotas: Quotas;
   users: AdminUser[];
   first_call_at: Record<string, number>; // agent_id -> thời điểm giả lập "lệnh đầu tiên"
@@ -285,12 +291,12 @@ export function makeSeed(): MockState {
   }
 
   const providers: Provider[] = [
-    { id: "hetzner", name: "Hetzner Cloud", connected: true, tier: "T1", last_check_at: ago(12 * MIN), error: null },
-    { id: "vultr", name: "Vultr", connected: true, tier: "T1", last_check_at: ago(12 * MIN), error: null },
-    { id: "contabo", name: "Contabo", connected: true, tier: "T1", last_check_at: ago(13 * MIN), error: null },
-    { id: "digitalocean", name: "DigitalOcean", connected: false, tier: "T1", last_check_at: null, error: null },
-    { id: "netcup", name: "netcup", connected: false, tier: "T1", last_check_at: ago(2 * DAY), error: "Token hết hạn (401 từ SCP API)" },
-    { id: "local", name: "Máy cục bộ (Incus)", connected: false, tier: "T1", last_check_at: null, error: null },
+    { id: "hetzner", name: "Hetzner Cloud", connected: true, tier: "T1", last_check_at: ago(12 * MIN), error: null, implemented: true, chain_rank: 1, token_source: "env" },
+    { id: "vultr", name: "Vultr", connected: true, tier: "T1", last_check_at: ago(12 * MIN), error: null, implemented: true, chain_rank: 2, token_source: "api" },
+    { id: "digitalocean", name: "DigitalOcean", connected: false, tier: "T1", last_check_at: null, error: null, implemented: true, chain_rank: 3 },
+    { id: "contabo", name: "Contabo", connected: true, tier: "T1", last_check_at: ago(13 * MIN), error: null, implemented: true, chain_rank: 4, token_source: "api" },
+    { id: "netcup", name: "netcup", connected: false, tier: "T1", last_check_at: ago(2 * DAY), error: "Token hết hạn (401 từ SCP API)", implemented: true, chain_rank: 5 },
+    { id: "local", name: "Máy cục bộ (Incus)", connected: false, tier: "T1", last_check_at: null, error: null, implemented: true },
   ];
 
   const fetched = ago(3 * HOUR);
@@ -311,6 +317,8 @@ export function makeSeed(): MockState {
     offer("digitalocean", "s-4vcpu-8gb", "sgp1", 4, 8, 160, 48, 0.0714, 60, "unverified"),
     offer("digitalocean", "s-2vcpu-4gb", "sgp1", 2, 4, 80, 24, 0.0357, 60, "unverified"),
     offer("contabo", "cloud-vps-10", "sin", 4, 8, 75, 6.9, 0.0096, 43200, "stock_limited"),
+    offer("netcup", "vps-1000-g11", "vie", 4, 8, 256, 7.4, 0.0101, 43200, "unverified"),
+    offer("digitalocean", "s-1vcpu-1gb", "fra1", 1, 1, 25, 6, 0.0089, 1, "verified"),
   ];
 
   const keys: ApiKey[] = [
@@ -332,8 +340,8 @@ export function makeSeed(): MockState {
   ];
 
   const snapshots: Snapshot[] = [
-    { id: "snp_kt01", box_id: "box_51be07", size_mb: 812, created_at: ago(7 * HOUR), location: "r2://boxa-snapshots/box_51be07/snp_kt01" },
-    { id: "snp_kt00", box_id: "box_51be07", size_mb: 790, created_at: ago(1 * DAY + 3 * HOUR), location: "r2://boxa-snapshots/box_51be07/snp_kt00" },
+    { id: "snp_kt01", box_id: "box_51be07", size_mb: 812, created_at: ago(7 * HOUR), location: "local:///var/lib/boxd/snapshots/snp_kt01.tar.gz", storage: "s3", remote_url: "s3://boxa-snapshots/boxa/snapshots/box_51be07/snp_kt01.tar.gz" },
+    { id: "snp_kt00", box_id: "box_51be07", size_mb: 790, created_at: ago(1 * DAY + 3 * HOUR), location: "local:///var/lib/boxd/snapshots/snp_kt00.tar.gz", storage: "local", upload_error: "upload HTTP 403: SignatureDoesNotMatch" },
     { id: "snp_sc02", box_id: "box_2c81e4", size_mb: 1430, created_at: ago(2 * HOUR), location: "r2://boxa-snapshots/box_2c81e4/snp_sc02" },
     { id: "snp_kg01", box_id: "box_a9d054", size_mb: 2210, created_at: ago(20 * HOUR), location: "r2://boxa-snapshots/box_a9d054/snp_kg01" },
     { id: "snp_ra01", box_id: "box_c4410f", size_mb: 640, created_at: ago(1 * DAY), location: "r2://boxa-snapshots/box_c4410f/snp_ra01" },
@@ -434,8 +442,12 @@ export function makeSeed(): MockState {
   }
 
   const settings: Settings = {
-    notify: { telegram_chat_id: "-1002233445566", email: "itroot2015@gmail.com", events: ["budget", "approval", "box_failed", "host_down"], daily_report_hour: 21 },
-    reaper: { idle_minutes: 15, default_ttl_seconds: 14400, keep_snapshots: 3 },
+    notify: {
+      telegram_chat_id: "-1002233445566", email: "itroot2015@gmail.com", events: ["daily_report", "budget", "approval", "box_failed", "host_down"], daily_report_hour: 21,
+      timezone: "Asia/Ho_Chi_Minh", smtp: { host: "smtp.gmail.com", port: 587, username: "itroot2015@gmail.com", from: "Boxa <itroot2015@gmail.com>", tls: "starttls" },
+    },
+    reaper: { idle_minutes: 15, default_ttl_seconds: 14400, keep_snapshots: 3, snapshot_retention_days: 30 },
+    egress_deny_by_default: false,
     base_domain: "sslip.io",
     url_token_protect: true,
     budget_month_usd: 60,
@@ -452,5 +464,16 @@ export function makeSeed(): MockState {
   return {
     agents, boxes, hosts, providers, offers, ledger, keys, templates: TEMPLATES.map((t) => ({ ...t })), secrets, snapshots,
     approvals, events, jobs, logs, files, settings, quotas, users, first_call_at: {}, seq: 1000, started_at: now,
+    notify_secrets: { telegram: true, smtp: false },
+    deliveries: [
+      { ts: ago(21 * HOUR), kind: "daily_report", channel: "telegram", ok: true, title: "Báo cáo chi phí ngày" },
+      { ts: ago(9 * MIN), kind: "budget", channel: "telegram", ok: true, title: "shopee-crawler đã dùng 85% ngân sách ngày" },
+      { ts: ago(9 * MIN), kind: "budget", channel: "email", ok: false, error: "email not configured (smtp host, from, recipients)", title: "shopee-crawler đã dùng 85% ngân sách ngày" },
+    ],
+    storage: {
+      provider: "r2", endpoint: "https://8c1f2a.r2.cloudflarestorage.com", region: "auto", bucket: "boxa-snapshots", prefix: "boxa",
+      access_key_id: "b1c5f0e3a2d94e7f", configured: true, source: "settings", has_secret: true, keep_snapshots: 3, snapshot_retention_days: 30,
+      fallback: "local: snapshots stay on their host (tar.gz / incus snapshot); restore and fork only on that host",
+    },
   };
 }

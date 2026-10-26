@@ -271,7 +271,11 @@
       "fork": "Fork",
       "forkTitle": "Fork {id} into a new box?",
       "forkDesc": "Creates a new box with the same spec from this snapshot; the current box is untouched.",
-      "forked": "Forked into {slug}"
+      "forked": "Forked into {slug}",
+      "storage": "Stored in",
+      "storageS3": "R2/B2/S3",
+      "storageLocal": "On host",
+      "storageLocalHint": "Restorable only on the host that took it."
     },
     "config": {
       "readOnly": "box.yaml — read only",
@@ -437,7 +441,7 @@
       "mcp": "MCP server card",
       "mcpDesc": "/.well-known/mcp.json: transports (HTTP, stdio), auth, tool list.",
       "a2a": "A2A agent card",
-      "a2aDesc": "/.well-known/agent.json: lets other agents delegate work to Boxa (Agent2Agent).",
+      "a2aDesc": "/.well-known/agent.json: lets other agents hand tasks to Boxa via /a2a.",
       "mcpEndpoint": "MCP endpoint",
       "mcpEndpointDesc": "Streamable HTTP, header Authorization: Bearer $BOXA_API_KEY."
     },
@@ -487,6 +491,17 @@
       "INTERNAL": "Unexpected error inside Core.",
       "INTERNALHint": "Retry once; if it persists, stop and tell the operator.",
       "NO_CAPACITYHint": "Lower the spec, wait retry_after_s and retry, or call box_quote for alternatives."
+    },
+    "a2a": "A2A: hand tasks to Boxa",
+    "a2aDesc": "Other agents send JSON-RPC to <mono>/a2a</mono>: a text part is a command (with <mono>metadata.box_id</mono>), a data part with <mono>tool</mono> + <mono>arguments</mono> calls any tool. A command's task id is its job id.",
+    "a2aColMethod": "Method",
+    "a2aColDoes": "What it does",
+    "a2aMethods": {
+      "message_send": "Runs a command or tool, waits up to 30 s, returns the Task.",
+      "message_stream": "Same, streamed as SSE until done.",
+      "tasks_get": "Task status and result.",
+      "tasks_cancel": "Cancels a running job (kills the command).",
+      "tasks_resubscribe": "Re-attach to a running task's SSE."
     }
   },
   "emergency": {
@@ -548,7 +563,23 @@
     "colMin": "Minimum billing",
     "colConfidence": "Confidence",
     "oneMonth": "1 month",
-    "unverifiedNote": "“Unverified” offers are always self-tested before the Scheduler uses them for real."
+    "unverifiedNote": "“Unverified” offers are always self-tested before the Scheduler uses them for real.",
+    "regions": "Regions",
+    "chainRank": "Fallback #{n}",
+    "chainHint": "Order the Scheduler tries when it needs a burst host. The first connected provider wins.",
+    "envToken": "Token from env",
+    "envTokenHint": "Set via Core environment variables. Pasting a new token here overrides it until the next restart.",
+    "feedOnly": "Prices only",
+    "localHint": "Hosts register themselves with boxd and a bootstrap token; no API token needed.",
+    "chainTitle": "Placement chain:",
+    "chainPool": "Existing pool",
+    "tokenHint": {
+      "contabo": "Paste client_id:client_secret:api_user:api_password (or the 4-field JSON) from Contabo's API page.",
+      "netcup": "Paste an SCP refresh token (client scp). Name spare servers boxa-spare-1; Boxa claims and reinstalls them.",
+      "digitalocean": "Personal access token with read and write scope.",
+      "hetzner": "Read & Write API token of the Hetzner Cloud project.",
+      "vultr": "API key with the manage_servers permission."
+    }
   },
   "kinds": {
     "category": {
@@ -737,23 +768,8 @@
   },
   "settings": {
     "title": "Settings",
-    "desc": "Language, notifications, Reaper, domain and budget.",
+    "desc": "Language, notifications, storage, Reaper, network, domain and budget.",
     "language": "Language",
-    "notify": "Notifications",
-    "notifyDesc": "The Telegram bot has Approve / Reject buttons right in the message.",
-    "telegram": "Telegram chat ID",
-    "email": "Email",
-    "reportHour": "Daily report time",
-    "reportHourHint": "Vietnam time (UTC+7)",
-    "events": "Events that send notifications",
-    "event": {
-      "budget": "An agent passes 80% of its budget",
-      "approval": "A request needs your approval",
-      "box_failed": "A box failed",
-      "host_down": "A host went down",
-      "reaper": "The Reaper slept / deleted a box",
-      "emergency_stop": "Emergency stop"
-    },
     "reaper": "Reaper defaults",
     "reaperDesc": "Applied when the agent doesn't declare its own.",
     "idle": "Sleep after (idle minutes)",
@@ -770,7 +786,13 @@
     "budgetHint": "Daily budget = monthly / 30",
     "spentMonth": "Spent this month",
     "save": "Save settings",
-    "savedToast": "Settings saved"
+    "savedToast": "Settings saved",
+    "retentionDays": "Delete snapshots after (days)",
+    "retentionDaysHint": "0 = keep by count only",
+    "network": "Outbound network",
+    "networkDesc": "Each box's allowlist lives on the box page. This is the default for boxes that declare none.",
+    "egressDeny": "Deny egress by default",
+    "egressDenyHint": "Boxes without an egress policy may only reach their agent's allowlist; with no allowlist everything is blocked."
   },
   "shell": {
     "searchPlaceholder": "Search or type a command…",
@@ -880,5 +902,92 @@
     "checking": "Checking…",
     "valid": "Valid YAML",
     "lineError": "Line {line}: {message}"
+  },
+  "egress": {
+    "title": "Egress",
+    "edit": "Edit",
+    "editTitle": "<g>Egress allowlist</g> <g>of {slug}</g>",
+    "editDesc": "One domain, IP or CIDR per line, optionally with :port. With a list, every other destination is blocked.",
+    "entries": "Allowed destinations",
+    "denyDefault": "Block everything else",
+    "denyDefaultHint": "On with an empty list = the box has no Internet access.",
+    "emptyMeans": "Empty with blocking off falls back to the agent or settings default.",
+    "apply": "Apply",
+    "saved": "Egress updated",
+    "unrestricted": "Unrestricted: the box can reach any address.",
+    "enforced": "Enforced · {mode}",
+    "notEnforced": "Not enforced",
+    "source": {
+      "box": "Set on the box",
+      "agent": "From the agent",
+      "settings": "From settings"
+    },
+    "denyOthers": "Others blocked",
+    "offline": "Empty list: the box has no Internet access.",
+    "applied": "Applied {time} · {rules} rules"
+  },
+  "notify": {
+    "title": "Notifications",
+    "desc": "Daily cost report and alerts via a Telegram bot and email. Tokens and passwords are encrypted in the secrets store and never shown again.",
+    "ready": "Ready",
+    "notSet": "Not set up",
+    "botToken": "Bot token",
+    "botTokenHint": "Get it from @BotFather.",
+    "secretStored": "Stored (encrypted). Leave empty to keep it.",
+    "chatId": "Chat ID",
+    "chatIdHint": "User, group or channel ID (e.g. -100…).",
+    "emailTitle": "Email (SMTP)",
+    "recipients": "Recipients",
+    "recipientsHint": "Comma separated.",
+    "smtpHost": "SMTP host",
+    "smtpPort": "Port",
+    "smtpTls": "Encryption",
+    "tlsNone": "None (local relay)",
+    "smtpUser": "Username",
+    "smtpPass": "Password",
+    "smtpFrom": "Sender (From)",
+    "reportHour": "Daily report hour",
+    "timezone": "Timezone",
+    "events": "Notify me about",
+    "event": {
+      "daily_report": "Daily cost report",
+      "budget": "Agent hits 80% / 100% of budget",
+      "approval": "Something needs your approval",
+      "emergency_stop": "Emergency stop",
+      "box_failed": "Box failed",
+      "host_down": "Host went down"
+    },
+    "save": "Save notifications",
+    "testTelegram": "Test Telegram",
+    "testEmail": "Test email",
+    "sendReport": "Send report now",
+    "clearToken": "Remove bot token",
+    "saveFirst": "Test buttons use the saved settings, so save first.",
+    "recent": "Recent deliveries",
+    "saved": "Notification settings saved",
+    "testSent": "Test message sent"
+  },
+  "storage": {
+    "title": "Snapshot storage",
+    "active": "Using {bucket}",
+    "localOnly": "Host-local only",
+    "fromEnv": "Set by environment",
+    "desc": "Snapshots are uploaded to Cloudflare R2, Backblaze B2 or S3 so they can be restored and forked on any host. Unconfigured, they stay on the host that took them.",
+    "provider": "Store in",
+    "pLocal": "On the host (default)",
+    "endpoint": "Endpoint",
+    "bucket": "Bucket",
+    "region": "Region",
+    "regionHint": "R2: auto. B2: taken from the endpoint.",
+    "prefix": "Prefix",
+    "accessKey": "Access key ID",
+    "secretKey": "Secret access key",
+    "secretStored": "Stored (encrypted). Leave empty to keep it.",
+    "localDesc": "Snapshots stay on the host that took them and can only be restored or forked there.",
+    "retentionNote": "Keeps {keep} snapshots per box and deletes them after {days} days (set in Reaper). Bucket copies are deleted too.",
+    "save": "Save",
+    "test": "Test connection",
+    "testOk": "Bucket works ({ms} ms)",
+    "saved": "Storage settings saved"
   }
 }

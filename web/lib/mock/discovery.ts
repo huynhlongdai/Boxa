@@ -158,19 +158,24 @@ export function a2aCard(root: string) {
   return {
     protocolVersion: "0.3.0",
     name: "Boxa",
-    description: "Provisions and operates sandboxed cloud boxes for other agents, within a budget.",
+    description: "Boxa rents cheap, disposable Linux sandboxes (boxes) to AI agents on low-cost VPS providers.",
     url: `${root}/a2a`,
-    version: "1.1.0",
+    preferredTransport: "JSONRPC",
+    additionalInterfaces: [
+      { url: `${root}/a2a`, transport: "JSONRPC" },
+      { url: `${root}/v1`, transport: "HTTP+JSON" },
+    ],
+    version: "0.1.0",
     defaultInputModes: ["application/json", "text/plain"],
     defaultOutputModes: ["application/json", "text/plain"],
-    capabilities: { streaming: true, pushNotifications: false },
-    securitySchemes: { bearer: { type: "http", scheme: "bearer" } },
+    capabilities: { streaming: true, pushNotifications: false, stateTransitionHistory: false },
+    securitySchemes: { bearer: { type: "http", scheme: "bearer", description: "Boxa API key" } },
     security: [{ bearer: [] }],
     skills: [
-      { id: "run-code", name: "Run code in a box", description: "Create a box, run commands, return output and files.", tags: ["exec", "sandbox"] },
-      { id: "quote", name: "Quote compute", description: "Price and placement for a spec without creating anything.", tags: ["cost"] },
-      { id: "snapshot", name: "Snapshot / fork", description: "Save, restore or fork box state.", tags: ["state"] },
+      { id: "exec", name: "Run a command in a box", description: "Text part = command, metadata.box_id = box. Runs as an async job; the task id is the job id.", tags: ["exec", "sandbox"] },
+      ...TOOLS.map((t) => ({ id: t.name, name: t.name, description: `${t.description} A2A: data part {"tool":"${t.name}","arguments":{…}}.`, tags: ["sandbox", t.name.replace("box_", "")] })),
     ],
+    "x-boxa": { a2a_methods: ["message/send", "message/stream", "tasks/get", "tasks/cancel", "tasks/resubscribe", "tasks/send", "tasks/sendSubscribe"] },
   };
 }
 
