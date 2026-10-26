@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -93,9 +95,10 @@ func tailBytes(buf []byte, n int, cutBefore bool, totalLines int) (string, bool,
 	if n <= 0 {
 		n = DefaultTailLines
 	}
-	s := strings.TrimRight(string(buf), "\n")
+	raw := strings.TrimRight(string(buf), "\n")
+	s, compacted := Compact(raw)
 	lines := strings.Split(s, "\n")
-	truncated := cutBefore
+	truncated := cutBefore || compacted
 	if len(lines) > n {
 		lines = lines[len(lines)-n:]
 		truncated = true
@@ -109,7 +112,7 @@ func tailBytes(buf []byte, n int, cutBefore bool, totalLines int) (string, bool,
 		truncated = true
 	}
 	if totalLines == 0 {
-		totalLines = len(strings.Split(s, "\n"))
+		totalLines = len(strings.Split(raw, "\n"))
 	}
 	return strings.ToValidUTF8(out, "\uFFFD"), truncated, totalLines
 }
@@ -130,4 +133,42 @@ func tokensSaved(totalBytes int64, returned int) int {
 		return 0
 	}
 	return int(d / 4)
+}
+
+var ansiRe = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07|\x1b[()][A-Z0-9]`)
+
+// Compact (v1.3 exec fast path) removes noise an agent never needs to read:
+// ANSI colour/cursor escapes, carriage-return progress redraws (only the
+// final state of each line is kept) and runs of ≥3 identical lines, which
+// become one line plus "[×N]". It reports whether anything was removed, so
+// tokens_saved grows and the full log is kept.
+func Compact(s string) (string, bool) {
+	orig := len(s)
+	if strings.IndexByte(s, 0x1b) >= 0 {
+		s = ansiRe.ReplaceAllString(s, "")
+	}
+	lines := strings.Split(s, "\n")
+	out := make([]string, 0, len(lines))
+	for _, l := range lines {
+		if strings.IndexByte(l, '\r') >= 0 {
+			parts := strings.Split(strings.TrimRight(l, "\r"), "\r")
+			l = parts[len(parts)-1]
+		}
+		out = append(out, l)
+	}
+	res := make([]string, 0, len(out))
+	for i := 0; i < len(out); {
+		j := i + 1
+		for j < len(out) && out[j] == out[i] {
+			j++
+		}
+		if n := j - i; n >= 3 {
+			res = append(res, out[i]+"  [×"+strconv.Itoa(n)+"]")
+		} else {
+			res = append(res, out[i:j]...)
+		}
+		i = j
+	}
+	s = strings.Join(res, "\n")
+	return s, len(s) < orig
 }

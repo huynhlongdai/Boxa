@@ -31,8 +31,10 @@ import (
 // Path mapping for the file API: "/work/x" or "x" → work/x, "/memory/x" → memory/x,
 // "/AGENTS.md" → AGENTS.md. Paths cannot escape the box dir.
 type LocalDriver struct {
-	Root string
-	mu   sync.Mutex
+	Root      string
+	mu        sync.Mutex
+	prevTicks map[string]float64 // v1.3 usage sampling
+	prevAt    time.Time
 }
 
 type localMeta struct {
@@ -75,6 +77,16 @@ func (d *LocalDriver) saveMeta(m *localMeta) error {
 }
 
 func (d *LocalDriver) Create(ctx context.Context, p proto.CreateParams) error {
+	// BOXD_LOCAL_CREATE_DELAY_MS simulates the cold-start cost of a real
+	// container launch (image unpack + boot + template setup) so warm-pool and
+	// clone benchmarks on a dev machine are meaningful. Default 0.
+	if ms, _ := strconv.Atoi(os.Getenv("BOXD_LOCAL_CREATE_DELAY_MS")); ms > 0 {
+		select {
+		case <-time.After(time.Duration(ms) * time.Millisecond):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 	dir := d.dir(p.BoxID)
 	for _, sub := range []string{"work", "memory"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
@@ -619,4 +631,133 @@ func (d *LocalDriver) Restore(ctx context.Context, p proto.RestoreParams) error 
 		os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte(p.Box.AgentsMD), 0o644)
 	}
 	return nil
+}
+
+// ---- v1.3 ----
+
+// Claim hands a warm box to its owner: AGENTS.md, env, spec.
+func (d *LocalDriver) Claim(ctx context.Context, realID string, p proto.ClaimParams) error {
+	m, err := d.meta(realID)
+	if err != nil {
+		return err
+	}
+	if m.Env == nil {
+		m.Env = map[string]string{}
+	}
+	for k, v := range p.Env {
+		m.Env[k] = v
+	}
+	if p.Spec.CPU > 0 {
+		m.CPU, m.RAMMB, m.DiskGB = p.Spec.CPU, p.Spec.RAMMB, p.Spec.DiskGB
+	}
+	m.Stopped = false
+	if err := d.saveMeta(m); err != nil {
+		return err
+	}
+	if p.AgentsMD != "" {
+		return os.WriteFile(filepath.Join(d.dir(realID), "AGENTS.md"), []byte(p.AgentsMD), 0o644)
+	}
+	return nil
+}
+
+// Clone copies the box directory (reflink when the filesystem supports it).
+func (d *LocalDriver) Clone(ctx context.Context, srcID, dstID string, p proto.CloneParams) (string, error) {
+	src, dst := d.dir(srcID), d.dir(dstID)
+	if _, err := d.meta(srcID); err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(dst); err == nil {
+		return "", boxErr("INVALID", "box already exists: "+dstID)
+	}
+	method, err := cpReflink(ctx, src, dst)
+	if err != nil {
+		return "", err
+	}
+	m, err := d.meta(dstID)
+	if err != nil {
+		return "", err
+	}
+	m.ID, m.Stopped = dstID, false
+	for k, v := range p.Env {
+		if m.Env == nil {
+			m.Env = map[string]string{}
+		}
+		m.Env[k] = v
+	}
+	if err := d.saveMeta(m); err != nil {
+		return "", err
+	}
+	if p.AgentsMD != "" {
+		os.WriteFile(filepath.Join(dst, "AGENTS.md"), []byte(p.AgentsMD), 0o644)
+	}
+	return method, nil
+}
+
+// Features: the local driver clones by (reflink) copy; no VMs.
+func (d *LocalDriver) Features(ctx context.Context) []string { return []string{"cow:copy"} }
+
+// Usage sums RSS and CPU time of each box's process groups (/proc).
+func (d *LocalDriver) Usage(ctx context.Context) map[string]proto.BoxUsage {
+	pidMu.Lock()
+	groups := map[int]string{}
+	for id, pids := range boxPIDs {
+		for pid := range pids {
+			groups[pid] = id // commands start with Setpgid, so pgid == leader pid
+		}
+	}
+	pidMu.Unlock()
+	if len(groups) == 0 {
+		return nil
+	}
+	ents, _ := os.ReadDir("/proc")
+	ticks := map[string]float64{}
+	ram := map[string]float64{}
+	page := float64(os.Getpagesize())
+	for _, e := range ents {
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil {
+			continue
+		}
+		b, err := os.ReadFile("/proc/" + e.Name() + "/stat")
+		if err != nil {
+			continue
+		}
+		s := string(b)
+		i := strings.LastIndexByte(s, ')')
+		if i < 0 {
+			continue
+		}
+		f := strings.Fields(s[i+1:])
+		if len(f) < 22 {
+			continue
+		}
+		pgid, _ := strconv.Atoi(f[2])
+		id, ok := groups[pgid]
+		if !ok {
+			continue
+		}
+		ut, _ := strconv.ParseFloat(f[11], 64)
+		st, _ := strconv.ParseFloat(f[12], 64)
+		rss, _ := strconv.ParseFloat(f[21], 64)
+		ticks[id] += ut + st
+		ram[id] += rss * page / (1 << 20)
+		_ = pid
+	}
+	now := time.Now()
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.prevTicks == nil {
+		d.prevTicks = map[string]float64{}
+	}
+	out := map[string]proto.BoxUsage{}
+	el := now.Sub(d.prevAt).Seconds()
+	for id := range ram {
+		u := proto.BoxUsage{RAMMB: float64(int(ram[id]*10)) / 10}
+		if prev, ok := d.prevTicks[id]; ok && el > 0 && ticks[id] >= prev {
+			u.CPUPct = float64(int((ticks[id]-prev)/100/el*1000)) / 10 // USER_HZ = 100
+		}
+		out[id] = u
+	}
+	d.prevTicks, d.prevAt = ticks, now
+	return out
 }

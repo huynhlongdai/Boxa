@@ -232,6 +232,9 @@ type CloudInitParams struct {
 	Provider       string
 	Region         string
 	BoxdURL        string // where to download the boxd binary
+	// v1.3
+	Mesh      bool   // install tailscale so boxd can join the headscale mesh
+	CacheHost string // BOXD_CACHE_HOST for shared apt/pip/npm/go caches ("" = off)
 }
 
 // RenderCloudInit renders the user-data for a new T1 host.

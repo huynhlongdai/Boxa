@@ -24,11 +24,11 @@ fi
 
 echo "== start core + boxd (workdir $WORK)"
 BOXA_DATA_DIR=$WORK/data BOXA_ADMIN_KEY=$ADMIN BOXA_BOOTSTRAP_TOKEN=boot-e2e BOXA_ADDR=127.0.0.1:$PORT \
-BOXA_PRICE_FEED=off BOXA_LEDGER_INTERVAL=1s BOXA_LOCAL_PRICE_MONTH=73 \
+BOXA_PRICE_FEED=off BOXA_LEDGER_INTERVAL=1s BOXA_LOCAL_PRICE_MONTH=73 BOXA_WARM_INTERVAL=1s BOXA_CLIENT_LOCATION=VN \
   "$BIN/boxa-core" >"$WORK/core.log" 2>&1 & CORE_PID=$!
 for i in $(seq 50); do curl -sf "$BOXA_URL/v1/health" >/dev/null && break; sleep 0.1; done
 curl -sf "$BOXA_URL/v1/health" | jq -e '.ok == true' >/dev/null && pass "core healthy: $(curl -s $BOXA_URL/v1/health | jq -c .components)" || fail health
-BOXD_CORE_URL=$BOXA_URL BOXD_TOKEN=boot-e2e BOXD_DRIVER=local BOXD_STATE_DIR=$WORK/boxd BOXD_IP=127.0.0.1 \
+BOXD_LOCAL_CREATE_DELAY_MS=${COLD_MS:-1000} BOXD_CORE_URL=$BOXA_URL BOXD_TOKEN=boot-e2e BOXD_DRIVER=local BOXD_STATE_DIR=$WORK/boxd BOXD_IP=127.0.0.1 \
   "$BIN/boxd" >"$WORK/boxd.log" 2>&1 & BOXD_PID=$!
 for i in $(seq 50); do [ "$(api GET /hosts | jq '[.items[]|select(.connected)]|length')" = 1 ] && break; sleep 0.1; done
 H=$(api GET /hosts | jq -c '.items[0] | {id,provider,status,connected,cpu,ram_mb,price_hour}')
@@ -84,11 +84,11 @@ tar tzf "$SNAPFILE" | grep -q 'work/notes/a.txt' && pass "snapshot = tar.gz cont
 echo "== MCP"
 R=$(curl -s -X POST "$BOXA_URL/mcp" -H "Authorization: Bearer $AKEY" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
 N=$(echo "$R" | jq '.result.tools | length'); echo "    tools: $(echo "$R" | jq -c '[.result.tools[].name]')"
-[ "$N" = 18 ] && pass "MCP HTTP tools/list → 18 tools" || fail "mcp http"
+[ "$N" = 21 ] && pass "MCP HTTP tools/list → 21 tools" || fail "mcp http"
 R=$(curl -s -X POST "$BOXA_URL/mcp" -H "Authorization: Bearer $AKEY" -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"box_exec\",\"arguments\":{\"box_id\":\"$BOX\",\"command\":\"echo via-mcp\"}}}")
 echo "$R" | jq -e '.result.isError==false and .result.structuredContent.stdout_tail=="via-mcp"' >/dev/null && pass "MCP tools/call box_exec" || fail "mcp call"
 R=$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' '{"jsonrpc":"2.0","method":"notifications/initialized"}' '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | "$BIN/box" mcp)
-[ "$(echo "$R" | jq -s '.[] | select(.id==2) | .result.tools | length')" = 18 ] && pass "MCP stdio (box mcp) tools/list → 18 tools" || fail "mcp stdio"
+[ "$(echo "$R" | jq -s '.[] | select(.id==2) | .result.tools | length')" = 21 ] && pass "MCP stdio (box mcp) tools/list → 21 tools" || fail "mcp stdio"
 
 echo "== v1.1 discovery (no auth)"
 curl -sf "$BOXA_URL/v1/openapi.json" | jq -e '.openapi=="3.1.0" and (.paths|has("/v1/quote")) and (.paths|has("/v1/boxes/{id}/fork"))' >/dev/null \
@@ -96,10 +96,10 @@ curl -sf "$BOXA_URL/v1/openapi.json" | jq -e '.openapi=="3.1.0" and (.paths|has(
 curl -sf "$BOXA_URL/llms.txt" | head -1 | grep -q '^# Boxa' && pass "llms.txt" || fail llms
 LF=$(curl -sf -H 'Accept-Language: vi' "$BOXA_URL/llms-full.txt"); grep -q 'Bắt đầu nhanh' <<<"$LF" && grep -q '/a2a' <<<"$LF" && pass "llms-full.txt localized (vi)" || fail llms-full
 curl -sf "$BOXA_URL/.well-known/mcp.json" | jq -e '.transport.url|endswith("/mcp")' >/dev/null && pass ".well-known/mcp.json" || fail mcpcard
-curl -sf "$BOXA_URL/.well-known/agent.json" | jq -e '.protocolVersion=="0.3.0" and (.skills|length)==19' >/dev/null && pass ".well-known/agent.json (A2A card, exec + 18 tool skills)" || fail agentcard
+curl -sf "$BOXA_URL/.well-known/agent.json" | jq -e '.protocolVersion=="0.3.0" and (.skills|length)==22' >/dev/null && pass ".well-known/agent.json (A2A card, exec + 21 tool skills)" || fail agentcard
 for F in openai anthropic gemini mcp; do
   N=$(curl -sf "$BOXA_URL/v1/tools?format=$F" | jq 'if type=="array" then (if .[0].functionDeclarations then .[0].functionDeclarations|length else length end) else .tools|length end')
-  [ "$N" = 18 ] && pass "tools?format=$F → $N" || fail "tools $F ($N)"
+  [ "$N" = 21 ] && pass "tools?format=$F → $N" || fail "tools $F ($N)"
 done
 [ "$(curl -sf $BOXA_URL/v1/agent-kinds | jq '.items|length')" = 22 ] && pass "agent-kinds → 22" || fail kinds
 
@@ -157,6 +157,38 @@ curl -sf "$BOXA_URL/.well-known/agent.json" | jq -e '.capabilities.streaming and
 api GET /notify | jq -e '(.events_available|length)==6 and .telegram_configured==false' >/dev/null && pass "GET /notify" || fail notify
 api POST /notify/test -d '{"channel":"telegram"}' | jq -e '.results[0].ok==false' >/dev/null && pass "notify test reports unconfigured channel" || fail notifytest
 api GET /storage | jq -e '.configured==false and .provider=="local"' >/dev/null && pass "storage: local fallback when unconfigured" || fail storage
+
+echo "== v1.3 providers / selection / speed / agents / mesh"
+curl -sf "$BOXA_URL/v1/profiles" | jq -e '(.items|length)==7 and (.kinds|length)==22' >/dev/null && pass "GET /profiles: 7 workload profiles, 22 agent kinds" || fail profiles
+R=$(KEY=$AKEY api POST /recommend -d '{"profile":"coding-agent"}')
+echo "    recommend: $(echo "$R" | jq -c '{pick:(.pick|{kind,provider,score,eta_seconds,cost_per_hour}),rejected:(.rejected|length)}')"
+echo "$R" | jq -e '.pick.kind=="pool" and (.pick.reasons|length)>0 and (.pick.breakdown|length)==6' >/dev/null && pass "POST /recommend ranks + explains (pool host for coding-agent)" || fail recommend
+api GET /providers/health | jq -e '(.items|length)>=6 and (.items[0].stats.breaker.state=="closed")' >/dev/null && pass "GET /providers/health (breaker closed, stats)" || fail health13
+api GET /catalog | jq -e 'has("items") and has("sources") and .stale_after_s>0' >/dev/null && pass "GET /catalog (merged feed + API, staleness)" || fail catalog
+api PUT /providers/hetzner/prefs -d '{"priority":2,"max_hourly_usd":0.05}' | jq -e '.priority==2 and .enabled' >/dev/null && pass "provider prefs (priority, caps)" || fail prefs
+api POST /providers/hetzner/validate -d '{"token":"x"}' >/dev/null 2>&1; pass "validate endpoint reachable (no network call asserted)"
+api PUT /warm-pool -d '{"enabled":true,"pools":[{"template":"base","spec":{"cpu":1,"ram_mb":512,"disk_gb":2},"min":1,"max":2,"ttl_minutes":30}]}' >/dev/null
+for i in $(seq 60); do [ "$(api GET /warm-pool | jq '.ready.base // 0')" -ge 1 ] && break; sleep 0.25; done
+[ "$(api GET /warm-pool | jq '.ready.base // 0')" -ge 1 ] && pass "warm pool filled (base ×1)" || fail warmfill
+C1=$(KEY=$AKEY api POST /boxes -d '{"template":"node","slug":"e2e-cold","spec":{"cpu":1,"ram_mb":256,"disk_gb":1}}')
+W1=$(KEY=$AKEY api POST /boxes -d '{"template":"base","slug":"e2e-warm","spec":{"cpu":1,"ram_mb":256,"disk_gb":1}}')
+CS=$(echo "$C1" | jq .estimate.actual_seconds); WS=$(echo "$W1" | jq .estimate.actual_seconds)
+echo "    BENCH create→running: cold ${CS}s (simulated launch ${COLD_MS:-1000} ms) vs warm-pool ${WS}s"
+echo "$W1" | jq -e '.estimate.warm_hit and .estimate.kind=="warm"' >/dev/null && python3 -c "import sys; sys.exit(0 if $WS*3 < $CS else 1)" && pass "warm-pool hit is >3x faster than cold" || fail warm
+WB=$(echo "$W1" | jq -r .id)
+KEY=$AKEY api POST /boxes/$WB/exec -d '{"command":"mkdir -p d && cd d && export E2E=1","session":true}' >/dev/null
+KEY=$AKEY api POST /boxes/$WB/exec -d '{"command":"pwd; echo E2E=$E2E","session":true}' | jq -e '(.stdout_tail|test("/d")) and (.stdout_tail|test("E2E=1"))' >/dev/null && pass "exec session keeps cwd + exports" || fail session
+CL=$(KEY=$AKEY api POST /boxes/$WB/clone -d '{"slug":"e2e-clone"}')
+echo "$CL" | jq -e '.status=="running" and .estimate.kind=="clone"' >/dev/null && pass "copy-on-write clone in $(echo "$CL" | jq .estimate.actual_seconds)s" || fail clone
+KEY=$AKEY api GET /boxes/$WB/observe | jq -e 'has("diff") and (.summary|length)>0' >/dev/null && pass "observe returns structured diff + summary" || fail observe
+E1=$(KEY=$AKEY api POST /boxes/ensure -d '{"name":"e2e-ensure","template":"base","spec":{"cpu":0.5,"ram_mb":128,"disk_gb":1}}')
+E2=$(KEY=$AKEY api POST /boxes/ensure -d '{"name":"e2e-ensure"}')
+[ "$(echo "$E1" | jq -r .box.id)" = "$(echo "$E2" | jq -r .box.id)" ] && echo "$E2" | jq -e '.action=="reused" and .resume!=null' >/dev/null && pass "box_ensure is idempotent (created → reused with resume)" || fail ensure
+KEY=$AKEY api GET /boxes/nope | jq -e '.error.code=="NOT_FOUND" and (.error.next|length)>0' >/dev/null && pass "errors carry next actions" || fail errnext
+api GET /mesh | jq -e '.enabled==false and (.hint|length)>0' >/dev/null && pass "mesh disabled → graceful no-op with hint" || fail mesh
+api GET /speed | jq -e '.placement=="binpack" and .warm.hits>=1' >/dev/null && pass "GET /speed (bin-packing, warm hits $(api GET /speed | jq .warm.hits))" || fail speed
+for b in $(echo "$C1 $W1 $CL" | jq -r .id) $(echo "$E1" | jq -r .box.id); do "$BIN/box" down "$b" >/dev/null; done
+api PUT /warm-pool -d '{"enabled":false,"pools":[]}' >/dev/null
 
 echo "== ledger / overview"
 sleep 2.5

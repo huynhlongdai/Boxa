@@ -81,6 +81,9 @@ func (m *Manager) RegisterHost(ctx context.Context, a any, hello proto.Hello) (p
 		host = h
 	}
 	w := proto.Welcome{HostID: host.ID}
+	if j := m.meshJoin(ctx, host); j != nil {
+		w.Mesh = &proto.MeshJoin{LoginServer: j.LoginServer, AuthKey: j.AuthKey, Hostname: j.Hostname, Tags: j.Tags}
+	}
 	if issue {
 		tok := "bxh_" + secret.RandHex(24)
 		host.TokenHash = secret.Hash(tok)
@@ -99,6 +102,7 @@ func (m *Manager) RegisterHost(ctx context.Context, a any, hello proto.Hello) (p
 		host.Region = "local"
 	}
 	host.Driver = hello.Driver
+	host.Arch, host.Features, host.MeshIP = hello.Arch, hello.Features, hello.MeshIP
 	wasDown := host.Status == "down"
 	if host.Status != "draining" {
 		host.Status = "ready"
@@ -147,6 +151,9 @@ func (m *Manager) HostMetrics(hostID string, mt proto.Metrics) {
 	}
 	now := time.Now().UTC()
 	h.CPUUsedPct, h.RAMUsedPct, h.DiskUsedPct = mt.CPUUsedPct, mt.RAMUsedPct, mt.DiskUsedPct
+	for id, u := range mt.Boxes {
+		m.RecordBoxUsage(id, u.CPUPct, u.RAMMB, now)
+	}
 	h.LastSeenAt = &now
 	h.Connected = true
 	m.Store.PutHost(ctx, h)
@@ -228,14 +235,18 @@ func (m *Manager) CreateHost(ctx context.Context, p *Principal, provID, sku, reg
 	}
 	ci, err := provider.RenderCloudInit(provider.CloudInitParams{
 		CoreURL: wsURL(m.Cfg.PublicURL), BootstrapToken: boot, Provider: provID, Region: region, BoxdURL: m.boxdURL(),
+		Mesh: m.meshEnabled(), CacheHost: m.Cfg.HostCacheIP,
 	})
 	if err != nil {
+		return nil, err
+	}
+	if err := m.capsAllow(ctx, provID, region, h.PriceHour, h.PriceMonth); err != nil {
 		return nil, err
 	}
 	if err := m.Store.PutHost(ctx, h); err != nil {
 		return nil, err
 	}
-	hd, err := prov.Create(ctx, token, provider.CreateRequest{Name: "boxa-" + h.ID[5:], SKU: sku, Region: region, CloudInit: ci, Labels: map[string]string{"boxa": "1", "boxa-host": h.ID[5:]}})
+	hd, err := m.guardedCreate(ctx, prov, token, provider.CreateRequest{Name: "boxa-" + h.ID[5:], SKU: sku, Region: region, CloudInit: ci, Labels: map[string]string{"boxa": "1", "boxa-host": h.ID[5:]}}, h.PriceMonth)
 	if err != nil {
 		h.Status = "down"
 		m.Store.PutHost(ctx, h)
@@ -358,6 +369,9 @@ func (m *Manager) waitHostReady(ctx context.Context, id string, timeout time.Dur
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		if m.Hub.Connected(id) {
+			if h, err := m.Store.GetHost(ctx, id); err == nil {
+				m.recordProvision(h, nil)
+			}
 			return nil
 		}
 		select {
@@ -367,5 +381,8 @@ func (m *Manager) waitHostReady(ctx context.Context, id string, timeout time.Dur
 		}
 	}
 	log.Printf("host %s did not connect within %s", id, timeout)
+	if h, err := m.Store.GetHost(ctx, id); err == nil {
+		m.recordProvision(h, fmt.Errorf("timeout: boxd did not connect in %s", timeout))
+	}
 	return model.EH(model.ErrProviderFailed, "The new host did not come online; retry or check the provider console.", "host %s did not connect in %s", id, timeout)
 }

@@ -80,20 +80,44 @@ func specProps(withIdem bool) map[string]any {
 	if withIdem {
 		p["idempotency_key"] = str("Same key returns the same box instead of creating a new one")
 	}
+	for k, v := range needsProps() {
+		p[k] = v
+	}
 	return p
+}
+
+// needsProps are the v1.3 need-based selection fields (profile + requirements).
+func needsProps() map[string]any {
+	return map[string]any{
+		"profile":        enum("Workload profile; picks template, size, lifecycle and placement for you. Use instead of guessing a spec.", "general", "coding-agent", "browser-automation", "build", "data", "long-running-service", "sandbox-untrusted"),
+		"max_price_hour": num("Hard cap on price per hour in USD (options above it are rejected)"),
+		"location":       str("Where you (the agent) run, for latency: region id (sin, fra1), ISO country (VN, US) or \"lat,lon\""),
+		"max_latency_ms": num("Reject placements estimated slower than this round-trip time"),
+		"optimize":       enum("What to favour when ranking options (default balanced)", "balanced", "cost", "speed", "reliability", "latency"),
+		"isolation":      enum("container (default, fastest) | vm (own kernel, for untrusted code) | sandbox (T2 sandbox API)", "any", "container", "vm", "sandbox"),
+		"arch":           enum("CPU architecture", "any", "amd64", "arm64"),
+		"lifetime":       enum("ephemeral = thrown away after the job; persistent = kept and slept when idle", "ephemeral", "persistent"),
+		"duration_hours": num("Expected run time, used for the cost estimate"),
+	}
 }
 
 // Tools is the tool list (contract v1 12 tools + v1.1 additions).
 var Tools = []Tool{
+	{Name: "box_ensure", Title: "Get or create a box by name", REST: "POST /v1/boxes/ensure", Annotations: idem(),
+		Description: "START HERE. Returns your live box with this name (waking it if asleep, with a resume summary of recent commands, running jobs and changed files) or creates it. Safe to call at the start of every session: the same name never creates a second box. Pass profile (e.g. coding-agent) instead of guessing cpu/ram.",
+		InputSchema: obj(withName(specProps(false)), "name")},
+	{Name: "box_recommend", Title: "Recommend where to run", REST: "POST /v1/recommend", Annotations: ro(),
+		Description: "Rank every way to satisfy your needs (warm pre-started container, container on a pool host, Incus VM, new provider server) with price, ETA in seconds, a 0-100 score and plain-language reasons, plus rejected options and why. Creates nothing. Use when unsure which profile/size to pick or when box_up returned NO_CAPACITY.",
+		InputSchema: obj(recommendProps())},
 	{Name: "box_up", Title: "Create a box", REST: "POST /v1/boxes", Annotations: rw(),
-		Description: "Create (or reuse via idempotency_key) a Linux sandbox box and wait until it is running. Returns the Box (id, status, url, cost_per_hour) plus next hints. Call box_quote first to see the price.",
+		Description: "Create a Linux sandbox box and wait until it is running (warm-pool hits start in about a second). Prefer box_ensure for long-lived work. Pass profile and optional limits (max_price_hour, location, isolation) and Boxa auto-picks template, size and placement; or pass template + cpu/ram_mb explicitly. The response includes estimate {kind, cost_per_hour, expected_total_usd, eta_seconds, actual_seconds, warm_hit} and next hints.",
 		InputSchema: obj(specProps(true))},
 	{Name: "box_quote", Title: "Price a box (dry run)", REST: "POST /v1/quote", Annotations: ro(),
 		Description: "Dry-run placement for a spec: where the box would run, cost_per_hour, expected_total_usd for its lifecycle, alternatives, and whether it fits the budget. Creates nothing.",
 		InputSchema: obj(specProps(false))},
 	{Name: "box_exec", Title: "Run a command", REST: "POST /v1/boxes/{id}/exec", Annotations: rw(),
 		Description: "Run a bash command in the box (cwd /work). Returns exit_code, the last tail_lines (default 60) of stdout/stderr, truncated, log_id for the full output, files_changed, tokens_saved and next hints. async=true returns job_id (poll with box_job). Sleeping boxes wake automatically.",
-		InputSchema: obj(map[string]any{"box_id": boxID, "command": str("bash command"), "cwd": str("working directory (default /work)"), "timeout_s": intg("timeout in seconds (default 300, max 3600 sync)"), "async": boolean("run in background, returns job_id"), "tail_lines": intg("lines of output to return (default 60)")}, "box_id", "command")},
+		InputSchema: obj(map[string]any{"box_id": boxID, "command": str("bash command"), "cwd": str("working directory (default /work)"), "timeout_s": intg("timeout in seconds (default 300, max 3600 sync)"), "async": boolean("run in background, returns job_id"), "tail_lines": intg("lines of output to return (default 60)"), "session": boolean("keep cwd and exported variables between calls, like one persistent shell")}, "box_id", "command")},
 	{Name: "box_exec_batch", Title: "Run several commands", REST: "POST /v1/boxes/{id}/exec-batch", Annotations: rw(),
 		Description: "Run up to 50 commands sequentially in one round-trip. stop_on_error (default true) stops at the first non-zero exit. Returns per-command results, ok, stopped_at, total tokens_saved.",
 		InputSchema: obj(map[string]any{"box_id": boxID, "commands": arr("bash commands, run in order", "string"), "stop_on_error": boolean("stop at the first failing command (default true)"), "cwd": str("working directory for all commands"), "timeout_s": intg("timeout per command in seconds"), "tail_lines": intg("lines of output per command")}, "box_id", "commands")},
@@ -113,7 +137,7 @@ var Tools = []Tool{
 		Description: "Regex search (extended regexp) under a path in the box; returns path, line, text (max 500 matches).",
 		InputSchema: obj(map[string]any{"box_id": boxID, "pattern": str("regular expression"), "path": str("directory or file (default /work)")}, "box_id", "pattern")},
 	{Name: "box_observe", Title: "Observe changes", REST: "GET /v1/boxes/{id}/observe", Annotations: ro(),
-		Description: "What changed since your last observe call: files changed, running processes, listening ports.",
+		Description: "What changed since your last observe call: files changed, processes started/exited, ports opened/closed (structured diff) and a one-line summary. Cheaper than ls/ps/netstat round-trips.",
 		InputSchema: obj(map[string]any{"box_id": boxID}, "box_id")},
 	{Name: "box_snapshot", Title: "Snapshot box", REST: "POST /v1/boxes/{id}/snapshot", Annotations: rw(),
 		Description: "Snapshot the box filesystem (/work and /memory; keeps the latest few). Use before risky changes; undo with box_restore or branch with box_fork.",
@@ -121,6 +145,9 @@ var Tools = []Tool{
 	{Name: "box_restore", Title: "Restore snapshot", REST: "POST /v1/boxes/{id}/restore", Annotations: dest(),
 		Description: "Replace the box's files with a snapshot (latest when snapshot_id is omitted). Changes since the snapshot are lost.",
 		InputSchema: obj(map[string]any{"box_id": boxID, "snapshot_id": str("snapshot id (default: latest of this box)")}, "box_id")},
+	{Name: "box_clone", Title: "Clone box (copy-on-write)", REST: "POST /v1/boxes/{id}/clone", Annotations: rw(),
+		Description: "Near-instant copy of a live box on the same host (copy-on-write on zfs/btrfs, reflink/copy otherwise): files, installed packages and all. Use it to try two approaches in parallel without re-running setup. Faster than box_fork, which goes through a snapshot.",
+		InputSchema: obj(map[string]any{"box_id": boxID, "slug": str("name for the new box")}, "box_id")},
 	{Name: "box_fork", Title: "Fork box", REST: "POST /v1/boxes/{id}/fork", Annotations: rw(),
 		Description: "Create a new box from a snapshot of this box (latest; a fresh snapshot is taken if none exists). Use it to try alternatives in parallel.",
 		InputSchema: obj(map[string]any{"box_id": boxID, "snapshot_id": str("snapshot id (default: latest)"), "slug": str("name for the new box")}, "box_id")},
@@ -241,4 +268,20 @@ func HasTool(name string) bool {
 		}
 	}
 	return false
+}
+
+func withName(p map[string]any) map[string]any {
+	p["name"] = str("Stable name for this box (lowercase, digits, '-'), e.g. \"repo-main\"; the idempotency key")
+	return p
+}
+
+func recommendProps() map[string]any {
+	p := needsProps()
+	p["cpu"] = num("vCPUs needed (default from profile)")
+	p["ram_mb"] = intg("RAM in MB needed (default from profile)")
+	p["disk_gb"] = intg("Disk in GB needed (default from profile)")
+	p["region"] = str("Pin a region")
+	p["template"] = str("Template override (default from profile)")
+	p["lifecycle"] = enum("Lifecycle override (default from profile)", "task", "session", "service")
+	return p
 }

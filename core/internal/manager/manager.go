@@ -20,6 +20,8 @@ import (
 	"boxa/core/internal/model"
 	"boxa/core/internal/objstore"
 	"boxa/core/internal/pricefeed"
+	"boxa/core/internal/proto"
+	"boxa/core/internal/provhealth"
 	"boxa/core/internal/provider"
 	"boxa/core/internal/secret"
 	"boxa/core/internal/store"
@@ -50,6 +52,14 @@ type Config struct {
 	ProviderChain      []string         // burst fallback order (default hetzner, vultr, digitalocean, contabo, netcup)
 	ObjectStore        *objstore.Config // snapshot storage from env (nil = settings/local)
 	TelegramAPI        string           // override https://api.telegram.org (tests)
+	// v1.3
+	HealthInterval    time.Duration // provider health probes (default 60s)
+	CatalogStaleAfter time.Duration // offers older than this are flagged stale (default 24h)
+	WarmInterval      time.Duration // warm pool refill loop (default 10s)
+	Placement         string        // binpack (default) | spread
+	ClientLocation    string        // default agent location for latency estimates (region id, ISO country, lat,lon)
+	Mesh              MeshConfig    // optional headscale mesh
+	HostCacheIP       string        // BOXD_CACHE_HOST written into new hosts' cloud-init (deploy/caches.sh on each host)
 }
 
 func (c *Config) defaults() {
@@ -73,6 +83,18 @@ func (c *Config) defaults() {
 	}
 	if c.CreateWait == 0 {
 		c.CreateWait = 120 * time.Second
+	}
+	if c.HealthInterval == 0 {
+		c.HealthInterval = time.Minute
+	}
+	if c.CatalogStaleAfter == 0 {
+		c.CatalogStaleAfter = 24 * time.Hour
+	}
+	if c.WarmInterval == 0 {
+		c.WarmInterval = 10 * time.Second
+	}
+	if c.Placement == "" {
+		c.Placement = "binpack"
 	}
 	c.PublicURL = strings.TrimRight(c.PublicURL, "/")
 	if c.URLKey == "" {
@@ -111,6 +133,17 @@ type Manager struct {
 	objHTTP       *http.Client // object storage client (tests inject the fake's client)
 	jobCancel     sync.Map     // job id → context.CancelFunc (A2A tasks/cancel)
 	notif         notifier
+	// v1.3
+	Health  *provhealth.Tracker
+	catMu   sync.Mutex
+	catalog *Catalog
+	catVer  int
+	warm    warmState
+	usage   usageState
+	obsMu   sync.Mutex
+	lastObs map[string]*proto.ObserveResult
+	etaMu   sync.Mutex
+	etas    map[string][]float64 // "<host>|<template>" → recent cold create seconds
 }
 
 // SetObjectStoreHTTP overrides the HTTP client used for object storage (tests).
@@ -121,8 +154,10 @@ func New(st store.Store, reg *provider.Registry, crypt *secret.Box, cfg Config) 
 	m := &Manager{
 		Store: st, Providers: reg, Crypt: crypt, Broker: events.NewBroker(), Cfg: cfg,
 		sysjobs: map[string]*SysJob{}, rate: map[string]*bucket{}, startedAt: time.Now(),
-		Feed: &pricefeed.Fetcher{BaseURL: cfg.PriceFeedURL, Allowlist: cfg.PriceFeedAllowlist},
-		ctx:  context.Background(),
+		Feed:    &pricefeed.Fetcher{BaseURL: cfg.PriceFeedURL, Allowlist: cfg.PriceFeedAllowlist},
+		ctx:     context.Background(),
+		Health:  provhealth.New(24*time.Hour, provhealth.BreakerConfig{}),
+		lastObs: map[string]*proto.ObserveResult{}, etas: map[string][]float64{},
 	}
 	m.Hub = hostlink.NewHub(m)
 	return m
@@ -172,6 +207,7 @@ func (m *Manager) Init(ctx context.Context, envAdminKey string) (string, error) 
 			m.Store.PutHost(ctx, h)
 		}
 	}
+	m.initV13(ctx)
 	return m.bootstrapAdmin(ctx, envAdminKey)
 }
 
@@ -181,6 +217,8 @@ func (m *Manager) Start(ctx context.Context) {
 	go m.loop(ctx, "reaper", m.Cfg.ReaperInterval, m.reap)
 	go m.loop(ctx, "ledger", m.Cfg.LedgerInterval, m.ledgerTick)
 	go m.loop(ctx, "notify", time.Minute, m.notifyTick)
+	go m.loop(ctx, "provider_health", m.Cfg.HealthInterval, m.healthTick)
+	go m.loop(ctx, "warm_pool", m.Cfg.WarmInterval, m.warmTick)
 	if !m.Cfg.DisablePriceFeed {
 		go m.loop(ctx, "price_feed", m.Cfg.PriceFeedInterval, m.refreshPrices)
 	} else {
@@ -237,7 +275,7 @@ func (m *Manager) SysJobs() []SysJob {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var out []SysJob
-	for _, n := range []string{"reaper", "ledger", "price_feed", "notify"} {
+	for _, n := range []string{"reaper", "ledger", "price_feed", "notify", "provider_health", "warm_pool"} {
 		if j, ok := m.sysjobs[n]; ok {
 			out = append(out, *j)
 		}

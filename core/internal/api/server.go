@@ -72,6 +72,7 @@ func (s *Server) routes() http.Handler {
 		r.Get("/openapi.json", s.openapi)
 		r.Get("/tools", s.tools)
 		r.Get("/agent-kinds", s.agentKinds)
+		r.Get("/profiles", s.profiles)
 		r.Get("/errors", s.errorCatalog)
 		r.Get("/internal/tls-ask", s.tlsAsk)       // Caddy on_demand_tls (bind core to localhost in production)
 		r.Get("/hosts/connect", s.M.Hub.ServeHTTP) // boxd dial-out (own token auth)
@@ -95,6 +96,7 @@ func (s *Server) routes() http.Handler {
 			r.Post("/boxes/{id}/fork", s.fork)
 			r.Get("/boxes/{id}/yaml", s.boxYAML)
 			r.Post("/quote", s.quote)
+			s.routesV13(r)
 			r.Get("/boxes/{id}/files", s.readFile)
 			r.Put("/boxes/{id}/files", s.writeFile)
 			r.Post("/boxes/{id}/grep", s.grep)
@@ -300,6 +302,9 @@ func localizeErr(r *http.Request, ae *model.APIError) *model.APIError {
 		if n := model.DefaultRetryAfter(ae.Code); n > 0 {
 			out.RetryAfterS = &n
 		}
+	}
+	if len(out.Next) == 0 {
+		out.Next = nextForError(ae.Code)
 	}
 	if out.DocsURL == "" && r != nil {
 		out.DocsURL = baseURL(r) + "/v1/errors#" + ae.Code

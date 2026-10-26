@@ -12,6 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"boxa/core/internal/egress"
+	"boxa/core/internal/model"
 )
 
 // Request is the normalized create-box request (same shape as POST /boxes body).
@@ -32,6 +33,12 @@ type Request struct {
 	Wait        *bool    `json:"wait,omitempty"`
 	// Egress restricts outbound traffic (enforced by the incus driver).
 	Egress *egress.Policy `json:"egress,omitempty"`
+	// v1.3: need-based selection. Profile = workload profile id; Requirements
+	// = declarative needs. Either one makes core auto-pick template, size and
+	// placement (warm pool / pool container / VM / burst) by score.
+	Profile      string              `json:"profile,omitempty"`
+	Requirements *model.Requirements `json:"requirements,omitempty"`
+	Name         string              `json:"name,omitempty"` // box_ensure key
 }
 
 type Spec struct {
@@ -66,6 +73,7 @@ var knownKeys = map[string]bool{
 	"name": true, "template": true, "spec": true, "lifecycle": true, "idle_minutes": true,
 	"ttl": true, "ttl_seconds": true, "budget_usd": true, "ports": true, "secrets": true,
 	"setup": true, "region": true, "description": true, "egress": true,
+	"profile": true, "requirements": true,
 }
 
 // ParseSize parses "4G", "512M", "4GB", "4096" (MB for ram) into MB.
@@ -146,6 +154,15 @@ func Parse(src string) (*Request, Errors) {
 			}
 			r.Slug = v.Value
 		case "description":
+		case "profile":
+			r.Profile = v.Value
+		case "requirements":
+			var rq model.Requirements
+			if v.Kind != yaml.MappingNode || v.Decode(&rq) != nil {
+				add(v, "requirements must be a mapping like { cpu: 2, ram_mb: 4096, max_price_hour: 0.05 }")
+				continue
+			}
+			r.Requirements = &rq
 		case "template":
 			if !tmplRe.MatchString(v.Value) {
 				add(v, "invalid template name %q", v.Value)
@@ -297,8 +314,11 @@ func Parse(src string) (*Request, Errors) {
 			}
 		}
 	}
-	if r.Template == "" {
+	if r.Template == "" && r.Profile == "" && r.Requirements == nil {
 		errs = append(errs, LineError{Line: root.Line, Message: "template is required (base, python, node, python-browser or a custom template)"})
+	}
+	if (r.Profile != "" || r.Requirements != nil) && !seen["lifecycle"] {
+		r.Lifecycle = "" // let the profile decide
 	}
 	if len(errs) > 0 {
 		sort.SliceStable(errs, func(i, j int) bool { return errs[i].Line < errs[j].Line })

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"boxa/core/internal/model"
+	"boxa/core/internal/provhealth"
 )
 
 func (m *Manager) ListProviders(ctx context.Context) ([]*model.Provider, error) {
@@ -88,6 +89,7 @@ func (m *Manager) SetProviderToken(ctx context.Context, p *Principal, id, token 
 	if err := m.Store.PutProvider(ctx, mp); err != nil {
 		return nil, err
 	}
+	m.Health.Reset(id)
 	m.Emit(ctx, p.Actor(), "", "", "provider.connected", id+" token validated", nil)
 	go func() {
 		c, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -107,7 +109,10 @@ func (m *Manager) refreshLiveOffers(ctx context.Context, id string) error {
 	if err != nil {
 		return nil // not connected: nothing to do
 	}
+	start := time.Now()
 	offers, err := prov.Offers(ctx, tok)
+	m.Health.Record(id, provhealth.Sample{Kind: provhealth.KindAPI, LatencyMS: float64(time.Since(start).Microseconds()) / 1000}, err, 0)
+	defer m.invalidateCatalog() // after the offers are stored
 	mp, _ := m.Store.GetProvider(ctx, id)
 	now := time.Now().UTC()
 	if mp != nil {
@@ -131,6 +136,7 @@ func (m *Manager) refreshLiveOffers(ctx context.Context, id string) error {
 // refreshPrices is the price-feed job: battleships + live provider APIs.
 func (m *Manager) refreshPrices(ctx context.Context) error {
 	var errs []string
+	defer m.invalidateCatalog()
 	results, err := m.Feed.Fetch(ctx)
 	if err != nil {
 		errs = append(errs, err.Error())

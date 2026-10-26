@@ -44,7 +44,34 @@ const (
 	MRestore    = "box.restore"     // v1.1: restore a snapshot into the same box, or fork it into a new one
 	MEgress     = "box.egress"      // v1.2: apply (or clear) the box egress allowlist
 	MExecCancel = "box.exec_cancel" // v1.2: kill a running async job (A2A tasks/cancel)
+	MClone      = "box.clone"       // v1.3: copy-on-write clone of a live box into a new box
+	MClaim      = "box.claim"       // v1.3: hand a warm-pool box to its owner (AGENTS.md, env, agent memory)
 )
+
+// CloneParams clones SourceID into a new box (copy-on-write when the storage supports it).
+type CloneParams struct {
+	SourceID string            `json:"source_id"`
+	BoxID    string            `json:"box_id"`
+	AgentID  string            `json:"agent_id"`
+	AgentsMD string            `json:"agents_md"`
+	Env      map[string]string `json:"env"`
+}
+
+// CloneResult reports which mechanism produced the clone.
+type CloneResult struct {
+	Method     string `json:"method"` // incus-zfs | incus-btrfs | incus-copy | reflink | copy
+	DurationMS int64  `json:"duration_ms"`
+}
+
+// ClaimParams re-targets a pre-started warm box to its new owner.
+type ClaimParams struct {
+	WarmID   string            `json:"warm_id"` // the pre-started container
+	BoxID    string            `json:"box_id"`  // the owner's box id (becomes an alias of warm_id on the host)
+	Spec     model.Spec        `json:"spec"`
+	AgentID  string            `json:"agent_id"`
+	AgentsMD string            `json:"agents_md"`
+	Env      map[string]string `json:"env"`
+}
 
 // EgressParams applies an egress policy to a box (inactive policy = clear).
 type EgressParams struct {
@@ -92,11 +119,25 @@ type Hello struct {
 	RAMMB    int      `json:"ram_mb"`
 	DiskGB   int      `json:"disk_gb"`
 	Boxes    []string `json:"boxes"`
+	// v1.3
+	Arch     string   `json:"arch,omitempty"`
+	Features []string `json:"features,omitempty"`
+	MeshIP   string   `json:"mesh_ip,omitempty"`
 }
 
 type Welcome struct {
 	HostID    string `json:"host_id"`
 	HostToken string `json:"host_token,omitempty"`
+	// v1.3: join the headscale mesh (only when enabled on core).
+	Mesh *MeshJoin `json:"mesh,omitempty"`
+}
+
+// MeshJoin tells boxd how to join the tailnet with tailscale.
+type MeshJoin struct {
+	LoginServer string   `json:"login_server"`
+	AuthKey     string   `json:"auth_key"`
+	Hostname    string   `json:"hostname"`
+	Tags        []string `json:"tags"`
 }
 
 type Metrics struct {
@@ -105,6 +146,14 @@ type Metrics struct {
 	DiskUsedPct float64            `json:"disk_used_pct"`
 	BoxCount    int                `json:"box_count"`
 	BoxCPU      map[string]float64 `json:"box_cpu,omitempty"`
+	// v1.3: per-box usage for right-sizing (cpu_pct of one vCPU, ram_mb).
+	Boxes map[string]BoxUsage `json:"boxes,omitempty"`
+}
+
+// BoxUsage is one box's resource usage sample.
+type BoxUsage struct {
+	CPUPct float64 `json:"cpu_pct"`
+	RAMMB  float64 `json:"ram_mb"`
 }
 
 type CreateParams struct {
@@ -116,6 +165,8 @@ type CreateParams struct {
 	Setup    []string          `json:"setup"`
 	AgentsMD string            `json:"agents_md"`
 	AgentID  string            `json:"agent_id"`
+	// v1.3
+	Isolation string `json:"isolation,omitempty"` // container (default) | vm
 }
 
 type BoxRef struct {

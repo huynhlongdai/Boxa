@@ -33,9 +33,11 @@ type APIError struct {
 	Hint        string `json:"hint"`
 	RetryAfterS *int   `json:"retry_after_s,omitempty"`
 	DocsURL     string `json:"docs_url,omitempty"`
-	Status      int    `json:"-"`
-	format      string
-	args        []any
+	// Next (v1.3) lists suggested next tool calls that usually resolve the error.
+	Next   []string `json:"next,omitempty"`
+	Status int      `json:"-"`
+	format string
+	args   []any
 }
 
 // Format returns the English message format (i18n key) and its args.

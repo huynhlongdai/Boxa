@@ -116,6 +116,30 @@ func callTool(ctx context.Context, c Caller, name string, a args) (int, []byte, 
 		return c.Do(ctx, "POST", "/boxes", body)
 	case "box_quote":
 		return c.Do(ctx, "POST", "/quote", specBody(a))
+	case "box_ensure":
+		if err := need("name"); err != nil {
+			return 0, nil, err
+		}
+		body := specBody(a)
+		body["name"] = a.s("name")
+		return c.Do(ctx, "POST", "/boxes/ensure", body)
+	case "box_recommend":
+		body := map[string]any{"requirements": needsBody(a, true)}
+		for _, k := range []string{"profile", "template", "lifecycle"} {
+			if a.s(k) != "" {
+				body[k] = a.s(k)
+			}
+		}
+		return c.Do(ctx, "POST", "/recommend", body)
+	case "box_clone":
+		if err := need("box_id"); err != nil {
+			return 0, nil, err
+		}
+		body := map[string]any{}
+		if a.s("slug") != "" {
+			body["slug"] = a.s("slug")
+		}
+		return c.Do(ctx, "POST", "/boxes/"+esc(a.s("box_id"))+"/clone", body)
 	case "box_exec_batch":
 		if err := need("box_id"); err != nil {
 			return 0, nil, err
@@ -186,6 +210,9 @@ func callTool(ctx context.Context, c Caller, name string, a args) (int, []byte, 
 			body["tail_lines"] = int(a.num("tail_lines"))
 		}
 		body["async"] = a.b("async")
+		if a.b("session") {
+			body["session"] = true
+		}
 		return c.Do(ctx, "POST", "/boxes/"+esc(a.s("box_id"))+"/exec", body)
 	case "box_job":
 		if err := need("job_id"); err != nil {
@@ -308,6 +335,12 @@ func specBody(a args) map[string]any {
 		if a.has(k) {
 			body[k] = a[k]
 		}
+	}
+	if a.s("profile") != "" {
+		body["profile"] = a.s("profile")
+	}
+	if rq := needsBody(a, false); len(rq) > 0 {
+		body["requirements"] = rq
 	}
 	if a.has("egress_allow") || a.has("egress_deny_by_default") {
 		eg := map[string]any{"allow": []any{}}
@@ -591,4 +624,33 @@ func (s *Server) ServeStdio(ctx context.Context, c Caller, in io.Reader, out io.
 	}
 	wg.Wait()
 	return sc.Err()
+}
+
+// needsBody collects requirement fields (withSpec adds cpu/ram/disk/region).
+func needsBody(a args, withSpec bool) map[string]any {
+	rq := map[string]any{}
+	for _, k := range []string{"location", "optimize", "isolation", "arch", "lifetime"} {
+		if a.s(k) != "" {
+			rq[k] = a.s(k)
+		}
+	}
+	for _, k := range []string{"max_price_hour", "max_latency_ms", "duration_hours"} {
+		if a.has(k) {
+			rq[k] = a.num(k)
+		}
+	}
+	if withSpec {
+		if a.has("cpu") {
+			rq["cpu"] = a.num("cpu")
+		}
+		for _, k := range []string{"ram_mb", "disk_gb"} {
+			if a.has(k) {
+				rq[k] = int(a.num(k))
+			}
+		}
+		if a.s("region") != "" {
+			rq["region"] = a.s("region")
+		}
+	}
+	return rq
 }

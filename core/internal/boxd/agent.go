@@ -55,6 +55,8 @@ type Agent struct {
 	observe map[string]time.Time
 	cpuPrev [2]uint64
 	jobs    sync.Map // job id → context.CancelFunc
+	aliases *aliasTable
+	meshIP  string
 }
 
 type ptySession struct {
@@ -70,7 +72,7 @@ func NewAgent(cfg Config, drv Driver) (*Agent, error) {
 	if err := os.MkdirAll(logs, 0o755); err != nil {
 		return nil, err
 	}
-	return &Agent{cfg: cfg, drv: drv, logsDir: logs, ptys: map[string]*ptySession{}, observe: map[string]time.Time{}}, nil
+	return &Agent{cfg: cfg, drv: drv, logsDir: logs, ptys: map[string]*ptySession{}, observe: map[string]time.Time{}, aliases: loadAliases(cfg.StateDir)}, nil
 }
 
 func (a *Agent) statePath() string { return filepath.Join(a.cfg.StateDir, "host.json") }
@@ -143,13 +145,14 @@ func (a *Agent) connectOnce(ctx context.Context) error {
 		return err
 	}
 	p := hostlink.NewPeer(ws)
-	boxes, _ := a.drv.List(ctx)
+	boxes, _ := a.listBoxes(ctx)
 	host, _ := os.Hostname()
 	cpu, ram, disk := hostCapacity(a.cfg.StateDir)
 	hb, _ := json.Marshal(proto.Hello{
 		HostID: st.HostID, Hostname: host, Driver: a.drv.Name(), Version: a.cfg.Version,
 		Provider: a.cfg.Provider, Region: a.cfg.Region, IP: a.cfg.IP,
 		CPU: cpu, RAMMB: ram, DiskGB: disk, Boxes: boxes,
+		Arch: hostArch(), Features: a.hostFeatures(ctx), MeshIP: a.meshIP,
 	})
 	if err := p.Send(proto.Frame{Type: proto.THello, Params: hb}); err != nil {
 		p.Close()
@@ -168,6 +171,9 @@ func (a *Agent) connectOnce(ctx context.Context) error {
 	}
 	var w proto.Welcome
 	json.Unmarshal(wf.Result, &w)
+	if w.Mesh != nil {
+		go a.joinMesh(ctx, *w.Mesh)
+	}
 	if w.HostToken != "" || w.HostID != st.HostID {
 		if w.HostToken != "" {
 			st.HostToken = w.HostToken
@@ -245,13 +251,38 @@ func decode[T any](f proto.Frame) (T, error) {
 }
 
 func (a *Agent) handle(ctx context.Context, f proto.Frame) (any, error) {
+	if f.Method != proto.MClaim && f.Method != proto.MCreate {
+		f.Params = a.rewriteIDs(f.Params)
+	}
 	switch f.Method {
 	case proto.MCreate:
 		p, err := decode[proto.CreateParams](f)
 		if err != nil {
 			return nil, err
 		}
+		if ce := CacheEnv(CacheHost()); ce != nil {
+			if p.Env == nil {
+				p.Env = map[string]string{}
+			}
+			for k, v := range ce {
+				if _, set := p.Env[k]; !set {
+					p.Env[k] = v
+				}
+			}
+		}
 		return nil, a.drv.Create(ctx, p)
+	case proto.MClaim:
+		p, err := decode[proto.ClaimParams](f)
+		if err != nil {
+			return nil, err
+		}
+		return a.claim(ctx, p)
+	case proto.MClone:
+		p, err := decode[proto.CloneParams](f)
+		if err != nil {
+			return nil, err
+		}
+		return a.clone(ctx, p)
 	case proto.MStart, proto.MStop, proto.MDelete:
 		p, err := decode[proto.BoxRef](f)
 		if err != nil {
@@ -263,10 +294,14 @@ func (a *Agent) handle(ctx context.Context, f proto.Frame) (any, error) {
 		case proto.MStop:
 			return nil, a.drv.Stop(ctx, p.BoxID)
 		default:
-			return nil, a.drv.Delete(ctx, p.BoxID)
+			err := a.drv.Delete(ctx, p.BoxID)
+			if err == nil {
+				a.aliases.drop(a.aliases.public(p.BoxID))
+			}
+			return nil, err
 		}
 	case proto.MList:
-		ids, err := a.drv.List(ctx)
+		ids, err := a.listBoxes(ctx)
 		return proto.ListResult{Boxes: ids}, err
 	case proto.MExec:
 		p, err := decode[proto.ExecParams](f)

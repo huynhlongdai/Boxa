@@ -47,6 +47,11 @@ type Placement struct {
 	CostPerHour float64
 	Billing     string
 	Reason      string
+	// v1.3
+	Kind      string  // warm | pool | vm | burst
+	ETA       float64 // estimated seconds to running
+	Score     float64 // selector score (smart placement)
+	Isolation string  // vm when an Incus VM was chosen
 }
 
 func expectedHours(b *model.Box) float64 {
@@ -102,6 +107,16 @@ func (m *Manager) candidates(ctx context.Context, b *model.Box, agent *model.Age
 		a.ram += x.Spec.RAMMB
 		a.disk += x.Spec.DiskGB
 	}
+	for hid, w := range m.warmAlloc() { // warm-pool containers occupy capacity too
+		a := used[hid]
+		if a == nil {
+			a = &alloc{}
+			used[hid] = a
+		}
+		a.cpu += w.CPU
+		a.ram += w.RAMMB
+		a.disk += w.DiskGB
+	}
 	hours := expectedHours(b)
 	for _, h := range hosts {
 		if exclude[h.ID] {
@@ -127,7 +142,7 @@ func (m *Manager) candidates(ctx context.Context, b *model.Box, agent *model.Age
 			continue
 		}
 		if float64(a.ram+b.Spec.RAMMB) > capRAM || a.cpu+b.Spec.CPU > capCPU {
-			rejected = append(rejected, fmt.Sprintf("%s: full (ram %d/%d MB)", h.ID, a.ram, int(capRAM)))
+			rejected = append(rejected, fmt.Sprintf("%s: full (ram %d/%d MB, cpu %.1f/%.0f)", h.ID, a.ram, int(capRAM), a.cpu, capCPU))
 			continue
 		}
 		// Disk is thin-provisioned (Incus/ZFS/btrfs): allow 2x; local dev driver does not allocate disk.
@@ -161,6 +176,7 @@ func (m *Manager) candidates(ctx context.Context, b *model.Box, agent *model.Age
 	// Burst offers from the price feed / provider APIs.
 	offers, _ := m.Store.ListOffers(ctx, "")
 	verified := map[string]bool{}
+	blockedSeen := map[string]bool{}
 	for _, o := range offers {
 		if o.Confidence == "verified" {
 			verified[o.Provider] = true
@@ -184,13 +200,26 @@ func (m *Manager) candidates(ctx context.Context, b *model.Box, agent *model.Age
 		if !ok || !prov.Implemented() || o.Provider == "local" || exclude["provider:"+o.Provider] {
 			continue
 		}
+		if why := m.offerBlocked(ctx, o); why != "" {
+			if !blockedSeen[o.Provider] {
+				blockedSeen[o.Provider] = true
+				rejected = append(rejected, o.Provider+": "+why)
+			}
+			continue
+		}
 		cost := provider.Quote(o, hours, m.Cfg.SetupCostUSD)
 		offerCands = append(offerCands, candidate{offer: &o, cost: cost, costPerHour: o.PriceHour,
 			label: fmt.Sprintf("burst %s %s %s %s/h×max(%.1fh,%dm)=%s", o.Provider, o.SKU, o.Region, fmtUSD(o.PriceHour), hours, o.MinBillingMinutes, fmtUSD(cost))})
 	}
+	binpack := m.Cfg.Placement != "spread"
 	sort.SliceStable(cands, func(i, j int) bool {
 		if cands[i].cost != cands[j].cost {
 			return cands[i].cost < cands[j].cost
+		}
+		if binpack {
+			// best fit: fill the fullest host that still has room under the
+			// soft limit, keeping other hosts empty (they can be drained/stopped)
+			return cands[i].loadAfter > cands[j].loadAfter
 		}
 		return cands[i].loadAfter < cands[j].loadAfter
 	})
@@ -273,11 +302,32 @@ func (m *Manager) proposePoolExpand(ctx context.Context, b *model.Box, c *candid
 }
 
 // chain returns the configured provider fallback chain.
+// Providers with a preference priority (1 = first) come before the rest,
+// which keep their configured chain order (v1.3).
 func (m *Manager) chain() []string {
+	base := provider.DefaultChain
 	if len(m.Cfg.ProviderChain) > 0 {
-		return m.Cfg.ProviderChain
+		base = m.Cfg.ProviderChain
 	}
-	return provider.DefaultChain
+	ctx := context.Background()
+	type pr struct {
+		id   string
+		rank int
+	}
+	l := make([]pr, len(base))
+	for i, id := range base {
+		r := 1000 + i
+		if pp := m.ProviderPrefs(ctx, id); pp.Priority > 0 {
+			r = pp.Priority*10 + i%10
+		}
+		l[i] = pr{id, r}
+	}
+	sort.SliceStable(l, func(i, j int) bool { return l[i].rank < l[j].rank })
+	out := make([]string, len(l))
+	for i, x := range l {
+		out[i] = x.id
+	}
+	return out
 }
 
 // chainRank is the provider's position in the fallback chain (unknown = last).

@@ -31,12 +31,19 @@ type env struct {
 	srv   *httptest.Server
 	admin *client.Client
 	ctx   context.Context
+	dir   string
 }
 
 func setup(t *testing.T) *env { return setupWith(t, nil, 1) }
 
 // setupWith starts core with a config hook and n local boxd hosts.
 func setupWith(t *testing.T, mut func(*manager.Config), hosts int) *env {
+	t.Helper()
+	return setupReg(t, provider.Default(nil), mut, hosts)
+}
+
+// setupReg is setupWith with a custom provider registry (v1.3 fake providers).
+func setupReg(t *testing.T, reg *provider.Registry, mut func(*manager.Config), hosts int) *env {
 	t.Helper()
 	dir := t.TempDir()
 	st, err := store.Open(filepath.Join(dir, "boxa.db"))
@@ -54,7 +61,7 @@ func setupWith(t *testing.T, mut func(*manager.Config), hosts int) *env {
 	if mut != nil {
 		mut(&cfg)
 	}
-	m := manager.New(st, provider.Default(nil), crypt, cfg)
+	m := manager.New(st, reg, crypt, cfg)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	if _, err := m.Init(ctx, "bx_admin_e2e"); err != nil {
@@ -63,6 +70,8 @@ func setupWith(t *testing.T, mut func(*manager.Config), hosts int) *env {
 	m.Start(ctx)
 	srv := httptest.NewServer(api.New(m, "", "*"))
 	t.Cleanup(srv.Close)
+	m.Cfg.PublicURL = srv.URL
+	e0 := &env{t: t, m: m, srv: srv, ctx: ctx, dir: dir}
 
 	for i := 0; i < hosts; i++ {
 		sfx := ""
@@ -90,8 +99,8 @@ func setupWith(t *testing.T, mut func(*manager.Config), hosts int) *env {
 			time.Sleep(50 * time.Millisecond)
 		}
 	}
-	e := &env{t: t, m: m, srv: srv, admin: client.New(srv.URL, "bx_admin_e2e"), ctx: ctx}
-	return e
+	e0.admin = client.New(srv.URL, "bx_admin_e2e")
+	return e0
 }
 
 func (e *env) must(c *client.Client, method, path string, body, out any) {
@@ -289,8 +298,8 @@ func TestEndToEnd(t *testing.T) {
 		json.NewDecoder(resp.Body).Decode(&out)
 		resp.Body.Close()
 		if r, ok := out["result"].(map[string]any); ok {
-			if tools, ok := r["tools"].([]any); ok && len(tools) != 18 {
-				t.Fatalf("want 18 tools, got %d", len(tools))
+			if tools, ok := r["tools"].([]any); ok && len(tools) != 21 {
+				t.Fatalf("want 21 tools, got %d", len(tools))
 			}
 		} else {
 			t.Fatalf("mcp result: %+v", out)

@@ -16,6 +16,7 @@ import (
 	"boxa/core/internal/manager"
 	"boxa/core/internal/mcp"
 	"boxa/core/internal/model"
+	"boxa/core/internal/selector"
 )
 
 func (s *Server) llmsHeader(r *http.Request) (string, string, *strings.Builder) {
@@ -29,6 +30,12 @@ func (s *Server) llmsHeader(r *http.Request) (string, string, *strings.Builder) 
 	fmt.Fprintf(&b, "2. %s `%s/mcp` (Streamable HTTP, header `Authorization: Bearer $BOXA_API_KEY`) — %s `box mcp`.\n", t("llms.qs2"), base, t("llms.or_stdio"))
 	fmt.Fprintf(&b, "3. %s\n", t("llms.qs3"))
 	fmt.Fprintf(&b, "4. %s\n\n", t("llms.qs4"))
+	// v1.3: how to choose a box
+	fmt.Fprintf(&b, "## %s\n\n%s\n\n", t("llms.h_choose"), t("llms.choose"))
+	for _, p := range selector.Profiles {
+		fmt.Fprintf(&b, "- `%s` (%s, %s, %.0f vCPU / %d MB): %s\n", p.ID, p.Template, p.Lifecycle, p.Defaults.CPU, p.Defaults.RAMMB, p.Description)
+	}
+	b.WriteString("\n")
 	return loc, base, &b
 }
 

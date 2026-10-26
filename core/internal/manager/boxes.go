@@ -57,6 +57,10 @@ func (m *Manager) CreateBox(ctx context.Context, p *Principal, req boxyaml.Reque
 			}
 		}
 	}
+	needs, err := m.applyNeeds(ctx, &req, agent)
+	if err != nil {
+		return nil, false, err
+	}
 	baseTemplate, tpl, err := m.normalizeRequest(ctx, p, &req, agent)
 	if err != nil {
 		return nil, false, err
@@ -82,7 +86,12 @@ func (m *Manager) CreateBox(ctx context.Context, p *Principal, req boxyaml.Reque
 		Region: req.Region, TTLSeconds: ttl, IdleMinutes: idle, BudgetUSD: req.BudgetUSD,
 		Ports: nonNilInts(req.Ports), Secrets: nonNilStrs(req.Secrets), Setup: req.Setup, CreatedAt: now, LastActiveAt: now,
 		Locale: m.agentLocale(ctx, agent), Egress: eg,
+		Requirements: needs, Name: req.Name,
 	}
+	if needs != nil {
+		b.Profile = needs.Profile
+	}
+	b.Estimate = m.previewEstimate(ctx, b, agent, baseTemplate)
 	if err := m.Store.PutBox(ctx, b); err != nil {
 		return nil, false, err
 	}
@@ -295,7 +304,7 @@ func (m *Manager) provisionWithTemplate(id, baseTemplate string) {
 			lastErr = err
 			break
 		}
-		pl, err := m.Schedule(ctx, b, agent, exclude)
+		pl, warmE, err := m.place(ctx, b, agent, exclude, baseTemplate)
 		if err != nil {
 			lastErr = err
 			var ae *model.APIError
@@ -321,14 +330,39 @@ func (m *Manager) provisionWithTemplate(id, baseTemplate string) {
 		}
 		b.HostID, b.Provider, b.Region = host.ID, host.Provider, host.Region
 		b.CostPerHour, b.Billing, b.PlacementReason = pl.CostPerHour, pl.Billing, pl.Reason
+		if pl.Isolation != "" {
+			b.Isolation = pl.Isolation
+		}
+		hours := expectedHours(b)
+		if b.Requirements != nil {
+			hours = hoursFor(b, *b.Requirements)
+		}
+		b.Estimate = &model.BoxEstimate{Kind: pl.Kind, CostPerHour: pl.CostPerHour, ExpectedHours: hours, ExpectedTotalUSD: model.Round4(pl.CostPerHour * hours),
+			ETASeconds: round1(pl.ETA), Score: pl.Score, WarmHit: warmE != nil}
 		b.URL = m.boxURL(ctx, b, host)
 		m.setStatus(ctx, b, model.StatusProvisioning, "scheduler", pl.Reason)
-		cctx, cancel := context.WithTimeout(ctx, 20*time.Minute)
-		err = m.Hub.Call(cctx, host.ID, proto.MCreate, proto.CreateParams{
-			BoxID: b.ID, Template: baseTemplate, Spec: b.Spec, Setup: b.Setup, AgentID: b.AgentID,
-			AgentsMD: m.agentsMD(ctx, b, agent),
-		}, nil)
-		cancel()
+		createStart := time.Now()
+		if warmE != nil {
+			err = m.claimWarm(ctx, b, agent, warmE)
+			if err != nil {
+				m.Emit(ctx, "system", b.ID, b.AgentID, "box.warm_claim_failed", fmt.Sprintf("warm entry %s on %s: %v; falling back to a cold create", warmE.ID, host.ID, err), nil)
+				attempt-- // a failed claim does not use up a retry
+				continue
+			}
+		} else {
+			cctx, cancel := context.WithTimeout(ctx, 20*time.Minute)
+			err = m.Hub.Call(cctx, host.ID, proto.MCreate, proto.CreateParams{
+				BoxID: b.ID, Template: baseTemplate, Spec: b.Spec, Setup: b.Setup, AgentID: b.AgentID,
+				AgentsMD: m.agentsMD(ctx, b, agent), Isolation: b.Isolation,
+			}, nil)
+			cancel()
+			if err == nil && len(b.Setup) == 0 {
+				m.recordColdCreate(host.ID, baseTemplate, time.Since(createStart))
+			}
+			if err == nil && m.warmConfig(ctx).Enabled {
+				m.warmRecord(false, 0)
+			}
+		}
 		if err != nil {
 			lastErr = err
 			exclude[host.ID] = true
@@ -350,6 +384,9 @@ func (m *Manager) provisionWithTemplate(id, baseTemplate string) {
 		}
 		b.LastActiveAt = time.Now().UTC()
 		b.Error = ""
+		if b.Estimate != nil {
+			b.Estimate.ActualSeconds = round3(time.Since(b.CreatedAt).Seconds())
+		}
 		m.setStatus(ctx, b, model.StatusRunning, "system", fmt.Sprintf("running on %s (%s/h)", host.ID, fmtUSD(b.CostPerHour)))
 		return
 	}
@@ -542,7 +579,20 @@ type ExecInput struct {
 	TimeoutS  int    `json:"timeout_s"`
 	Async     bool   `json:"async"`
 	TailLines int    `json:"tail_lines"`
-	jobID     string // set for async jobs (cancellable)
+	// Session (v1.3 exec fast path): cwd and exported variables persist
+	// across calls, like one long-lived shell (state lives in the box).
+	Session bool   `json:"session,omitempty"`
+	jobID   string // set for async jobs (cancellable)
+}
+
+// sessionWrap makes a command behave like the next line of a persistent
+// shell: restore the previous cwd + exports, run, save them again. The exit
+// code of the user command is preserved.
+func sessionWrap(cmd string) string {
+	const st = "${BOX_WORK:-/work}/.boxa"
+	return `mkdir -p "` + st + `" 2>/dev/null; if [ -f "` + st + `/env" ]; then . "` + st + `/env" 2>/dev/null; fi; ` +
+		`if [ -f "` + st + `/cwd" ]; then cd "$(cat "` + st + `/cwd")" 2>/dev/null; fi; ` +
+		"{ " + cmd + "\n}; __boxa_rc=$?; pwd > \"" + st + "/cwd\"; export -p | grep -v -E ' (PWD|OLDPWD|SHLVL|_|__boxa_rc)=' > \"" + st + "/env\"; exit $__boxa_rc"
 }
 
 func (m *Manager) secretEnv(ctx context.Context, b *model.Box) (map[string]string, error) {
@@ -608,8 +658,12 @@ func (m *Manager) execSync(ctx context.Context, actor string, b *model.Box, in E
 	var out boxd.ExecOut
 	cctx, cancel := context.WithTimeout(ctx, time.Duration(in.TimeoutS+60)*time.Second)
 	defer cancel()
+	command := in.Command
+	if in.Session {
+		command = sessionWrap(command)
+	}
 	err = m.Hub.Call(cctx, b.HostID, proto.MExec, proto.ExecParams{
-		BoxID: b.ID, Command: in.Command, Cwd: in.Cwd, Env: env, TimeoutS: in.TimeoutS, TailLines: in.TailLines, JobID: in.jobID,
+		BoxID: b.ID, Command: command, Cwd: in.Cwd, Env: env, TimeoutS: in.TimeoutS, TailLines: in.TailLines, JobID: in.jobID,
 	}, &out)
 	if err != nil {
 		return nil, mapHostErr(err)
@@ -620,6 +674,15 @@ func (m *Manager) execSync(ctx context.Context, actor string, b *model.Box, in E
 	}
 	if res.FilesChanged == nil {
 		res.FilesChanged = []string{}
+	}
+	if in.Session {
+		kept := res.FilesChanged[:0]
+		for _, f := range res.FilesChanged {
+			if !strings.Contains(f, "/.boxa/") {
+				kept = append(kept, f)
+			}
+		}
+		res.FilesChanged = kept
 	}
 	if out.LogID != "" {
 		lid := out.LogID
@@ -814,7 +877,7 @@ func (m *Manager) Grep(ctx context.Context, p *Principal, id, pattern, path stri
 	return &out, nil
 }
 
-func (m *Manager) Observe(ctx context.Context, p *Principal, id string) (*proto.ObserveResult, error) {
+func (m *Manager) Observe(ctx context.Context, p *Principal, id string) (*ObserveView, error) {
 	if err := p.Require(model.ScopeBoxFile); err != nil {
 		return nil, err
 	}
@@ -822,11 +885,26 @@ func (m *Manager) Observe(ctx context.Context, p *Principal, id string) (*proto.
 	if err != nil {
 		return nil, err
 	}
-	var out proto.ObserveResult
-	if err := m.Hub.Call(ctx, b.HostID, proto.MObserve, proto.BoxRef{BoxID: b.ID}, &out); err != nil {
-		return nil, mapHostErr(err)
+	out, err := m.observeRaw(ctx, b)
+	if err != nil {
+		return nil, err
 	}
-	return &out, nil
+	if out.FilesChanged == nil {
+		out.FilesChanged = []string{}
+	}
+	if out.Processes == nil {
+		out.Processes = []proto.Proc{}
+	}
+	if out.Ports == nil {
+		out.Ports = []int{}
+	}
+	m.obsMu.Lock()
+	prev := m.lastObs[b.ID]
+	m.lastObs[b.ID] = out
+	m.obsMu.Unlock()
+	v := &ObserveView{ObserveResult: *out, Diff: diffObserve(prev, out)}
+	v.Summary = summarizeObserve(v)
+	return v, nil
 }
 
 // ---- lifecycle verbs ----

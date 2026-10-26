@@ -89,7 +89,20 @@ func (a *Agent) collectMetrics(ctx context.Context) proto.Metrics {
 	if ids, err := a.drv.List(ctx); err == nil {
 		m.BoxCount = len(ids)
 	}
+	if u, ok := a.drv.(Usager); ok { // v1.3: per-box usage for right-sizing
+		if bu := u.Usage(ctx); len(bu) > 0 {
+			m.Boxes = map[string]proto.BoxUsage{}
+			for id, v := range bu {
+				m.Boxes[a.aliases.public(id)] = v
+			}
+		}
+	}
 	return m
+}
+
+// Usager reports per-box CPU (% of one vCPU since the last call) and RAM.
+type Usager interface {
+	Usage(ctx context.Context) map[string]proto.BoxUsage
 }
 
 func round1(v float64) float64 { return float64(int(v*10+0.5)) / 10 }

@@ -103,7 +103,7 @@ func TestDiscoveryAndI18n(t *testing.T) {
 				t.Fatalf("kinds: %d", len(v["items"].([]any)))
 			}
 		case "/.well-known/agent.json":
-			if v["protocolVersion"] != "0.3.0" || len(v["skills"].([]any)) != 19 || !strings.HasSuffix(v["url"].(string), "/a2a") || v["capabilities"].(map[string]any)["streaming"] != true {
+			if v["protocolVersion"] != "0.3.0" || len(v["skills"].([]any)) != 22 || !strings.HasSuffix(v["url"].(string), "/a2a") || v["capabilities"].(map[string]any)["streaming"] != true {
 				t.Fatalf("agent card %+v", v)
 			}
 		case "/.well-known/mcp.json":
@@ -327,7 +327,7 @@ func TestV11Boxes(t *testing.T) {
 		t.Fatalf("default snippet: %+v", sn2)
 	}
 
-	// MCP over HTTP: 18 tools, localized prompt, resources.
+	// MCP over HTTP: 21 tools, localized prompt, resources.
 	mcpCall := func(lang, body string) map[string]any {
 		req, _ := http.NewRequestWithContext(context.Background(), "POST", e.srv.URL+"/mcp", strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer "+ag.Key)
@@ -344,7 +344,7 @@ func TestV11Boxes(t *testing.T) {
 		return m
 	}
 	m := mcpCall("", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
-	if len(m["result"].(map[string]any)["tools"].([]any)) != 18 {
+	if len(m["result"].(map[string]any)["tools"].([]any)) != 21 {
 		t.Fatalf("mcp tools: %+v", m)
 	}
 	m = mcpCall("zh", `{"jsonrpc":"2.0","id":2,"method":"prompts/get","params":{"name":"cost-review"}}`)

@@ -78,6 +78,13 @@ type Box struct {
 	Locale       string     `json:"locale,omitempty"`      // agent-facing language (AGENTS.md)
 	ForkedFrom   string     `json:"forked_from,omitempty"` // snapshot id this box was forked from
 	Egress       *BoxEgress `json:"egress,omitempty"`      // outbound allowlist (nil = unrestricted)
+	// v1.3
+	Profile      string        `json:"profile,omitempty"`      // workload profile used to size/place the box
+	Requirements *Requirements `json:"requirements,omitempty"` // declarative needs (auto-pick)
+	Isolation    string        `json:"isolation,omitempty"`    // container (default) | vm
+	Estimate     *BoxEstimate  `json:"estimate,omitempty"`     // cost/ETA preview + measured time to running
+	ClonedFrom   string        `json:"cloned_from,omitempty"`  // box id this box was copy-on-write cloned from
+	Name         string        `json:"name,omitempty"`         // box_ensure key (defaults to slug)
 }
 
 // BoxEgress is the effective egress policy of a box and how it is enforced.
@@ -205,6 +212,10 @@ type Host struct {
 	EmptySince    *time.Time `json:"empty_since,omitempty"`
 	TokenHash     string     `json:"-"`
 	BootstrapHash string     `json:"-"`
+	// v1.3
+	Arch     string   `json:"arch,omitempty"`     // amd64 | arm64
+	Features []string `json:"features,omitempty"` // vm, cow:zfs|btrfs|reflink|copy, cache, mesh
+	MeshIP   string   `json:"mesh_ip,omitempty"`  // tailnet address when joined to headscale
 }
 
 type Provider struct {
@@ -344,6 +355,9 @@ type Settings struct {
 	// Locale is the operator default language (vi|en|zh|ja): approvals, AGENTS.md
 	// fallback. API responses follow each request's Accept-Language.
 	Locale string `json:"locale"`
+	// Location (v1.3) is where agents/users usually run (region id, ISO
+	// country code such as VN, or "lat,lon"); used for latency estimates.
+	Location string `json:"location"`
 }
 
 func DefaultSettings() Settings {

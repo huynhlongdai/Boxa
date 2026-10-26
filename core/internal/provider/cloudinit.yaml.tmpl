@@ -16,6 +16,9 @@ write_files:
       BOXD_PROVIDER={{.Provider}}
       BOXD_REGION={{.Region}}
       BOXD_STATE_DIR=/var/lib/boxd
+{{- if .CacheHost}}
+      BOXD_CACHE_HOST={{.CacheHost}}
+{{- end}}
   - path: /etc/systemd/system/boxd.service
     permissions: "0644"
     content: |
@@ -34,5 +37,8 @@ runcmd:
   - [sh, -c, "incus admin init --minimal || true"]
   - [sh, -c, "mkdir -p /var/lib/boxd /var/lib/boxa/memory"]
   - [sh, -c, "ARCH=$(dpkg --print-architecture); curl -fsSL '{{.BoxdURL}}'-linux-$ARCH -o /usr/local/bin/boxd && chmod +x /usr/local/bin/boxd"]
+{{- if .Mesh}}
+  - [sh, -c, "curl -fsSL https://tailscale.com/install.sh | sh"]
+{{- end}}
   - [systemctl, daemon-reload]
   - [systemctl, enable, --now, boxd]

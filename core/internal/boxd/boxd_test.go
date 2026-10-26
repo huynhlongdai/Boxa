@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -17,7 +18,7 @@ import (
 func TestShapeTail(t *testing.T) {
 	var b strings.Builder
 	for i := 1; i <= 100; i++ {
-		b.WriteString(strings.Repeat("x", 3) + "\n")
+		b.WriteString(strings.Repeat("x", 3) + strconv.Itoa(i) + "\n")
 	}
 	tail, tr := ShapeBytes([]byte(b.String()), 60)
 	if !tr || strings.Count(tail, "\n") != 59 {
@@ -34,6 +35,25 @@ func TestShapeTail(t *testing.T) {
 	tail, tr = ShapeBytes(bytes.Repeat([]byte("y"), 100<<10), 60)
 	if !tr || len(tail) > MaxTailBytes {
 		t.Fatalf("cap: %d %v", len(tail), tr)
+	}
+}
+
+func TestCompact(t *testing.T) {
+	in := "\x1b[32mok\x1b[0m\nDownloading 10%\rDownloading 50%\rDownloading 100%\nsame\nsame\nsame\nsame\nend"
+	out, did := Compact(in)
+	if !did || out != "ok\nDownloading 100%\nsame  [×4]\nend" {
+		t.Fatalf("compact: %q", out)
+	}
+	if o, d := Compact("a\nb\nb\nc"); d || o != "a\nb\nb\nc" {
+		t.Fatalf("no-op compact changed output: %q", o)
+	}
+	var b strings.Builder
+	for i := 0; i < 500; i++ {
+		b.WriteString("\x1b[1mprogress line\x1b[0m\n")
+	}
+	tail, tr := ShapeBytes([]byte(b.String()), 60)
+	if !tr || tail != "progress line  [×500]" {
+		t.Fatalf("repeated output should collapse: %q", tail)
 	}
 }
 

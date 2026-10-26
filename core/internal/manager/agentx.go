@@ -24,8 +24,8 @@ import (
 
 // ToolNames is the MCP tool list advertised in AGENTS.md (kept in sync with
 // internal/mcp by a test there).
-var ToolNames = []string{"box_up", "box_quote", "box_exec", "box_exec_batch", "box_job", "box_logs", "box_read", "box_write",
-	"box_grep", "box_observe", "box_snapshot", "box_restore", "box_fork", "box_sleep", "box_down", "box_list", "box_cost", "box_templates"}
+var ToolNames = []string{"box_ensure", "box_recommend", "box_up", "box_quote", "box_exec", "box_exec_batch", "box_job", "box_logs", "box_read", "box_write",
+	"box_grep", "box_observe", "box_snapshot", "box_restore", "box_clone", "box_fork", "box_sleep", "box_down", "box_list", "box_cost", "box_templates"}
 
 // BaseURL is the public URL agents use to reach core.
 func (m *Manager) BaseURL() string {

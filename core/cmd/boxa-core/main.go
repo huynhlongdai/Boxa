@@ -125,9 +125,19 @@ func main() {
 		BurstEmptyAfter:    envDur("BOXA_BURST_EMPTY_AFTER", 10*time.Minute),
 		HostDownAfter:      envDur("BOXA_HOST_DOWN_AFTER", 2*time.Minute),
 		CreateWait:         envDur("BOXA_CREATE_WAIT", 120*time.Second),
-		URLKey:             secret.Hash("url:" + master),
-		ProviderChain:      chain,
-		ObjectStore:        objCfg,
+		HealthInterval:     envDur("BOXA_HEALTH_INTERVAL", time.Minute),
+		CatalogStaleAfter:  envDur("BOXA_CATALOG_STALE_AFTER", 24*time.Hour),
+		WarmInterval:       envDur("BOXA_WARM_INTERVAL", 10*time.Second),
+		Placement:          env("BOXA_PLACEMENT", "binpack"),
+		ClientLocation:     os.Getenv("BOXA_CLIENT_LOCATION"),
+		HostCacheIP:        os.Getenv("BOXA_HOST_CACHE_IP"),
+		Mesh: manager.MeshConfig{
+			Enabled: envBool("BOXA_MESH_ENABLED"), HeadscaleURL: os.Getenv("BOXA_MESH_URL"), APIKey: os.Getenv("BOXA_MESH_API_KEY"),
+			User: os.Getenv("BOXA_MESH_USER"), BaseDomain: os.Getenv("BOXA_MESH_DOMAIN"), DERPHost: os.Getenv("BOXA_MESH_DERP_HOST"),
+		},
+		URLKey:        secret.Hash("url:" + master),
+		ProviderChain: chain,
+		ObjectStore:   objCfg,
 	}
 	m := manager.New(st, provider.Default(nil), crypt, cfg)
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

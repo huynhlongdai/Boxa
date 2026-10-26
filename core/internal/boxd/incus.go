@@ -3,6 +3,7 @@ package boxd
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"boxa/core/internal/egress"
@@ -30,6 +32,9 @@ type IncusDriver struct {
 	Resolver   egress.Resolver
 	run        func(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, args ...string) error
 	nft        func(ctx context.Context, script string) error // test hook
+	umu        sync.Mutex
+	prevCPU    map[string]float64
+	prevAt     time.Time
 }
 
 func NewIncusDriver(memRoot, exportDir string) *IncusDriver {
@@ -92,6 +97,9 @@ func (d *IncusDriver) Create(ctx context.Context, p proto.CreateParams) error {
 		image = d.Images["base"]
 	}
 	args := []string{"launch", image, name, "-c", "security.privileged=false", "-c", "security.nesting=false"}
+	if p.Isolation == "vm" {
+		args = append(args, "--vm") // v1.3: Incus VM (own kernel) for untrusted workloads
+	}
 	if p.Spec.CPU >= 1 {
 		args = append(args, "-c", fmt.Sprintf("limits.cpu=%d", int(p.Spec.CPU)))
 	} else if p.Spec.CPU > 0 {
@@ -130,6 +138,9 @@ func (d *IncusDriver) Create(ctx context.Context, p proto.CreateParams) error {
 	}
 	if _, err := d.incus(ctx, "exec", name, "--", "mkdir", "-p", "/work", "/memory"); err != nil {
 		return err
+	}
+	if h := CacheHost(); h != "" { // v1.3: shared apt cache on the host
+		_ = d.Write(ctx, p.BoxID, "/etc/apt/apt.conf.d/01boxa-cache", []byte(AptProxyConf(h)))
 	}
 	if p.AgentsMD != "" {
 		if err := d.Write(ctx, p.BoxID, "/AGENTS.md", []byte(p.AgentsMD)); err != nil {
@@ -512,4 +523,137 @@ func (d *IncusDriver) Restore(ctx context.Context, p proto.RestoreParams) error 
 		return d.Write(ctx, p.BoxID, "/AGENTS.md", []byte(p.Box.AgentsMD))
 	}
 	return nil
+}
+
+// ---- v1.3 ----
+
+// Claim re-targets a warm container: limits for the requested spec, the
+// owner's env and /memory volume, AGENTS.md.
+func (d *IncusDriver) Claim(ctx context.Context, realID string, p proto.ClaimParams) error {
+	name := cname(realID)
+	if p.Spec.CPU >= 1 {
+		_, _ = d.incus(ctx, "config", "set", name, fmt.Sprintf("limits.cpu=%d", int(p.Spec.CPU)))
+	} else if p.Spec.CPU > 0 {
+		_, _ = d.incus(ctx, "config", "set", name, fmt.Sprintf("limits.cpu.allowance=%d%%", int(p.Spec.CPU*100)))
+	}
+	if p.Spec.RAMMB > 0 {
+		if _, err := d.incus(ctx, "config", "set", name, fmt.Sprintf("limits.memory=%dMiB", p.Spec.RAMMB)); err != nil {
+			return err
+		}
+	}
+	for k, v := range p.Env {
+		if _, err := d.incus(ctx, "config", "set", name, "environment."+k+"="+v); err != nil {
+			return err
+		}
+	}
+	if d.MemoryRoot != "" && p.AgentID != "" {
+		src := filepath.Join(d.MemoryRoot, filepath.Base(p.AgentID))
+		if err := os.MkdirAll(src, 0o777); err == nil {
+			_, _ = d.incus(ctx, "config", "device", "add", name, "memory", "disk", "source="+src, "path=/memory", "shift=true")
+		}
+	}
+	if p.AgentsMD != "" {
+		return d.Write(ctx, realID, "/AGENTS.md", []byte(p.AgentsMD))
+	}
+	return nil
+}
+
+// Clone uses `incus copy`, which is copy-on-write on zfs/btrfs/lvm-thin
+// storage pools (a snapshot clone, near instant) and a full copy on dir.
+func (d *IncusDriver) Clone(ctx context.Context, srcID, dstID string, p proto.CloneParams) (string, error) {
+	src, dst := cname(srcID), cname(dstID)
+	if _, err := d.incus(ctx, "copy", src, dst, "--instance-only", "--allow-inconsistent"); err != nil {
+		return "", err
+	}
+	_, _ = d.incus(ctx, "config", "device", "remove", dst, "memory") // the clone must not share the source agent's /memory mount implicitly
+	for k, v := range p.Env {
+		_, _ = d.incus(ctx, "config", "set", dst, "environment."+k+"="+v)
+	}
+	if d.MemoryRoot != "" && p.AgentID != "" {
+		srcDir := filepath.Join(d.MemoryRoot, filepath.Base(p.AgentID))
+		_, _ = d.incus(ctx, "config", "device", "add", dst, "memory", "disk", "source="+srcDir, "path=/memory", "shift=true")
+	}
+	if _, err := d.incus(ctx, "start", dst); err != nil {
+		return "", err
+	}
+	if p.AgentsMD != "" {
+		_ = d.Write(ctx, dstID, "/AGENTS.md", []byte(p.AgentsMD))
+	}
+	return "incus-" + d.poolDriver(ctx), nil
+}
+
+// poolDriver returns the storage driver of the default pool (zfs, btrfs, dir…).
+func (d *IncusDriver) poolDriver(ctx context.Context) string {
+	out, err := d.incus(ctx, "storage", "list", "-f", "csv", "-c", "nd")
+	if err != nil {
+		return "copy"
+	}
+	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
+		f := strings.Split(l, ",")
+		if len(f) >= 2 && (f[0] == "default" || len(strings.Split(strings.TrimSpace(out), "\n")) == 1) {
+			return strings.TrimSpace(f[1])
+		}
+	}
+	return "copy"
+}
+
+// Features: VM support when /dev/kvm exists, CoW method from the pool driver.
+func (d *IncusDriver) Features(ctx context.Context) []string {
+	f := []string{}
+	if _, err := os.Stat("/dev/kvm"); err == nil {
+		f = append(f, "vm")
+	}
+	switch drv := d.poolDriver(ctx); drv {
+	case "zfs", "btrfs", "lvm":
+		f = append(f, "cow:"+drv)
+	default:
+		f = append(f, "cow:copy")
+	}
+	return f
+}
+
+// Usage reads memory and CPU counters of every boxa container (incus list).
+func (d *IncusDriver) Usage(ctx context.Context) map[string]proto.BoxUsage {
+	out, err := d.incus(ctx, "list", "boxa-", "--format", "json")
+	if err != nil {
+		return nil
+	}
+	var list []struct {
+		Name  string `json:"name"`
+		State *struct {
+			CPU struct {
+				Usage float64 `json:"usage"` // ns
+			} `json:"cpu"`
+			Memory struct {
+				Usage float64 `json:"usage"` // bytes
+			} `json:"memory"`
+		} `json:"state"`
+	}
+	if json.Unmarshal([]byte(out), &list) != nil {
+		return nil
+	}
+	now := time.Now()
+	d.umu.Lock()
+	defer d.umu.Unlock()
+	if d.prevCPU == nil {
+		d.prevCPU = map[string]float64{}
+	}
+	el := now.Sub(d.prevAt).Seconds()
+	res := map[string]proto.BoxUsage{}
+	cur := map[string]float64{}
+	for _, c := range list {
+		if c.State == nil || !strings.HasPrefix(c.Name, "boxa-") {
+			continue
+		}
+		id := strings.Replace(strings.TrimPrefix(c.Name, "boxa-"), "-", "_", 1) // inverse of cname
+
+		u := proto.BoxUsage{RAMMB: float64(int(c.State.Memory.Usage/(1<<20)*10)) / 10}
+		cur[id] = c.State.CPU.Usage
+		if prev, ok := d.prevCPU[id]; ok && el > 0 && c.State.CPU.Usage >= prev {
+			u.CPUPct = float64(int((c.State.CPU.Usage-prev)/1e9/el*1000)) / 10
+		}
+		res[id] = u
+	}
+	d.prevCPU, d.prevAt = cur, now
+	return res
 }
