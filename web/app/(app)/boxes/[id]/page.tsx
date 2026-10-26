@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BoxStatusChip, LifecycleBadge, Mono } from "@/components/boxa/status";
 import { BoxActions } from "@/components/boxa/box-actions";
+import { CloneButton } from "@/components/boxa/box-v13";
 import { ErrorBox } from "@/components/boxa/page";
 import { BoxTerminal } from "@/components/boxa/terminal";
 import { OverviewTab, TimelineTab, FilesTab, LogsTab, SnapshotsTab, ConfigTab } from "./tabs";
@@ -52,7 +53,10 @@ function Inner() {
             )}
           </p>
         </div>
-        <BoxActions box={box} labels className="flex-wrap" onDeleted={() => router.push("/boxes")} />
+        <div className="flex flex-wrap items-center gap-1">
+          <CloneButton box={box} />
+          <BoxActions box={box} labels className="flex-wrap" onDeleted={() => router.push("/boxes")} />
+        </div>
       </div>
 
       <Tabs value={tab} onValueChange={(v) => router.replace(`/boxes/${id}?tab=${v}`, { scroll: false })}>

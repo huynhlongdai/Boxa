@@ -18,6 +18,7 @@ import { DonutChart, HBarChart, StackedCostChart } from "@/components/boxa/chart
 import { Empty, ErrorBox, LoadingRows, PageHeader } from "@/components/boxa/page";
 import { MoneyBudget, BudgetBar } from "@/components/boxa/budget";
 import { Mono } from "@/components/boxa/status";
+import { RightsizeList } from "@/components/boxa/speed";
 
 
 export default function CostsPage() {
@@ -99,6 +100,8 @@ export default function CostsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <RightsizeList />
 
       <Card>
         <CardHeader className="gap-3">

@@ -24,6 +24,8 @@ import { ConfirmButton } from "@/components/boxa/confirm";
 import { Empty, ErrorBox, LoadingRows } from "@/components/boxa/page";
 import { Mono } from "@/components/boxa/status";
 import { EgressCard } from "@/components/boxa/egress";
+import { EstimateCard, ResumeCard } from "@/components/boxa/box-v13";
+import { RightsizeCard } from "@/components/boxa/speed";
 
 function Row({ k, children }: { k: string; children: React.ReactNode }) {
   return (
@@ -78,6 +80,9 @@ export function OverviewTab({ box }: { box: Box }) {
         </CardContent>
       </Card>
       <div className="flex min-w-0 flex-col gap-4">
+        <EstimateCard box={box} />
+        <ResumeCard box={box} />
+        <RightsizeCard boxId={box.id} enabled={["running", "sleeping"].includes(box.status)} />
         <EgressCard box={box} />
         <Card>
           <CardHeader><CardTitle>{t("cost")}</CardTitle></CardHeader>
