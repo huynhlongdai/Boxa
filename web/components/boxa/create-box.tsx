@@ -2,9 +2,8 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Calculator, Plus, Sparkles } from "lucide-react";
-import { toast } from "sonner";
-import { api, errMsg, paths } from "@/lib/api";
+import { Calculator, Plus, Sparkles, Wand2, SlidersHorizontal } from "lucide-react";
+import { api, paths } from "@/lib/api";
 import { startsWith, useAction, useApi } from "@/lib/hooks";
 import { useFmt } from "@/lib/format";
 import type { Agent, Lifecycle, List, Quote, QuoteBody, Template } from "@/lib/types";
@@ -14,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Field, Input, Select } from "@/components/ui/input";
 import { Mono } from "./status";
+import { RecommendPanel } from "./recommend";
 import { toastError } from "@/lib/error-toast";
 
 /** Kết quả POST /quote: giá + lý do đặt chỗ + phương án khác. */
@@ -82,6 +82,9 @@ export function CreateBoxDialog() {
   const [ram, setRam] = React.useState(2048);
   const [quote, setQuote] = React.useState<{ q: Quote; sig: string } | null>(null);
   const [quoting, setQuoting] = React.useState(false);
+  const [mode, setMode] = React.useState<"need" | "manual">("need");
+  const te = useTranslations("estimate");
+  const { usd, num } = useFmt();
   const { run, pending } = useAction();
   const router = useRouter();
   const idem = React.useMemo(() => (open ? crypto.randomUUID() : ""), [open]);
@@ -104,11 +107,27 @@ export function CreateBoxDialog() {
       <DialogTrigger asChild>
         <Button size="sm"><Plus /> {t("trigger")}</Button>
       </DialogTrigger>
-      <DialogContent className="max-w-xl">
+      <DialogContent className={mode === "need" ? "max-w-3xl" : "max-w-xl"} data-create-box>
         <DialogHeader>
           <DialogTitle>{t("title")}</DialogTitle>
-          <DialogDescription>{t("desc")}</DialogDescription>
+          <DialogDescription>{mode === "need" ? t("descNeed") : t("desc")}</DialogDescription>
         </DialogHeader>
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label={t("mode")}>
+          <Button type="button" size="sm" role="tab" aria-selected={mode === "need"} variant={mode === "need" ? "default" : "outline"} onClick={() => setMode("need")}><Wand2 /> {t("modeNeed")}</Button>
+          <Button type="button" size="sm" role="tab" aria-selected={mode === "manual"} variant={mode === "manual" ? "default" : "outline"} onClick={() => setMode("manual")}><SlidersHorizontal /> {t("modeManual")}</Button>
+        </div>
+        {mode === "need" ? (
+          <div className="flex min-w-0 flex-col gap-3">
+            <Field label={tc("agent")}>
+              <Select value={agentId} onChange={(e) => setAgent(e.target.value)}>
+                <option value="">{tc("chooseAgent")}</option>
+                {agents?.items.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </Select>
+            </Field>
+            <RecommendPanel compact agentId={agentId} onCreated={(b) => { setOpen(false); router.push(`/boxes/${b.id}`); }} />
+          </div>
+        ) : (
+        <>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label={tc("agent")}>
             <Select value={agentId} onChange={(e) => setAgent(e.target.value)}>
@@ -148,7 +167,7 @@ export function CreateBoxDialog() {
             <Button
               disabled={!agentId || !!pending}
               onClick={async () => {
-                const b = await run("create", () => api.createBox({ ...body, agent_id: agentId, slug: slug || undefined }, idem), { success: (x) => t("creatingToast", { slug: x.slug }), revalidate: [startsWith("/boxes"), "/overview"] });
+                const b = await run("create", () => api.createBox({ ...body, agent_id: agentId, slug: slug || undefined }, idem), { success: (x) => (x.estimate ? `${t("creatingToast", { slug: x.slug })} · ${te("toast", { eta: num(x.estimate.eta_seconds, 1), hour: usd(x.estimate.cost_per_hour), total: usd(x.estimate.expected_total_usd) })}` : t("creatingToast", { slug: x.slug })), revalidate: [startsWith("/boxes"), "/overview"] });
                 if (b) { setOpen(false); router.push(`/boxes/${b.id}`); }
               }}
             >
@@ -156,6 +175,8 @@ export function CreateBoxDialog() {
             </Button>
           </div>
         </DialogFooter>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );

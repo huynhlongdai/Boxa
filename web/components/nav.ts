@@ -1,7 +1,7 @@
-import { Bot, Boxes, Cable, FileCode2, KeyRound, LayoutDashboard, Server, Settings, ShieldCheck, Wallet, type LucideIcon } from "lucide-react";
+import { Bot, Boxes, Cable, FileCode2, KeyRound, LayoutDashboard, Server, Settings, ShieldCheck, Wallet, Wand2, type LucideIcon } from "lucide-react";
 
 /** Khoá dịch trong namespace "nav". */
-export type NavKey = "overview" | "boxes" | "agents" | "costs" | "infra" | "templates" | "secrets" | "developers" | "settings" | "admin";
+export type NavKey = "overview" | "boxes" | "recommend" | "agents" | "costs" | "infra" | "templates" | "secrets" | "developers" | "settings" | "admin";
 
 export interface NavItem {
   href: string;
@@ -15,6 +15,7 @@ export const NAV: NavItem[] = [
   { href: "/boxes", key: "boxes", icon: Boxes, mobileTab: true },
   { href: "/agents", key: "agents", icon: Bot, mobileTab: true },
   { href: "/costs", key: "costs", icon: Wallet, mobileTab: true },
+  { href: "/recommend", key: "recommend", icon: Wand2 },
   { href: "/infra", key: "infra", icon: Server },
   { href: "/templates", key: "templates", icon: FileCode2 },
   { href: "/secrets", key: "secrets", icon: KeyRound },
