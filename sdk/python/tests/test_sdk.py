@@ -14,10 +14,10 @@ def test_discovery(core):
     assert len(bx.agent_kinds()["items"]) == 22
     tools = as_openai_tools(bx)
     names = {t["function"]["name"] for t in tools}
-    assert {"box_up", "box_exec_batch", "box_fork", "box_quote"} <= names and len(names) == 18
-    assert as_openai_tools(bx, responses_api=True)[0]["name"] == "box_up"
+    assert {"box_up", "box_exec_batch", "box_fork", "box_quote"} <= names and len(names) == 21
+    assert as_openai_tools(bx, responses_api=True)[0]["name"] == "box_ensure"
     assert as_anthropic_tools(bx)[0]["input_schema"]["type"] == "object"
-    assert len(as_gemini_tools(bx)[0]["functionDeclarations"]) == 18
+    assert len(as_gemini_tools(bx)[0]["functionDeclarations"]) == 21
     assert bx.llms_txt().startswith("# Boxa")
     assert bx.openapi()["openapi"] == "3.1.0"
 
@@ -113,3 +113,27 @@ def test_env_defaults(monkeypatch):
     assert bx._url("/llms.txt") == "http://example.test:9/llms.txt"
     assert bx._url("/boxes", {"all": True, "status": None}) == "http://example.test:9/v1/boxes?all=true"
     assert boxa.__version__ == "1.1.0"
+
+
+def test_v13_selection_helpers(core):
+    from boxa import Boxa
+    url, akey = core["url"], core["key"]
+    with Boxa(akey, url) as bx:
+        pr = bx.profiles()
+        assert len(pr["items"]) == 7 and len(pr["kinds"]) == 22
+        rec = bx.recommend("general", ram_mb=256, disk_gb=1, max_price_hour=1)
+        assert rec["pick"]["kind"] in ("pool", "warm") and rec["pick"]["reasons"]
+        e1 = bx.ensure("sdk-py-ensure", template="base", cpu=0.5, ram_mb=128, disk_gb=1)
+        assert e1["action"] == "created" and e1["box"]["status"] == "running"
+        bid = e1["box"]["id"]
+        r = bx.exec(bid, "mkdir -p q && cd q && export Z=9", session=True)
+        r = bx.exec(bid, "pwd; echo Z=$Z", session=True)
+        assert "/q" in r["stdout_tail"] and "Z=9" in r["stdout_tail"]
+        e2 = bx.ensure("sdk-py-ensure")
+        assert e2["action"] == "reused" and e2["box"]["id"] == bid and e2["resume"]["recent_execs"]
+        c = bx.clone(bid, slug="sdk-py-clone")
+        assert c["status"] == "running" and c["cloned_from"] == bid and c["estimate"]["kind"] == "clone"
+        assert bx.resume(bid)["box"]["id"] == bid
+        assert bx.rightsize(bid)["box_id"] == bid
+        bx.down(c["id"])
+        bx.down(bid)

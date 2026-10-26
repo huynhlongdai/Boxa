@@ -21,6 +21,8 @@ export interface Box {
   ttl_seconds: number; idle_minutes: number; budget_usd: number; spent_usd: number; cost_per_hour: number;
   placement_reason: string; ports: number[]; secrets: string[]; created_at: string; last_active_at: string;
   forked_from?: string; locale?: string; error?: string; next?: string[];
+  /** v1.3 */
+  profile?: string; requirements?: Requirements; isolation?: string; estimate?: BoxEstimate; cloned_from?: string; name?: string;
 }
 
 export interface ExecResult {
@@ -70,9 +72,44 @@ export interface FileRead { path: string; type: "file" | "dir"; content?: string
 
 export interface ApiErrorBody { code: string; message: string; hint: string; retry_after_s?: number; docs_url?: string }
 
+/** v1.3 declarative needs (POST /recommend, POST /boxes {requirements}). */
+export interface Requirements {
+  cpu?: number; ram_mb?: number; disk_gb?: number; gpu?: number; arch?: "any" | "amd64" | "arm64"; region?: string;
+  location?: string; max_latency_ms?: number; max_price_hour?: number; lifetime?: "ephemeral" | "persistent";
+  duration_hours?: number; isolation?: "any" | "container" | "vm" | "sandbox"; profile?: string;
+  optimize?: "balanced" | "cost" | "speed" | "reliability" | "latency"; public_url?: boolean; untrusted?: boolean;
+}
+
+export interface BoxEstimate {
+  kind: "warm" | "pool" | "vm" | "burst" | "clone"; cost_per_hour: number; expected_hours: number; expected_total_usd: number;
+  eta_seconds: number; actual_seconds?: number; score?: number; warm_hit: boolean;
+}
+
+export interface ScoredOption {
+  kind: string; provider: string; region: string; host_id?: string; sku?: string; isolation: string; cost_per_hour: number;
+  expected_total_usd: number; eta_seconds: number; latency_ms: number; rank: number; score: number;
+  breakdown: Record<string, { score: number; weight: number; value: string }>; reasons: string[]; requires_approval: boolean;
+}
+
+export interface Recommendation {
+  requirements: Requirements; profile: { id: string; name: string; template: string; lifecycle: Lifecycle };
+  template: string; lifecycle: Lifecycle; expected_hours: number; options: ScoredOption[];
+  rejected: { kind: string; provider?: string; region?: string; host_id?: string; reason: string }[];
+  pick: ScoredOption | null; auto_pick: string; explain: string; box_up: Record<string, unknown>; next?: string[];
+}
+
+export interface EnsureResult {
+  box: Box; action: "created" | "reused" | "woken" | "recreated"; created: boolean;
+  resume?: { box: Box; woke: boolean; recent_execs: { ts: string; command: string; exit_code: unknown; log_id: unknown }[]; running_jobs: Job[]; files_changed: string[]; listening_ports: number[]; next: string[] };
+}
+
 export interface CreateBoxInput {
   template?: string; lifecycle?: Lifecycle; spec?: Spec; slug?: string; ttl_seconds?: number; idle_minutes?: number;
   budget_usd?: number; ports?: number[]; secrets?: string[]; setup?: string[]; region?: string; agent_id?: string;
+  /** v1.3: workload profile (auto-picks template, size and placement) */
+  profile?: string;
+  /** v1.3: declarative needs; Boxa scores options and auto-picks */
+  requirements?: Requirements;
   /** full box.yaml instead of the fields above */
   yaml?: string;
 }
@@ -232,9 +269,9 @@ export class Boxa {
   events(id: string) { return this.request<List<BoxaEvent>>("GET", `/boxes/${enc(id)}/events`); }
 
   // ---- exec ----
-  exec(id: string, command: string, opts?: { cwd?: string; timeout_s?: number; tail_lines?: number; async?: false }): Promise<ExecResult>;
-  exec(id: string, command: string, opts: { cwd?: string; timeout_s?: number; tail_lines?: number; async: true }): Promise<JobRef>;
-  exec(id: string, command: string, opts: { cwd?: string; timeout_s?: number; tail_lines?: number; async?: boolean } = {}): Promise<ExecResult | JobRef> {
+  exec(id: string, command: string, opts?: { cwd?: string; timeout_s?: number; tail_lines?: number; async?: false; session?: boolean }): Promise<ExecResult>;
+  exec(id: string, command: string, opts: { cwd?: string; timeout_s?: number; tail_lines?: number; async: true; session?: boolean }): Promise<JobRef>;
+  exec(id: string, command: string, opts: { cwd?: string; timeout_s?: number; tail_lines?: number; async?: boolean; session?: boolean } = {}): Promise<ExecResult | JobRef> {
     return this.request("POST", `/boxes/${enc(id)}/exec`, { body: { command, ...opts } });
   }
   execBatch(id: string, commands: BatchCommand[], opts: { stop_on_error?: boolean; cwd?: string; timeout_s?: number; tail_lines?: number } = {}) {
@@ -270,6 +307,22 @@ export class Boxa {
   snapshots(id: string) { return this.request<List<Snapshot>>("GET", `/boxes/${enc(id)}/snapshots`); }
   restore(id: string, snapshotId?: string) { return this.request<Box>("POST", `/boxes/${enc(id)}/restore`, { body: snapshotId ? { snapshot_id: snapshotId } : {} }); }
   fork(id: string, opts: { snapshot_id?: string; slug?: string } = {}) { return this.request<Box>("POST", `/boxes/${enc(id)}/fork`, { body: opts }); }
+
+  // ---- v1.3: need-based selection + agent helpers ----
+  /** Workload profiles + per-agent-kind defaults (no auth needed). */
+  profiles() { return this.request<{ items: { id: string; name: string; description: string; template: string; lifecycle: Lifecycle }[]; kinds: { kind: string; profile: string }[] }>("GET", "/profiles"); }
+  /** Rank placement options with price, ETA, score and reasons. Creates nothing. */
+  recommend(input: { profile?: string; template?: string; lifecycle?: Lifecycle; requirements?: Requirements } = {}) {
+    return this.request<Recommendation>("POST", "/recommend", { body: input });
+  }
+  /** Get-or-create a box by name (idempotent); a sleeping box is woken and returned with a resume summary. */
+  ensure(name: string, input: CreateBoxInput = {}) { return this.request<EnsureResult>("POST", "/boxes/ensure", { body: { ...input, name } }); }
+  /** Wake if needed and summarise recent execs, jobs, files and ports. */
+  resume(id: string) { return this.request<NonNullable<EnsureResult["resume"]>>("GET", `/boxes/${enc(id)}/resume`); }
+  /** Copy-on-write clone of a live box on the same host. */
+  clone(id: string, opts: { slug?: string } = {}) { return this.request<Box>("POST", `/boxes/${enc(id)}/clone`, { body: opts }); }
+  /** Right-sizing suggestion for one box (or all running boxes when id is omitted). */
+  rightsize(id?: string) { return this.request<Record<string, unknown>>("GET", id ? `/boxes/${enc(id)}/rightsize` : "/rightsize"); }
 
   // ---- misc ----
   templates() { return this.request<List<Template>>("GET", "/templates"); }

@@ -187,11 +187,14 @@ class _Base:
 
     # -- exec --------------------------------------------------------------
     def exec(self, box_id: str, command: str, *, cwd: Optional[str] = None, timeout_s: Optional[int] = None,
-             tail_lines: Optional[int] = None, async_: bool = False) -> Union[ExecResult, JobRef]:
-        """Run a command. Sync → :class:`ExecResult`; ``async_=True`` → ``{"job_id"}``."""
+             tail_lines: Optional[int] = None, async_: bool = False, session: bool = False) -> Union[ExecResult, JobRef]:
+        """Run a command. Sync → :class:`ExecResult`; ``async_=True`` → ``{"job_id"}``.
+        ``session=True`` keeps cwd and exported variables between calls (persistent shell)."""
         body = _clean({"command": command, "cwd": cwd, "timeout_s": timeout_s, "tail_lines": tail_lines})
         if async_:
             body["async"] = True
+        if session:
+            body["session"] = True
         return self._call("POST", f"/boxes/{_q(box_id)}/exec", body)
 
     def exec_batch(self, box_id: str, commands: Iterable[BatchCommand], *, stop_on_error: bool = True,
@@ -234,6 +237,40 @@ class _Base:
 
     def fork(self, box_id: str, snapshot_id: Optional[str] = None, *, slug: Optional[str] = None) -> Box:
         return self._call("POST", f"/boxes/{_q(box_id)}/fork", _clean({"snapshot_id": snapshot_id, "slug": slug}))
+
+    # -- v1.3: need-based selection + agent helpers ---------------------------
+    def profiles(self) -> Dict[str, Any]:
+        """Workload profiles and per-agent-kind defaults (no auth needed)."""
+        return self._call("GET", "/profiles")
+
+    def recommend(self, profile: Optional[str] = None, *, template: Optional[str] = None,
+                  lifecycle: Optional[str] = None, **requirements: Any) -> Dict[str, Any]:
+        """Rank placement options (warm pool / pool container / VM / new server) with price, ETA,
+        score and reasons. ``requirements``: cpu, ram_mb, disk_gb, max_price_hour, location,
+        max_latency_ms, optimize, isolation, arch, region, lifetime, duration_hours. Creates nothing."""
+        return self._call("POST", "/recommend", _clean({"profile": profile, "template": template, "lifecycle": lifecycle,
+                                                        "requirements": _clean(requirements) or None}))
+
+    def ensure(self, name: str, profile: Optional[str] = None, *, template: Optional[str] = None,
+               lifecycle: Optional[str] = None, cpu: Optional[float] = None, ram_mb: Optional[int] = None,
+               disk_gb: Optional[int] = None, requirements: Optional[Mapping[str, Any]] = None, **extra: Any) -> Dict[str, Any]:
+        """Get-or-create a box by name (idempotent): returns ``{box, action, created, resume?}``;
+        a sleeping box is woken and comes with a resume summary."""
+        body = _box_body(template, lifecycle, cpu, ram_mb, disk_gb, extra)
+        body.update(_clean({"name": name, "profile": profile, "requirements": dict(requirements) if requirements else None}))
+        return self._call("POST", "/boxes/ensure", body)
+
+    def resume(self, box_id: str) -> Dict[str, Any]:
+        """Wake if needed and summarise recent execs, running jobs, changed files and ports."""
+        return self._call("GET", f"/boxes/{_q(box_id)}/resume")
+
+    def clone(self, box_id: str, *, slug: Optional[str] = None) -> Box:
+        """Copy-on-write clone of a live box on the same host."""
+        return self._call("POST", f"/boxes/{_q(box_id)}/clone", _clean({"slug": slug}))
+
+    def rightsize(self, box_id: Optional[str] = None) -> Dict[str, Any]:
+        """Right-sizing suggestion for one box (or all running boxes)."""
+        return self._call("GET", f"/boxes/{_q(box_id)}/rightsize" if box_id else "/rightsize")
 
     # -- misc ----------------------------------------------------------------
     def templates(self) -> Dict[str, List[Template]]:

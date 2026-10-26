@@ -69,10 +69,10 @@ test("discovery + tool formats", { skip }, async () => {
   assert.equal((await bx.health()).ok, true);
   assert.equal((await bx.agentKinds()).items.length, 22);
   const oa = await asOpenAITools(bx);
-  assert.equal(oa.length, 18);
+  assert.equal(oa.length, 21);
   assert.ok(oa.some((t) => t.function.name === "box_exec_batch"));
   assert.equal((await asAnthropicTools(bx))[0].input_schema.type, "object");
-  assert.equal((await asGeminiTools(bx))[0].functionDeclarations.length, 18);
+  assert.equal((await asGeminiTools(bx))[0].functionDeclarations.length, 21);
   assert.ok((await bx.llmsTxt()).startsWith("# Boxa"));
   assert.equal((await bx.openapi()).openapi, "3.1.0");
   const sn = await new Boxa({ apiKey: admin, baseUrl: url }).snippet(agentId, undefined, "zh");
@@ -136,4 +136,27 @@ test("box lifecycle: quote, create, exec, batch, run, restore, fork, tools", { s
   assert.ok(listed.items.some((x) => x.id === box.id));
   await bx.down(fork.id);
   assert.equal((await bx.deleteBox(box.id)).status, "terminated");
+});
+
+test("v1.3 recommend / ensure / clone / session exec", { skip }, async () => {
+  const bx = new Boxa({ apiKey: key, baseUrl: url });
+  const pr = await bx.profiles();
+  assert.equal(pr.items.length, 7);
+  assert.equal(pr.kinds.length, 22);
+  const rec = await bx.recommend({ profile: "general", requirements: { ram_mb: 256, disk_gb: 1, max_price_hour: 1 } });
+  assert.ok(rec.pick && rec.pick.reasons.length > 0 && Object.keys(rec.pick.breakdown).length === 6);
+  const e1 = await bx.ensure("sdk-ts-ensure", { template: "base", spec: { cpu: 0.5, ram_mb: 128, disk_gb: 1 } });
+  assert.equal(e1.action, "created");
+  await bx.exec(e1.box.id, "mkdir -p t && cd t && export K=7", { session: true });
+  const r = await bx.exec(e1.box.id, "pwd; echo K=$K", { session: true });
+  assert.ok(r.stdout_tail.includes("/t") && r.stdout_tail.includes("K=7"));
+  const e2 = await bx.ensure("sdk-ts-ensure");
+  assert.equal(e2.action, "reused");
+  assert.equal(e2.box.id, e1.box.id);
+  const c = await bx.clone(e1.box.id, { slug: "sdk-ts-clone" });
+  assert.equal(c.cloned_from, e1.box.id);
+  assert.equal(c.estimate?.kind, "clone");
+  assert.equal((await bx.resume(e1.box.id)).box.id, e1.box.id);
+  await bx.down(c.id);
+  await bx.down(e1.box.id);
 });
