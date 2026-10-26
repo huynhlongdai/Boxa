@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
-import { ArrowDownUp, CheckCircle2, Cpu, Plug, Plus, ServerCog, Trash2, TrendingDown } from "lucide-react";
+import { ArrowDownUp, CheckCircle2, Cpu, Plug, PlugZap, Plus, ServerCog, Trash2, TrendingDown } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { api, paths } from "@/lib/api";
 import { useAction, useApi } from "@/lib/hooks";
@@ -17,6 +18,12 @@ import { ConfirmButton } from "@/components/boxa/confirm";
 import { ApprovalList } from "@/components/boxa/approvals";
 import { ConfidenceBadge, HostStatusChip, Mono, ProviderChip } from "@/components/boxa/status";
 import { ErrorBox, LoadingRows, PageHeader, SectionTitle } from "@/components/boxa/page";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CatalogView, ConnectProviderWizard, ProviderHealthView } from "@/components/boxa/provider-manager";
+import { SpeedSummary, WarmPoolSettings } from "@/components/boxa/speed";
+import { MeshView } from "@/components/boxa/mesh";
+
+const TABS = ["providers", "health", "catalog", "speed", "mesh"] as const;
 
 
 const TOKEN_HINT: Record<string, string> = { contabo: "contabo", netcup: "netcup", digitalocean: "digitalocean", hetzner: "hetzner", vultr: "vultr" };
@@ -130,7 +137,7 @@ function AddHostDialog({ offers, providers }: { offers: Offer[]; providers: Prov
   );
 }
 
-export default function InfraPage() {
+function ProvidersTab() {
   const { data: providers, error: pe } = useApi<List<Provider>>(paths.providers);
   const { data: hosts, error: he, mutate: mh } = useApi<List<Host>>(paths.hosts, { refreshInterval: (d) => (d?.items.some((h) => h.status === "provisioning") ? 2500 : 15000) });
   const { data: offers } = useApi<List<Offer>>(paths.offers);
@@ -141,15 +148,15 @@ export default function InfraPage() {
   const [sortAsc, setSortAsc] = React.useState(true);
   const sortedOffers = [...(offers?.items ?? [])].sort((a, b) => (sortAsc ? 1 : -1) * (a.price_hour / a.cpu - b.price_hour / b.cpu));
   const poolMonth = (hosts?.items ?? []).filter((h) => h.billing === "pool").reduce((a, h) => a + h.price_month, 0);
+  const [wizard, setWizard] = React.useState(false);
 
   return (
     <>
-      <PageHeader title={t("title")} desc={t("desc")} />
-
       <SectionTitle>{t("expansion")}</SectionTitle>
       <div className="mb-6"><ApprovalList filter={(a) => a.type === "pool_expand" || a.type === "host_down"} emptyText={t("noExpansion")} /></div>
 
-      <SectionTitle>{t("providers")}</SectionTitle>
+      <SectionTitle right={providers && <Button size="sm" onClick={() => setWizard(true)}><PlugZap /> {t("connectWizard")}</Button>}>{t("providers")}</SectionTitle>
+      {providers && <ConnectProviderWizard providers={providers.items} open={wizard} onOpenChange={setWizard} />}
       {pe ? <ErrorBox error={pe} /> : !providers ? <LoadingRows rows={2} /> : (
         <>
           <p className="mb-3 flex flex-wrap items-center gap-1.5 text-[13px] text-muted-foreground">
@@ -238,4 +245,29 @@ export default function InfraPage() {
       <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"><CheckCircle2 className="size-3.5 shrink-0" /> {t("unverifiedNote")}</p>
     </>
   );
+}
+
+function Inner() {
+  const t = useTranslations("infra");
+  const sp = useSearchParams();
+  const router = useRouter();
+  const raw = sp.get("s") ?? "providers";
+  const tab = (TABS as readonly string[]).includes(raw) ? raw : "providers";
+  return (
+    <>
+      <PageHeader title={t("title")} desc={t("desc")} />
+      <Tabs value={tab} onValueChange={(v) => router.replace(v === "providers" ? "/infra" : `/infra?s=${v}`, { scroll: false })}>
+        <TabsList>{TABS.map((v) => <TabsTrigger key={v} value={v}>{t(`tabs.${v}`)}</TabsTrigger>)}</TabsList>
+        <TabsContent value="providers"><ProvidersTab /></TabsContent>
+        <TabsContent value="health"><ProviderHealthView /></TabsContent>
+        <TabsContent value="catalog"><CatalogView /></TabsContent>
+        <TabsContent value="speed"><SpeedSummary /><WarmPoolSettings /></TabsContent>
+        <TabsContent value="mesh"><MeshView /></TabsContent>
+      </Tabs>
+    </>
+  );
+}
+
+export default function InfraPage() {
+  return <React.Suspense fallback={<LoadingRows />}><Inner /></React.Suspense>;
 }
