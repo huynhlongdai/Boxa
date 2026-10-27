@@ -2,6 +2,7 @@
 package boxyaml
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"sort"
@@ -39,6 +40,9 @@ type Request struct {
 	Profile      string              `json:"profile,omitempty"`
 	Requirements *model.Requirements `json:"requirements,omitempty"`
 	Name         string              `json:"name,omitempty"` // box_ensure key
+	// v1.7: supervised app (process supervisor) and wake-on-request (default on).
+	App           *model.AppSpec `json:"app,omitempty"`
+	WakeOnRequest *bool          `json:"wake_on_request,omitempty"`
 }
 
 type Spec struct {
@@ -73,7 +77,7 @@ var knownKeys = map[string]bool{
 	"name": true, "template": true, "spec": true, "lifecycle": true, "idle_minutes": true,
 	"ttl": true, "ttl_seconds": true, "budget_usd": true, "ports": true, "secrets": true,
 	"setup": true, "region": true, "description": true, "egress": true,
-	"profile": true, "requirements": true,
+	"profile": true, "requirements": true, "app": true, "wake_on_request": true,
 }
 
 // ParseSize parses "4G", "512M", "4GB", "4096" (MB for ram) into MB.
@@ -154,6 +158,31 @@ func Parse(src string) (*Request, Errors) {
 			}
 			r.Slug = v.Value
 		case "description":
+		case "app":
+			// app: { repo: …, install: …, start: …, port: 8000, ready: { http: /healthz }, restart: always, env: {…} }
+			var raw map[string]any
+			var sp model.AppSpec
+			if v.Kind != yaml.MappingNode || v.Decode(&raw) != nil {
+				add(v, "app must be a mapping like { start: npm start, port: 8000 }")
+				continue
+			}
+			if b, err := json.Marshal(raw); err != nil || json.Unmarshal(b, &sp) != nil {
+				add(v, "app: bad field types (start/install/repo are strings, port is a number, env is a mapping)")
+				continue
+			}
+			sp.Normalize()
+			if msg := sp.Validate(); msg != "" {
+				add(v, "app: %s", msg)
+				continue
+			}
+			r.App = &sp
+		case "wake_on_request":
+			b, err := strconv.ParseBool(v.Value)
+			if err != nil {
+				add(v, "wake_on_request must be true or false")
+				continue
+			}
+			r.WakeOnRequest = &b
 		case "profile":
 			r.Profile = v.Value
 		case "requirements":

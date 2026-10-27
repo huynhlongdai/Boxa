@@ -36,6 +36,11 @@ type Config struct {
 	// AssumePublicURL (BOXAZ_INGRESS_ASSUME_PUBLIC) tries the ingress fallback
 	// even when PublicURL looks private (e.g. sandboxes reach it over a VPN).
 	AssumePublicURL bool
+	// v1.7 gateway: BOXAZ_WAKE_HOLD (default 10 s, settings.wake.hold_s wins)
+	// and BOXAZ_GATEWAY_DOMAIN (host-based gateway URLs <key>-<port>.<domain>,
+	// needs wildcard DNS + TLS pointing at core).
+	WakeHold      time.Duration
+	GatewayDomain string
 	// PublicURLProbe checks a fresh tunnel URL from core (nil = real HTTP GET; tests stub it).
 	PublicURLProbe     func(ctx context.Context, url string) bool
 	BaseDomain         string // overrides settings.base_domain when set
@@ -158,6 +163,9 @@ type Manager struct {
 	lastObs map[string]*proto.ObserveResult
 	etaMu   sync.Mutex
 	etas    map[string][]float64 // "<host>|<template>" → recent cold create seconds
+	// v1.7
+	app appState
+	gw  gatewayState
 }
 
 // SetObjectStoreHTTP overrides the HTTP client used for object storage (tests).

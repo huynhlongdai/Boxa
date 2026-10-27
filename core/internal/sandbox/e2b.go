@@ -12,6 +12,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,8 +36,10 @@ type E2B struct {
 	// EnvdBase overrides the envd URL for every sandbox (tests).
 	EnvdBase string
 	fork     bool
-	mu       sync.Mutex
-	meta     map[string]e2bSandbox
+	// noAutoResume is set after the API rejected lifecycle autoResume once.
+	noAutoResume bool
+	mu           sync.Mutex
+	meta         map[string]e2bSandbox
 }
 
 type e2bSandbox struct {
@@ -189,9 +192,29 @@ func (d *E2B) Create(ctx context.Context, c Cred, s Spec) (*Sandbox, error) {
 	if len(s.Env) > 0 {
 		body["envVars"] = s.Env
 	}
+	// v1.7 native wake: paused sandboxes resume on their own when traffic
+	// reaches the preview host (lifecycle onTimeout=pause + autoResume).
+	// BOXAZ_NATIVE_AUTORESUME=0 turns it off; an API that rejects the field
+	// gets the plain body (once, then never again for this driver).
+	d.mu.Lock()
+	auto := !d.noAutoResume && os.Getenv("BOXAZ_NATIVE_AUTORESUME") != "0"
+	d.mu.Unlock()
+	if auto {
+		body["autoPause"] = true
+		body["autoResume"] = map[string]any{"enabled": true}
+	}
 	api := d.api(c, s.Region)
 	var sb e2bSandbox
-	if err := d.h.do(ctx, "POST", api+"/sandboxes", d.hdr(c), body, &sb); err != nil {
+	err := d.h.do(ctx, "POST", api+"/sandboxes", d.hdr(c), body, &sb)
+	if he, ok := err.(*HTTPError); ok && auto && (he.Status == 400 || he.Status == 422) {
+		d.mu.Lock()
+		d.noAutoResume = true
+		d.mu.Unlock()
+		body["autoPause"] = false
+		delete(body, "autoResume")
+		err = d.h.do(ctx, "POST", api+"/sandboxes", d.hdr(c), body, &sb)
+	}
+	if err != nil {
 		return nil, err
 	}
 	if sb.SandboxID == "" {

@@ -9,10 +9,12 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -57,6 +59,8 @@ type Agent struct {
 	jobs    sync.Map // job id → context.CancelFunc
 	aliases *aliasTable
 	meshIP  string
+	apps    map[string]*appSup // v1.7 supervised apps (guarded by mu)
+	appsUp  sync.Once
 }
 
 type ptySession struct {
@@ -92,6 +96,8 @@ func (a *Agent) saveState(s state) error {
 
 // Run connects and reconnects forever until ctx is done.
 func (a *Agent) Run(ctx context.Context) error {
+	a.appsUp.Do(func() { go a.loadApps(ctx) })
+	defer a.stopAllApps()
 	backoff := time.Second
 	for ctx.Err() == nil {
 		start := time.Now()
@@ -230,6 +236,11 @@ func (a *Agent) metricsLoop(ctx context.Context, p *hostlink.Peer) {
 func (a *Agent) onFrame(p *hostlink.Peer, f proto.Frame) {
 	switch f.Type {
 	case proto.TReq:
+		if f.Method == proto.MTCPOpen {
+			f.Params = a.rewriteIDs(f.Params)
+			p.Reply(f, nil, a.openTCP(p, f))
+			return
+		}
 		res, err := a.handle(context.Background(), f)
 		p.Reply(f, res, err)
 	case proto.TPtyData:
@@ -290,10 +301,16 @@ func (a *Agent) handle(ctx context.Context, f proto.Frame) (any, error) {
 		}
 		switch f.Method {
 		case proto.MStart:
-			return nil, a.drv.Start(ctx, p.BoxID)
+			err := a.drv.Start(ctx, p.BoxID)
+			if err == nil {
+				a.appBoxStarted(p.BoxID)
+			}
+			return nil, err
 		case proto.MStop:
+			a.appBoxStopped(p.BoxID)
 			return nil, a.drv.Stop(ctx, p.BoxID)
 		default:
+			a.appBoxGone(p.BoxID)
 			err := a.drv.Delete(ctx, p.BoxID)
 			if err == nil {
 				a.aliases.drop(a.aliases.public(p.BoxID))
@@ -385,7 +402,15 @@ func (a *Agent) handle(ctx context.Context, f proto.Frame) (any, error) {
 			p.Location = loc
 			defer os.Remove(localFile(loc))
 		}
-		return map[string]bool{"ok": true}, a.drv.Restore(ctx, p)
+		if err := a.drv.Restore(ctx, p); err != nil {
+			return nil, err
+		}
+		if !p.Create {
+			a.appBoxRestored(p.BoxID)
+		}
+		return map[string]bool{"ok": true}, nil
+	case proto.MAppSet, proto.MAppGet, proto.MAppRestart, proto.MAppEnsure, proto.MAppLogs:
+		return a.handleApp(ctx, f.Method, f.Params)
 	case proto.MEgress:
 		p, err := decode[proto.EgressParams](f)
 		if err != nil {
@@ -660,6 +685,24 @@ func (a *Agent) closeAllPTY() {
 	for _, id := range ids {
 		a.closePTY(id)
 	}
+}
+
+// openTCP answers tcp.open: dial the box port and pump bytes (v1.7 gateway).
+func (a *Agent) openTCP(p *hostlink.Peer, f proto.Frame) error {
+	tp, err := decode[proto.TCPOpenParams](f)
+	if err != nil {
+		return err
+	}
+	addr, err := a.drv.Addr(context.Background(), tp.BoxID, tp.Port)
+	if err != nil {
+		return err
+	}
+	c, err := net.DialTimeout("tcp", addr, 5*time.Second)
+	if err != nil {
+		return boxErr("UNAVAILABLE", "nothing listens on port "+strconv.Itoa(tp.Port)+": "+err.Error())
+	}
+	p.ServeStream(tp.Stream, c)
+	return nil
 }
 
 var ingressClient = &http.Client{Timeout: 60 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}

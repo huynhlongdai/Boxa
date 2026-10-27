@@ -25,7 +25,7 @@ import (
 // ToolNames is the MCP tool list advertised in AGENTS.md (kept in sync with
 // internal/mcp by a test there).
 var ToolNames = []string{"box_ensure", "box_recommend", "box_up", "box_quote", "box_exec", "box_exec_batch", "box_job", "box_logs", "box_read", "box_write",
-	"box_grep", "box_observe", "box_snapshot", "box_restore", "box_clone", "box_fork", "box_url", "box_sleep", "box_down", "box_list", "box_cost", "box_templates"}
+	"box_grep", "box_observe", "box_snapshot", "box_restore", "box_clone", "box_fork", "box_url", "box_url_token", "box_app_set", "box_app_status", "box_app_logs", "box_sleep", "box_down", "box_list", "box_cost", "box_templates"}
 
 // BaseURL is the public URL agents use to reach core.
 func (m *Manager) BaseURL() string {
@@ -501,6 +501,9 @@ func (m *Manager) Restore(ctx context.Context, p *Principal, id string, in Resto
 	b.LastActiveAt = time.Now().UTC()
 	m.Store.PutBox(ctx, b)
 	m.EmitData(ctx, p.Actor(), b.ID, b.AgentID, "box.restored", fmt.Sprintf("restored snapshot %s", sn.ID), nil, map[string]any{"snapshot_id": sn.ID, "source_box_id": src.ID})
+	if b.App != nil {
+		go m.appAfterRestore(b.ID) // v1.7
+	}
 	m.publishBox(b)
 	return m.decorateBox(ctx, b), nil
 }
@@ -574,6 +577,7 @@ func (m *Manager) Fork(ctx context.Context, p *Principal, id string, in RestoreI
 		IdleMinutes: src.IdleMinutes, BudgetUSD: src.BudgetUSD, Ports: nonNilInts(src.Ports), Secrets: nonNilStrs(src.Secrets),
 		Setup: src.Setup, CreatedAt: now, LastActiveAt: now, Locale: src.Locale, ForkedFrom: sn.ID,
 	}
+	inheritV17(b, src)
 	if src.Egress != nil {
 		eg := *src.Egress
 		eg.Allow = append([]string{}, src.Egress.Allow...)

@@ -90,7 +90,17 @@
   "Pass the port your server listens on, e.g. 8000.": "サーバーが待ち受けているポートを指定してください（例: 8000）。",
   "Retry, or box_fork (snapshot based) instead.": "再試行するか、代わりに box_fork（スナップショット方式）を使ってください。",
   "Wake the box first (box_sleep wake=true).": "先に box を起こしてください（box_sleep wake=true）。",
-  "Retry in a few seconds; the in-box ingress agent is (re)connecting.": "数秒後に再試行してください。ボックス内の ingress エージェントが（再）接続中です。"
+  "Retry in a few seconds; the in-box ingress agent is (re)connecting.": "数秒後に再試行してください。ボックス内の ingress エージェントが（再）接続中です。",
+  "Retry in a few seconds; the box link is reconnecting.": "数秒後に再試行してください。box のリンクが再接続中です。",
+  "Example: {\"repo\":\"https://github.com/heroku/node-js-sample\",\"install\":\"npm install\",\"start\":\"npm start\",\"port\":5000}.": "例: {\"repo\":\"https://github.com/heroku/node-js-sample\",\"install\":\"npm install\",\"start\":\"npm start\",\"port\":5000}。",
+  "Retry in a few seconds.": "数秒後に再試行してください。",
+  "Use the port number, e.g. /ports/8000/tokens.": "ポート番号を使ってください（例: /ports/8000/tokens）。",
+  "Example: \"app\":{\"start\":\"npm start\",\"port\":8000}.": "例: \"app\":{\"start\":\"npm start\",\"port\":8000}。",
+  "Expose it first: POST /v1/boxes/{id}/ports {port}.": "先に公開してください: POST /v1/boxes/{id}/ports {port}。",
+  "Use a ttl_s between 60 and 2592000 (30 days).": "ttl_s は 60〜2592000（30 日）で指定してください。",
+  "Use \"public\" or \"token\".": "\"public\" か \"token\" を使ってください。",
+  "Set it first: PUT /v1/boxes/{id}/app (box app set).": "先に設定してください: PUT /v1/boxes/{id}/app（box app set）。",
+  "Set BOXAZ_PUBLIC_URL to an internet-reachable URL of core so the sandbox can dial in, or use a provider with preview URLs.": "サンドボックスが接続できるよう BOXAZ_PUBLIC_URL をインターネットから到達可能な core の URL に設定するか、プレビュー URL のあるプロバイダーを使ってください。"
  },
  "msg": {
   "%s bootstrap exit %d: %s": "%s のブートストラップが終了コード %d で失敗: %s",
@@ -240,7 +250,18 @@
   "provider %s is not a sandbox provider": "プロバイダー %s はサンドボックスプロバイダーではありません",
   "ingress agent of %s is not connected": "%s の ingress エージェントが接続されていません",
   "no box at this address": "このアドレスにボックスはありません",
-  "port %d is not exposed": "ポート %d は公開されていません"
+  "port %d is not exposed": "ポート %d は公開されていません",
+  "box %s link is not connected": "box %s のリンクが接続されていません",
+  "token %s not found": "トークン %s が見つかりません",
+  "access must be public or token": "access は public か token である必要があります",
+  "the gateway cannot reach this sandbox: %s": "ゲートウェイはこのサンドボックスに到達できません: %s",
+  "ttl_s out of range": "ttl_s が範囲外です",
+  "port %d is not exposed on box %s": "ポート %d は box %s で公開されていません",
+  "cannot set the app of a box in status %s": "状態 %s の box にはアプリを設定できません",
+  "invalid app spec: %s": "アプリ仕様が無効です: %s",
+  "bad port": "ポートが不正です",
+  "ingress agent: %v": "ingress エージェント: %v",
+  "box %s has no app": "box %s にはアプリがありません"
  },
  "text": {
   "agentsmd.budget_box": "このボックスに $%.2f",

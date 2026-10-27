@@ -72,6 +72,10 @@ type PortView struct {
 	// Caveats explain the limits of the URL's kind and why earlier steps of
 	// the fallback chain (provider preview → ingress → tunnel) were skipped.
 	Caveats []string `json:"caveats,omitempty"`
+	// v1.7: the stable Boxaz gateway URL of this port (wake on request, URL
+	// tokens, WebSocket/SSE pass-through) and its access mode.
+	GatewayURL string `json:"gateway_url,omitempty"`
+	Access     string `json:"access"` // public | token
 }
 
 // PortsResult is GET/POST /v1/boxes/{id}/ports.
@@ -82,6 +86,24 @@ type PortsResult struct {
 }
 
 func (m *Manager) portView(ctx context.Context, b *model.Box, h *model.Host, port int) PortView {
+	v := m.portViewChain(ctx, b, h, port)
+	v.Access = b.AccessFor(port)
+	v.GatewayURL = m.GatewayURL(b, port)
+	if v.Access == model.AccessToken {
+		// token ports are only handed out through the gateway: never the
+		// provider preview / tunnel URL, which would bypass the token
+		gw := v.GatewayURL
+		if gw == "" {
+			gw = m.GatewayPath(b, port)
+		}
+		return PortView{Port: port, URL: gw, Kind: KindGateway, Public: false, GatewayURL: v.GatewayURL, Access: v.Access,
+			Note:    "token required: open with ?token=<bxt_…> (exchanged for a cookie), Authorization: Bearer <token> or X-Boxaz-Token; issue one with POST /v1/boxes/{id}/ports/{port}/tokens (box url --token)",
+			Caveats: []string{caveatGateway}}
+	}
+	return v
+}
+
+func (m *Manager) portViewChain(ctx context.Context, b *model.Box, h *model.Host, port int) PortView {
 	v := PortView{Port: port, Kind: "none"}
 	if h != nil && h.Billing == "sandbox" {
 		if u := m.sandboxPreview(ctx, h, port); u != "" {
@@ -229,6 +251,7 @@ func (m *Manager) cloneSandbox(ctx context.Context, p *Principal, src *model.Box
 		TTLSeconds: src.TTLSeconds, IdleMinutes: src.IdleMinutes, BudgetUSD: src.BudgetUSD, CostPerHour: src.CostPerHour, Billing: "sandbox",
 		Ports: nonNilInts(src.Ports), Secrets: nonNilStrs(src.Secrets), CreatedAt: now, LastActiveAt: now, Locale: src.Locale,
 		Profile: src.Profile, Requirements: src.Requirements, Isolation: src.Isolation, ClonedFrom: src.ID}
+	inheritV17(nb, src)
 	if err := m.Store.PutBox(ctx, nb); err != nil {
 		return nil, err
 	}
@@ -310,6 +333,7 @@ func (m *Manager) forkSandboxSnapshot(ctx context.Context, p *Principal, src *mo
 		Lifecycle: src.Lifecycle, Template: src.Template, Spec: src.Spec, Region: src.Region, TTLSeconds: src.TTLSeconds,
 		IdleMinutes: src.IdleMinutes, BudgetUSD: src.BudgetUSD, Ports: nonNilInts(src.Ports), Secrets: nonNilStrs(src.Secrets),
 		Setup: src.Setup, CreatedAt: now, LastActiveAt: now, Locale: src.Locale, ForkedFrom: sn.ID, Billing: "sandbox", Provider: snapHost.Provider}
+	inheritV17(b, src)
 	if err := m.Store.PutBox(ctx, b); err != nil {
 		return nil, err
 	}

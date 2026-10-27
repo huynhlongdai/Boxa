@@ -298,8 +298,8 @@ func TestEndToEnd(t *testing.T) {
 		json.NewDecoder(resp.Body).Decode(&out)
 		resp.Body.Close()
 		if r, ok := out["result"].(map[string]any); ok {
-			if tools, ok := r["tools"].([]any); ok && len(tools) != 22 {
-				t.Fatalf("want 22 tools, got %d", len(tools))
+			if tools, ok := r["tools"].([]any); ok && len(tools) != 26 {
+				t.Fatalf("want 26 tools, got %d", len(tools))
 			}
 		} else {
 			t.Fatalf("mcp result: %+v", out)

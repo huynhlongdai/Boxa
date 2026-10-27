@@ -119,11 +119,11 @@ tar tzf "$SNAPFILE" | grep -q 'work/notes/a.txt' && pass "snapshot = tar.gz cont
 echo "== MCP"
 R=$(curl -s -X POST "$BOXAZ_URL/mcp" -H "Authorization: Bearer $AKEY" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
 N=$(echo "$R" | jq '.result.tools | length'); echo "    tools: $(echo "$R" | jq -c '[.result.tools[].name]')"
-[ "$N" = 22 ] && pass "MCP HTTP tools/list → 22 tools" || fail "mcp http"
+[ "$N" = 26 ] && pass "MCP HTTP tools/list → 26 tools" || fail "mcp http"
 R=$(curl -s -X POST "$BOXAZ_URL/mcp" -H "Authorization: Bearer $AKEY" -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"box_exec\",\"arguments\":{\"box_id\":\"$BOX\",\"command\":\"echo via-mcp\"}}}")
 echo "$R" | jq -e '.result.isError==false and .result.structuredContent.stdout_tail=="via-mcp"' >/dev/null && pass "MCP tools/call box_exec" || fail "mcp call"
 R=$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' '{"jsonrpc":"2.0","method":"notifications/initialized"}' '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | "$BIN/box" mcp)
-[ "$(echo "$R" | jq -s '.[] | select(.id==2) | .result.tools | length')" = 22 ] && pass "MCP stdio (box mcp) tools/list → 22 tools" || fail "mcp stdio"
+[ "$(echo "$R" | jq -s '.[] | select(.id==2) | .result.tools | length')" = 26 ] && pass "MCP stdio (box mcp) tools/list → 26 tools" || fail "mcp stdio"
 
 echo "== v1.1 discovery (no auth)"
 curl -sf "$BOXAZ_URL/v1/openapi.json" | jq -e '.openapi=="3.1.0" and (.paths|has("/v1/quote")) and (.paths|has("/v1/boxes/{id}/fork"))' >/dev/null \
@@ -131,10 +131,10 @@ curl -sf "$BOXAZ_URL/v1/openapi.json" | jq -e '.openapi=="3.1.0" and (.paths|has
 LT=$(curl -sf "$BOXAZ_URL/llms.txt"); [[ $LT == "# Boxaz"* ]] && pass "llms.txt" || fail llms
 LF=$(curl -sf -H 'Accept-Language: vi' "$BOXAZ_URL/llms-full.txt"); grep -q 'Bắt đầu nhanh' <<<"$LF" && grep -q '/a2a' <<<"$LF" && pass "llms-full.txt localized (vi)" || fail llms-full
 curl -sf "$BOXAZ_URL/.well-known/mcp.json" | jq -e '.transport.url|endswith("/mcp")' >/dev/null && pass ".well-known/mcp.json" || fail mcpcard
-curl -sf "$BOXAZ_URL/.well-known/agent.json" | jq -e '.protocolVersion=="0.3.0" and (.skills|length)==23' >/dev/null && pass ".well-known/agent.json (A2A card, exec + 22 tool skills)" || fail agentcard
+curl -sf "$BOXAZ_URL/.well-known/agent.json" | jq -e '.protocolVersion=="0.3.0" and (.skills|length)==27' >/dev/null && pass ".well-known/agent.json (A2A card, exec + 26 tool skills)" || fail agentcard
 for F in openai anthropic gemini mcp; do
   N=$(curl -sf "$BOXAZ_URL/v1/tools?format=$F" | jq 'if type=="array" then (if .[0].functionDeclarations then .[0].functionDeclarations|length else length end) else .tools|length end')
-  [ "$N" = 22 ] && pass "tools?format=$F → $N" || fail "tools $F ($N)"
+  [ "$N" = 26 ] && pass "tools?format=$F → $N" || fail "tools $F ($N)"
 done
 [ "$(curl -sf $BOXAZ_URL/v1/agent-kinds | jq '.items|length')" = 22 ] && pass "agent-kinds → 22" || fail kinds
 
@@ -270,6 +270,31 @@ grep -q '^DELETE /v1/sandboxes/' "$WORK/fsb/calls.log" && pass "box down → san
 echo "    fake provider calls: $(awk '{print $1" "$2}' "$WORK/fsb/calls.log" | sed 's/sbx-[0-9a-f]*/:id/' | sort | uniq -c | awk '{print $2" "$3"×"$1}' | paste -sd, -)"
 
 grep -q "deprecated env vars honoured, rename them to BOXAZ_\*: BOXA_WARM_INTERVAL" "$WORK/core.log" && pass "legacy BOXA_* env still honoured, with a deprecation note" || fail "legacy env compat"
+echo "== v1.7 app supervisor / gateway (wake on request) / URL tokens"
+APORT=${APP_PORT:-18791}
+AB=$(KEY=$AKEY api POST /boxes -d '{"template":"base","slug":"e2e-app","lifecycle":"session"}' | jq -r .id)
+for i in $(seq 40); do [ "$(KEY=$AKEY api GET /boxes/$AB | jq -r .status)" = running ] && break; sleep 0.25; done
+"$BIN/box" app set "$AB" --start "exec python3 -m http.server \$PORT --bind 127.0.0.1" --install "echo app-ok > index.html" --port $APORT --ready-http / --workdir /work/site >/dev/null || fail "box app set"
+for i in $(seq 60); do S=$("$BIN/box" app status "$AB" | awk '$1=="state"{print $2}'); [ "$S" = ready ] && break; sleep 0.25; done
+[ "$S" = ready ] && pass "box app set → supervised app ready (boxd supervisor)" || fail "app state $S"
+GW=$BOXAZ_URL$(KEY=$AKEY api GET /boxes/$AB/ports | jq -r --argjson p $APORT '.ports[]|select(.port==$p)|.gateway_url')
+[ "$(curl -s "$GW")" = app-ok ] && pass "gateway URL serves the app: $GW" || fail "gateway $GW"
+pkill -f "http.server $APORT" || true; sleep 0.5
+for i in $(seq 60); do R=$(KEY=$AKEY api GET /boxes/$AB/app); [ "$(echo "$R" | jq -r .status.state)" = ready ] && break; sleep 0.25; done
+echo "$R" | jq -e '.status.ready and .status.restarts>=1' >/dev/null && pass "killed app restarted by the supervisor (restarts=$(echo "$R" | jq .status.restarts))" || fail "restart $R"
+"$BIN/box" app logs "$AB" | grep -q "exited with code" && pass "box app logs shows the crash + restart" || fail "app logs"
+"$BIN/box" sleep "$AB" >/dev/null
+[ "$(curl -s -o /dev/null -w '%{http_code}' -I "$GW")" = 503 ] && [ "$(KEY=$AKEY api GET /boxes/$AB | jq -r .status)" = sleeping ] && pass "HEAD probe to a sleeping box → 503, box stays asleep" || fail "probe woke the box"
+T0=$(date +%s%3N); B=$(curl -s "$GW"); T1=$(date +%s%3N)
+[ "$B" = app-ok ] && pass "request to the sleeping box woke it and returned 200 in $((T1-T0)) ms" || fail "wake on request: $B"
+TOK=$("$BIN/box" url "$AB" $APORT --token --ttl 10m | awk '/^token /{print $2}')
+[ "$(curl -s -o /dev/null -w '%{http_code}' "$GW")" = 401 ] && [ "$(curl -s -H "Authorization: Bearer $TOK" "$GW")" = app-ok ] && pass "box url --token: 401 without, 200 with Bearer" || fail "token"
+C=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "$GW?token=$TOK"); [[ $C == 302* && $C != *bxt_* ]] && pass "?token= exchanged for a cookie + redirect without it" || fail "query token $C"
+TID=$("$BIN/box" url "$AB" $APORT --tokens | awk 'NR==2{print $1}'); "$BIN/box" url "$AB" $APORT --revoke "$TID" >/dev/null
+[ "$(curl -s -o /dev/null -w '%{http_code}' -H "X-Boxaz-Token: $TOK" "$GW")" = 401 ] && pass "revoked token → 401" || fail "revoke"
+api GET /capabilities | jq -e 'any(.items[]; .provider=="e2b" and .wake_on_http_native and .memory_pause) and any(.items[]; .provider=="prized" and (.inbound_http|not)) and all(.items[]; .wake_via_gateway)' >/dev/null && pass "GET /capabilities: lifecycle flags per provider" || fail caps
+"$BIN/box" down "$AB" >/dev/null
+
 echo "== ledger / overview"
 sleep 2.5
 C=$(KEY=$ADMIN api GET /costs); echo "    summary: $(echo "$C" | jq -c .summary) entries=$(echo "$C" | jq '.items|length')"

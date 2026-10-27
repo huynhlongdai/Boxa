@@ -254,6 +254,8 @@ func (s *Shim) Call(ctx context.Context, method string, params, out any) error {
 			return &proto.Error{Code: "NOT_FOUND", Message: "log not found (a T3 sandbox keeps the last 16 truncated outputs in memory)"}
 		}
 		return encodeOut(proto.LogReadResult{Content: c}, out)
+	case proto.MAppSet, proto.MAppGet, proto.MAppRestart, proto.MAppEnsure, proto.MAppLogs:
+		return s.appCall(ctx, method, params, out)
 	case proto.MExecCancel:
 		return nil // the provider's request/response exec cannot be cancelled mid-flight
 	case proto.MRead:

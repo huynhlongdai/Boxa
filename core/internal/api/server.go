@@ -99,6 +99,7 @@ func (s *Server) routes() http.Handler {
 			r.Post("/quote", s.quote)
 			s.routesV13(r)
 			s.routesV14(r)
+			s.routesV17(r)
 			r.Get("/boxes/{id}/files", s.readFile)
 			r.Put("/boxes/{id}/files", s.writeFile)
 			r.Post("/boxes/{id}/grep", s.grep)

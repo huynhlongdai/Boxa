@@ -41,6 +41,8 @@ type op struct {
 
 var idP = param{"id", "path", "string", "Box id (box_…) or slug", true}
 
+var portP = param{"port", "path", "integer", "port number", true}
+
 func qp(name, typ, desc string) param { return param{name, "query", typ, desc, false} }
 
 type ok struct {
@@ -259,6 +261,22 @@ var ops = []op{
 	{Method: "GET", Path: "/v1/mesh/config", Summary: "Generated headscale config.yaml, derp.yaml and acl.json", Tag: "mesh", Params: []param{qp("format", "string", "yaml = config.yaml as text")}},
 	{Method: "GET", Path: "/v1/mesh/acl", Summary: "Generated ACL policy from box ownership + egress", Tag: "mesh"},
 	{Method: "POST", Path: "/v1/mesh/keys", Summary: "Create a pre-auth key for a host or box", Tag: "mesh", Req: manager.MeshKeyInput{}, Resp: manager.MeshKeyResult{}, Status: 201},
+	// v1.7: app supervisor, wake on request, scoped URL tokens, lifecycle capabilities
+	{Method: "PATCH", Path: "/v1/boxes/{id}", Summary: "Change box settings (wake_on_request)", Tag: "boxes", Req: manager.PatchBoxInput{}, Resp: model.Box{}, Params: []param{idP},
+		Desc: "wake_on_request (default true): a request to the box's gateway URL wakes it while it sleeps."},
+	{Method: "GET", Path: "/v1/boxes/{id}/app", Summary: "App spec + live supervisor status (state, ready, restarts, last_exit)", Tag: "apps", Resp: model.AppView{}, Params: []param{idP}},
+	{Method: "PUT", Path: "/v1/boxes/{id}/app", Summary: "Set the supervised app (repo, install, start, port, ready, restart, env, workdir) and start it", Tag: "apps", Req: model.AppSpec{}, Resp: model.AppView{}, Params: []param{idP},
+		Desc: "boxd clones the repo, runs install once per spec, starts the app, restarts it on crash with exponential backoff (restart: always|on-failure|never), re-runs it after a cold resume, restore or clone and gates gateway traffic to `port` until the readiness check (ready.http path or ready.tcp) passes. On exec-only (T3) sandboxes a setsid supervisor script does the same. The port is exposed automatically."},
+	{Method: "DELETE", Path: "/v1/boxes/{id}/app", Summary: "Stop and remove the app", Tag: "apps", Resp: model.AppView{}, Params: []param{idP}},
+	{Method: "POST", Path: "/v1/boxes/{id}/app/restart", Summary: "Restart the app now", Tag: "apps", Resp: model.AppView{}, Params: []param{idP}},
+	{Method: "GET", Path: "/v1/boxes/{id}/app/logs", Summary: "App output (ring buffer + file); ?follow=1 streams SSE events `log`", Tag: "apps", Resp: proto.AppLogsResult{},
+		Params: []param{idP, qp("offset", "integer", "byte offset to read from; -1 (default) = the last `max` bytes"), qp("max", "integer", "bytes per chunk (default 16384)"), qp("follow", "boolean", "1 = text/event-stream of {data, offset, truncated}")}},
+	{Method: "PUT", Path: "/v1/boxes/{id}/ports/{port}", Summary: "Set a port's access: public (gateway URL works without a token) or token", Tag: "urls", Req: manager.PortAccessInput{}, Resp: manager.PortView{}, Params: []param{idP, portP}},
+	{Method: "GET", Path: "/v1/boxes/{id}/ports/{port}/tokens", Summary: "List the port's URL tokens (values are never returned)", Tag: "urls", Resp: manager.URLTokenList{}, Params: []param{idP, portP}},
+	{Method: "POST", Path: "/v1/boxes/{id}/ports/{port}/tokens", Summary: "Issue a scoped URL token for this box+port (expiring, revocable)", Tag: "urls", Req: manager.CreateURLTokenInput{}, Resp: model.URLToken{}, Status: 201, Params: []param{idP, portP},
+		Desc: "The token (bxt_…) is returned once with a ready-to-share `url` (gateway URL + ?token=). The gateway accepts it as Authorization: Bearer, X-Boxaz-Token, ?token= (exchanged for an HttpOnly cookie, then redirected without it) or that cookie, and strips it before the request reaches the app. private (default true) switches the port to access=token. Provider-wide tokens are never handed out."},
+	{Method: "DELETE", Path: "/v1/boxes/{id}/ports/{port}/tokens/{token_id}", Summary: "Revoke a URL token (effective immediately)", Tag: "urls", Resp: model.URLToken{}, Params: []param{idP, portP, {"token_id", "path", "string", "token id (utok_…)", true}}},
+	{Method: "GET", Path: "/v1/capabilities", Summary: "Lifecycle capability flags per provider (memory_pause, wake_on_http_native, wake_via_gateway, fork, inbound_http, max_runtime)", Tag: "infra", Resp: manager.CapabilityRow{}, List: true},
 	// v1.4: sandbox provider tier
 	{Method: "GET", Path: "/v1/sandbox/providers", Summary: "Sandbox API providers (T2/T3): capabilities, per-second prices, regions, verification level, connection state", Tag: "infra", Resp: manager.SandboxProviderView{}, List: true,
 		Desc: "Connect one with PUT /v1/providers/{id}/token (multi-field credentials as a JSON object string, e.g. {\"token\":\"…\",\"project_id\":\"…\"}). mode=dial: boxd runs inside the sandbox (T2); mode=shim: exec-only gateway shim (T3)."},

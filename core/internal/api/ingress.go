@@ -28,6 +28,11 @@ func (s *Server) ingressMW(next http.Handler) http.Handler {
 			return
 		}
 		host := hostOnly(r.Host)
+		// host-based gateway URLs: <key>-<port>.<BOXAZ_GATEWAY_DOMAIN>
+		if d := strings.TrimPrefix(s.M.Cfg.GatewayDomain, "."); d != "" && strings.HasSuffix(strings.ToLower(host), "."+strings.ToLower(d)) {
+			s.gateway(w, r, strings.TrimSuffix(host[:len(host)-len(d)-1], "."), "")
+			return
+		}
 		if !s.M.IsIngressHost(r.Context(), host) {
 			next.ServeHTTP(w, r)
 			return
@@ -108,64 +113,13 @@ const (
 	legacyTokenCookie = "boxa_t"
 )
 
-// pathIngress serves <public url>/x/<key>-<port>/… : the ingress fallback for
-// sandbox boxes whose provider has no preview URL. The key in the path is the
-// credential (unguessable, per box); the prefix is stripped before forwarding.
+// pathIngress serves <public url>/x/<key>-<port>/… : the v1.7 Boxaz gateway
+// (stable URL per box+port, wake on request, URL tokens, unbuffered proxy).
+// The key in the path is unguessable per box; the prefix is stripped before
+// forwarding.
 func (s *Server) pathIngress(w http.ResponseWriter, r *http.Request) {
 	seg, _, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/x/"), "/")
-	b, port, err := s.M.BoxForIngressPath(r.Context(), seg)
-	if err != nil {
-		http.Error(w, "boxaz: no running box at this address", http.StatusNotFound)
-		return
-	}
-	prefix := "/x/" + seg
-	rest := strings.TrimPrefix(r.URL.Path, prefix)
-	if rest == "" {
-		// relative links need the trailing slash
-		http.Redirect(w, r, prefix+"/"+qs(r.URL.RawQuery), http.StatusMovedPermanently)
-		return
-	}
-	body, _ := io.ReadAll(io.LimitReader(r.Body, 32<<20))
-	hdr := map[string][]string{}
-	for k, v := range r.Header {
-		if !hopHeaders[k] && k != "Cookie" && k != "Authorization" {
-			hdr[k] = v
-		}
-	}
-	// the box app gets its own cookies, never the dashboard/API session
-	var keep []string
-	for _, c := range r.Cookies() {
-		if c.Name != "boxaz_key" && c.Name != "boxa_key" {
-			keep = append(keep, c.Name+"="+c.Value)
-		}
-	}
-	if len(keep) > 0 {
-		hdr["Cookie"] = []string{strings.Join(keep, "; ")}
-	}
-	hdr["X-Forwarded-Host"] = []string{r.Host}
-	hdr["X-Forwarded-Prefix"] = []string{prefix}
-	if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
-		hdr["X-Forwarded-Proto"] = []string{"https"}
-	}
-	res, err := s.M.ProxyPort(r.Context(), b, port, r.Method, rest+qs(r.URL.RawQuery), hdr, body)
-	if err != nil {
-		ae := model.AsAPIError(err)
-		http.Error(w, "boxaz: "+ae.Message, http.StatusBadGateway)
-		return
-	}
-	for k, vs := range res.Headers {
-		if hopHeaders[k] || strings.EqualFold(k, "Content-Length") {
-			continue
-		}
-		for _, v := range vs {
-			if strings.EqualFold(k, "Location") && strings.HasPrefix(v, "/") && !strings.HasPrefix(v, "//") {
-				v = prefix + v // keep redirects inside the prefix
-			}
-			w.Header().Add(k, v)
-		}
-	}
-	w.WriteHeader(res.Status)
-	w.Write(res.Body)
+	s.gateway(w, r, seg, "/x/"+seg)
 }
 
 func qs(raw string) string {

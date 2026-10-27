@@ -103,7 +103,7 @@ func TestDiscoveryAndI18n(t *testing.T) {
 				t.Fatalf("kinds: %d", len(v["items"].([]any)))
 			}
 		case "/.well-known/agent.json":
-			if v["protocolVersion"] != "0.3.0" || len(v["skills"].([]any)) != 23 || !strings.HasSuffix(v["url"].(string), "/a2a") || v["capabilities"].(map[string]any)["streaming"] != true {
+			if v["protocolVersion"] != "0.3.0" || len(v["skills"].([]any)) != 27 || !strings.HasSuffix(v["url"].(string), "/a2a") || v["capabilities"].(map[string]any)["streaming"] != true {
 				t.Fatalf("agent card %+v", v)
 			}
 		case "/.well-known/mcp.json":
@@ -344,7 +344,7 @@ func TestV11Boxes(t *testing.T) {
 		return m
 	}
 	m := mcpCall("", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
-	if len(m["result"].(map[string]any)["tools"].([]any)) != 22 {
+	if len(m["result"].(map[string]any)["tools"].([]any)) != 26 {
 		t.Fatalf("mcp tools: %+v", m)
 	}
 	m = mcpCall("zh", `{"jsonrpc":"2.0","id":2,"method":"prompts/get","params":{"name":"cost-review"}}`)

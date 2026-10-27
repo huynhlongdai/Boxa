@@ -26,6 +26,7 @@ type Peer struct {
 	seq     atomic.Uint64
 	mu      sync.Mutex
 	pending map[string]chan proto.Frame
+	streams map[string]*StreamConn // v1.7 tcp streams (guarded by mu)
 	closed  chan struct{}
 	once    sync.Once
 	// OnFrame handles frames that are not RPC responses (req, metrics, pty.*).
@@ -49,6 +50,7 @@ func (p *Peer) Close() {
 			delete(p.pending, id)
 		}
 		p.mu.Unlock()
+		p.closeStreams()
 	})
 }
 
@@ -151,6 +153,8 @@ func (p *Peer) ReadLoop() error {
 			if p.OnFrame != nil {
 				go p.OnFrame(f)
 			}
+		case proto.TTCPData, proto.TTCPClose:
+			p.deliverStream(f)
 		default:
 			if p.OnFrame != nil {
 				p.OnFrame(f) // ordered: pty data must stay in order

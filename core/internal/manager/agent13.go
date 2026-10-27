@@ -70,6 +70,7 @@ func (m *Manager) Clone(ctx context.Context, p *Principal, id string, in CloneIn
 		Ports: nonNilInts(src.Ports), Secrets: nonNilStrs(src.Secrets), CreatedAt: now, LastActiveAt: now, Locale: src.Locale, Egress: src.Egress,
 		Profile: src.Profile, Requirements: src.Requirements, Isolation: src.Isolation, ClonedFrom: src.ID,
 		PlacementReason: "copy-on-write clone of " + src.ID + " on " + src.HostID}
+	inheritV17(nb, src)
 	if err := m.Store.PutBox(ctx, nb); err != nil {
 		return nil, err
 	}

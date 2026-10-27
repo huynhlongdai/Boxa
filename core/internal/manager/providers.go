@@ -34,6 +34,8 @@ func (m *Manager) ListProviders(ctx context.Context) ([]*model.Provider, error) 
 			p.TokenSource = "api"
 		}
 		m.fillProviderMeta(p)
+		lc := m.LifecycleFor(p.ID)
+		p.Lifecycle = &lc
 	}
 	sort.Slice(ps, func(i, j int) bool { return order[ps[i].ID] < order[ps[j].ID] })
 	return ps, nil

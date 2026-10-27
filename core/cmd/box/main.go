@@ -46,6 +46,12 @@ Env: BOXAZ_URL (default http://localhost:8080), BOXAZ_API_KEY, BOXAZ_LANG (vi|en
   box fork <box> [snapshot_id] [--slug name]
   box clone <box> [--slug name]                 (sandbox boxes: provider-native fork when available)
   box url <box> [port]                          (public URL of a port; with a port, exposes it)
+  box url <box> <port> --token [--ttl 24h] [--label who]   (scoped URL token; the port then needs it)
+  box url <box> <port> --tokens | --revoke <token_id> | --public
+  box app set <box> --start "npm start" [--repo URL] [--ref main] [--install "npm ci"] [--port 8000]
+         [--ready-http /healthz | --ready-tcp] [--restart always|on-failure|never] [--env K=V] [--workdir /work/app]
+  box app status|restart|rm <box>
+  box app logs <box> [-f] [--bytes 8000]
   box yaml <box>
   box mcp                                       (stdio MCP server)
 `
@@ -148,6 +154,8 @@ func main() {
 		err = cmdURL(ctx, c, args)
 	case "yaml":
 		err = cmdYAML(ctx, c, args)
+	case "app":
+		err = cmdApp(ctx, c, args)
 	case "mcp":
 		s := &mcp.Server{Name: "boxaz", Version: manager.Version}
 		if c.Lang != "" {
@@ -655,8 +663,25 @@ func cmdRestoreFork(ctx context.Context, c *client.Client, verb string, args []s
 
 // cmdURL prints the public URL of each port (POST exposes a new port).
 func cmdURL(ctx context.Context, c *client.Client, args []string) error {
+	fs := flag.NewFlagSet("url", flag.ContinueOnError)
+	tok := fs.Bool("token", false, "issue a scoped URL token for the port")
+	ttl := fs.Duration("ttl", 24*time.Hour, "token lifetime")
+	label := fs.String("label", "", "token label")
+	list := fs.Bool("tokens", false, "list the port's tokens")
+	revoke := fs.String("revoke", "", "revoke a token id")
+	public := fs.Bool("public", false, "make the port public again")
+	if err := fs.Parse(reorder(fs, args)); err != nil {
+		return err
+	}
+	args = fs.Args()
 	if len(args) < 1 {
-		return fmt.Errorf("usage: box url <box> [port]")
+		return fmt.Errorf("usage: box url <box> [port] [--token --ttl 24h]")
+	}
+	if *tok || *list || *revoke != "" || *public {
+		if len(args) < 2 {
+			return fmt.Errorf("usage: box url <box> <port> --token|--tokens|--revoke <id>|--public")
+		}
+		return cmdURLToken(ctx, c, args[0], args[1], *tok, *ttl, *label, *list, *revoke, *public)
 	}
 	var res manager.PortsResult
 	p := "/boxes/" + url.PathEscape(args[0]) + "/ports"
@@ -694,6 +719,9 @@ func cmdURL(ctx context.Context, c *client.Client, args []string) error {
 			fmt.Printf("\t%s", v.Note)
 		}
 		fmt.Println()
+		if v.GatewayURL != "" && v.GatewayURL != v.URL {
+			fmt.Printf("  gateway (wakes on request): %s\n", v.GatewayURL)
+		}
 		for _, c := range v.Caveats {
 			fmt.Println("  ! " + c)
 		}

@@ -154,6 +154,10 @@ func main() {
 		AutoSandbox:   envBool("BOXAZ_AUTO_SANDBOX"),
 		SandboxMode:   os.Getenv("BOXAZ_SANDBOX_MODE"),
 		ObjectStore:   objCfg,
+		GatewayDomain: os.Getenv("BOXAZ_GATEWAY_DOMAIN"),
+	}
+	if d, err := time.ParseDuration(os.Getenv("BOXAZ_WAKE_HOLD")); err == nil && d > 0 {
+		cfg.WakeHold = d
 	}
 	m := manager.New(st, sandbox.DefaultRegistry(nil), crypt, cfg)
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

@@ -263,6 +263,76 @@ func callTool(ctx context.Context, c Caller, name string, a args) (int, []byte, 
 			return c.Do(ctx, "POST", "/boxes/"+esc(a.s("box_id"))+"/ports", map[string]any{"port": int(a.num("port"))})
 		}
 		return c.Do(ctx, "GET", "/boxes/"+esc(a.s("box_id"))+"/ports", nil)
+	case "box_url_token":
+		if err := need("box_id"); err != nil {
+			return 0, nil, err
+		}
+		if !a.has("port") {
+			return 0, nil, fmt.Errorf("missing required argument %q", "port")
+		}
+		base := "/boxes/" + esc(a.s("box_id")) + "/ports/" + strconv.Itoa(int(a.num("port")))
+		switch a.s("action") {
+		case "list":
+			return c.Do(ctx, "GET", base+"/tokens", nil)
+		case "revoke":
+			if err := need("token_id"); err != nil {
+				return 0, nil, err
+			}
+			return c.Do(ctx, "DELETE", base+"/tokens/"+esc(a.s("token_id")), nil)
+		case "public":
+			return c.Do(ctx, "PUT", base, map[string]any{"access": "public"})
+		}
+		body := map[string]any{}
+		if a.has("ttl_s") {
+			body["ttl_s"] = int(a.num("ttl_s"))
+		}
+		if a.s("label") != "" {
+			body["label"] = a.s("label")
+		}
+		return c.Do(ctx, "POST", base+"/tokens", body)
+	case "box_app_set":
+		if err := need("box_id", "start"); err != nil {
+			return 0, nil, err
+		}
+		spec := map[string]any{"start": a.s("start")}
+		for _, k := range []string{"repo", "ref", "install", "restart", "workdir"} {
+			if a.s(k) != "" {
+				spec[k] = a.s(k)
+			}
+		}
+		if a.has("port") {
+			spec["port"] = int(a.num("port"))
+		}
+		if a.s("ready_http") != "" {
+			spec["ready"] = map[string]any{"http": a.s("ready_http")}
+		}
+		if e, ok := a["env"].(map[string]any); ok {
+			spec["env"] = e
+		}
+		return c.Do(ctx, "PUT", "/boxes/"+esc(a.s("box_id"))+"/app", spec)
+	case "box_app_status":
+		if err := need("box_id"); err != nil {
+			return 0, nil, err
+		}
+		if a.b("restart") {
+			return c.Do(ctx, "POST", "/boxes/"+esc(a.s("box_id"))+"/app/restart", map[string]any{})
+		}
+		return c.Do(ctx, "GET", "/boxes/"+esc(a.s("box_id"))+"/app", nil)
+	case "box_app_logs":
+		if err := need("box_id"); err != nil {
+			return 0, nil, err
+		}
+		q := url.Values{}
+		q.Set("offset", "-1")
+		if a.has("offset") {
+			q.Set("offset", strconv.Itoa(int(a.num("offset"))))
+		}
+		max := 8000
+		if a.has("max_bytes") {
+			max = int(a.num("max_bytes"))
+		}
+		q.Set("max", strconv.Itoa(max))
+		return c.Do(ctx, "GET", "/boxes/"+esc(a.s("box_id"))+"/app/logs?"+q.Encode(), nil)
 	case "box_sleep":
 		if err := need("box_id"); err != nil {
 			return 0, nil, err

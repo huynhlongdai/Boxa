@@ -50,11 +50,13 @@ const (
 	KindIngress = "ingress"
 	KindTunnel  = "tunnel"
 	KindNone    = "none"
+	KindGateway = "gateway" // v1.7: token-protected port, only via the Boxaz gateway
 )
 
 // Caveats shown with each kind.
 var (
-	caveatIngress = "path-prefixed URL (/x/<key>-<port>/): the app must use relative links; HTTP only, buffered through core (no WebSocket/streaming, 32 MB body cap); a sleeping box is woken by the first request"
+	caveatIngress = "path-prefixed URL (/x/<key>-<port>/): the app must use relative links (X-Forwarded-Prefix is sent); streamed through core (WebSocket and SSE pass through); a sleeping box is woken by the first request (held up to settings.wake.hold_s, then 503 + Retry-After)"
+	caveatGateway = "Boxaz gateway URL: path-prefixed (/x/<key>-<port>/) unless BOXAZ_GATEWAY_DOMAIN is set; WebSocket and SSE pass through; a sleeping box is woken by the first request"
 	caveatTunnel  = "Cloudflare quick tunnel (trycloudflare.com): free and accountless but without uptime guarantee; the URL changes if the tunnel has to restart (e.g. a wake that lost processes); the first request can take a few seconds"
 )
 

@@ -88,6 +88,10 @@ type Box struct {
 	// Exposures are the fallback public URLs of ports on sandbox boxes whose
 	// provider has no preview host (Boxaz ingress or an in-box tunnel).
 	Exposures []Exposure `json:"exposures,omitempty"`
+	// v1.7
+	App           *AppSpec       `json:"app,omitempty"`             // supervised app (nil = none)
+	WakeOnRequest *bool          `json:"wake_on_request,omitempty"` // gateway wakes the box on a request (nil = on)
+	PortAccess    map[int]string `json:"port_access,omitempty"`     // port → public | token
 }
 
 // Exposure is how one port of a box is reachable from the internet when the
@@ -258,6 +262,19 @@ type Provider struct {
 	Adapter      string `json:"adapter,omitempty"`      // api | native | yaml
 	Verification string `json:"verification,omitempty"` // live-verified | docs-verified | sdk-source
 	Docs         string `json:"docs,omitempty"`
+	// v1.7: lifecycle capability flags (filled from the registry, not stored).
+	Lifecycle *LifecycleCaps `json:"lifecycle,omitempty"`
+}
+
+// LifecycleCaps tells clients what sleep / wake / fork really mean on a provider.
+type LifecycleCaps struct {
+	MemoryPause      bool   `json:"memory_pause"`        // sleep keeps memory + processes (else: processes restart on wake)
+	WakeOnHTTPNative bool   `json:"wake_on_http_native"` // the provider's own URL wakes a paused box
+	WakeViaGateway   bool   `json:"wake_via_gateway"`    // the Boxaz gateway URL wakes it (always true)
+	Fork             bool   `json:"fork"`                // native fork / clone of a live box
+	InboundHTTP      bool   `json:"inbound_http"`        // the provider exposes ports to the internet itself
+	MaxRuntimeS      int    `json:"max_runtime"`         // max continuous runtime in seconds (0 = unlimited / not documented)
+	Note             string `json:"note,omitempty"`
 }
 
 type Offer struct {
@@ -401,6 +418,16 @@ type Settings struct {
 	// Location (v1.3) is where agents/users usually run (region id, ISO
 	// country code such as VN, or "lat,lon"); used for latency estimates.
 	Location string `json:"location"`
+	// Wake (v1.7) tunes wake-on-request at the Boxaz gateway.
+	Wake WakeSettings `json:"wake"`
+}
+
+// WakeSettings: zero values mean the defaults (hold 10 s, Retry-After 5 s,
+// bots / HEAD / health probes do not wake a sleeping box).
+type WakeSettings struct {
+	HoldS        int  `json:"hold_s"`         // how long a request to a sleeping box is held while it resumes (0 = 10)
+	RetryAfterS  int  `json:"retry_after_s"`  // Retry-After of the 503 when the hold runs out (0 = 5)
+	WakeOnProbes bool `json:"wake_on_probes"` // true = HEAD, bots and health probes wake boxes too
 }
 
 func DefaultSettings() Settings {

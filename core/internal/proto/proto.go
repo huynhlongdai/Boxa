@@ -21,6 +21,9 @@ const (
 	TPtyData = "pty.data"
 	TPtyExit = "pty.exit"
 	TPing    = "ping"
+	// v1.7: raw TCP streams (gateway pass-through for WebSocket/SSE/HTTP).
+	TTCPData  = "tcp.data"
+	TTCPClose = "tcp.close"
 )
 
 // RPC methods (core → boxd).
@@ -46,7 +49,41 @@ const (
 	MExecCancel = "box.exec_cancel" // v1.2: kill a running async job (A2A tasks/cancel)
 	MClone      = "box.clone"       // v1.3: copy-on-write clone of a live box into a new box
 	MClaim      = "box.claim"       // v1.3: hand a warm-pool box to its owner (AGENTS.md, env, agent memory)
+	MTCPOpen    = "tcp.open"        // v1.7: open a raw TCP stream to a port inside a box
+	MAppSet     = "app.set"         // v1.7: set (or with nil spec remove) the supervised app of a box
+	MAppGet     = "app.get"         // v1.7: app status
+	MAppRestart = "app.restart"     // v1.7: restart the app now
+	MAppEnsure  = "app.ensure"      // v1.7: start the app if its process is gone (after wake/restore/clone)
+	MAppLogs    = "app.logs"        // v1.7: read app output from an offset
 )
+
+// TCPOpenParams opens stream Stream to BoxID:Port. Data then flows in
+// tcp.data frames (Stream + Data) both ways until a tcp.close frame.
+type TCPOpenParams struct {
+	BoxID  string `json:"box_id"`
+	Port   int    `json:"port"`
+	Stream string `json:"stream"`
+}
+
+// AppParams carries the app spec of a box (nil Spec = remove the app).
+type AppParams struct {
+	BoxID string         `json:"box_id"`
+	Spec  *model.AppSpec `json:"spec,omitempty"`
+}
+
+// AppLogsParams reads app output starting at Offset (-1 = the last Max bytes).
+type AppLogsParams struct {
+	BoxID  string `json:"box_id"`
+	Offset int64  `json:"offset"`
+	Max    int    `json:"max"`
+}
+
+// AppLogsResult is a chunk of app output; Offset is where the next read starts.
+type AppLogsResult struct {
+	Data      string `json:"data"`
+	Offset    int64  `json:"offset"`
+	Truncated bool   `json:"truncated,omitempty"` // older output was dropped (ring buffer / rotation)
+}
 
 // CloneParams clones SourceID into a new box (copy-on-write when the storage supports it).
 type CloneParams struct {

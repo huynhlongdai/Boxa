@@ -232,6 +232,8 @@ type SandboxProviderView struct {
 	Health    string  `json:"health"`
 	FromUSDH  float64 `json:"from_usd_h"` // cheapest catalog size per hour
 	ChainRank int     `json:"chain_rank,omitempty"`
+	// v1.7 lifecycle capability flags
+	Lifecycle model.LifecycleCaps `json:"lifecycle"`
 }
 
 // SandboxProviders lists every sandbox provider (adapter metadata + state).
@@ -246,7 +248,7 @@ func (m *Manager) SandboxProviders(ctx context.Context, p *Principal) ([]Sandbox
 			continue
 		}
 		info := sp.Info()
-		v := SandboxProviderView{Info: info, Mode: m.sandboxMode(ctx, info), Health: m.Health.Stats(info.ID, "").Status}
+		v := SandboxProviderView{Info: info, Mode: m.sandboxMode(ctx, info), Health: m.Health.Stats(info.ID, "").Status, Lifecycle: m.LifecycleFor(info.ID)}
 		if mp, err := m.Store.GetProvider(ctx, info.ID); err == nil {
 			v.Connected = mp.Connected && mp.TokenEnc != ""
 		}

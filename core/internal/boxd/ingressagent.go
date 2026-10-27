@@ -14,6 +14,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -99,6 +100,10 @@ func ingressOnce(ctx context.Context, cfg IngressAgentConfig) error {
 		if f.Type != proto.TReq {
 			return
 		}
+		if f.Method == proto.MTCPOpen {
+			p.Reply(f, nil, ingressTCP(p, cfg.Target, f))
+			return
+		}
 		if f.Method != proto.MHTTP {
 			p.Reply(f, nil, &proto.Error{Code: "INVALID", Message: "ingress agent only proxies http.do"})
 			return
@@ -149,4 +154,22 @@ func ingressDo(ctx context.Context, target string, p proto.HTTPParams) *proto.HT
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
 	return &proto.HTTPResult{Status: resp.StatusCode, Headers: resp.Header, Body: body}
+}
+
+// ingressTCP answers tcp.open from core (v1.7 gateway pass-through).
+func ingressTCP(p *hostlink.Peer, target string, f proto.Frame) error {
+	var tp proto.TCPOpenParams
+	if err := json.Unmarshal(f.Params, &tp); err != nil {
+		return &proto.Error{Code: "INVALID", Message: err.Error()}
+	}
+	addr := target
+	if addr == "" {
+		addr = "127.0.0.1:" + strconv.Itoa(tp.Port)
+	}
+	c, err := net.DialTimeout("tcp", addr, 5*time.Second)
+	if err != nil {
+		return &proto.Error{Code: "UNAVAILABLE", Message: "nothing listens on port " + strconv.Itoa(tp.Port) + ": " + err.Error()}
+	}
+	p.ServeStream(tp.Stream, c)
+	return nil
 }

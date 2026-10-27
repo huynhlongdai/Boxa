@@ -90,7 +90,17 @@
   "Pass the port your server listens on, e.g. 8000.": "请传入服务器监听的端口，例如 8000。",
   "Retry, or box_fork (snapshot based) instead.": "请重试，或改用 box_fork（基于快照）。",
   "Wake the box first (box_sleep wake=true).": "请先唤醒 box（box_sleep wake=true）。",
-  "Retry in a few seconds; the in-box ingress agent is (re)connecting.": "请几秒后重试；box 内的 ingress 代理正在（重新）连接。"
+  "Retry in a few seconds; the in-box ingress agent is (re)connecting.": "请几秒后重试；box 内的 ingress 代理正在（重新）连接。",
+  "Retry in a few seconds; the box link is reconnecting.": "请几秒后重试；box 连接正在重新建立。",
+  "Example: {\"repo\":\"https://github.com/heroku/node-js-sample\",\"install\":\"npm install\",\"start\":\"npm start\",\"port\":5000}.": "示例：{\"repo\":\"https://github.com/heroku/node-js-sample\",\"install\":\"npm install\",\"start\":\"npm start\",\"port\":5000}。",
+  "Retry in a few seconds.": "请几秒后重试。",
+  "Use the port number, e.g. /ports/8000/tokens.": "请使用端口号，例如 /ports/8000/tokens。",
+  "Example: \"app\":{\"start\":\"npm start\",\"port\":8000}.": "示例：\"app\":{\"start\":\"npm start\",\"port\":8000}。",
+  "Expose it first: POST /v1/boxes/{id}/ports {port}.": "请先公开端口：POST /v1/boxes/{id}/ports {port}。",
+  "Use a ttl_s between 60 and 2592000 (30 days).": "ttl_s 取值 60 到 2592000（30 天）。",
+  "Use \"public\" or \"token\".": "请使用 \"public\" 或 \"token\"。",
+  "Set it first: PUT /v1/boxes/{id}/app (box app set).": "请先设置：PUT /v1/boxes/{id}/app（box app set）。",
+  "Set BOXAZ_PUBLIC_URL to an internet-reachable URL of core so the sandbox can dial in, or use a provider with preview URLs.": "将 BOXAZ_PUBLIC_URL 设为可从互联网访问的 core 地址，以便沙箱回连；或使用带预览 URL 的提供商。"
  },
  "msg": {
   "%s bootstrap exit %d: %s": "%s 引导命令退出码 %d：%s",
@@ -240,7 +250,18 @@
   "provider %s is not a sandbox provider": "提供商 %s 不是沙箱提供商",
   "ingress agent of %s is not connected": "%s 的 ingress 代理未连接",
   "no box at this address": "此地址没有 box",
-  "port %d is not exposed": "端口 %d 未暴露"
+  "port %d is not exposed": "端口 %d 未暴露",
+  "box %s link is not connected": "box %s 的连接尚未建立",
+  "token %s not found": "未找到令牌 %s",
+  "access must be public or token": "access 必须是 public 或 token",
+  "the gateway cannot reach this sandbox: %s": "网关无法访问此沙箱：%s",
+  "ttl_s out of range": "ttl_s 超出范围",
+  "port %d is not exposed on box %s": "端口 %d 未在 box %s 上公开",
+  "cannot set the app of a box in status %s": "无法为状态为 %s 的 box 设置应用",
+  "invalid app spec: %s": "应用规格无效：%s",
+  "bad port": "端口无效",
+  "ingress agent: %v": "ingress 代理：%v",
+  "box %s has no app": "box %s 没有应用"
  },
  "text": {
   "agentsmd.budget_box": "本盒子 $%.2f",

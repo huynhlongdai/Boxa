@@ -86,7 +86,24 @@ func (m *Manager) CreateBox(ctx context.Context, p *Principal, req boxyaml.Reque
 		Region: req.Region, TTLSeconds: ttl, IdleMinutes: idle, BudgetUSD: req.BudgetUSD,
 		Ports: nonNilInts(req.Ports), Secrets: nonNilStrs(req.Secrets), Setup: req.Setup, CreatedAt: now, LastActiveAt: now,
 		Locale: m.agentLocale(ctx, agent), Egress: eg,
-		Requirements: needs, Name: req.Name,
+		Requirements: needs, Name: req.Name, WakeOnRequest: req.WakeOnRequest,
+	}
+	if req.App != nil { // v1.7
+		sp := *req.App
+		sp.Normalize()
+		if msg := sp.Validate(); msg != "" {
+			return nil, false, model.EH(model.ErrInvalid, "Example: \"app\":{\"start\":\"npm start\",\"port\":8000}.", "invalid app spec: %s", msg)
+		}
+		b.App = &sp
+		if sp.Port > 0 {
+			found := false
+			for _, x := range b.Ports {
+				found = found || x == sp.Port
+			}
+			if !found {
+				b.Ports = append(b.Ports, sp.Port)
+			}
+		}
 	}
 	if needs != nil {
 		b.Profile = needs.Profile
@@ -482,6 +499,12 @@ func (m *Manager) setStatus(ctx context.Context, b *model.Box, status, actor, ms
 		}
 	}
 	m.publishBox(m.decorateBox(ctx, b))
+	if prev != status && status == model.StatusRunning && b.App != nil {
+		go m.appEnsure(b.ID) // v1.7: (re)start the supervised app (create, wake, clone, fork)
+	}
+	if prev != status && status != model.StatusRunning {
+		m.app.ready.Delete(b.ID)
+	}
 }
 
 func (m *Manager) decorateBox(ctx context.Context, b *model.Box) *model.Box {
@@ -492,6 +515,10 @@ func (m *Manager) decorateBox(ctx context.Context, b *model.Box) *model.Box {
 		b.Secrets = []string{}
 	}
 	b.SpentUSD = model.Round4(b.SpentUSD)
+	if b.WakeOnRequest == nil { // v1.7: report the default explicitly
+		on := true
+		b.WakeOnRequest = &on
+	}
 	return b
 }
 

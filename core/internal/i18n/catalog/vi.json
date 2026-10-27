@@ -90,7 +90,17 @@
   "Pass the port your server listens on, e.g. 8000.": "Truyền cổng mà server của bạn đang lắng nghe, ví dụ 8000.",
   "Retry, or box_fork (snapshot based) instead.": "Thử lại, hoặc dùng box_fork (dựa trên snapshot).",
   "Wake the box first (box_sleep wake=true).": "Đánh thức box trước (box_sleep wake=true).",
-  "Retry in a few seconds; the in-box ingress agent is (re)connecting.": "Thử lại sau vài giây; agent ingress trong box đang (tái) kết nối."
+  "Retry in a few seconds; the in-box ingress agent is (re)connecting.": "Thử lại sau vài giây; agent ingress trong box đang (tái) kết nối.",
+  "Retry in a few seconds; the box link is reconnecting.": "Thử lại sau vài giây; liên kết của box đang kết nối lại.",
+  "Example: {\"repo\":\"https://github.com/heroku/node-js-sample\",\"install\":\"npm install\",\"start\":\"npm start\",\"port\":5000}.": "Ví dụ: {\"repo\":\"https://github.com/heroku/node-js-sample\",\"install\":\"npm install\",\"start\":\"npm start\",\"port\":5000}.",
+  "Retry in a few seconds.": "Thử lại sau vài giây.",
+  "Use the port number, e.g. /ports/8000/tokens.": "Dùng số cổng, ví dụ /ports/8000/tokens.",
+  "Example: \"app\":{\"start\":\"npm start\",\"port\":8000}.": "Ví dụ: \"app\":{\"start\":\"npm start\",\"port\":8000}.",
+  "Expose it first: POST /v1/boxes/{id}/ports {port}.": "Mở cổng trước: POST /v1/boxes/{id}/ports {port}.",
+  "Use a ttl_s between 60 and 2592000 (30 days).": "Dùng ttl_s từ 60 đến 2592000 (30 ngày).",
+  "Use \"public\" or \"token\".": "Dùng \"public\" hoặc \"token\".",
+  "Set it first: PUT /v1/boxes/{id}/app (box app set).": "Đặt app trước: PUT /v1/boxes/{id}/app (box app set).",
+  "Set BOXAZ_PUBLIC_URL to an internet-reachable URL of core so the sandbox can dial in, or use a provider with preview URLs.": "Đặt BOXAZ_PUBLIC_URL thành URL của core truy cập được từ Internet để sandbox gọi vào được, hoặc dùng provider có preview URL."
  },
  "msg": {
   "%s bootstrap exit %d: %s": "%s: lệnh khởi động thoát với mã %d: %s",
@@ -240,7 +250,18 @@
   "provider %s is not a sandbox provider": "nhà cung cấp %s không phải nhà cung cấp sandbox",
   "ingress agent of %s is not connected": "agent ingress của %s chưa kết nối",
   "no box at this address": "không có box nào ở địa chỉ này",
-  "port %d is not exposed": "cổng %d chưa được mở"
+  "port %d is not exposed": "cổng %d chưa được mở",
+  "box %s link is not connected": "liên kết của box %s chưa kết nối",
+  "token %s not found": "không tìm thấy token %s",
+  "access must be public or token": "access phải là public hoặc token",
+  "the gateway cannot reach this sandbox: %s": "gateway không truy cập được sandbox này: %s",
+  "ttl_s out of range": "ttl_s ngoài phạm vi cho phép",
+  "port %d is not exposed on box %s": "cổng %d chưa được mở trên box %s",
+  "cannot set the app of a box in status %s": "không thể đặt app cho box ở trạng thái %s",
+  "invalid app spec: %s": "app spec không hợp lệ: %s",
+  "bad port": "cổng không hợp lệ",
+  "ingress agent: %v": "ingress agent: %v",
+  "box %s has no app": "box %s chưa có app"
  },
  "text": {
   "agentsmd.budget_box": "$%.2f cho box này",
