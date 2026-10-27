@@ -572,3 +572,67 @@ func TestAccessP1(t *testing.T) {
 	}
 	_ = bufio.NewReader
 }
+
+// v1.11 control-origin hardening: only BOXAZ_PUBLIC_URL's host is core; box
+// hosts serve box traffic + /.boxaz/*; a box cannot set cookies for the whole
+// gateway domain; box-host origins never open access sockets.
+func TestControlOrigin(t *testing.T) {
+	appPort := freePort(t)
+	l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", appPort))
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.SetCookie(w, &http.Cookie{Name: "sid", Value: "1", Domain: "example.test", Path: "/"})
+		w.Header().Add("Set-Cookie", "x=2; Path=/; domain=.example.test; HttpOnly")
+		io.WriteString(w, "app:"+r.URL.Path)
+	})}
+	go app.Serve(l)
+	t.Cleanup(func() { app.Close() })
+	e := setupWith(t, func(c *manager.Config) { c.GatewayDomain = "example.test" }, 1)
+	e.m.Cfg.PublicURL = "https://gw.example.test"
+	ag, _ := e.agentClient("co-agent", 0)
+	var b model.Box
+	e.must(ag, "POST", "/boxes", map[string]any{"template": "base", "slug": "co-app", "lifecycle": "session", "ports": []int{appPort}}, &b)
+	b = *waitStatus(t, e.m, b.ID, model.StatusRunning, 20*time.Second)
+	do := func(host, path string, hdr http.Header) *http.Response {
+		req, _ := http.NewRequest("GET", e.srv.URL+path, nil)
+		req.Host = host
+		for k, v := range hdr {
+			req.Header[k] = v
+		}
+		resp, err := http.DefaultTransport.RoundTrip(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+	if r := do("example.test", "/v1/boxes", nil); r.StatusCode != 404 {
+		t.Fatalf("bare gateway domain served core: %d", r.StatusCode)
+	}
+	if r := do("gw.example.test", "/v1/boxes", nil); r.StatusCode != 401 {
+		t.Fatalf("control host /v1/boxes → %d", r.StatusCode)
+	}
+	host := b.Subdomain + ".example.test"
+	r := do(host, "/v1/boxes", nil)
+	body, _ := io.ReadAll(r.Body)
+	if r.StatusCode != 200 || string(body) != "app:/v1/boxes" {
+		t.Fatalf("box host must proxy to the app, never core: %d %s", r.StatusCode, body)
+	}
+	for _, c := range r.Header.Values("Set-Cookie") {
+		if strings.Contains(strings.ToLower(c), "domain=") {
+			t.Fatalf("Set-Cookie with Domain reached the client: %q", c)
+		}
+	}
+	if len(r.Header.Values("Set-Cookie")) != 2 {
+		t.Fatalf("cookies %v", r.Header.Values("Set-Cookie"))
+	}
+	if r := do(host, "/.boxaz/nope", nil); r.StatusCode != 404 {
+		t.Fatalf("/.boxaz/nope → %d", r.StatusCode)
+	}
+	tk := ticket(t, e, ag, b.ID, map[string]any{"purpose": "terminal"})
+	if r := do(host, "/.boxaz/terminal?ticket="+url.QueryEscape(tk.Ticket), http.Header{"Origin": {"https://other-box.example.test"}, "Connection": {"Upgrade"}, "Upgrade": {"websocket"},
+		"Sec-Websocket-Version": {"13"}, "Sec-Websocket-Key": {"dGhlIHNhbXBsZSBub25jZQ=="}}); r.StatusCode != 403 {
+		t.Fatalf("box-host origin opened an access socket: %d", r.StatusCode)
+	}
+}

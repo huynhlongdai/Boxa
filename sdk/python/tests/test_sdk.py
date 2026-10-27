@@ -15,10 +15,10 @@ def test_discovery(core):
     assert len(bx.agent_kinds()["items"]) == 22
     tools = as_openai_tools(bx)
     names = {t["function"]["name"] for t in tools}
-    assert {"box_up", "box_exec_batch", "box_fork", "box_quote"} <= names and len(names) == 30
+    assert {"box_up", "box_exec_batch", "box_fork", "box_quote"} <= names and len(names) == 32
     assert as_openai_tools(bx, responses_api=True)[0]["name"] == "box_ensure"
     assert as_anthropic_tools(bx)[0]["input_schema"]["type"] == "object"
-    assert len(as_gemini_tools(bx)[0]["functionDeclarations"]) == 30
+    assert len(as_gemini_tools(bx)[0]["functionDeclarations"]) == 32
     assert bx.llms_txt().startswith("# Boxaz")
     assert bx.openapi()["openapi"] == "3.1.0"
 
@@ -287,5 +287,28 @@ def test_v110_access(core):
             assert k["fingerprint"].startswith("SHA256:") and k["name"] == "sdk-test"
             assert any(x["id"] == k["id"] for x in bx.ssh_keys()["items"])
             bx.delete_ssh_key(k["id"])
+        finally:
+            bx.down(box["id"])
+
+
+def test_v111_access(core):
+    from boxaz import Boxaz, BoxazError
+    url, akey = core["url"], core["key"]
+    with Boxaz(akey, url) as bx:
+        box = bx.up(template="base", lifecycle="session", slug="sdk-py-p1")
+        try:
+            c = bx.ssh_cert(box["id"], SSH_PUB, ttl_s=600)
+            assert c["certificate"].startswith("ssh-ed25519-cert-v01@openssh.com ") and box["id"] in c["principals"]
+            with pytest.raises(BoxazError):
+                bx.ssh_cert(box["id"], SSH_PUB, ttl_s=50000)
+            assert bx.revoke_ticket(box["id"], c["id"])["revoked"] == 1
+            assert bx.ssh_info()["user_ca"].startswith("ssh-ed25519 ")
+            s = bx.share_desktop(box["id"], ttl_s=120)
+            assert s["view_only"] and "share=bxs_" in s["url"]
+            assert len(bx.desktop_shares(box["id"])["items"]) == 1
+            assert bx.revoke_desktop_shares(box["id"])["revoked"] == 1
+            assert "running" in bx.browser_status(box["id"]) and "running" in bx.desktop_status(box["id"])
+            a = bx.access(box["id"])
+            assert a["commands"]["browser"].startswith("box browser ") and "/cdp" in a["cdp"]["url"]
         finally:
             bx.down(box["id"])

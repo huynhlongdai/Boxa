@@ -30,6 +30,7 @@ import (
 
 	"boxaz/core/internal/model"
 	"boxaz/core/internal/secret"
+	"boxaz/core/internal/store"
 )
 
 const sshUserCAKV = "ssh:userca"
@@ -307,6 +308,13 @@ func (m *Manager) BoxForSSH(ctx context.Context, ref string) (*model.Box, error)
 	}
 	if b := m.boxByName(ctx, ref); b != nil {
 		return b, nil
+	}
+	if boxes, err := m.Store.ListBoxes(ctx, store.BoxFilter{Statuses: []string{model.StatusRunning, model.StatusSleeping}}); err == nil {
+		for _, b := range boxes {
+			if b.Slug == ref {
+				return b, nil
+			}
+		}
 	}
 	return nil, model.E(model.ErrNotFound, "no box at this address")
 }

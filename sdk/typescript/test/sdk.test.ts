@@ -87,10 +87,10 @@ test("discovery + tool formats", { skip }, async () => {
   assert.equal((await bx.health()).ok, true);
   assert.equal((await bx.agentKinds()).items.length, 22);
   const oa = await asOpenAITools(bx);
-  assert.equal(oa.length, 30);
+  assert.equal(oa.length, 32);
   assert.ok(oa.some((t) => t.function.name === "box_exec_batch"));
   assert.equal((await asAnthropicTools(bx))[0].input_schema.type, "object");
-  assert.equal((await asGeminiTools(bx))[0].functionDeclarations.length, 30);
+  assert.equal((await asGeminiTools(bx))[0].functionDeclarations.length, 32);
   assert.ok((await bx.llmsTxt()).startsWith("# Boxaz"));
   assert.equal((await bx.openapi()).openapi, "3.1.0");
   const sn = await new Boxaz({ apiKey: admin, baseUrl: url }).snippet(agentId, undefined, "zh");
@@ -263,6 +263,28 @@ test("v1.10 access: tickets, forward allowlist, terminals, ssh keys", { skip }, 
     const k = await bx.addSshKey("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHriFbNRs2ilXN0Y7F+viZSJ0GcP4uLy8TuLjh/ttcww sdk-test");
     assert.ok(k.fingerprint.startsWith("SHA256:") && k.name === "sdk-test");
     await bx.deleteSshKey(k.id);
+  } finally {
+    await bx.deleteBox(box.id);
+  }
+});
+
+test("v1.11 access: ssh certificates, desktop share links, browser/desktop status", { skip }, async () => {
+  const bx = new Boxaz({ apiKey: key, baseUrl: url });
+  const box = await bx.createBox({ template: "base", lifecycle: "session", slug: "sdk-ts-p1" });
+  try {
+    const c = await bx.sshCert(box.id, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHriFbNRs2ilXN0Y7F+viZSJ0GcP4uLy8TuLjh/ttcww sdk-test", 600);
+    assert.ok(c.certificate.startsWith("ssh-ed25519-cert-v01@openssh.com ") && c.principals.includes(box.id));
+    await assert.rejects(bx.sshCert(box.id, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHriFbNRs2ilXN0Y7F+viZSJ0GcP4uLy8TuLjh/ttcww", 50000), /ttl_s/);
+    assert.equal((await bx.revokeTicket(box.id, c.id)).revoked, 1);
+    assert.ok((await bx.sshInfo()).user_ca!.startsWith("ssh-ed25519 "));
+    const s = await bx.shareDesktop(box.id, { ttl_s: 120 });
+    assert.ok(s.view_only && s.url!.includes("share=bxs_"));
+    assert.equal((await bx.desktopShares(box.id)).items.length, 1);
+    assert.equal((await bx.revokeDesktopShares(box.id)).revoked, 1);
+    assert.equal(typeof (await bx.browserStatus(box.id)).running, "boolean");
+    assert.equal(typeof (await bx.desktopStatus(box.id)).running, "boolean");
+    const a = await bx.access(box.id);
+    assert.ok(a.commands.browser.startsWith("box browser ") && a.cdp!.url.includes("/cdp"));
   } finally {
     await bx.deleteBox(box.id);
   }

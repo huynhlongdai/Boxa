@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json as _json
 import os
+import inspect
 import time
 import urllib.error
 import urllib.parse
@@ -435,6 +436,67 @@ class _Base:
 
     def delete_ssh_key(self, key_id: str) -> Dict[str, Any]:
         return self._call("DELETE", f"/ssh/keys/{_q(key_id)}")
+
+    # -- v1.11 access P1: SSH certificates, browser (CDP), desktop (VNC) ------------
+    def ssh_cert(self, box_id: str, public_key: str, ttl_s: Optional[int] = None) -> Dict[str, Any]:
+        """Short-lived SSH user certificate for one box (``ttl_s`` ≤ 43200). Save ``certificate`` as
+        ``<key>-cert.pub``; it authenticates without an API key (``ProxyCommand box ssh-proxy --anon %h``
+        or the direct listener). Revoke with ``revoke_ticket(box_id, cert["id"])``."""
+        return self._call("POST", "/ssh/certs", _clean({"box": box_id, "public_key": public_key, "ttl_s": ttl_s}))
+
+    def browser(self, box_id: str, *, ttl_s: Optional[int] = None, headless: Optional[bool] = None) -> Dict[str, Any]:
+        """Start (or reuse) Chromium in the box; returns ``cdp_url`` for Playwright
+        ``chromium.connect_over_cdp(cdp_url)`` / puppeteer ``connect({browserWSEndpoint})``
+        (reusable until ``expires_at``, default 1 h), ``http_url``, ``version``, ``started``, ``start_ms``."""
+        return self._call("POST", f"/boxes/{_q(box_id)}/browser", _clean({"ttl_s": ttl_s, "headless": headless}))
+
+    def cdp_url(self, box_id: str, ttl_s: Optional[int] = None) -> str:
+        """Just the CDP WebSocket URL of the box's browser (starts it when needed)."""
+        r = self.browser(box_id, ttl_s=ttl_s)
+        if inspect.isawaitable(r):
+            async def _u() -> str:
+                return (await r)["cdp_url"]
+            return _u()  # type: ignore[return-value]
+        return r["cdp_url"]
+
+    def connect_playwright(self, playwright: Any, box_id: str, ttl_s: Optional[int] = None) -> Any:
+        """``browser = bx.connect_playwright(p, box_id)`` with ``sync_playwright()`` (or await it with
+        the async API): Playwright's Chromium attached to the box's browser over CDP."""
+        u = self.cdp_url(box_id, ttl_s)
+        if inspect.isawaitable(u):
+            async def _c() -> Any:
+                return await playwright.chromium.connect_over_cdp(await u)
+            return _c()
+        return playwright.chromium.connect_over_cdp(u)
+
+    def browser_status(self, box_id: str) -> Dict[str, Any]:
+        return self._call("GET", f"/boxes/{_q(box_id)}/browser")
+
+    def stop_browser(self, box_id: str) -> Dict[str, Any]:
+        return self._call("DELETE", f"/boxes/{_q(box_id)}/browser")
+
+    def desktop(self, box_id: str, *, width: Optional[int] = None, height: Optional[int] = None,
+                view_only: Optional[bool] = None, ttl_s: Optional[int] = None) -> Dict[str, Any]:
+        """Start the desktop (Xvfb + window manager + x11vnc) and get a single-use ``viewer_url``
+        (noVNC page) and ``vnc_url`` (RFB over WebSocket)."""
+        return self._call("POST", f"/boxes/{_q(box_id)}/desktop", _clean({"width": width, "height": height, "view_only": view_only, "ttl_s": ttl_s}))
+
+    def desktop_status(self, box_id: str) -> Dict[str, Any]:
+        return self._call("GET", f"/boxes/{_q(box_id)}/desktop")
+
+    def stop_desktop(self, box_id: str) -> Dict[str, Any]:
+        return self._call("DELETE", f"/boxes/{_q(box_id)}/desktop")
+
+    def share_desktop(self, box_id: str, *, ttl_s: int = 3600, view_only: bool = True) -> Dict[str, Any]:
+        """View-only (default) share link ``url`` (iframe-able, TTL 60 s … 24 h, reusable until revoked)."""
+        return self._call("POST", f"/boxes/{_q(box_id)}/desktop/shares", {"ttl_s": ttl_s, "view_only": view_only})
+
+    def desktop_shares(self, box_id: str) -> Dict[str, Any]:
+        return self._call("GET", f"/boxes/{_q(box_id)}/desktop/shares")
+
+    def revoke_desktop_shares(self, box_id: str, share_id: str = "all") -> Dict[str, Any]:
+        """Revoke one share link (or "all"): viewers are disconnected, the link answers 410."""
+        return self._call("DELETE", f"/boxes/{_q(box_id)}/desktop/shares/{_q(share_id)}")
 
     # -- misc ----------------------------------------------------------------
     def templates(self) -> Dict[str, List[Template]]:

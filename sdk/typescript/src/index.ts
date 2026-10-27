@@ -424,10 +424,29 @@ export class Boxaz {
   terminals(id: string) { return this.request<List<TerminalSession> & { detach_ttl_s: number }>("GET", `/boxes/${enc(id)}/terminals`); }
   killTerminal(id: string, sessionId = "all") { return this.request<{ killed: number }>("DELETE", `/boxes/${enc(id)}/terminals/${enc(sessionId)}`); }
   /** SSH gateway host key (known_hosts line + fingerprint), direct listener, ProxyCommand. */
-  sshInfo() { return this.request<{ known_hosts: string; host_key_fingerprint: string; host_key_alias: string; direct: string; proxy_command: string; domain: string }>("GET", "/ssh"); }
+  sshInfo() { return this.request<{ known_hosts: string; host_key_fingerprint: string; host_key_alias: string; direct: string; proxy_command: string; domain: string; /** v1.11 */ user_ca?: string; cert_max_ttl_s?: number; sftp?: string }>("GET", "/ssh"); }
   sshKeys() { return this.request<List<SshKey>>("GET", "/ssh/keys"); }
   addSshKey(publicKey: string, name?: string) { return this.request<SshKey>("POST", "/ssh/keys", { body: { public_key: publicKey, name } }); }
   deleteSshKey(keyId: string) { return this.request<{ deleted: boolean }>("DELETE", `/ssh/keys/${enc(keyId)}`); }
+
+  // ---- v1.11 access P1: SSH certificates, browser (CDP), desktop (VNC) ----
+  /** Short-lived SSH user certificate for one box (ttl_s ≤ 43200); revoke with revokeTicket(box, cert.id). */
+  sshCert(boxId: string, publicKey: string, ttlS?: number) { return this.request<SshCert>("POST", "/ssh/certs", { body: { box: boxId, public_key: publicKey, ttl_s: ttlS } }); }
+  /** Start (or reuse) Chromium in the box; cdp_url works with chromium.connectOverCDP / puppeteer.connect. */
+  browser(boxId: string, opts: { ttl_s?: number; headless?: boolean } = {}) { return this.request<BrowserSession>("POST", `/boxes/${enc(boxId)}/browser`, { body: opts }); }
+  /** Just the CDP WebSocket URL (starts the browser when needed). */
+  async cdpUrl(boxId: string, ttlS?: number) { return (await this.browser(boxId, { ttl_s: ttlS })).cdp_url; }
+  browserStatus(boxId: string) { return this.request<BrowserState>("GET", `/boxes/${enc(boxId)}/browser`); }
+  stopBrowser(boxId: string) { return this.request<{ box_id: string; stopped: boolean }>("DELETE", `/boxes/${enc(boxId)}/browser`); }
+  /** Start the desktop; viewer_url = single-use noVNC page, vnc_url = RFB over WebSocket. */
+  desktop(boxId: string, opts: { width?: number; height?: number; view_only?: boolean; ttl_s?: number } = {}) { return this.request<DesktopSession>("POST", `/boxes/${enc(boxId)}/desktop`, { body: opts }); }
+  desktopStatus(boxId: string) { return this.request<DesktopState>("GET", `/boxes/${enc(boxId)}/desktop`); }
+  stopDesktop(boxId: string) { return this.request<{ box_id: string; stopped: boolean }>("DELETE", `/boxes/${enc(boxId)}/desktop`); }
+  /** View-only (default) share link, iframe-able, TTL 60 s … 24 h. */
+  shareDesktop(boxId: string, opts: { ttl_s?: number; view_only?: boolean } = {}) { return this.request<DesktopShare>("POST", `/boxes/${enc(boxId)}/desktop/shares`, { body: { ttl_s: opts.ttl_s ?? 3600, view_only: opts.view_only ?? true } }); }
+  desktopShares(boxId: string) { return this.request<List<DesktopShare>>("GET", `/boxes/${enc(boxId)}/desktop/shares`); }
+  /** Revoke one share link (or "all"): viewers disconnect, the link answers 410. */
+  revokeDesktopShares(boxId: string, shareId = "all") { return this.request<{ revoked: number; viewers_closed: number }>("DELETE", `/boxes/${enc(boxId)}/desktop/shares/${enc(shareId)}`); }
 
   // ---- misc ----
   templates() { return this.request<List<Template>>("GET", "/templates"); }
@@ -532,7 +551,7 @@ export interface PortsResult { box_id: string; url: string; /** v1.9 */ name?: s
 export interface UrlToken { id: string; box_id: string; port: number; label?: string; prefix: string; token?: string; url?: string; expires_at: string; created_at: string; revoked_at?: string; expired?: boolean }
 export interface LifecycleCaps { memory_pause: boolean; wake_on_http_native: boolean; wake_via_gateway: boolean; fork: boolean; inbound_http: boolean; max_runtime: number; private_preview?: boolean; note?: string }
 // v1.10 access
-export type TicketPurpose = "terminal" | "tcp" | "ssh";
+export type TicketPurpose = "terminal" | "tcp" | "ssh" | "cdp" | "vnc" | "ssh_cert" | "vnc_share";
 export interface AccessTicket {
   id: string; box_id: string; purpose: TicketPurpose; port?: number; session_id?: string; prefix: string;
   /** Only in the create response. */ ticket?: string; url?: string; core_url?: string; command?: string;
@@ -548,8 +567,28 @@ export interface AccessInfo {
   tcp: { url: string; core_url: string; allowed_ports: number[]; auth: string };
   terminal: { url: string; core_url: string; detach_ttl_s: number; sessions: TerminalSession[] };
   ssh: { url: string; core_url: string; host: string; proxy_command: string; command: string; config: string; known_hosts: string; host_key_fingerprint: string; direct?: string; features: string };
+  /** v1.11 */ cdp?: AccessAddon; desktop?: AccessAddon;
   commands: Record<string, string>; notes?: string[]; tickets: string;
 }
+/** v1.11: the on-demand browser / desktop in an access summary. */
+export interface AccessAddon { url: string; core_url: string; page?: string; start: string; running: boolean; clients: number }
+/** v1.11: short-lived SSH user certificate (POST /v1/ssh/certs). */
+export interface SshCert {
+  id: string; box_id: string; certificate: string; serial: number; principals: string[]; valid_after: string; valid_before: string; fingerprint: string;
+  host: string; user: string; proxy_command: string; known_hosts: string; command: string; direct_command?: string; config: string; user_ca: string;
+}
+export interface BrowserState {
+  box_id: string; running: boolean; headless: boolean; source?: "found" | "installed" | "existing"; binary?: string; version?: Record<string, string>;
+  started: boolean; start_ms?: number; clients: number; idle_stop_s: number; port: number; note?: string;
+}
+/** CDP endpoint: pass cdp_url to Playwright chromium.connectOverCDP() or puppeteer.connect({ browserWSEndpoint }). */
+export interface BrowserSession extends BrowserState { cdp_url: string; http_url?: string; core_url: string; ticket_id: string; expires_at: string; live_view?: string }
+export interface DesktopState {
+  box_id: string; running: boolean; display?: string; width?: number; height?: number; vnc_server?: string; wm?: string; started: boolean; start_ms?: number;
+  viewers: number; shares: number; idle_stop_s: number; port: number; browser_on_desktop: boolean; note?: string;
+}
+export interface DesktopSession extends DesktopState { vnc_url: string; viewer_url: string; core_url: string; ticket_id: string; view_only: boolean; expires_at: string }
+export interface DesktopShare { id: string; box_id: string; /** only when created */ url?: string; prefix: string; view_only: boolean; expires_at: string; created_at: string; revoked_at?: string; viewers: number; uses: number; actor?: string }
 
 export interface GatewayInfo {
   mode: "host" | "path" | "relative"; domain: string; domain_source: "env" | "settings" | "none"; public_url: string; url_pattern: string; /** v1.9 */ label_pattern?: string; alias_pattern?: string; internet_facing: boolean;

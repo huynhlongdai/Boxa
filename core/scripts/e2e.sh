@@ -119,11 +119,11 @@ tar tzf "$SNAPFILE" | grep -q 'work/notes/a.txt' && pass "snapshot = tar.gz cont
 echo "== MCP"
 R=$(curl -s -X POST "$BOXAZ_URL/mcp" -H "Authorization: Bearer $AKEY" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
 N=$(echo "$R" | jq '.result.tools | length'); echo "    tools: $(echo "$R" | jq -c '[.result.tools[].name]')"
-[ "$N" = 30 ] && pass "MCP HTTP tools/list → 30 tools" || fail "mcp http"
+[ "$N" = 32 ] && pass "MCP HTTP tools/list → 32 tools" || fail "mcp http"
 R=$(curl -s -X POST "$BOXAZ_URL/mcp" -H "Authorization: Bearer $AKEY" -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"box_exec\",\"arguments\":{\"box_id\":\"$BOX\",\"command\":\"echo via-mcp\"}}}")
 echo "$R" | jq -e '.result.isError==false and .result.structuredContent.stdout_tail=="via-mcp"' >/dev/null && pass "MCP tools/call box_exec" || fail "mcp call"
 R=$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' '{"jsonrpc":"2.0","method":"notifications/initialized"}' '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | "$BIN/box" mcp)
-[ "$(echo "$R" | jq -s '.[] | select(.id==2) | .result.tools | length')" = 30 ] && pass "MCP stdio (box mcp) tools/list → 30 tools" || fail "mcp stdio"
+[ "$(echo "$R" | jq -s '.[] | select(.id==2) | .result.tools | length')" = 32 ] && pass "MCP stdio (box mcp) tools/list → 32 tools" || fail "mcp stdio"
 
 echo "== v1.1 discovery (no auth)"
 curl -sf "$BOXAZ_URL/v1/openapi.json" | jq -e '.openapi=="3.1.0" and (.paths|has("/v1/quote")) and (.paths|has("/v1/boxes/{id}/fork"))' >/dev/null \
@@ -131,10 +131,10 @@ curl -sf "$BOXAZ_URL/v1/openapi.json" | jq -e '.openapi=="3.1.0" and (.paths|has
 LT=$(curl -sf "$BOXAZ_URL/llms.txt"); [[ $LT == "# Boxaz"* ]] && pass "llms.txt" || fail llms
 LF=$(curl -sf -H 'Accept-Language: vi' "$BOXAZ_URL/llms-full.txt"); grep -q 'Bắt đầu nhanh' <<<"$LF" && grep -q '/a2a' <<<"$LF" && pass "llms-full.txt localized (vi)" || fail llms-full
 curl -sf "$BOXAZ_URL/.well-known/mcp.json" | jq -e '.transport.url|endswith("/mcp")' >/dev/null && pass ".well-known/mcp.json" || fail mcpcard
-curl -sf "$BOXAZ_URL/.well-known/agent.json" | jq -e '.protocolVersion=="0.3.0" and (.skills|length)==31' >/dev/null && pass ".well-known/agent.json (A2A card, exec + 30 tool skills)" || fail agentcard
+curl -sf "$BOXAZ_URL/.well-known/agent.json" | jq -e '.protocolVersion=="0.3.0" and (.skills|length)==33' >/dev/null && pass ".well-known/agent.json (A2A card, exec + 32 tool skills)" || fail agentcard
 for F in openai anthropic gemini mcp; do
   N=$(curl -sf "$BOXAZ_URL/v1/tools?format=$F" | jq 'if type=="array" then (if .[0].functionDeclarations then .[0].functionDeclarations|length else length end) else .tools|length end')
-  [ "$N" = 30 ] && pass "tools?format=$F → $N" || fail "tools $F ($N)"
+  [ "$N" = 32 ] && pass "tools?format=$F → $N" || fail "tools $F ($N)"
 done
 [ "$(curl -sf $BOXAZ_URL/v1/agent-kinds | jq '.items|length')" = 22 ] && pass "agent-kinds → 22" || fail kinds
 
@@ -360,6 +360,55 @@ if command -v ssh >/dev/null 2>&1; then
 fi
 "$BIN/box" ssh-config "$BOX" | grep -q "ProxyCommand .*ssh-proxy %h" && pass "box ssh-config prints a ProxyCommand host block" || fail ssh-config
 kill $ECHO_PID 2>/dev/null || true
+
+echo "== v1.11 access P1: sftp, ssh certificates, CDP browser, desktop + share links, metadata block"
+PROBE="python3 $ROOT/scripts/accessprobe.py"
+NAME=$("$BIN/box" access "$BOX" | head -1 | awk '{print $2}')
+head -c 300000 /dev/urandom > "$WORK/sftp-up.bin"
+O=$("$BIN/box" sftp "$BOX" put "$WORK/sftp-up.bin" /tmp/sftp-e2e.bin) && "$BIN/box" sftp "$BOX" get /tmp/sftp-e2e.bin "$WORK/sftp-down.bin" >/dev/null && cmp -s "$WORK/sftp-up.bin" "$WORK/sftp-down.bin" \
+  && pass "box sftp put + get (300 KB round trip, $O)" || fail "box sftp"
+"$BIN/box" sftp "$BOX" ls /tmp | grep -q sftp-e2e.bin && pass "box sftp ls" || fail "sftp ls"
+if command -v sftp >/dev/null 2>&1 && command -v ssh >/dev/null 2>&1; then
+  mkdir -p "$WORK/home"; KH="$WORK/home/.boxaz/known_hosts"
+  SSHO=(-o "ProxyCommand=$BIN/box ssh-proxy %h" -o HostKeyAlias=boxaz-ssh -o "UserKnownHostsFile=$KH" -o BatchMode=yes -o LogLevel=ERROR)
+  echo "put $WORK/sftp-up.bin /tmp/openssh-sftp.bin" > "$WORK/sftp.batch"
+  HOME=$WORK/home sftp "${SSHO[@]}" -b "$WORK/sftp.batch" "boxaz@$NAME.boxaz" >/dev/null 2>&1 && cmp -s "$WORK/sftp-up.bin" /tmp/openssh-sftp.bin && pass "OpenSSH sftp -b put through ProxyCommand" || fail "openssh sftp"
+  HOME=$WORK/home scp "${SSHO[@]}" -q "boxaz@$NAME.boxaz:/tmp/openssh-sftp.bin" "$WORK/scp-down.bin" && cmp -s "$WORK/sftp-up.bin" "$WORK/scp-down.bin" && pass "OpenSSH scp get (SFTP protocol) through ProxyCommand" || fail "openssh scp"
+  # short-lived certificate: no API key in the ssh process at all
+  HOME=$WORK/home "$BIN/box" ssh-cert "$BOX" --ttl 10m --json > "$WORK/cert.json" || fail "ssh-cert"
+  CID=$(jq -r .id "$WORK/cert.json"); CUSER=$(jq -r .user "$WORK/cert.json")
+  CERTO=(-i "$WORK/home/.boxaz/id_ed25519" -o "CertificateFile=$WORK/home/.boxaz/id_ed25519-cert.pub" -o IdentitiesOnly=yes -o "ProxyCommand=env -u BOXAZ_API_KEY $BIN/box ssh-proxy --anon %h" -o HostKeyAlias=boxaz-ssh -o "UserKnownHostsFile=$KH" -o BatchMode=yes -o LogLevel=ERROR)
+  O=$(HOME=$WORK/home ssh "${CERTO[@]}" "$CUSER@$NAME.boxaz" 'echo cert-$((40+2))' </dev/null 2>&1) && [[ $O == *cert-42* ]] && pass "OpenSSH with a short-lived certificate (box ssh-proxy --anon, no API key)" || fail "cert ssh $O"
+  KEY=$AKEY api DELETE "/boxes/$BOX/tickets/$CID" >/dev/null
+  if HOME=$WORK/home ssh "${CERTO[@]}" "$CUSER@$NAME.boxaz" true </dev/null >/dev/null 2>&1; then fail "revoked certificate accepted"; else pass "revoked certificate refused"; fi
+else
+  echo "    (OpenSSH client not installed: OpenSSH sftp/scp/cert steps skipped)"
+fi
+if command -v chromium >/dev/null 2>&1 || command -v google-chrome >/dev/null 2>&1 || [ -n "${E2E_BROWSER:-}" ]; then
+  T0=$(date +%s%N); "$BIN/box" browser "$BOX" --ttl 10m --json > "$WORK/browser.json" || { cat "$WORK/browser.json"; fail "box browser"; }
+  CDP=$(jq -r .cdp_url "$WORK/browser.json"); CDPH=$(jq -r .http_url "$WORK/browser.json")
+  pass "box browser: $(jq -r '.version.Browser' "$WORK/browser.json") started=$(jq -r .started "$WORK/browser.json") in $(( ($(date +%s%N)-T0)/1000000 )) ms"
+  WSD=$(curl -sS "${CDPH%%\?*}/json/version/?${CDPH#*\?}" | jq -r .webSocketDebuggerUrl)
+  [[ $WSD == ws*"/cdp/devtools/browser/"*"ticket=bxa_"* ]] && pass "/json/version rewritten to the gateway (connectOverCDP(http_url) works)" || fail "json/version $WSD"
+  O=$($PROBE cdp "$CDP" --navigate 'data:text/html,<title>cdp-e2e-42</title>ok' --expect-blocked 'http://169.254.169.254/latest/meta-data/') || { echo "$O"; fail "cdp probe"; }
+  [[ $(echo "$O" | jq -r .title) == cdp-e2e-42 ]] && pass "CDP Browser.getVersion ($(echo "$O" | jq -r .product)) + navigate + document.title over the WebSocket" || fail "cdp $O"
+  [[ $(echo "$O" | jq -r .metadata_blocked) == true ]] && pass "CDP navigation to 169.254.169.254 blocked ($(echo "$O" | jq -c .blocked_nav))" || fail "metadata $O"
+  $PROBE cdp "$WSD" >/dev/null && pass "rewritten browser socket works with the same (reusable) cdp ticket" || fail "cdp reuse"
+  T0=$(date +%s%N); "$BIN/box" desktop "$BOX" --json > "$WORK/desktop.json" || { cat "$WORK/desktop.json"; fail "box desktop"; }
+  pass "box desktop: $(jq -r '"\(.width)x\(.height) \(.vnc_server) wm=\(.wm)"' "$WORK/desktop.json") in $(( ($(date +%s%N)-T0)/1000000 )) ms"
+  O=$($PROBE vnc "$(jq -r .vnc_url "$WORK/desktop.json")") || { echo "$O"; fail "vnc probe"; }
+  [[ $(echo "$O" | jq -r .version) == "RFB 003.00"* ]] && [ "$(echo "$O" | jq -r .update_rects)" -ge 1 ] && pass "VNC over WSS: $(echo "$O" | jq -r .version) handshake + framebuffer update ($(echo "$O" | jq -c '{width,height,update_pixels}'))" || fail "vnc $O"
+  "$BIN/box" browser "$BOX" --status | jq -e '.running and (.headless == false)' >/dev/null && pass "browser restarted onto the desktop (visible on DISPLAY)" || echo "    note: browser stays headless ($("$BIN/box" browser "$BOX" --status | jq -c '{running,headless}'))"
+  "$BIN/box" desktop "$BOX" --share --ttl 2m --json > "$WORK/share.json"
+  SURL=$(jq -r .url "$WORK/share.json"); SSOCK=$(echo "$SURL" | sed 's#^http#ws#; s#/desktop/view?#/vnc?#')
+  [ "$($PROBE http "$SURL" | jq -r .status)" = 200 ] && pass "share link page 200 (view-only=$(jq -r .view_only "$WORK/share.json"))" || fail "share page"
+  $PROBE vnc "$SSOCK" --input >/dev/null && pass "share link socket: RFB through a view-only viewer (input dropped by core)" || fail "share vnc"
+  "$BIN/box" desktop "$BOX" --revoke-shares | jq -e '.revoked == 1' >/dev/null && pass "box desktop --revoke-shares" || fail "revoke shares"
+  [ "$($PROBE http "$SURL" | jq -r .status)" = 410 ] && [ "$($WSC "$SSOCK" --status)" = 410 ] && pass "revoked share link: page 410, socket 410" || fail "share after revoke"
+  "$BIN/box" browser "$BOX" --stop >/dev/null && "$BIN/box" desktop "$BOX" --stop >/dev/null && pass "browser + desktop stopped" || fail "stop"
+else
+  echo "    (no Chromium on this host: CDP / desktop steps skipped — apt-get install chromium xvfb x11vnc openbox)"
+fi
 
 echo "== ledger / overview"
 sleep 2.5

@@ -100,8 +100,8 @@ func (m *Manager) GatewayHost(ctx context.Context, host string) (kind, seg strin
 	if pu, err := url.Parse(m.Cfg.PublicURL); err == nil && pu.Hostname() != "" && strings.EqualFold(pu.Hostname(), host) {
 		return "core", ""
 	}
-	if host == d {
-		return "core", ""
+	if host == d { // v1.11: the bare gateway domain is not a control origin (only BOXAZ_PUBLIC_URL's host is)
+		return "reserved", ""
 	}
 	if !strings.HasSuffix(host, "."+d) {
 		return "", ""

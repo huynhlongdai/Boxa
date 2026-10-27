@@ -108,6 +108,10 @@ func (s *Server) browserOpen(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, r, err)
 		return
 	}
+	out.CDPURL, out.CoreURL = absURL(r, out.CDPURL, true), absURL(r, out.CoreURL, true)
+	if out.HTTPURL == "" {
+		out.HTTPURL = "http" + strings.TrimPrefix(out.CDPURL, "ws")
+	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, 201, out)
 }
@@ -143,6 +147,7 @@ func (s *Server) desktopOpen(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, r, err)
 		return
 	}
+	out.VNCURL, out.CoreURL, out.ViewerURL = absURL(r, out.VNCURL, true), absURL(r, out.CoreURL, true), absURL(r, out.ViewerURL, false)
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, 201, out)
 }
@@ -178,6 +183,7 @@ func (s *Server) shareCreate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, r, err)
 		return
 	}
+	out.URL = absURL(r, out.URL, false)
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, 201, out)
 }
@@ -198,6 +204,22 @@ func (s *Server) shareRevoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"revoked": n, "viewers_closed": closed})
+}
+
+// absURL completes a path-only URL (core without BOXAZ_PUBLIC_URL) with the
+// scheme and host of the request.
+func absURL(r *http.Request, u string, ws bool) string {
+	if !strings.HasPrefix(u, "/") {
+		return u
+	}
+	scheme := "http://"
+	if requestIsSecure(r) {
+		scheme = "https://"
+	}
+	if ws {
+		scheme = "ws" + strings.TrimPrefix(scheme, "http")
+	}
+	return scheme + r.Host + u
 }
 
 // ---- CDP ----

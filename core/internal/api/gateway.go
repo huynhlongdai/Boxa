@@ -300,6 +300,7 @@ func (s *Server) proxyGateway(w http.ResponseWriter, r *http.Request, b *model.B
 		Transport:     tr,
 		FlushInterval: -1, // SSE / streaming: flush every write
 		ModifyResponse: func(res *http.Response) error {
+			hostOnlyCookies(res.Header) // v1.11: a box can never set cookies for the whole gateway domain
 			if loc := res.Header.Get("Location"); loc != "" {
 				switch {
 				case prefix != "" && strings.HasPrefix(loc, "/") && !strings.HasPrefix(loc, "//"):
@@ -322,6 +323,30 @@ func (s *Server) proxyGateway(w http.ResponseWriter, r *http.Request, b *model.B
 		},
 	}
 	rp.ServeHTTP(w, r)
+}
+
+// hostOnlyCookie drops the Domain attribute of a Set-Cookie value so the
+// cookie stays on the box host (<name>.<domain>) and is never sent to the
+// control origin or other boxes (cookie tossing across *.<domain>).
+func hostOnlyCookie(v string) string {
+	parts := strings.Split(v, ";")
+	out := parts[:1]
+	for _, p := range parts[1:] {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(p)), "domain=") {
+			continue
+		}
+		out = append(out, p)
+	}
+	return strings.Join(out, ";")
+}
+
+func hostOnlyCookies(h http.Header) {
+	if vs := h.Values("Set-Cookie"); len(vs) > 0 {
+		h.Del("Set-Cookie")
+		for _, v := range vs {
+			h.Add("Set-Cookie", hostOnlyCookie(v))
+		}
+	}
 }
 
 func clientIP(r *http.Request) string {
@@ -368,6 +393,9 @@ func (s *Server) bufferedGateway(w http.ResponseWriter, r *http.Request, b *mode
 		for _, v := range vs {
 			if strings.EqualFold(k, "Location") && prefix != "" && strings.HasPrefix(v, "/") && !strings.HasPrefix(v, "//") {
 				v = prefix + v
+			}
+			if strings.EqualFold(k, "Set-Cookie") {
+				v = hostOnlyCookie(v)
 			}
 			w.Header().Add(k, v)
 		}

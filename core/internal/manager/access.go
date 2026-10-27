@@ -609,6 +609,9 @@ func (m *Manager) OriginAllowed(r *http.Request, cors string) bool {
 		}
 	}
 	pu, _ := url.Parse(oo)
+	if d := m.GatewayDomain(r.Context()); d != "" && pu != nil && strings.HasSuffix(strings.ToLower(pu.Hostname()), "."+d) {
+		return false // v1.11: box hosts (app JS) never open access sockets
+	}
 	return pu != nil && isLoopbackHost(pu.Host) && isLoopbackHost(r.Host)
 }
 
