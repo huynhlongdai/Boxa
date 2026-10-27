@@ -100,7 +100,8 @@
   "Use a ttl_s between 60 and 2592000 (30 days).": "ttl_s 取值 60 到 2592000（30 天）。",
   "Use \"public\" or \"token\".": "请使用 \"public\" 或 \"token\"。",
   "Set it first: PUT /v1/boxes/{id}/app (box app set).": "请先设置：PUT /v1/boxes/{id}/app（box app set）。",
-  "Set BOXAZ_PUBLIC_URL to an internet-reachable URL of core so the sandbox can dial in, or use a provider with preview URLs.": "将 BOXAZ_PUBLIC_URL 设为可从互联网访问的 core 地址，以便沙箱回连；或使用带预览 URL 的提供商。"
+  "Set BOXAZ_PUBLIC_URL to an internet-reachable URL of core so the sandbox can dial in, or use a provider with preview URLs.": "将 BOXAZ_PUBLIC_URL 设为可从互联网访问的 core 地址，以便沙箱回连；或使用带预览 URL 的提供商。",
+  "Use a bare domain such as example.com (box URLs become <key>-<port>.example.com).": "请使用裸域名，例如 example.com（box URL 将变为 <key>-<port>.example.com）。"
  },
  "msg": {
   "%s bootstrap exit %d: %s": "%s 引导命令退出码 %d：%s",
@@ -261,7 +262,10 @@
   "invalid app spec: %s": "应用规格无效：%s",
   "bad port": "端口无效",
   "ingress agent: %v": "ingress 代理：%v",
-  "box %s has no app": "box %s 没有应用"
+  "box %s has no app": "box %s 没有应用",
+  "provider %s is not configured": "provider %s 尚未配置",
+  "gateway.provider_preview must be auto, private or public": "gateway.provider_preview 必须是 auto、private 或 public",
+  "gateway.domain %q is not a valid domain": "gateway.domain %q 不是有效的域名"
  },
  "text": {
   "agentsmd.budget_box": "本盒子 $%.2f",

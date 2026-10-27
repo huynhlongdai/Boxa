@@ -100,7 +100,8 @@
   "Use a ttl_s between 60 and 2592000 (30 days).": "Dùng ttl_s từ 60 đến 2592000 (30 ngày).",
   "Use \"public\" or \"token\".": "Dùng \"public\" hoặc \"token\".",
   "Set it first: PUT /v1/boxes/{id}/app (box app set).": "Đặt app trước: PUT /v1/boxes/{id}/app (box app set).",
-  "Set BOXAZ_PUBLIC_URL to an internet-reachable URL of core so the sandbox can dial in, or use a provider with preview URLs.": "Đặt BOXAZ_PUBLIC_URL thành URL của core truy cập được từ Internet để sandbox gọi vào được, hoặc dùng provider có preview URL."
+  "Set BOXAZ_PUBLIC_URL to an internet-reachable URL of core so the sandbox can dial in, or use a provider with preview URLs.": "Đặt BOXAZ_PUBLIC_URL thành URL của core truy cập được từ Internet để sandbox gọi vào được, hoặc dùng provider có preview URL.",
+  "Use a bare domain such as example.com (box URLs become <key>-<port>.example.com).": "Dùng domain trần như example.com (URL box sẽ thành <key>-<port>.example.com)."
  },
  "msg": {
   "%s bootstrap exit %d: %s": "%s: lệnh khởi động thoát với mã %d: %s",
@@ -261,7 +262,10 @@
   "invalid app spec: %s": "app spec không hợp lệ: %s",
   "bad port": "cổng không hợp lệ",
   "ingress agent: %v": "ingress agent: %v",
-  "box %s has no app": "box %s chưa có app"
+  "box %s has no app": "box %s chưa có app",
+  "provider %s is not configured": "provider %s chưa được cấu hình",
+  "gateway.provider_preview must be auto, private or public": "gateway.provider_preview phải là auto, private hoặc public",
+  "gateway.domain %q is not a valid domain": "gateway.domain %q không phải domain hợp lệ"
  },
  "text": {
   "agentsmd.budget_box": "$%.2f cho box này",

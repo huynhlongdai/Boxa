@@ -367,8 +367,13 @@ class _Base:
 
     def capabilities(self) -> Dict[str, Any]:
         """Lifecycle flags per provider: memory_pause, wake_on_http_native, wake_via_gateway, fork,
-        inbound_http, max_runtime."""
+        inbound_http, max_runtime, private_preview."""
         return self._call("GET", "/capabilities")
+
+    def gateway(self, check: bool = False) -> Dict[str, Any]:
+        """v1.8: gateway domain, box URL pattern (https://<key>-<port>.<domain>/), reserved
+        subdomains and provider-preview policy; ``check=True`` probes the public URL."""
+        return self._call("GET", "/gateway" + ("?check=1" if check else ""))
 
     # -- misc ----------------------------------------------------------------
     def templates(self) -> Dict[str, List[Template]]:

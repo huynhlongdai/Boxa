@@ -397,6 +397,8 @@ export class Boxaz {
   setWakeOnRequest(id: string, on: boolean) { return this.request<Box>("PATCH", `/boxes/${enc(id)}`, { body: { wake_on_request: on } }); }
   /** Lifecycle capability flags per provider. */
   capabilities() { return this.request<List<LifecycleCaps & { provider: string; group: string }>>("GET", "/capabilities"); }
+  /** v1.8: gateway domain, box URL pattern (https://<key>-<port>.<domain>/), reserved subdomains, provider-preview policy; check probes the public URL. */
+  gateway(check = false) { return this.request<GatewayInfo>("GET", "/gateway", { query: check ? { check: "1" } : undefined }); }
 
   // ---- misc ----
   templates() { return this.request<List<Template>>("GET", "/templates"); }
@@ -494,7 +496,13 @@ export interface AppStatus {
 }
 export interface AppView { box_id: string; spec: AppSpec | null; status: AppStatus }
 export type PortAccess = "public" | "token";
-export interface PortView { port: number; url: string; kind: string; public: boolean; note?: string; caveats?: string[]; gateway_url?: string; access: PortAccess }
+export interface PortView { port: number; url: string; kind: string; public: boolean; note?: string; caveats?: string[]; gateway_url?: string; access: PortAccess; provider_preview?: "private" | "public" }
 export interface PortsResult { box_id: string; url: string; ports: PortView[] }
 export interface UrlToken { id: string; box_id: string; port: number; label?: string; prefix: string; token?: string; url?: string; expires_at: string; created_at: string; revoked_at?: string; expired?: boolean }
-export interface LifecycleCaps { memory_pause: boolean; wake_on_http_native: boolean; wake_via_gateway: boolean; fork: boolean; inbound_http: boolean; max_runtime: number; note?: string }
+export interface LifecycleCaps { memory_pause: boolean; wake_on_http_native: boolean; wake_via_gateway: boolean; fork: boolean; inbound_http: boolean; max_runtime: number; private_preview?: boolean; note?: string }
+export interface GatewayInfo {
+  mode: "host" | "path" | "relative"; domain: string; domain_source: "env" | "settings" | "none"; public_url: string; url_pattern: string; internet_facing: boolean;
+  reserved: string[]; provider_preview: "auto" | "private" | "public"; provider_preview_source: "env" | "settings" | "default"; private_previews: boolean;
+  providers: { provider: string; preview_host: boolean; private_preview: boolean; note: string }[];
+  check?: { ok: boolean; status?: number; latency_ms: number; error?: string; checked_at: string };
+}

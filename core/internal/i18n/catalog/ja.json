@@ -100,7 +100,8 @@
   "Use a ttl_s between 60 and 2592000 (30 days).": "ttl_s は 60〜2592000（30 日）で指定してください。",
   "Use \"public\" or \"token\".": "\"public\" か \"token\" を使ってください。",
   "Set it first: PUT /v1/boxes/{id}/app (box app set).": "先に設定してください: PUT /v1/boxes/{id}/app（box app set）。",
-  "Set BOXAZ_PUBLIC_URL to an internet-reachable URL of core so the sandbox can dial in, or use a provider with preview URLs.": "サンドボックスが接続できるよう BOXAZ_PUBLIC_URL をインターネットから到達可能な core の URL に設定するか、プレビュー URL のあるプロバイダーを使ってください。"
+  "Set BOXAZ_PUBLIC_URL to an internet-reachable URL of core so the sandbox can dial in, or use a provider with preview URLs.": "サンドボックスが接続できるよう BOXAZ_PUBLIC_URL をインターネットから到達可能な core の URL に設定するか、プレビュー URL のあるプロバイダーを使ってください。",
+  "Use a bare domain such as example.com (box URLs become <key>-<port>.example.com).": "example.com のような素のドメインを使ってください（box URL は <key>-<port>.example.com になります）。"
  },
  "msg": {
   "%s bootstrap exit %d: %s": "%s のブートストラップが終了コード %d で失敗: %s",
@@ -261,7 +262,10 @@
   "invalid app spec: %s": "アプリ仕様が無効です: %s",
   "bad port": "ポートが不正です",
   "ingress agent: %v": "ingress エージェント: %v",
-  "box %s has no app": "box %s にはアプリがありません"
+  "box %s has no app": "box %s にはアプリがありません",
+  "provider %s is not configured": "provider %s は未設定です",
+  "gateway.provider_preview must be auto, private or public": "gateway.provider_preview は auto、private、public のいずれかにしてください",
+  "gateway.domain %q is not a valid domain": "gateway.domain %q は有効なドメインではありません"
  },
  "text": {
   "agentsmd.budget_box": "このボックスに $%.2f",

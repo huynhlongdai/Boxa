@@ -228,6 +228,9 @@ test("v1.7 supervised app / gateway wake / URL tokens / capabilities", { skip },
     assert.equal((await bx.setWakeOnRequest(box.id, false)).wake_on_request, false);
     const caps = new Map((await bx.capabilities()).items.map((c) => [c.provider, c]));
     assert.ok(caps.get("e2b")?.wake_on_http_native && !caps.get("prized")?.inbound_http);
+    assert.ok(caps.get("e2b")?.private_preview && !caps.get("prized")?.private_preview);
+    const gi = await bx.gateway();
+    assert.ok(["host", "path", "relative"].includes(gi.mode) && gi.reserved.includes("hark"));
   } finally {
     await bx.deleteBox(box.id);
   }

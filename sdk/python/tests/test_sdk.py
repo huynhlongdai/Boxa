@@ -239,5 +239,8 @@ def test_v17_app_gateway_tokens(core):
             assert "data" in bx.app_logs(box["id"])
             caps = {c["provider"]: c for c in bx.capabilities()["items"]}
             assert caps["e2b"]["wake_on_http_native"] and not caps["prized"]["inbound_http"]
+            assert caps["e2b"]["private_preview"] and not caps["prized"]["private_preview"]
+            gw_info = bx.gateway()
+            assert gw_info["mode"] in ("host", "path", "relative") and "hark" in gw_info["reserved"]
         finally:
             bx.down(box["id"])
