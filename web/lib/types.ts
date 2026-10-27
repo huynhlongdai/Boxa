@@ -389,6 +389,9 @@ export interface GatewayInfo {
   domain_source: "env" | "settings" | "none";
   public_url: string;
   url_pattern: string;
+  /** v1.9: URL các port khác theo nhãn, và alias cũ <key>-<port>. */
+  label_pattern?: string;
+  alias_pattern?: string;
   internet_facing: boolean;
   reserved: string[];
   provider_preview: ProviderPreviewMode;
@@ -1065,6 +1068,9 @@ export interface Box {
   port_access?: Record<string, PortAccess | string>;
   /** v1.7: app được supervisor chạy (null/undefined = không có). */
   app?: AppSpec | null;
+  /** v1.9: tên gateway dễ đọc (https://<subdomain>.<domain>/) + nhãn port. */
+  subdomain?: string;
+  port_labels?: Record<string, string>;
 }
 
 export interface PortView {
@@ -1079,11 +1085,20 @@ export interface PortView {
   access: PortAccess | string;
   /** v1.8: host preview của provider cho port này: private (chỉ qua gateway) | public (ai biết sandbox id cũng vào được); không có = provider không có preview. */
   provider_preview?: "private" | "public";
+  /** v1.9: nhãn chữ của port (web, api, db…) trong URL <name>-<label>.<domain>. */
+  label?: string;
+  /** v1.9: port chính, phục vụ ở tên box trần https://<name>.<domain>/. */
+  primary?: boolean;
+  /** v1.9: URL cũ <key>-<port> (vẫn chạy). */
+  alias_url?: string;
 }
 
 export interface PortsResult {
   box_id: string;
   url: string;
+  /** v1.9: tên gateway của box và port mà tên trần trỏ vào. */
+  name?: string;
+  primary_port?: number;
   ports: PortView[];
 }
 
@@ -1122,6 +1137,8 @@ export interface AppSpec {
   install?: string;
   start: string;
   port?: number;
+  /** v1.9: nhãn URL của port app (<name>-<label>.<domain>). */
+  label?: string;
   ready?: AppReady | null;
   restart?: "always" | "on-failure" | "never" | string;
   env?: Record<string, string>;

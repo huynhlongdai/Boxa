@@ -92,6 +92,11 @@ type Box struct {
 	App           *AppSpec       `json:"app,omitempty"`             // supervised app (nil = none)
 	WakeOnRequest *bool          `json:"wake_on_request,omitempty"` // gateway wakes the box on a request (nil = on)
 	PortAccess    map[int]string `json:"port_access,omitempty"`     // port → public | token
+	// v1.9: readable gateway URLs. Subdomain is the box's DNS name at the
+	// gateway (https://<subdomain>.<domain>/ → primary port); PortLabels name
+	// the other ports (https://<subdomain>-<label>.<domain>/).
+	Subdomain  string         `json:"subdomain,omitempty"`
+	PortLabels map[int]string `json:"port_labels,omitempty"`
 }
 
 // Exposure is how one port of a box is reachable from the internet when the

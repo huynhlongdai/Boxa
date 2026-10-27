@@ -167,7 +167,7 @@ class _Base:
                    cpu: Optional[float] = None, ram_mb: Optional[int] = None, disk_gb: Optional[int] = None,
                    idempotency_key: Optional[str] = None, wait: bool = True, **extra: Any) -> Box:
         """Create a box (``yaml=...`` also accepted). Extra fields: slug, ttl_seconds, idle_minutes,
-        budget_usd, ports, secrets, setup, region, agent_id. Returns :class:`Box` (with ``next`` hints)."""
+        budget_usd, ports, secrets, setup, region, agent_id, subdomain (v1.9 gateway name → https://<subdomain>.<domain>/). Returns :class:`Box` (with ``next`` hints)."""
         h = {"Idempotency-Key": idempotency_key} if idempotency_key else None
         return self._call("POST", "/boxes", _box_body(template, lifecycle, cpu, ram_mb, disk_gb, extra),
                           params=None if wait else {"wait": False}, headers=h)
@@ -313,14 +313,16 @@ class _Base:
     def set_app(self, box_id: str, start: str, *, repo: Optional[str] = None, ref: Optional[str] = None,
                 install: Optional[str] = None, port: Optional[int] = None, ready_http: Optional[str] = None,
                 ready_tcp: bool = False, restart: Optional[str] = None, env: Optional[Mapping[str, str]] = None,
-                workdir: Optional[str] = None, backoff_max_s: Optional[int] = None) -> Dict[str, Any]:
+                workdir: Optional[str] = None, backoff_max_s: Optional[int] = None, label: Optional[str] = None) -> Dict[str, Any]:
         """Declare the box's long-running app: Boxaz clones ``repo``, runs ``install`` once, starts
         ``start``, restarts it on crash (``restart`` = always | on-failure | never), starts it again after
-        wake / restore / clone and gates gateway traffic to ``port`` until it is ready. Returns ``{spec, status}``."""
+        wake / restore / clone and gates gateway traffic to ``port`` until it is ready. ``port`` is also the box's
+        primary URL (``https://<name>.<domain>/``); ``label`` names it for ``<name>-<label>``. Returns ``{spec, status}``."""
         ready = {"http": ready_http} if ready_http else ({"tcp": True} if ready_tcp else None)
         return self._call("PUT", f"/boxes/{_q(box_id)}/app", _clean({
             "start": start, "repo": repo, "ref": ref, "install": install, "port": port, "ready": ready,
-            "restart": restart, "env": dict(env) if env else None, "workdir": workdir, "backoff_max_s": backoff_max_s}))
+            "restart": restart, "env": dict(env) if env else None, "workdir": workdir, "backoff_max_s": backoff_max_s,
+            "label": label}))
 
     def app(self, box_id: str) -> Dict[str, Any]:
         """App spec + live status: state (cloning|installing|starting|ready|backoff|exited|stopped|sleeping),
@@ -338,11 +340,14 @@ class _Base:
         return self._call("GET", f"/boxes/{_q(box_id)}/app/logs", params={"offset": offset, "max": max_bytes})
 
     def ports(self, box_id: str) -> Dict[str, Any]:
-        """Every exposed port with its public ``url``, ``kind``, ``access`` and stable ``gateway_url``."""
+        """Every exposed port with its public ``url``, ``kind``, ``access``, stable ``gateway_url``
+        (v1.9 readable: ``https://<name>.<domain>/`` for the primary port, ``https://<name>-<label>.<domain>/``
+        for others), ``label``, ``primary`` and the legacy ``alias_url``; plus the box ``name`` and ``primary_port``."""
         return self._call("GET", f"/boxes/{_q(box_id)}/ports")
 
-    def expose(self, box_id: str, port: int) -> Dict[str, Any]:
-        return self._call("POST", f"/boxes/{_q(box_id)}/ports", {"port": port})
+    def expose(self, box_id: str, port: int, label: Optional[str] = None) -> Dict[str, Any]:
+        """Expose a port; ``label`` (e.g. "api") names it in its URL ``<name>-<label>.<domain>``."""
+        return self._call("POST", f"/boxes/{_q(box_id)}/ports", _clean({"port": port, "label": label}))
 
     def create_url_token(self, box_id: str, port: int, *, ttl_s: Optional[int] = None, label: Optional[str] = None,
                          private: Optional[bool] = None) -> Dict[str, Any]:
@@ -361,6 +366,15 @@ class _Base:
         """``access`` = "public" (gateway URL works without a token) or "token"."""
         return self._call("PUT", f"/boxes/{_q(box_id)}/ports/{int(port)}", {"access": access})
 
+    def set_port_label(self, box_id: str, port: int, label: str) -> Dict[str, Any]:
+        """v1.9: name a port in its gateway URL (``https://<name>-<label>.<domain>/``); returns the port view."""
+        return self._call("PUT", f"/boxes/{_q(box_id)}/ports/{int(port)}", {"label": label})
+
+    def rename_url(self, box_id: str, name: str) -> Box:
+        """v1.9: set the box's readable gateway name (``https://<name>.<domain>/``). Taken or reserved names
+        raise an error whose ``next`` suggests a free one; the old name stops answering, the alias keeps working."""
+        return self._call("PATCH", f"/boxes/{_q(box_id)}", {"subdomain": name})
+
     def set_wake_on_request(self, box_id: str, on: bool) -> Box:
         """Whether a request to the box's gateway URL wakes it while it sleeps (default on)."""
         return self._call("PATCH", f"/boxes/{_q(box_id)}", {"wake_on_request": bool(on)})
@@ -371,7 +385,7 @@ class _Base:
         return self._call("GET", "/capabilities")
 
     def gateway(self, check: bool = False) -> Dict[str, Any]:
-        """v1.8: gateway domain, box URL pattern (https://<key>-<port>.<domain>/), reserved
+        """Gateway domain, box URL pattern (v1.9 https://<name>.<domain>/, label_pattern, alias_pattern), reserved
         subdomains and provider-preview policy; ``check=True`` probes the public URL."""
         return self._call("GET", "/gateway" + ("?check=1" if check else ""))
 

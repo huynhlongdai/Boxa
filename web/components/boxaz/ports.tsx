@@ -1,10 +1,11 @@
 "use client";
 // v1.7: tab Ports của box — Boxaz gateway URL theo port, quyền truy cập (public / token), URL token (tạo / liệt kê / thu hồi),
 // wake_on_request, trạng thái app do supervisor chạy (restart + log SSE) và capability lifecycle của provider.
+// v1.9: URL dễ đọc — tên box (https://<name>.<domain>/ → port chính), nhãn port (<name>-<label>), alias cũ <key>-<port>.
 import * as React from "react";
 import { useTranslations } from "next-intl";
 import { useSWRConfig } from "swr";
-import { AlertTriangle, ExternalLink, KeyRound, Plus, RefreshCw, RotateCcw, ScrollText, ShieldCheck, Zap } from "lucide-react";
+import { AlertTriangle, ExternalLink, KeyRound, Pencil, Plus, RefreshCw, RotateCcw, ScrollText, ShieldCheck, Zap } from "lucide-react";
 import { api, paths } from "@/lib/api";
 import { useAction, useApi } from "@/lib/hooks";
 import { useFmt } from "@/lib/format";
@@ -216,10 +217,16 @@ function PortRow({ box, pv, inbound }: { box: Box; pv: PortView; inbound: boolea
   const tokenMode = pv.access === "token";
   const gw = pv.gateway_url || (tokenMode ? pv.url : "");
   const providerUrl = pv.kind !== "gateway" && pv.url && pv.url !== gw ? pv.url : "";
+  const [editing, setEditing] = React.useState(false);
+  const [label, setLabel] = React.useState(pv.label ?? "");
+  const labelOk = /^[a-z]([a-z0-9-]{0,18}[a-z0-9])?$/.test(label) && !label.includes("--");
   return (
     <div className="rounded-md border border-border p-3" data-testid={`port-${pv.port}`}>
       <div className="flex flex-wrap items-center gap-2">
         <Mono className="text-[15px] font-semibold">:{pv.port}</Mono>
+        {pv.label && <Badge variant="blue" title={t("label")} data-testid={`label-${pv.port}`}>{pv.label}</Badge>}
+        {pv.primary && <Badge variant="green" data-testid={`primary-${pv.port}`}>{t("primary")}</Badge>}
+        <Button size="xs" variant="ghost" onClick={() => { setLabel(pv.label ?? ""); setEditing((x) => !x); }} aria-label={t("labelEdit")} title={t("labelEdit")} data-testid={`edit-label-${pv.port}`}><Pencil /></Button>
         <Badge variant="outline" title={t(`kindHint.${kind}`)}>{t(`kind.${kind}`)}</Badge>
         <Badge variant={tokenMode ? "yellow" : "green"}>{tokenMode ? t("access.token") : t("access.public")}</Badge>
         <span className="flex-1" />
@@ -232,6 +239,18 @@ function PortRow({ box, pv, inbound }: { box: Box; pv: PortView; inbound: boolea
             })} />
         </label>
       </div>
+      {editing && (
+        <form className="mt-2 flex flex-wrap items-center gap-2" onSubmit={async (e) => {
+          e.preventDefault();
+          if (!labelOk) return;
+          const r = await run("label", () => api.setPortLabel(box.id, pv.port, label), { success: t("labelSaved", { port: pv.port, label }), revalidate: [paths.boxPorts(box.id), paths.box(box.id)] });
+          if (r) setEditing(false);
+        }}>
+          <span className="text-[13px] text-muted-foreground">{t("label")}</span>
+          <Input value={label} onChange={(e) => setLabel(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 20))} placeholder={t("labelPh")} className="h-8 w-36 font-mono" aria-label={t("label")} data-testid={`label-input-${pv.port}`} />
+          <Button size="xs" type="submit" disabled={!labelOk || !!pending}>{t("labelSave")}</Button>
+        </form>
+      )}
       <div className="mt-2 flex flex-col gap-1.5 text-[13px]">
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-28 shrink-0 text-muted-foreground">{t("boxazUrl")}</span>
@@ -242,6 +261,13 @@ function PortRow({ box, pv, inbound }: { box: Box; pv: PortView; inbound: boolea
             </>
           ) : <span className="text-muted-foreground">—</span>}
         </div>
+        {pv.alias_url && (
+          <div className="flex flex-wrap items-center gap-2" title={t("aliasHint")}>
+            <span className="w-28 shrink-0 text-muted-foreground">{t("alias")}</span>
+            <Mono className="min-w-0 break-all text-xs text-muted-foreground">{pv.alias_url}</Mono>
+            <CopyButton text={pv.alias_url} />
+          </div>
+        )}
         {providerUrl && (
           <div className="flex flex-wrap items-center gap-2">
             <span className="w-28 shrink-0 text-muted-foreground">{t("providerUrl")}</span>
@@ -274,19 +300,54 @@ function PortRow({ box, pv, inbound }: { box: Box; pv: PortView; inbound: boolea
 function ExposeForm({ box }: { box: Box }) {
   const t = useTranslations("ports");
   const [port, setPort] = React.useState("");
+  const [label, setLabel] = React.useState("");
   const { run, pending } = useAction();
   const n = Number(port);
-  const valid = Number.isInteger(n) && n >= 1 && n <= 65535;
+  const valid = Number.isInteger(n) && n >= 1 && n <= 65535 && (!label || /^[a-z]([a-z0-9-]*[a-z0-9])?$/.test(label));
   return (
     <form className="flex items-center gap-2" onSubmit={async (e) => {
       e.preventDefault();
       if (!valid) return;
-      const r = await run("expose", () => api.exposePort(box.id, n), { success: t("exposed", { port: n }), revalidate: [paths.boxPorts(box.id), paths.box(box.id)] });
-      if (r) setPort("");
+      const r = await run("expose", () => api.exposePort(box.id, n, label || undefined), { success: t("exposed", { port: n }), revalidate: [paths.boxPorts(box.id), paths.box(box.id)] });
+      if (r) { setPort(""); setLabel(""); }
     }}>
       <Input value={port} onChange={(e) => setPort(e.target.value.replace(/\D/g, "").slice(0, 5))} placeholder="8000" inputMode="numeric" className="h-8 w-24 font-mono" aria-label={t("exposePort")} />
+      <Input value={label} onChange={(e) => setLabel(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 20))} placeholder={t("labelPh")} className="h-8 w-28 font-mono" aria-label={t("exposeLabel")} title={t("exposeLabel")} />
       <Button size="sm" variant="outline" type="submit" disabled={!valid || !!pending || box.status !== "running"}><Plus /> {t("expose")}</Button>
     </form>
+  );
+}
+
+function BoxNameForm({ box, data }: { box: Box; data: PortsResult }) {
+  const t = useTranslations("ports");
+  const [name, setName] = React.useState(data.name ?? "");
+  React.useEffect(() => setName(data.name ?? ""), [data.name]);
+  const { run, pending } = useAction();
+  const ok = /^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$/.test(name) && /[a-z]/.test(name) && !name.includes("--");
+  const main = data.ports.find((p) => p.primary)?.gateway_url;
+  if (!data.name) return null;
+  return (
+    <div className="flex flex-col gap-1.5 rounded-md border border-border bg-muted/30 p-3 text-[13px]" data-testid="box-name">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="w-28 shrink-0 text-muted-foreground">{t("nameTitle")}</span>
+        {main ? (
+          <>
+            <a href={main} target="_blank" rel="noreferrer" className="min-w-0 break-all text-primary hover:underline"><Mono>{main}</Mono></a>
+            <CopyButton text={main} />
+          </>
+        ) : <Mono>{data.name}</Mono>}
+      </div>
+      <form className="flex flex-wrap items-center gap-2" onSubmit={async (e) => {
+        e.preventDefault();
+        if (!ok || name === data.name) return;
+        await run("rename", () => api.patchBox(box.id, { subdomain: name }), { success: t("renamed", { name }), revalidate: [paths.boxPorts(box.id), paths.box(box.id), paths.boxEvents(box.id)] });
+      }}>
+        <span className="w-28 shrink-0 text-muted-foreground">{t("name")}</span>
+        <Input value={name} onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 40))} className="h-8 w-56 font-mono" aria-label={t("name")} data-testid="box-name-input" />
+        <Button size="xs" variant="outline" type="submit" disabled={!ok || name === data.name || !!pending}>{t("rename")}</Button>
+      </form>
+      <p className="text-xs text-muted-foreground">{t("nameHint")} {t("guessable")}</p>
+    </div>
   );
 }
 
@@ -303,6 +364,7 @@ function PortsCard({ box }: { box: Box }) {
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <p className="text-xs text-muted-foreground">{t("intro")}</p>
+        {data && <BoxNameForm box={box} data={data} />}
         {error ? <ErrorBox error={error} retry={() => mutate()} /> : !data ? <LoadingRows rows={2} /> : !data.ports.length ? (
           <Empty title={t("empty")} desc={t("emptyDesc")} />
         ) : data.ports.map((pv) => <PortRow key={pv.port} box={box} pv={pv} inbound={inbound} />)}

@@ -231,6 +231,13 @@ test("v1.7 supervised app / gateway wake / URL tokens / capabilities", { skip },
     assert.ok(caps.get("e2b")?.private_preview && !caps.get("prized")?.private_preview);
     const gi = await bx.gateway();
     assert.ok(["host", "path", "relative"].includes(gi.mode) && gi.reserved.includes("hark"));
+    // v1.9 readable names
+    assert.ok(p.gateway_url!.endsWith("/x/sdk-ts-app/") && gi.url_pattern.endsWith("<name>/"));
+    assert.equal((await bx.renameUrl(box.id, "TS Shop")).subdomain, "ts-shop");
+    const pv = await bx.ports(box.id);
+    assert.ok(pv.name === "ts-shop" && pv.ports[0].gateway_url!.endsWith("/x/ts-shop/") && pv.ports[0].primary && pv.ports[0].alias_url!.endsWith(`-${port}/`));
+    assert.equal((await bx.setPortLabel(box.id, port, "site")).label, "site");
+    await assert.rejects(bx.renameUrl(box.id, "hark"), /reserved/);
   } finally {
     await bx.deleteBox(box.id);
   }

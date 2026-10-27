@@ -368,12 +368,13 @@ export const api = {
 
   // v1.7: ports + gateway URL, URL token, wake_on_request, app supervisor, capabilities
   boxPorts: (id: string) => http.get<PortsResult>(paths.boxPorts(id)),
-  exposePort: (id: string, port: number) => http.post<PortsResult>(paths.boxPorts(id), { port }),
+  exposePort: (id: string, port: number, label?: string) => http.post<PortsResult>(paths.boxPorts(id), label ? { port, label } : { port }),
   setPortAccess: (id: string, port: number, access: PortAccess) => http.put<PortView>(`/boxes/${id}/ports/${port}`, { access }),
+  setPortLabel: (id: string, port: number, label: string) => http.put<PortView>(`/boxes/${id}/ports/${port}`, { label }),
   portTokens: (id: string, port: number) => http.get<URLTokenList>(paths.portTokens(id, port)),
   createPortToken: (id: string, port: number, body: { ttl_s?: number; label?: string; private?: boolean }) => http.post<URLToken>(paths.portTokens(id, port), body),
   revokePortToken: (id: string, port: number, tokenId: string) => http.del<URLToken>(`${paths.portTokens(id, port)}/${encodeURIComponent(tokenId)}`),
-  patchBox: (id: string, body: { wake_on_request?: boolean }) => http.patch<Box>(paths.box(id), body),
+  patchBox: (id: string, body: { wake_on_request?: boolean; subdomain?: string }) => http.patch<Box>(paths.box(id), body),
   getApp: (id: string) => http.get<AppView>(paths.boxApp(id)),
   setApp: (id: string, spec: AppSpec) => http.put<AppView>(paths.boxApp(id), spec),
   deleteApp: (id: string) => http.del<AppView>(paths.boxApp(id)),

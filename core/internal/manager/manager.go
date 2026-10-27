@@ -167,8 +167,9 @@ type Manager struct {
 	etaMu   sync.Mutex
 	etas    map[string][]float64 // "<host>|<template>" → recent cold create seconds
 	// v1.7
-	app appState
-	gw  gatewayState
+	app   appState
+	gw    gatewayState
+	names nameState // v1.9 readable gateway names
 }
 
 // SetObjectStoreHTTP overrides the HTTP client used for object storage (tests).
@@ -234,6 +235,7 @@ func (m *Manager) Init(ctx context.Context, envAdminKey string) (string, error) 
 	}
 	m.initV13(ctx)
 	m.initV14(ctx)
+	m.backfillNames(ctx) // v1.9: boxes created before readable names
 	return m.bootstrapAdmin(ctx, envAdminKey)
 }
 
@@ -373,7 +375,7 @@ func (m *Manager) PutSettings(ctx context.Context, s model.Settings) (model.Sett
 	}
 	s.Gateway.Domain = normDomain(s.Gateway.Domain)
 	if d := s.Gateway.Domain; d != "" && !validDomain(d) {
-		return s, model.EH(model.ErrInvalid, "Use a bare domain such as example.com (box URLs become <key>-<port>.example.com).", "gateway.domain %q is not a valid domain", d)
+		return s, model.EH(model.ErrInvalid, "Use a bare domain such as example.com (box URLs become <name>.example.com).", "gateway.domain %q is not a valid domain", d)
 	}
 	switch s.Gateway.ProviderPreview = strings.ToLower(strings.TrimSpace(s.Gateway.ProviderPreview)); s.Gateway.ProviderPreview {
 	case "", "auto", "private", "public":

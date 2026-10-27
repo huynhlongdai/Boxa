@@ -1638,11 +1638,26 @@
       "refresh": "Refresh",
       "noLogs": "No output yet."
     },
-    "previewPrivate": "The provider's own preview URL for this port refuses direct traffic (private sandbox): only this Boxaz URL reaches the app."
+    "previewPrivate": "The provider's own preview URL for this port refuses direct traffic (private sandbox): only this Boxaz URL reaches the app.",
+    "nameTitle": "Box address",
+    "name": "Name",
+    "nameHint": "The bare name serves the primary port (demo-app.example.com); other ports get name-label (demo-app-api.example.com). Lowercase letters, digits and hyphens.",
+    "rename": "Rename",
+    "renamed": "Address is now {name}",
+    "primary": "primary",
+    "label": "Label",
+    "labelEdit": "Change label",
+    "labelSave": "Save",
+    "labelSaved": "Port {port} is now “{label}”",
+    "labelPh": "e.g. api",
+    "alias": "Old address",
+    "aliasHint": "The old key-port address keeps working.",
+    "guessable": "Name URLs are easy to guess. Turn on “Require token” for private apps.",
+    "exposeLabel": "Label (optional)"
   },
   "gateway": {
     "title": "Gateway domain",
-    "desc": "Box URLs on your own domain, one subdomain per box port, through a wildcard DNS record (e.g. a Cloudflare Tunnel, see deploy/cloudflare-tunnel).",
+    "desc": "Box URLs on your own domain with readable names (demo-app.example.com, demo-app-api.example.com), through a wildcard DNS record (e.g. a Cloudflare Tunnel, see deploy/cloudflare-tunnel).",
     "mode": "URL mode",
     "modeHost": "host-based",
     "modePath": "path-based",
@@ -1668,6 +1683,9 @@
     "provPublic": "preview public",
     "provNone": "no preview host",
     "reserved": "Reserved subdomains (never routed to a box)",
-    "recheck": "Check now"
+    "recheck": "Check now",
+    "labelPattern": "Other ports",
+    "aliasPattern": "Old address (alias)",
+    "guessable": "Name URLs are guessable: use token mode (URL tokens) for private apps."
   }
 }

@@ -9,7 +9,6 @@ package manager
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -60,7 +59,17 @@ func (m *Manager) SetApp(ctx context.Context, p *Principal, id string, in model.
 			b.Ports = append(nonNilInts(b.Ports), spec.Port)
 			newPort = true
 		}
+		if spec.Label != "" && spec.Label != b.PortLabels[spec.Port] {
+			before := namesCopy(b)
+			if err := m.setPortLabel(ctx, b, spec.Port, spec.Label); err != nil {
+				lock.Unlock()
+				return nil, err
+			}
+			m.refreshNamedURLs(b, before)
+			newPort = true
+		}
 	}
+	m.ensureNames(ctx, b)
 	m.Store.PutBox(ctx, b)
 	lock.Unlock()
 	m.app.ready.Delete(b.ID)
@@ -275,6 +284,15 @@ func inheritV17(dst, src *model.Box) {
 		dst.App = &a
 	}
 	dst.WakeOnRequest = src.WakeOnRequest
+	// v1.9: the copy starts from the source's name (made unique by
+	// ensureNames, e.g. demo-app → demo-app-blue) and keeps its port labels
+	dst.Subdomain = src.Subdomain
+	if src.PortLabels != nil {
+		dst.PortLabels = map[int]string{}
+		for k, v := range src.PortLabels {
+			dst.PortLabels[k] = v
+		}
+	}
 	if src.PortAccess != nil {
 		dst.PortAccess = map[int]string{}
 		for k, v := range src.PortAccess {
@@ -291,11 +309,12 @@ func asProtoErr(err error, pe **proto.Error) bool {
 	return false
 }
 
-var _ = strings.TrimSpace
-
 // PatchBoxInput is PATCH /v1/boxes/{id} (v1.7).
 type PatchBoxInput struct {
 	WakeOnRequest *bool `json:"wake_on_request,omitempty"`
+	// Subdomain (v1.9) renames the box's gateway address
+	// (https://<subdomain>.<domain>/); the old name stops answering at once.
+	Subdomain *string `json:"subdomain,omitempty"`
 }
 
 // PatchBox changes per-box settings.
@@ -318,8 +337,20 @@ func (m *Manager) PatchBox(ctx context.Context, p *Principal, id string, in Patc
 		v := *in.WakeOnRequest
 		b.WakeOnRequest = &v
 	}
+	oldName := b.Subdomain
+	if in.Subdomain != nil && model.Slugify(*in.Subdomain, 0) != b.Subdomain {
+		before := namesCopy(b)
+		if err := m.claimExplicitName(ctx, b, *in.Subdomain); err != nil {
+			lock.Unlock()
+			return nil, err
+		}
+		m.refreshNamedURLs(b, before)
+	}
 	m.Store.PutBox(ctx, b)
 	lock.Unlock()
+	if b.Subdomain != oldName {
+		m.Emit(ctx, p.Actor(), b.ID, b.AgentID, "box.settings", fmt.Sprintf("gateway name %s → %s", oldName, b.Subdomain), nil)
+	}
 	if in.WakeOnRequest != nil {
 		m.Emit(ctx, p.Actor(), b.ID, b.AgentID, "box.settings", fmt.Sprintf("wake_on_request → %v", *in.WakeOnRequest), nil)
 	}

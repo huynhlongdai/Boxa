@@ -1,10 +1,10 @@
 # Gateway Boxaz trên domain riêng qua Cloudflare Tunnel
 
-Đưa gateway lên domain thật: API/dashboard ở `https://gw.<domain>`, mỗi port của box ở `https://<key>-<port>.<domain>/` (host-based, không có tiền tố đường dẫn). Không cần mở port hay có IP công khai: `cloudflared` gọi ra Cloudflare, Cloudflare lo TLS.
+Đưa gateway lên domain thật: API/dashboard ở `https://gw.<domain>`, mỗi box ở `https://<tên-box>.<domain>/` (port chính) và `https://<tên-box>-<nhãn>.<domain>/` (port khác, nhãn chữ như `api`, `db`), host-based, không có tiền tố đường dẫn; địa chỉ cũ `<key>-<port>` vẫn chạy (v1.9). Không cần mở port hay có IP công khai: `cloudflared` gọi ra Cloudflare, Cloudflare lo TLS.
 
 ## Yêu cầu
 
-- Zone trên Cloudflare (gói Free được). **Universal SSL miễn phí chỉ phủ wildcard một cấp** (`*.example.com`), vì vậy URL box là `<key>-<port>.example.com` — không dùng `*.box.example.com` (cần Advanced Certificate trả phí).
+- Zone trên Cloudflare (gói Free được). **Universal SSL miễn phí chỉ phủ wildcard một cấp** (`*.example.com`), vì vậy URL box là một nhãn `<tên-box>[-<nhãn>].example.com` — không dùng `*.box.example.com` (cần Advanced Certificate trả phí).
 - API token: *Account → Cloudflare Tunnel: Edit* và *Zone → DNS: Edit* (zone đó). Đặt `CF_API_TOKEN` (bỏ trống nếu có proxy tự chèn header Authorization).
 - `cloudflared` (bản đúng kiến trúc máy: amd64 / arm64), `curl`, `jq`.
 

@@ -1638,7 +1638,22 @@
       "refresh": "刷新",
       "noLogs": "暂无输出。"
     },
-    "previewPrivate": "该端口在服务商处的预览 URL 拒绝直接访问（私有沙箱）：只有这个 Boxaz URL 能访问应用。"
+    "previewPrivate": "该端口在服务商处的预览 URL 拒绝直接访问（私有沙箱）：只有这个 Boxaz URL 能访问应用。",
+    "nameTitle": "Box 地址",
+    "name": "名称",
+    "nameHint": "裸名称指向主端口（demo-app.example.com）；其他端口为 名称-标签（demo-app-api.example.com）。使用小写字母、数字和连字符。",
+    "rename": "改名",
+    "renamed": "地址已改为 {name}",
+    "primary": "主端口",
+    "label": "标签",
+    "labelEdit": "修改标签",
+    "labelSave": "保存",
+    "labelSaved": "端口 {port} 现在是“{label}”",
+    "labelPh": "例如 api",
+    "alias": "旧地址",
+    "aliasHint": "旧的 key-port 地址仍然可用。",
+    "guessable": "按名称的 URL 很容易被猜到。私有应用请开启“需要令牌”。",
+    "exposeLabel": "标签（可选）"
   },
   "gateway": {
     "title": "网关域名",
@@ -1668,6 +1683,9 @@
     "provPublic": "预览公开",
     "provNone": "无预览域名",
     "reserved": "保留子域名（永不指向 box）",
-    "recheck": "立即检查"
+    "recheck": "立即检查",
+    "labelPattern": "其他端口",
+    "aliasPattern": "旧地址（别名）",
+    "guessable": "按名称的 URL 可被猜到：私有应用请使用令牌模式（URL 令牌）。"
   }
 }

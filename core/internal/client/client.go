@@ -57,11 +57,12 @@ func (c *Client) Do(ctx context.Context, method, path string, body any) (int, []
 // APIError mirrors the error envelope.
 type APIError struct {
 	Status      int
-	Code        string `json:"code"`
-	Message     string `json:"message"`
-	Hint        string `json:"hint"`
-	RetryAfterS *int   `json:"retry_after_s,omitempty"`
-	DocsURL     string `json:"docs_url,omitempty"`
+	Code        string   `json:"code"`
+	Message     string   `json:"message"`
+	Hint        string   `json:"hint"`
+	RetryAfterS *int     `json:"retry_after_s,omitempty"`
+	DocsURL     string   `json:"docs_url,omitempty"`
+	Next        []string `json:"next,omitempty"`
 }
 
 func (e *APIError) Error() string {

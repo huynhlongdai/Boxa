@@ -101,7 +101,14 @@
   "Use \"public\" or \"token\".": "Dùng \"public\" hoặc \"token\".",
   "Set it first: PUT /v1/boxes/{id}/app (box app set).": "Đặt app trước: PUT /v1/boxes/{id}/app (box app set).",
   "Set BOXAZ_PUBLIC_URL to an internet-reachable URL of core so the sandbox can dial in, or use a provider with preview URLs.": "Đặt BOXAZ_PUBLIC_URL thành URL của core truy cập được từ Internet để sandbox gọi vào được, hoặc dùng provider có preview URL.",
-  "Use a bare domain such as example.com (box URLs become <key>-<port>.example.com).": "Dùng domain trần như example.com (URL box sẽ thành <key>-<port>.example.com)."
+  "Use a bare domain such as example.com (box URLs become <name>.example.com).": "Dùng domain trần như example.com (URL box sẽ thành <name>.example.com).",
+  "Use 1-40 lowercase letters, digits and '-', e.g. \"demo-app\".": "Dùng 1-40 ký tự chữ thường, chữ số và '-', ví dụ \"demo-app\".",
+  "Pick another name; reserved names belong to other services of the domain.": "Chọn tên khác; tên dành riêng thuộc về các dịch vụ khác của domain.",
+  "Pick another name, or let Boxaz add a word suffix by leaving it out.": "Chọn tên khác, hoặc bỏ trống để Boxaz tự thêm một từ phía sau.",
+  "Use a word like web, api, admin or db (letters first, at most 20 characters).": "Dùng một từ như web, api, admin hoặc db (bắt đầu bằng chữ, tối đa 20 ký tự).",
+  "Each port of a box needs its own label.": "Mỗi port của box cần một nhãn riêng.",
+  "Pick another label or rename the box.": "Chọn nhãn khác hoặc đổi tên box.",
+  "Pass access (public | token) and/or label (e.g. api).": "Truyền access (public | token) và/hoặc label (ví dụ api)."
  },
  "msg": {
   "%s bootstrap exit %d: %s": "%s: lệnh khởi động thoát với mã %d: %s",
@@ -265,7 +272,14 @@
   "box %s has no app": "box %s chưa có app",
   "provider %s is not configured": "provider %s chưa được cấu hình",
   "gateway.provider_preview must be auto, private or public": "gateway.provider_preview phải là auto, private hoặc public",
-  "gateway.domain %q is not a valid domain": "gateway.domain %q không phải domain hợp lệ"
+  "gateway.domain %q is not a valid domain": "gateway.domain %q không phải domain hợp lệ",
+  "invalid box name %q: %s": "tên box %q không hợp lệ: %s",
+  "box name %q is reserved": "tên box %q đã được dành riêng",
+  "box name %q is taken (%s is in use)": "tên box %q đã có người dùng (%s đang được dùng)",
+  "invalid port label %q: %s": "nhãn port %q không hợp lệ: %s",
+  "label %q is already used by port %d": "nhãn %q đã được port %d dùng",
+  "%s is already in use by another box": "%s đang được một box khác dùng",
+  "nothing to change: pass access or label": "không có gì để đổi: truyền access hoặc label"
  },
  "text": {
   "agentsmd.budget_box": "$%.2f cho box này",
@@ -367,6 +381,6 @@
   "snip.tools": "Schema tool cho mọi LLM hỗ trợ function calling",
   "snip.uncertain": "Lưu ý: định dạng cấu hình có thể khác giữa các phiên bản; nếu lỗi hãy xem tài liệu MCP của công cụ.",
   "llms.h_apps": "Web app, URL Boxaz và token (v1.7)",
-  "llms.apps": "- Chạy server lâu dài bằng box_app_set {start, port, repo?, install?, ready_http?}: Boxaz clone, cài một lần, chạy app, tự khởi động lại khi crash (có backoff), chạy lại sau wake / restore / clone và giữ traffic đến khi app sẵn sàng. Theo dõi bằng box_app_status và box_app_logs (GET /v1/boxes/{id}/app/logs?follow=1 trả SSE). Nên dùng thay cho `nohup … &`.\n- Mỗi port đã mở có gateway_url, URL Boxaz cố định (box_url): request đầu tiên vào box đang ngủ sẽ đánh thức box (wake_on_request, mặc định bật; PATCH /v1/boxes/{id}), WebSocket và SSE đi thẳng không đệm.\n- Chia sẻ riêng tư bằng box_url_token: token có hạn, thu hồi được, chỉ cho một box+port (`?token=`, `Authorization: Bearer` hoặc `X-Boxaz-Token`); port chuyển sang access=token. Lưu ý: token chỉ bảo vệ URL Boxaz. Khi có gateway domain hoặc BOXAZ_PUBLIC_URL công khai, sandbox E2B và Novita được tạo ở chế độ private: host preview của provider trả 403 nếu thiếu traffic token của sandbox (chỉ gateway gửi kèm), và port báo provider_preview=private. Port báo provider_preview=public (Daytona, hoặc BOXAZ_PROVIDER_PREVIEW=public) thì URL preview của provider vẫn truy cập được với bất kỳ ai biết sandbox id; đừng dựa vào token để giữ bí mật ở đó.\n- GET /v1/capabilities liệt kê theo provider: memory_pause, wake_on_http_native, wake_via_gateway, fork, inbound_http, max_runtime.\n- GET /v1/gateway cho biết gateway domain, mẫu URL (https://<key>-<port>.<domain>/), subdomain dành riêng và chính sách preview của provider."
+  "llms.apps": "- Chạy server lâu dài bằng box_app_set {start, port, repo?, install?, ready_http?}: Boxaz clone, cài một lần, chạy app, tự khởi động lại khi crash (có backoff), chạy lại sau wake / restore / clone và giữ traffic đến khi app sẵn sàng. Theo dõi bằng box_app_status và box_app_logs (GET /v1/boxes/{id}/app/logs?follow=1 trả SSE). Nên dùng thay cho `nohup … &`.\n- Mỗi port đã mở có gateway_url, URL Boxaz cố định (box_url): request đầu tiên vào box đang ngủ sẽ đánh thức box (wake_on_request, mặc định bật; PATCH /v1/boxes/{id}), WebSocket và SSE đi thẳng không đệm.\n- Chia sẻ riêng tư bằng box_url_token: token có hạn, thu hồi được, chỉ cho một box+port (`?token=`, `Authorization: Bearer` hoặc `X-Boxaz-Token`); port chuyển sang access=token. Lưu ý: token chỉ bảo vệ URL Boxaz. Khi có gateway domain hoặc BOXAZ_PUBLIC_URL công khai, sandbox E2B và Novita được tạo ở chế độ private: host preview của provider trả 403 nếu thiếu traffic token của sandbox (chỉ gateway gửi kèm), và port báo provider_preview=private. Port báo provider_preview=public (Daytona, hoặc BOXAZ_PROVIDER_PREVIEW=public) thì URL preview của provider vẫn truy cập được với bất kỳ ai biết sandbox id; đừng dựa vào token để giữ bí mật ở đó.\n- GET /v1/capabilities liệt kê theo provider: memory_pause, wake_on_http_native, wake_via_gateway, fork, inbound_http, max_runtime.\n- GET /v1/gateway cho biết gateway domain, mẫu URL (https://<key>-<port>.<domain>/), subdomain dành riêng và chính sách preview của provider.\n- URL dễ đọc (v1.9): https://<name>.<domain>/ trỏ vào port chính của box (port của app, không có thì port đầu tiên), https://<name>-<label>.<domain>/ cho các port khác (label = web, api, db…, không bao giờ là số). Tên lấy từ subdomain / name / slug khi tạo; đổi bằng box_url {name} hoặc PATCH /v1/boxes/{id} {subdomain}, đặt nhãn port bằng box_url {port, label}. Địa chỉ cũ <key>-<port> vẫn chạy (alias_url). URL theo tên đoán được: app riêng tư hãy dùng box_url_token."
  }
 }

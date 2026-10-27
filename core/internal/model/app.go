@@ -22,6 +22,9 @@ type AppSpec struct {
 	Install string `json:"install,omitempty"` // run once per spec (e.g. "npm ci")
 	Start   string `json:"start"`             // the app command (foreground; e.g. "npm start")
 	Port    int    `json:"port,omitempty"`    // port the app listens on (gates gateway traffic for this port)
+	// Label (v1.9) names the app port in gateway URLs (<box>-<label>.<domain>);
+	// the app port is also the box's primary port (<box>.<domain>).
+	Label string `json:"label,omitempty"`
 	// Ready is the readiness check: {"http":"/healthz"} or {"tcp":true}.
 	// Default: tcp on Port when Port is set, otherwise "started" counts as ready.
 	Ready   *AppReady         `json:"ready,omitempty"`
@@ -84,6 +87,7 @@ type AppView struct {
 func (s *AppSpec) Normalize() {
 	s.Start = strings.TrimSpace(s.Start)
 	s.Repo = strings.TrimSpace(s.Repo)
+	s.Label = strings.ToLower(strings.TrimSpace(s.Label))
 	if s.Restart == "" {
 		s.Restart = RestartAlways
 	}
@@ -125,6 +129,10 @@ func (s *AppSpec) Validate() string {
 		return "repo must be a git URL (https://… or git@…)"
 	case strings.Contains(s.Workdir, ".."):
 		return "workdir must not contain .."
+	case s.Label != "" && s.Port == 0:
+		return "label needs port"
+	case s.Label != "" && PortLabelProblem(s.Label) != "":
+		return PortLabelProblem(s.Label)
 	}
 	for k := range s.Env {
 		if k == "" || strings.ContainsAny(k, "= \t\n'\"$") {

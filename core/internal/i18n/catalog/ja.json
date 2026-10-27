@@ -101,7 +101,14 @@
   "Use \"public\" or \"token\".": "\"public\" か \"token\" を使ってください。",
   "Set it first: PUT /v1/boxes/{id}/app (box app set).": "先に設定してください: PUT /v1/boxes/{id}/app（box app set）。",
   "Set BOXAZ_PUBLIC_URL to an internet-reachable URL of core so the sandbox can dial in, or use a provider with preview URLs.": "サンドボックスが接続できるよう BOXAZ_PUBLIC_URL をインターネットから到達可能な core の URL に設定するか、プレビュー URL のあるプロバイダーを使ってください。",
-  "Use a bare domain such as example.com (box URLs become <key>-<port>.example.com).": "example.com のような素のドメインを使ってください（box URL は <key>-<port>.example.com になります）。"
+  "Use a bare domain such as example.com (box URLs become <name>.example.com).": "example.com のような素のドメインを使ってください（box URL は <name>.example.com になります）。",
+  "Use 1-40 lowercase letters, digits and '-', e.g. \"demo-app\".": "小文字・数字・'-' を 1〜40 文字で使ってください（例: \"demo-app\"）。",
+  "Pick another name; reserved names belong to other services of the domain.": "別の名前を選んでください。予約名はドメインの他のサービス用です。",
+  "Pick another name, or let Boxaz add a word suffix by leaving it out.": "別の名前を選ぶか、省略して Boxaz に単語の接尾辞を付けさせてください。",
+  "Use a word like web, api, admin or db (letters first, at most 20 characters).": "web、api、admin、db のような単語を使ってください（英字で始まり、20 文字以内）。",
+  "Each port of a box needs its own label.": "box の各ポートには固有のラベルが必要です。",
+  "Pick another label or rename the box.": "別のラベルを選ぶか、box の名前を変更してください。",
+  "Pass access (public | token) and/or label (e.g. api).": "access（public | token）と/または label（例: api）を指定してください。"
  },
  "msg": {
   "%s bootstrap exit %d: %s": "%s のブートストラップが終了コード %d で失敗: %s",
@@ -265,7 +272,14 @@
   "box %s has no app": "box %s にはアプリがありません",
   "provider %s is not configured": "provider %s は未設定です",
   "gateway.provider_preview must be auto, private or public": "gateway.provider_preview は auto、private、public のいずれかにしてください",
-  "gateway.domain %q is not a valid domain": "gateway.domain %q は有効なドメインではありません"
+  "gateway.domain %q is not a valid domain": "gateway.domain %q は有効なドメインではありません",
+  "invalid box name %q: %s": "box 名 %q が無効です: %s",
+  "box name %q is reserved": "box 名 %q は予約されています",
+  "box name %q is taken (%s is in use)": "box 名 %q は使用済みです（%s が使用中）",
+  "invalid port label %q: %s": "ポートラベル %q が無効です: %s",
+  "label %q is already used by port %d": "ラベル %q はポート %d が使用中です",
+  "%s is already in use by another box": "%s は別の box が使用中です",
+  "nothing to change: pass access or label": "変更内容がありません: access または label を指定してください"
  },
  "text": {
   "agentsmd.budget_box": "このボックスに $%.2f",
@@ -367,6 +381,6 @@
   "snip.tools": "関数呼び出し対応 LLM 向けのツール定義",
   "snip.uncertain": "注意: 設定形式はバージョンにより異なる場合があります。失敗したらツールの MCP ドキュメントを確認してください。",
   "llms.h_apps": "Web アプリ、Boxaz URL とトークン（v1.7）",
-  "llms.apps": "- 常駐サーバーは box_app_set {start, port, repo?, install?, ready_http?} で実行: Boxaz がクローンし、インストールを一度だけ行い、アプリを起動し、クラッシュ時はバックオフ付きで再起動し、起動 / 復元 / クローン後に再び起動し、準備完了までトラフィックを保留します。box_app_status と box_app_logs で確認できます（GET /v1/boxes/{id}/app/logs?follow=1 は SSE）。`nohup … &` より推奨。\n- 公開した各ポートには gateway_url（固定の Boxaz URL、box_url）があります: スリープ中の box への最初のリクエストで起動し（wake_on_request、既定でオン、PATCH /v1/boxes/{id}）、WebSocket と SSE はバッファなしで通ります。\n- 非公開で共有するには box_url_token: 1 つの box+ポート専用の、期限付きで失効可能なトークン（`?token=`、`Authorization: Bearer` または `X-Boxaz-Token`）。ポートは access=token に切り替わります。注意: トークンが保護するのは Boxaz URL だけです。ゲートウェイドメインまたはインターネットから届く BOXAZ_PUBLIC_URL があると、E2B と Novita のサンドボックスはプライベートで作成されます。プレビューホストはサンドボックスのトラフィックトークンがないと 403 を返し（トークンを付けるのはゲートウェイだけ）、ポートは provider_preview=private を返します。provider_preview=public のポート（Daytona、または BOXAZ_PROVIDER_PREVIEW=public）では、プロバイダープレビュー URL はサンドボックス ID を知っている人なら誰でも開けます。そこでの秘密保護をトークンに頼らないでください。\n- GET /v1/capabilities はプロバイダーごとに memory_pause、wake_on_http_native、wake_via_gateway、fork、inbound_http、max_runtime を返します。\n- GET /v1/gateway はゲートウェイドメイン、URL 形式（https://<key>-<port>.<domain>/）、予約サブドメイン、プロバイダープレビューの方針を返します。"
+  "llms.apps": "- 常駐サーバーは box_app_set {start, port, repo?, install?, ready_http?} で実行: Boxaz がクローンし、インストールを一度だけ行い、アプリを起動し、クラッシュ時はバックオフ付きで再起動し、起動 / 復元 / クローン後に再び起動し、準備完了までトラフィックを保留します。box_app_status と box_app_logs で確認できます（GET /v1/boxes/{id}/app/logs?follow=1 は SSE）。`nohup … &` より推奨。\n- 公開した各ポートには gateway_url（固定の Boxaz URL、box_url）があります: スリープ中の box への最初のリクエストで起動し（wake_on_request、既定でオン、PATCH /v1/boxes/{id}）、WebSocket と SSE はバッファなしで通ります。\n- 非公開で共有するには box_url_token: 1 つの box+ポート専用の、期限付きで失効可能なトークン（`?token=`、`Authorization: Bearer` または `X-Boxaz-Token`）。ポートは access=token に切り替わります。注意: トークンが保護するのは Boxaz URL だけです。ゲートウェイドメインまたはインターネットから届く BOXAZ_PUBLIC_URL があると、E2B と Novita のサンドボックスはプライベートで作成されます。プレビューホストはサンドボックスのトラフィックトークンがないと 403 を返し（トークンを付けるのはゲートウェイだけ）、ポートは provider_preview=private を返します。provider_preview=public のポート（Daytona、または BOXAZ_PROVIDER_PREVIEW=public）では、プロバイダープレビュー URL はサンドボックス ID を知っている人なら誰でも開けます。そこでの秘密保護をトークンに頼らないでください。\n- GET /v1/capabilities はプロバイダーごとに memory_pause、wake_on_http_native、wake_via_gateway、fork、inbound_http、max_runtime を返します。\n- GET /v1/gateway はゲートウェイドメイン、URL 形式（https://<key>-<port>.<domain>/）、予約サブドメイン、プロバイダープレビューの方針を返します。\n- 読みやすい URL（v1.9）：https://<name>.<domain>/ は box のメインポート（アプリのポート、なければ最初のポート）、https://<name>-<label>.<domain>/ はその他のポート（label = web、api、db…、数字は使わない）。名前は作成時に subdomain / name / slug から決まり、box_url {name} または PATCH /v1/boxes/{id} {subdomain} で変更、ポートのラベルは box_url {port, label} で設定。旧 <key>-<port> アドレスも引き続き使えます（alias_url）。名前の URL は推測できるため、非公開アプリには box_url_token を使ってください。"
  }
 }

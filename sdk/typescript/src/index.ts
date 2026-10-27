@@ -25,6 +25,8 @@ export interface Box {
   profile?: string; requirements?: Requirements; isolation?: string; estimate?: BoxEstimate; cloned_from?: string; name?: string;
   /** v1.7 */
   app?: AppSpec; wake_on_request?: boolean; port_access?: Record<string, PortAccess>;
+  /** v1.9: readable gateway name (https://<subdomain>.<domain>/) and port labels (<subdomain>-<label>) */
+  subdomain?: string; port_labels?: Record<string, string>;
 }
 
 export interface ExecResult {
@@ -139,6 +141,8 @@ export interface CreateBoxInput {
   requirements?: Requirements;
   /** v1.7: supervised app started with the box; wake on request (default true) */
   app?: AppSpec; wake_on_request?: boolean;
+  /** v1.9: gateway name (default: name, else slug; a taken derived name gets a word suffix) */
+  subdomain?: string;
   /** full box.yaml instead of the fields above */
   yaml?: string;
 }
@@ -385,7 +389,8 @@ export class Boxaz {
   }
   /** Exposed ports with url, kind, access and the stable gateway_url. */
   ports(id: string) { return this.request<PortsResult>("GET", `/boxes/${enc(id)}/ports`); }
-  expose(id: string, port: number) { return this.request<PortsResult>("POST", `/boxes/${enc(id)}/ports`, { body: { port } }); }
+  /** Expose a port; label (e.g. "api") names it in its URL https://<name>-<label>.<domain>/ (v1.9). */
+  expose(id: string, port: number, label?: string) { return this.request<PortsResult>("POST", `/boxes/${enc(id)}/ports`, { body: label ? { port, label } : { port } }); }
   /** Issue a scoped, expiring, revocable token for one box port (token + url shown once; private defaults to true). */
   createUrlToken(id: string, port: number, opts: { ttl_s?: number; label?: string; private?: boolean } = {}) {
     return this.request<UrlToken>("POST", `/boxes/${enc(id)}/ports/${port}/tokens`, { body: opts });
@@ -394,10 +399,14 @@ export class Boxaz {
   revokeUrlToken(id: string, port: number, tokenId: string) { return this.request<UrlToken>("DELETE", `/boxes/${enc(id)}/ports/${port}/tokens/${enc(tokenId)}`); }
   setPortAccess(id: string, port: number, access: PortAccess) { return this.request<PortView>("PUT", `/boxes/${enc(id)}/ports/${port}`, { body: { access } }); }
   /** Whether a request to the gateway URL wakes the sleeping box (default on). */
+  /** v1.9: name a port in its gateway URL (https://<name>-<label>.<domain>/). */
+  setPortLabel(id: string, port: number, label: string) { return this.request<PortView>("PUT", `/boxes/${enc(id)}/ports/${port}`, { body: { label } }); }
+  /** v1.9: set the box's readable gateway name (https://<name>.<domain>/); taken / reserved names → BoxazError with next. */
+  renameUrl(id: string, name: string) { return this.request<Box>("PATCH", `/boxes/${enc(id)}`, { body: { subdomain: name } }); }
   setWakeOnRequest(id: string, on: boolean) { return this.request<Box>("PATCH", `/boxes/${enc(id)}`, { body: { wake_on_request: on } }); }
   /** Lifecycle capability flags per provider. */
   capabilities() { return this.request<List<LifecycleCaps & { provider: string; group: string }>>("GET", "/capabilities"); }
-  /** v1.8: gateway domain, box URL pattern (https://<key>-<port>.<domain>/), reserved subdomains, provider-preview policy; check probes the public URL. */
+  /** Gateway domain, box URL pattern (v1.9 https://<name>.<domain>/ + label/alias patterns), reserved subdomains, provider-preview policy; check probes the public URL. */
   gateway(check = false) { return this.request<GatewayInfo>("GET", "/gateway", { query: check ? { check: "1" } : undefined }); }
 
   // ---- misc ----
@@ -487,7 +496,7 @@ export default Boxaz;
 // ---- v1.7 types ----
 export type RestartPolicy = "always" | "on-failure" | "never";
 export interface AppSpec {
-  start: string; repo?: string; ref?: string; install?: string; port?: number;
+  start: string; repo?: string; ref?: string; install?: string; port?: number; /** v1.9: URL label of port */ label?: string;
   ready?: { http?: string; tcp?: boolean }; restart?: RestartPolicy; env?: Record<string, string>; workdir?: string; backoff_max_s?: number;
 }
 export interface AppStatus {
@@ -496,12 +505,14 @@ export interface AppStatus {
 }
 export interface AppView { box_id: string; spec: AppSpec | null; status: AppStatus }
 export type PortAccess = "public" | "token";
-export interface PortView { port: number; url: string; kind: string; public: boolean; note?: string; caveats?: string[]; gateway_url?: string; access: PortAccess; provider_preview?: "private" | "public" }
-export interface PortsResult { box_id: string; url: string; ports: PortView[] }
+export interface PortView { port: number; url: string; kind: string; public: boolean; note?: string; caveats?: string[]; gateway_url?: string; access: PortAccess; provider_preview?: "private" | "public";
+  /** v1.9: text label (web, api, …), primary = served at the bare box name, alias_url = legacy <key>-<port> URL */
+  label?: string; primary?: boolean; alias_url?: string }
+export interface PortsResult { box_id: string; url: string; /** v1.9 */ name?: string; primary_port?: number; ports: PortView[] }
 export interface UrlToken { id: string; box_id: string; port: number; label?: string; prefix: string; token?: string; url?: string; expires_at: string; created_at: string; revoked_at?: string; expired?: boolean }
 export interface LifecycleCaps { memory_pause: boolean; wake_on_http_native: boolean; wake_via_gateway: boolean; fork: boolean; inbound_http: boolean; max_runtime: number; private_preview?: boolean; note?: string }
 export interface GatewayInfo {
-  mode: "host" | "path" | "relative"; domain: string; domain_source: "env" | "settings" | "none"; public_url: string; url_pattern: string; internet_facing: boolean;
+  mode: "host" | "path" | "relative"; domain: string; domain_source: "env" | "settings" | "none"; public_url: string; url_pattern: string; /** v1.9 */ label_pattern?: string; alias_pattern?: string; internet_facing: boolean;
   reserved: string[]; provider_preview: "auto" | "private" | "public"; provider_preview_source: "env" | "settings" | "default"; private_previews: boolean;
   providers: { provider: string; preview_host: boolean; private_preview: boolean; note: string }[];
   check?: { ok: boolean; status?: number; latency_ms: number; error?: string; checked_at: string };

@@ -22,6 +22,7 @@ import (
 	"boxaz/core/internal/i18n"
 	"boxaz/core/internal/manager"
 	"boxaz/core/internal/mcp"
+	"boxaz/core/internal/model"
 )
 
 const usage = `box — Boxaz CLI
@@ -46,6 +47,7 @@ Env: BOXAZ_URL (default http://localhost:8080), BOXAZ_API_KEY, BOXAZ_LANG (vi|en
   box fork <box> [snapshot_id] [--slug name]
   box clone <box> [--slug name]                 (sandbox boxes: provider-native fork when available)
   box url <box> [port]                          (public URL of a port; with a port, exposes it)
+  box url <box> [port] --name demo-app [--as api]  (readable URL: https://demo-app.<domain>/, port label → demo-app-api)
   box url <box> <port> --token [--ttl 24h] [--label who]   (scoped URL token; the port then needs it)
   box url <box> <port> --tokens | --revoke <token_id> | --public
   box app set <box> --start "npm start" [--repo URL] [--ref main] [--install "npm ci"] [--port 8000]
@@ -666,7 +668,9 @@ func cmdURL(ctx context.Context, c *client.Client, args []string) error {
 	fs := flag.NewFlagSet("url", flag.ContinueOnError)
 	tok := fs.Bool("token", false, "issue a scoped URL token for the port")
 	ttl := fs.Duration("ttl", 24*time.Hour, "token lifetime")
-	label := fs.String("label", "", "token label")
+	label := fs.String("label", "", "with --token: note for the token; otherwise: the port's URL label (<name>-<label>.<domain>)")
+	as := fs.String("as", "", "the port's URL label, e.g. api → https://<name>-api.<domain>/")
+	name := fs.String("name", "", "rename the box's gateway address, e.g. demo-app → https://demo-app.<domain>/")
 	list := fs.Bool("tokens", false, "list the port's tokens")
 	revoke := fs.String("revoke", "", "revoke a token id")
 	public := fs.Bool("public", false, "make the port public again")
@@ -675,7 +679,7 @@ func cmdURL(ctx context.Context, c *client.Client, args []string) error {
 	}
 	args = fs.Args()
 	if len(args) < 1 {
-		return fmt.Errorf("usage: box url <box> [port] [--token --ttl 24h]")
+		return fmt.Errorf("usage: box url <box> [port] [--name <box-name>] [--as <label>] [--token --ttl 24h]")
 	}
 	if *tok || *list || *revoke != "" || *public {
 		if len(args) < 2 {
@@ -686,12 +690,27 @@ func cmdURL(ctx context.Context, c *client.Client, args []string) error {
 	var res manager.PortsResult
 	p := "/boxes/" + url.PathEscape(args[0]) + "/ports"
 	var err error
+	if *name != "" {
+		var b model.Box
+		if err := c.JSON(ctx, "PATCH", "/boxes/"+url.PathEscape(args[0]), map[string]any{"subdomain": *name}, &b); err != nil {
+			return err
+		}
+		fmt.Printf("name: %s\n", b.Subdomain)
+	}
+	portLabel := *as
+	if portLabel == "" {
+		portLabel = *label
+	}
 	if len(args) > 1 {
 		port, perr := strconv.Atoi(args[1])
 		if perr != nil {
 			return fmt.Errorf("port must be a number: %q", args[1])
 		}
-		err = c.JSON(ctx, "POST", p, map[string]any{"port": port}, &res)
+		body := map[string]any{"port": port}
+		if portLabel != "" {
+			body["label"] = portLabel
+		}
+		err = c.JSON(ctx, "POST", p, body, &res)
 	} else {
 		err = c.JSON(ctx, "GET", p, nil, &res)
 	}
@@ -714,13 +733,23 @@ func cmdURL(ctx context.Context, c *client.Client, args []string) error {
 		if v.Public {
 			pub = "public"
 		}
-		fmt.Printf("%d\t%s\t%s\t%s", v.Port, u, v.Kind, pub)
+		lbl := v.Label
+		if v.Primary {
+			lbl += "*"
+		}
+		if lbl == "" {
+			lbl = "-"
+		}
+		fmt.Printf("%d\t%s\t%s\t%s\t%s", v.Port, lbl, u, v.Kind, pub)
 		if v.Note != "" && v.URL == "" {
 			fmt.Printf("\t%s", v.Note)
 		}
 		fmt.Println()
 		if v.GatewayURL != "" && v.GatewayURL != v.URL {
 			fmt.Printf("  gateway (wakes on request): %s\n", v.GatewayURL)
+		}
+		if v.AliasURL != "" {
+			fmt.Printf("  alias: %s\n", v.AliasURL)
 		}
 		for _, c := range v.Caveats {
 			fmt.Println("  ! " + c)

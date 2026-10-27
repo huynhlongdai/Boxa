@@ -96,11 +96,15 @@ func TestGatewayAppTokensLocal(t *testing.T) {
 	var pr manager.PortsResult
 	e.must(ag, "GET", "/boxes/"+b.ID+"/ports", nil, &pr)
 	gw := pr.Ports[0].GatewayURL
-	if !strings.HasPrefix(gw, e.srv.URL+"/x/") || !strings.HasSuffix(gw, "-"+strconv.Itoa(appPort)+"/") || pr.Ports[0].Access != "public" {
+	// v1.9: readable name (slug "gw" is reserved → word suffix), legacy alias kept
+	if gw != e.srv.URL+"/x/gw-blue/" || pr.Name != "gw-blue" || !pr.Ports[0].Primary || !strings.HasSuffix(pr.Ports[0].AliasURL, "-"+strconv.Itoa(appPort)+"/") || pr.Ports[0].Access != "public" {
 		t.Fatalf("ports %+v", pr)
 	}
 	if r := gwDo(t, "GET", gw, nil); r.status != 200 || !strings.Contains(r.body, "hi") {
 		t.Fatalf("gateway GET: %d %.200s", r.status, r.body)
+	}
+	if r := gwDo(t, "GET", pr.Ports[0].AliasURL, nil); r.status != 200 || !strings.Contains(r.body, "hi") {
+		t.Fatalf("alias GET: %d %.200s", r.status, r.body)
 	}
 
 	// crash → supervisor restarts it

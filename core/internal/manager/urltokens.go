@@ -55,7 +55,8 @@ type URLTokenList struct {
 
 // PortAccessInput is PUT /v1/boxes/{id}/ports/{port}.
 type PortAccessInput struct {
-	Access string `json:"access"` // public | token
+	Access string `json:"access,omitempty"` // public | token
+	Label  string `json:"label,omitempty"`  // v1.9: the port's URL label (<box>-<label>.<domain>)
 }
 
 func (m *Manager) loadTokens(ctx context.Context, boxID string) []*model.URLToken {
@@ -194,7 +195,10 @@ func (m *Manager) SetPortAccess(ctx context.Context, p *Principal, id string, po
 	if err := p.Require(model.ScopeBoxExec); err != nil {
 		return nil, err
 	}
-	if in.Access != model.AccessPublic && in.Access != model.AccessToken {
+	if in.Access == "" && in.Label == "" {
+		return nil, model.EH(model.ErrInvalid, "Pass access (public | token) and/or label (e.g. api).", "nothing to change: pass access or label")
+	}
+	if in.Access != "" && in.Access != model.AccessPublic && in.Access != model.AccessToken {
 		return nil, model.EH(model.ErrInvalid, "Use \"public\" or \"token\".", "access must be public or token")
 	}
 	b, err := m.portBox(ctx, p, id, port)
@@ -208,13 +212,28 @@ func (m *Manager) SetPortAccess(ctx context.Context, p *Principal, id string, po
 		lock.Unlock()
 		return nil, err
 	}
-	if cur.PortAccess == nil {
-		cur.PortAccess = map[int]string{}
+	if in.Label != "" {
+		before := namesCopy(cur)
+		if err := m.setPortLabel(ctx, cur, port, in.Label); err != nil {
+			lock.Unlock()
+			return nil, err
+		}
+		m.refreshNamedURLs(cur, before)
 	}
-	cur.PortAccess[port] = in.Access
+	if in.Access != "" {
+		if cur.PortAccess == nil {
+			cur.PortAccess = map[int]string{}
+		}
+		cur.PortAccess[port] = in.Access
+	}
 	m.Store.PutBox(ctx, cur)
 	lock.Unlock()
-	m.Emit(ctx, p.Actor(), cur.ID, cur.AgentID, "box.port", fmt.Sprintf("port %d access → %s", port, in.Access), nil)
+	if in.Access != "" {
+		m.Emit(ctx, p.Actor(), cur.ID, cur.AgentID, "box.port", fmt.Sprintf("port %d access → %s", port, in.Access), nil)
+	}
+	if in.Label != "" {
+		m.Emit(ctx, p.Actor(), cur.ID, cur.AgentID, "box.port", fmt.Sprintf("port %d label → %s (%s)", port, cur.PortLabels[port], m.GatewayURL(cur, port)), nil)
+	}
 	m.publishBox(m.decorateBox(ctx, cur))
 	h, _ := m.Store.GetHost(ctx, cur.HostID)
 	v := m.portView(ctx, cur, h, port)

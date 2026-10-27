@@ -1638,7 +1638,22 @@
       "refresh": "更新",
       "noLogs": "まだ出力はありません。"
     },
-    "previewPrivate": "このポートのプロバイダー側プレビュー URL は直接アクセスを拒否します（プライベートサンドボックス）。アプリに届くのはこの Boxaz URL だけです。"
+    "previewPrivate": "このポートのプロバイダー側プレビュー URL は直接アクセスを拒否します（プライベートサンドボックス）。アプリに届くのはこの Boxaz URL だけです。",
+    "nameTitle": "Box のアドレス",
+    "name": "名前",
+    "nameHint": "名前だけのアドレスはメインポート（demo-app.example.com）、他のポートは 名前-ラベル（demo-app-api.example.com）。小文字・数字・ハイフンを使用。",
+    "rename": "名前を変更",
+    "renamed": "アドレスは {name} になりました",
+    "primary": "メイン",
+    "label": "ラベル",
+    "labelEdit": "ラベルを変更",
+    "labelSave": "保存",
+    "labelSaved": "ポート {port} は「{label}」になりました",
+    "labelPh": "例: api",
+    "alias": "旧アドレス",
+    "aliasHint": "旧 key-port アドレスも引き続き使えます。",
+    "guessable": "名前の URL は推測しやすいです。非公開アプリでは「トークン必須」をオンにしてください。",
+    "exposeLabel": "ラベル（任意）"
   },
   "gateway": {
     "title": "ゲートウェイドメイン",
@@ -1668,6 +1683,9 @@
     "provPublic": "プレビュー公開",
     "provNone": "プレビューホストなし",
     "reserved": "予約サブドメイン（box には割り当てない）",
-    "recheck": "今すぐ確認"
+    "recheck": "今すぐ確認",
+    "labelPattern": "その他のポート",
+    "aliasPattern": "旧アドレス（エイリアス）",
+    "guessable": "名前の URL は推測できます。非公開アプリにはトークンモード（URL トークン）を使ってください。"
   }
 }

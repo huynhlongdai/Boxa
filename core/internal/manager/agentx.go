@@ -578,6 +578,7 @@ func (m *Manager) Fork(ctx context.Context, p *Principal, id string, in RestoreI
 		Setup: src.Setup, CreatedAt: now, LastActiveAt: now, Locale: src.Locale, ForkedFrom: sn.ID,
 	}
 	inheritV17(b, src)
+	m.ensureNames(ctx, b)
 	if src.Egress != nil {
 		eg := *src.Egress
 		eg.Allow = append([]string{}, src.Egress.Allow...)

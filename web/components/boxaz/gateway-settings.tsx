@@ -1,5 +1,5 @@
 "use client";
-// v1.8: gateway domain (URL box <key>-<port>.<domain>) + chính sách preview của provider + trạng thái URL công khai.
+// v1.8/v1.9: gateway domain (URL dễ đọc <name>.<domain>, <name>-<label>.<domain>; alias <key>-<port>) + chính sách preview của provider + trạng thái URL công khai.
 import * as React from "react";
 import { useTranslations } from "next-intl";
 import { Globe2, RefreshCw } from "lucide-react";
@@ -44,7 +44,10 @@ export function GatewaySettingsCard({ value, onChange }: { value: GatewaySetting
         </Field>
         {!g ? <Skeleton className="h-24 md:col-span-2" /> : (
           <div className="grid gap-2 text-[13px] md:col-span-2">
-            <div className="flex flex-wrap items-center gap-2"><span className="w-40 shrink-0 text-muted-foreground">{t("pattern")}</span><Mono className="break-all">{g.url_pattern}</Mono></div>
+            <div className="flex flex-wrap items-center gap-2"><span className="w-40 shrink-0 text-muted-foreground">{t("pattern")}</span><Mono className="break-all" data-testid="gateway-pattern">{g.url_pattern}</Mono></div>
+            {g.label_pattern && <div className="flex flex-wrap items-center gap-2"><span className="w-40 shrink-0 text-muted-foreground">{t("labelPattern")}</span><Mono className="break-all">{g.label_pattern}</Mono></div>}
+            {g.alias_pattern && <div className="flex flex-wrap items-center gap-2"><span className="w-40 shrink-0 text-muted-foreground">{t("aliasPattern")}</span><Mono className="break-all text-muted-foreground">{g.alias_pattern}</Mono></div>}
+            <p className="text-xs text-muted-foreground">{t("guessable")}</p>
             <div className="flex flex-wrap items-center gap-2">
               <span className="w-40 shrink-0 text-muted-foreground">{t("publicUrl")}</span>
               {g.public_url ? <Mono className="break-all">{g.public_url}</Mono> : <span className="text-muted-foreground">—</span>}

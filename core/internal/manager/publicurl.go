@@ -55,10 +55,10 @@ const (
 
 // Caveats shown with each kind.
 var (
-	caveatIngress = "path-prefixed URL (/x/<key>-<port>/): the app must use relative links (X-Forwarded-Prefix is sent); streamed through core (WebSocket and SSE pass through); a sleeping box is woken by the first request (held up to settings.wake.hold_s, then 503 + Retry-After)"
-	caveatGateway = "Boxaz gateway URL: path-prefixed (/x/<key>-<port>/) unless a gateway domain is set (host-based <key>-<port>.<domain>); WebSocket and SSE pass through; a sleeping box is woken by the first request"
+	caveatIngress = "path-prefixed URL (/x/<name>/ or /x/<name>-<label>/): the app must use relative links (X-Forwarded-Prefix is sent); streamed through core (WebSocket and SSE pass through); a sleeping box is woken by the first request (held up to settings.wake.hold_s, then 503 + Retry-After)"
+	caveatGateway = "Boxaz gateway URL: path-prefixed (/x/<name>[-<label>]/) unless a gateway domain is set (host-based <name>.<domain> / <name>-<label>.<domain>); WebSocket and SSE pass through; a sleeping box is woken by the first request"
 	// caveatHostGateway replaces caveatIngress when a gateway domain is set.
-	caveatHostGateway = "served through core at a host-based gateway URL (<key>-<port>.<domain>, no path prefix); WebSocket and SSE pass through; a sleeping box is woken by the first request (held up to settings.wake.hold_s, then 503 + Retry-After)"
+	caveatHostGateway = "served through core at a host-based gateway URL (<name>.<domain> or <name>-<label>.<domain>, no path prefix); WebSocket and SSE pass through; a sleeping box is woken by the first request (held up to settings.wake.hold_s, then 503 + Retry-After)"
 	caveatTunnel      = "Cloudflare quick tunnel (trycloudflare.com): free and accountless but without uptime guarantee; the URL changes if the tunnel has to restart (e.g. a wake that lost processes); the first request can take a few seconds"
 )
 
@@ -98,8 +98,13 @@ func (m *Manager) IngressAgentToken(boxID string) string {
 func (m *Manager) exposureKey(boxID string) string { return m.hmacHex("expose", boxID, 20) }
 
 // ingressURL is the public ingress URL of a port of a box.
+// v1.9: the readable /x/<name>[-<label>]/ path when the box has a name.
 func (m *Manager) ingressURL(b *model.Box, port int) string {
-	return strings.TrimRight(m.Cfg.PublicURL, "/") + "/x/" + m.exposureKey(b.ID) + "-" + strconv.Itoa(port) + "/"
+	seg := hostLabel(b, port)
+	if seg == "" {
+		seg = m.exposureKey(b.ID) + "-" + strconv.Itoa(port)
+	}
+	return strings.TrimRight(m.Cfg.PublicURL, "/") + "/x/" + seg + "/"
 }
 
 // CoreLooksPublic reports whether BOXAZ_PUBLIC_URL can be reached from the
@@ -202,6 +207,13 @@ func (m *Manager) dropExposures(boxID string) {
 
 // BoxForIngressPath resolves the /x/<key>-<port> path segment.
 func (m *Manager) BoxForIngressPath(ctx context.Context, seg string) (*model.Box, int, error) {
+	if !IsBoxLabel(seg) {
+		// v1.9 readable address: <name> or <name>-<label>
+		if seg == "" || IsReservedSubdomain(seg) {
+			return nil, 0, model.E(model.ErrNotFound, "no box at this address")
+		}
+		return m.BoxForHostLabel(ctx, seg)
+	}
 	i := strings.LastIndexByte(seg, '-')
 	if i <= 0 {
 		return nil, 0, model.E(model.ErrNotFound, "no box at this address")

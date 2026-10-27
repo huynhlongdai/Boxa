@@ -192,7 +192,7 @@ expect "POST /sandbox/adapters/lint rỗng → 400" "$(jx POST sandbox/adapters/
 
 echo "== v1.7: ports + Boxaz URL, access, URL token, wake_on_request, app supervisor + log SSE, capabilities"
 expect "GET /capabilities" "$(jx GET capabilities - 'j.items.length+"|"+j.items.every(c=>c.wake_via_gateway)+"|"+j.items.find(c=>c.provider==="e2b").wake_on_http_native+"|"+j.items.find(c=>c.provider==="prized").inbound_http')" "17|true|true|false"
-expect "GET /boxes/:id/ports (gateway_url + access)" "$(jx GET boxes/box_a9d054/ports - 'j.ports.length+"|"+j.ports[0].port+"|"+/^https:\/\/[a-z0-9]+-3000\./.test(j.ports[0].gateway_url)+"|"+j.ports[0].access')" "1|3000|true|public"
+expect "GET /boxes/:id/ports (gateway_url + access)" "$(jx GET boxes/box_a9d054/ports - 'j.ports.length+"|"+j.ports[0].port+"|"+j.ports[0].gateway_url+"|"+j.ports[0].access')" "1|3000|https://kecon-story-gen.boxaz.dev/|public"
 expect "port token-only → kind gateway, không lộ URL provider" "$(jx GET boxes/box_5e2b70/ports - 'j.ports[0].kind+"|"+j.ports[0].public+"|"+(j.ports[0].url===j.ports[0].gateway_url)')" "gateway|false|true"
 expect "PUT ports/:port access=token" "$(jx PUT boxes/box_a9d054/ports/3000 '{"access":"token"}' 'j.access+"|"+j.kind')" "token|gateway"
 expect "PUT ports/:port access sai → 400" "$(jx PUT boxes/box_a9d054/ports/3000 '{"access":"open"}' 'j.error.code')" "INVALID"
@@ -231,13 +231,26 @@ done
 grep -rqs "preview-caveat" .next/static/chunks && grep -rqs "logs-follow" .next/static/chunks && grep -rqs "issue-token-" .next/static/chunks && ok "bundle có UI ports (preview-caveat, issue-token, logs-follow)" || bad "bundle thiếu UI ports"
 
 echo "== v1.8: gateway domain + private provider previews"
-expect "GET /gateway?check=1" "$(jx GET 'gateway?check=1' - 'j.mode+"|"+/^https:\/\/<key>-<port>\./.test(j.url_pattern)+"|"+j.reserved.includes("hark")+"|"+j.providers.find(p=>p.provider==="e2b").private_preview+"|"+j.providers.find(p=>p.provider==="prized").preview_host+"|"+j.check.ok')" "host|true|true|true|false|true"
+expect "GET /gateway?check=1" "$(jx GET 'gateway?check=1' - 'j.mode+"|"+/^https:\/\/<name>\./.test(j.url_pattern)+"|"+j.reserved.includes("hark")+"|"+j.providers.find(p=>p.provider==="e2b").private_preview+"|"+j.providers.find(p=>p.provider==="prized").preview_host+"|"+j.check.ok')" "host|true|true|true|false|true"
 expect "GET /capabilities private_preview" "$(jx GET capabilities - 'j.items.find(c=>c.provider==="e2b").private_preview+"|"+j.items.find(c=>c.provider==="prized").private_preview')" "true|false"
 expect "port e2b (token) → provider_preview private" "$(jx GET boxes/box_5e2b70/ports - 'j.ports[0].provider_preview')" "private"
 expect "PUT settings gateway.domain sai → 400" "$(jx PUT settings '{"gateway":{"domain":"not a domain","provider_preview":""}}' 'j.error.code')" "INVALID"
 expect "PUT settings gateway → lưu + /gateway theo" "$(jx PUT settings '{"gateway":{"domain":"Example.COM","provider_preview":"public"}}' 'j.gateway.domain+"|"+j.gateway.provider_preview')" "example.com|public"
 expect "GET /gateway sau khi đổi" "$(jx GET gateway - 'j.domain+"|"+j.domain_source+"|"+j.private_previews')" "example.com|settings|false"
 jx PUT settings '{"gateway":{"domain":"","provider_preview":""}}' 'j.gateway.domain' >/dev/null
+
+echo "== v1.9: URL dễ đọc (tên box + nhãn port, alias <key>-<port>)"
+expect "ports: name + primary + label + alias" "$(jx GET boxes/box_a9d054/ports - 'j.name+"|"+j.primary_port+"|"+j.ports[0].primary+"|"+j.ports[0].label+"|"+/^https:\/\/[0-9a-f]{20}-3000\./.test(j.ports[0].alias_url)')" "kecon-story-gen|3000|true|web|true"
+expect "POST ports {port,label} → <name>-<label>" "$(jx POST boxes/box_a9d054/ports '{"port":5432,"label":"pg"}' 'j.ports[0].port+"|"+j.ports[0].gateway_url+"|"+/[0-9]/.test(j.ports[0].gateway_url.split("//")[1].split(".")[0])')" "5432|https://kecon-story-gen-pg.boxaz.dev/|false"
+expect "PUT ports/:port {label}" "$(jx PUT boxes/box_a9d054/ports/5432 '{"label":"db"}' 'j.label+"|"+j.url')" "db|https://kecon-story-gen-db.boxaz.dev/"
+expect "PUT label trùng port khác → 400" "$(jx PUT boxes/box_a9d054/ports/5432 '{"label":"web"}' 'j.error.code')" "INVALID"
+expect "PUT label là số → 400" "$(jx PUT boxes/box_a9d054/ports/5432 '{"label":"5432"}' 'j.error.code')" "INVALID"
+expect "PATCH subdomain dành riêng → 400" "$(jx PATCH boxes/box_a9d054 '{"subdomain":"hark"}' 'j.error.code')" "INVALID"
+expect "PATCH subdomain đã có người dùng → 400" "$(jx PATCH boxes/box_a9d054 '{"subdomain":"hark-research"}' 'j.error.code+"|"+/hark-research-blue/.test(j.error.hint)')" "INVALID|true"
+expect "PATCH subdomain → đổi tên" "$(jx PATCH boxes/box_a9d054 '{"subdomain":"Kể Chuyện"}' 'j.subdomain')" "ke-chuyen"
+expect "ports theo tên mới" "$(jx GET boxes/box_a9d054/ports - 'j.ports.find(p=>p.port===3000).gateway_url')" "https://ke-chuyen.boxaz.dev/"
+jx PATCH boxes/box_a9d054 '{"subdomain":"kecon-story-gen"}' 'j.subdomain' >/dev/null
+grep -rqs "box-name-input" .next/static/chunks && grep -rqs "edit-label-" .next/static/chunks && ok "bundle có UI tên box + nhãn port" || bad "bundle thiếu UI tên box / nhãn port"
 declare -A GWWORD=([vi]="Gateway domain" [en]="Gateway domain" [zh]="网关域名" [ja]="ゲートウェイドメイン")
 for l in $LOCALES; do
   node -e 'const m=require("./messages/'$l'.json");process.exit(m.gateway&&m.gateway.title==="'"${GWWORD[$l]}"'"&&m.gateway.previewHint&&m.gateway.reserved&&m.gateway.reachable.includes("{ms}")&&m.ports.previewPrivate?0:1)' && ok "[$l] chuỗi gateway.* đủ" || bad "[$l] thiếu chuỗi gateway.*"

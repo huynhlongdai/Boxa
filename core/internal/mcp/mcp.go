@@ -259,8 +259,18 @@ func callTool(ctx context.Context, c Caller, name string, a args) (int, []byte, 
 		if err := need("box_id"); err != nil {
 			return 0, nil, err
 		}
+		if n := a.s("name"); n != "" {
+			// v1.9: rename the box's gateway address first
+			if st, body, err := c.Do(ctx, "PATCH", "/boxes/"+esc(a.s("box_id")), map[string]any{"subdomain": n}); err != nil || st >= 400 {
+				return st, body, err
+			}
+		}
 		if a.has("port") {
-			return c.Do(ctx, "POST", "/boxes/"+esc(a.s("box_id"))+"/ports", map[string]any{"port": int(a.num("port"))})
+			body := map[string]any{"port": int(a.num("port"))}
+			if l := a.s("label"); l != "" {
+				body["label"] = l
+			}
+			return c.Do(ctx, "POST", "/boxes/"+esc(a.s("box_id"))+"/ports", body)
 		}
 		return c.Do(ctx, "GET", "/boxes/"+esc(a.s("box_id"))+"/ports", nil)
 	case "box_url_token":
@@ -295,7 +305,7 @@ func callTool(ctx context.Context, c Caller, name string, a args) (int, []byte, 
 			return 0, nil, err
 		}
 		spec := map[string]any{"start": a.s("start")}
-		for _, k := range []string{"repo", "ref", "install", "restart", "workdir"} {
+		for _, k := range []string{"repo", "ref", "install", "restart", "workdir", "label"} {
 			if a.s(k) != "" {
 				spec[k] = a.s(k)
 			}

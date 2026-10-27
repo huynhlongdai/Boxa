@@ -81,6 +81,12 @@ type PortView struct {
 	// (reachable directly by anyone who knows the sandbox id) or "" (the
 	// provider has no preview host / not a sandbox box).
 	ProviderPreview string `json:"provider_preview,omitempty"`
+	// v1.9: readable addresses. Label names the port (web, api, db, …);
+	// Primary marks the port served at the bare box name; AliasURL is the
+	// legacy <key>-<port> gateway URL, which keeps working.
+	Label    string `json:"label,omitempty"`
+	Primary  bool   `json:"primary,omitempty"`
+	AliasURL string `json:"alias_url,omitempty"`
 }
 
 const caveatPreviewPublic = "the provider preview URL of this port stays reachable at the provider by anyone who knows the sandbox id (this provider cannot refuse public preview traffic, or the sandbox was created public): the token protects only the Boxaz URL"
@@ -98,15 +104,22 @@ func (m *Manager) hasPreviewHost(provider string) bool {
 
 // PortsResult is GET/POST /v1/boxes/{id}/ports.
 type PortsResult struct {
-	BoxID string     `json:"box_id"`
-	URL   string     `json:"url"` // the box URL (first port)
-	Ports []PortView `json:"ports"`
+	BoxID string `json:"box_id"`
+	URL   string `json:"url"` // the box URL (first port)
+	// v1.9: the box's gateway name and the port its bare name serves
+	Name        string     `json:"name,omitempty"`
+	PrimaryPort int        `json:"primary_port,omitempty"`
+	Ports       []PortView `json:"ports"`
 }
 
 func (m *Manager) portView(ctx context.Context, b *model.Box, h *model.Host, port int) PortView {
 	v := m.portViewChain(ctx, b, h, port)
 	v.Access = b.AccessFor(port)
 	v.GatewayURL = m.GatewayURL(b, port)
+	v.Label, v.Primary = PortLabel(b, port), port == PrimaryPort(b)
+	if alias := m.GatewayAliasURL(b, port); alias != v.GatewayURL {
+		v.AliasURL = alias
+	}
 	if h != nil && h.Billing == "sandbox" && m.hasPreviewHost(h.Provider) {
 		v.ProviderPreview = "public"
 		if h.PrivateTraffic {
@@ -125,6 +138,7 @@ func (m *Manager) portView(ctx context.Context, b *model.Box, h *model.Host, por
 			cav = append(cav, caveatPreviewPublic)
 		}
 		return PortView{Port: port, URL: gw, Kind: KindGateway, Public: false, GatewayURL: v.GatewayURL, Access: v.Access, ProviderPreview: v.ProviderPreview,
+			Label: v.Label, Primary: v.Primary, AliasURL: v.AliasURL,
 			Note:    "token required: open with ?token=<bxt_…> (exchanged for a cookie), Authorization: Bearer <token> or X-Boxaz-Token; issue one with POST /v1/boxes/{id}/ports/{port}/tokens (box url --token)",
 			Caveats: cav}
 	}
@@ -149,9 +163,11 @@ func (m *Manager) portViewChain(ctx context.Context, b *model.Box, h *model.Host
 		}
 		// no provider preview: Boxaz ingress, then an in-box tunnel
 		v = m.ensurePublic(ctx, b, port, false)
-		if v.Kind == "ingress" && m.GatewayDomain(ctx) != "" {
-			// same path through core, but the clean host-based URL (v1.8)
+		if v.Kind == "ingress" {
+			// same path through core, but the readable gateway URL (v1.9)
 			v.URL = m.GatewayURL(b, port)
+		}
+		if v.Kind == "ingress" && m.GatewayDomain(ctx) != "" {
 			for i, c := range v.Caveats {
 				if c == caveatIngress {
 					v.Caveats[i] = caveatHostGateway
@@ -175,8 +191,9 @@ func (m *Manager) Ports(ctx context.Context, p *Principal, id string) (*PortsRes
 	if err != nil {
 		return nil, err
 	}
+	b = m.decorateBox(ctx, m.ensureNamesStored(ctx, b))
 	h, _ := m.Store.GetHost(ctx, b.HostID)
-	out := &PortsResult{BoxID: b.ID, URL: b.URL, Ports: []PortView{}}
+	out := &PortsResult{BoxID: b.ID, URL: b.URL, Name: b.Subdomain, PrimaryPort: PrimaryPort(b), Ports: []PortView{}}
 	for _, port := range b.Ports {
 		out.Ports = append(out.Ports, m.portView(ctx, b, h, port))
 	}
@@ -186,6 +203,9 @@ func (m *Manager) Ports(ctx context.Context, p *Principal, id string) (*PortsRes
 // ExposeInput is POST /v1/boxes/{id}/ports.
 type ExposeInput struct {
 	Port int `json:"port"`
+	// Label (v1.9) names the port in its gateway URL: <box>-<label>.<domain>
+	// (default: a well-known label such as web, api, db, else a word).
+	Label string `json:"label,omitempty"`
 }
 
 // Expose declares a port on a live box and returns its public URL (sandbox
@@ -216,13 +236,24 @@ func (m *Manager) Expose(ctx context.Context, p *Principal, id string, in Expose
 	if !found {
 		b.Ports = append(nonNilInts(b.Ports), in.Port)
 	}
+	labelChanged := false
+	if in.Label != "" && in.Label != b.PortLabels[in.Port] {
+		before := namesCopy(b)
+		if err := m.setPortLabel(ctx, b, in.Port, in.Label); err != nil {
+			lock.Unlock()
+			return nil, err
+		}
+		m.refreshNamedURLs(b, before)
+		labelChanged = true
+	}
+	m.ensureNames(ctx, b)
 	if b.URL == "" && h != nil {
 		b.URL = m.boxURL(ctx, b, h)
 	}
 	m.Store.PutBox(ctx, b)
 	lock.Unlock()
-	if !found {
-		m.Emit(ctx, p.Actor(), b.ID, b.AgentID, "box.port", fmt.Sprintf("port %d exposed", in.Port), nil)
+	if !found || labelChanged {
+		m.Emit(ctx, p.Actor(), b.ID, b.AgentID, "box.port", fmt.Sprintf("port %d exposed as %s", in.Port, m.GatewayURL(b, in.Port)), nil)
 		m.publishBox(m.decorateBox(ctx, b))
 	}
 	res, err := m.Ports(ctx, p, b.ID)
@@ -297,6 +328,7 @@ func (m *Manager) cloneSandbox(ctx context.Context, p *Principal, src *model.Box
 		Ports: nonNilInts(src.Ports), Secrets: nonNilStrs(src.Secrets), CreatedAt: now, LastActiveAt: now, Locale: src.Locale,
 		Profile: src.Profile, Requirements: src.Requirements, Isolation: src.Isolation, ClonedFrom: src.ID}
 	inheritV17(nb, src)
+	m.ensureNames(ctx, nb)
 	if err := m.Store.PutBox(ctx, nb); err != nil {
 		return nil, err
 	}
@@ -388,6 +420,7 @@ func (m *Manager) forkSandboxSnapshot(ctx context.Context, p *Principal, src *mo
 		IdleMinutes: src.IdleMinutes, BudgetUSD: src.BudgetUSD, Ports: nonNilInts(src.Ports), Secrets: nonNilStrs(src.Secrets),
 		Setup: src.Setup, CreatedAt: now, LastActiveAt: now, Locale: src.Locale, ForkedFrom: sn.ID, Billing: "sandbox", Provider: snapHost.Provider}
 	inheritV17(b, src)
+	m.ensureNames(ctx, b)
 	if err := m.Store.PutBox(ctx, b); err != nil {
 		return nil, err
 	}

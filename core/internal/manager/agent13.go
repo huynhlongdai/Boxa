@@ -71,6 +71,7 @@ func (m *Manager) Clone(ctx context.Context, p *Principal, id string, in CloneIn
 		Profile: src.Profile, Requirements: src.Requirements, Isolation: src.Isolation, ClonedFrom: src.ID,
 		PlacementReason: "copy-on-write clone of " + src.ID + " on " + src.HostID}
 	inheritV17(nb, src)
+	m.ensureNames(ctx, nb)
 	if err := m.Store.PutBox(ctx, nb); err != nil {
 		return nil, err
 	}

@@ -87,26 +87,24 @@ func (m *Manager) WakePolicy(ctx context.Context) WakePolicy {
 	return p
 }
 
-// GatewayURL is the stable Boxaz URL of a box port. Without BOXAZ_PUBLIC_URL
-// or BOXAZ_GATEWAY_DOMAIN it is the core-relative path /x/<key>-<port>/.
+// GatewayURL is the stable Boxaz URL of a box port (v1.9 readable form):
+// https://<name>.<domain>/ for the primary port, https://<name>-<label>.<domain>/
+// for the others; <public>/x/<name>[-<label>]/ without a gateway domain, or
+// the core-relative /x/… path without BOXAZ_PUBLIC_URL. A box that has no
+// name yet falls back to the <key>-<port> alias.
 func (m *Manager) GatewayURL(b *model.Box, port int) string {
-	seg := m.exposureKey(b.ID) + "-" + strconv.Itoa(port)
-	if d := m.GatewayDomain(context.Background()); d != "" {
-		scheme := "https://"
-		if strings.HasPrefix(m.Cfg.PublicURL, "http://") {
-			scheme = "http://"
-		}
-		return scheme + seg + "." + d + "/"
+	if hl := hostLabel(b, port); hl != "" {
+		return m.gatewayURLFor(hl)
 	}
-	if m.Cfg.PublicURL == "" {
-		return "/x/" + seg + "/"
-	}
-	return strings.TrimRight(m.Cfg.PublicURL, "/") + "/x/" + seg + "/"
+	return m.GatewayAliasURL(b, port)
 }
 
 // GatewayPath is the core-relative path of a box port's gateway URL.
 func (m *Manager) GatewayPath(b *model.Box, port int) string {
-	return "/x/" + m.exposureKey(b.ID) + "-" + strconv.Itoa(port) + "/"
+	if hl := hostLabel(b, port); hl != "" {
+		return "/x/" + hl + "/"
+	}
+	return "/x/" + m.legacySeg(b, port) + "/"
 }
 
 // GatewayWake starts (or joins) the background wake of a box.

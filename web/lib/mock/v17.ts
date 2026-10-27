@@ -10,6 +10,9 @@ type MBox = MockState["boxes"][number];
 
 interface V17Box {
   key: string;
+  /** v1.9: tên gateway dễ đọc (https://<name>.<domain>/) + nhãn port (<name>-<label>). */
+  name: string;
+  labels: Record<number, string>;
   tokens: (URLToken & { _secret: string })[];
   app: AppSpec | null;
   status: AppStatus;
@@ -68,11 +71,72 @@ function appendLog(v: V17Box, text: string) {
   }
 }
 
+// ---- v1.9: tên gateway dễ đọc (giống core/internal/manager/gatewaynames.go) ----
+const RESERVED_NAMES = new Set(["admin", "api", "app", "assets", "auth", "autoconfig", "autodiscover", "blog", "cdn", "console", "core", "dashboard", "dl", "docs", "ftp", "git", "grafana", "gw", "hark", "help", "imap", "login", "mail", "mcp", "metrics", "mx", "ns", "ns1", "ns2", "pop", "pop3", "portal", "smtp", "sso", "static", "status", "support", "webmail", "ws", "www"]);
+const SUFFIXES = ["blue", "green", "amber", "coral", "jade", "ruby", "teal", "navy", "sky", "sun", "moon", "star", "leaf", "oak", "pine", "fox", "owl", "wolf", "bear", "hawk"];
+const WORDS = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india", "juliet", "kilo", "lima", "mike", "november", "oscar", "papa"];
+const WELL_KNOWN: Record<number, string> = { 80: "web", 3000: "web", 4200: "web", 5000: "web", 5173: "web", 8000: "web", 8080: "web", 3001: "api", 4000: "api", 8001: "api", 8081: "admin", 9000: "admin", 5432: "db", 3306: "mysql", 6379: "redis", 27017: "mongo", 8888: "jupyter", 7860: "gradio", 8501: "streamlit", 11434: "ollama", 9229: "debug", 9090: "metrics" };
+
+export function slugifyName(s: string, max = 40): string {
+  const out = s.replace(/đ/g, "d").replace(/Đ/g, "D").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return max > 0 && out.length > max ? out.slice(0, max).replace(/-+$/, "") : out;
+}
+export const boxNameOk = (n: string) => n.length >= 1 && n.length <= 40 && /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(n) && !n.includes("--") && /[a-z]/.test(n) && !/^[0-9a-f]{20}-[0-9]{1,5}$/.test(n);
+export const portLabelOk = (l: string) => l.length <= 20 && /^[a-z]([a-z0-9-]*[a-z0-9])?$/.test(l) && !l.includes("--");
+
+function primaryPort(b: MBox, v: V17Box): number {
+  if (v.app?.port && b.ports.includes(v.app.port)) return v.app.port;
+  return b.ports[0] ?? 0;
+}
+/** Mọi host đang dùng (trừ box `except`). */
+function usedHosts(except: string): Set<string> {
+  const S = st();
+  const out = new Set<string>();
+  for (const [id, v] of Object.entries(S.boxes)) {
+    if (id === except || !v.name) continue;
+    out.add(v.name);
+    for (const l of Object.values(v.labels)) out.add(`${v.name}-${l}`);
+  }
+  return out;
+}
+function clash(used: Set<string>, name: string, labels: Record<number, string>): boolean {
+  return RESERVED_NAMES.has(name) || used.has(name) || Object.values(labels).some((l) => used.has(`${name}-${l}`));
+}
+export function freeName(used: Set<string>, base: string, labels: Record<number, string>): string {
+  if (!boxNameOk(base)) base = "box";
+  if (!clash(used, base, labels)) return base;
+  for (const w of SUFFIXES) {
+    const n = `${base.slice(0, 39 - w.length).replace(/-+$/, "")}-${w}`;
+    if (boxNameOk(n) && !clash(used, n, labels)) return n;
+  }
+  return `${base.slice(0, 30)}-${rnd(6).replace(/[0-9]/g, "x")}`;
+}
+function assignLabels(b: MBox, v: V17Box, used: Set<string>) {
+  const taken = new Set(Object.values(v.labels));
+  for (const p of b.ports) {
+    if (v.labels[p]) continue;
+    const cands = [...(v.app?.port === p && v.app?.label ? [v.app.label] : []), ...(WELL_KNOWN[p] ? [WELL_KNOWN[p]] : []), ...(WELL_KNOWN[p] === "web" ? ["app", "site", "ui"] : []), ...WORDS];
+    const l = cands.find((c) => !taken.has(c) && !used.has(`${v.name}-${c}`));
+    if (l) {
+      v.labels[p] = l;
+      taken.add(l);
+    }
+  }
+}
+function ensureNames(b: MBox, v: V17Box) {
+  const used = usedHosts(b.id);
+  if (!v.name) v.name = freeName(used, slugifyName(b.slug) || "box", v.labels);
+  assignLabels(b, v, used);
+}
+
 function ensure(b: MBox): V17Box {
   const S = st();
   let v = S.boxes[b.id];
-  if (v) return v;
-  v = { key: rnd(10), tokens: [], app: null, status: { state: "none", ready: false, restarts: 0 }, log: "", base: 0 };
+  if (v) {
+    ensureNames(b, v);
+    return v;
+  }
+  v = { key: rnd(10).replace(/[^0-9a-f]/g, "a").padEnd(20, "0").slice(0, 20), name: "", labels: {}, tokens: [], app: null, status: { state: "none", ready: false, restarts: 0 }, log: "", base: 0 };
   S.boxes[b.id] = v;
   const now = Date.now();
   // Dữ liệu mẫu: một box Node có app sẵn sàng, một box sandbox có port token + app, một service có port token + 2 token.
@@ -107,6 +171,7 @@ function ensure(b: MBox): V17Box {
     const old = mkToken(b, v, 8080, "demo", 3600, now - 5 * 3600e3);
     v.tokens.push(old);
   }
+  ensureNames(b, v);
   return v;
 }
 
@@ -125,11 +190,24 @@ function publicTok(t: URLToken & { _secret: string }): URLToken {
 }
 
 const accessFor = (b: MBox, port: number) => (b.port_access?.[String(port)] === "token" ? "token" : "public");
-const gatewayURL = (v: V17Box, port: number) => `https://${v.key}-${port}.${GW_DOMAIN}/`;
+const aliasURL = (v: V17Box, port: number) => `https://${v.key}-${port}.${GW_DOMAIN}/`;
+/** v1.9: https://<name>.<domain>/ cho port chính, https://<name>-<label>.<domain>/ cho port khác. */
+function gatewayURL(b: MBox, v: V17Box, port: number): string {
+  if (port === primaryPort(b, v)) return `https://${v.name}.${GW_DOMAIN}/`;
+  return v.labels[port] ? `https://${v.name}-${v.labels[port]}.${GW_DOMAIN}/` : aliasURL(v, port);
+}
 
 function portView(b: MBox, v: V17Box, port: number): PortView {
+  return { ...portViewBase(b, v, port), label: v.labels[port], primary: port === primaryPort(b, v), alias_url: aliasURL(v, port) };
+}
+
+function portsResult(b: MBox, v: V17Box) {
+  return { box_id: b.id, url: b.ports.length ? portView(b, v, primaryPort(b, v)).url : "", name: v.name, primary_port: primaryPort(b, v), ports: b.ports.map((p) => portView(b, v, p)) };
+}
+
+function portViewBase(b: MBox, v: V17Box, port: number): PortView {
   const access = accessFor(b, port);
-  const gw = gatewayURL(v, port);
+  const gw = gatewayURL(b, v, port);
   const running = b.status === "running";
   const caps = KNOWN[b.provider];
   // v1.8: E2B / Novita sandboxes behind an internet-facing gateway are created private
@@ -143,7 +221,7 @@ function portView(b: MBox, v: V17Box, port: number): PortView {
   if (priv) {
     return { port, url: gw, kind: "gateway", public: true, gateway_url: gw, access, provider_preview: "private",
       note: `${b.provider} preview host is private (refuses requests without the sandbox traffic token); served through the Boxaz gateway, which wakes a sleeping box`,
-      caveats: ["Boxaz gateway URL: host-based <key>-<port>.<domain>; WebSocket and SSE pass through; a sleeping box is woken by the first request"] };
+      caveats: ["Boxaz gateway URL: host-based <name>.<domain> / <name>-<label>.<domain>; WebSocket and SSE pass through; a sleeping box is woken by the first request"] };
   }
   if (caps?.inbound_http && b.provider !== "prized") {
     const host = b.provider === "e2b" ? "e2b.app" : "sandbox.novita.ai";
@@ -160,6 +238,16 @@ function appView(b: MBox, v: V17Box): AppView {
   return { box_id: b.id, spec: v.app, status };
 }
 
+function setLabel(b: MBox, v: V17Box, port: number, raw: string, err: V17Ctx["err"]): Res | null {
+  const label = raw.trim().toLowerCase();
+  if (!portLabelOk(label)) return err(400, "INVALID", "v19_bad_label", { label: raw });
+  const other = Object.entries(v.labels).find(([p, l]) => Number(p) !== port && l === label);
+  if (other) return err(400, "INVALID", "v19_label_used", { label, port: Number(other[0]) });
+  if (usedHosts(b.id).has(`${v.name}-${label}`)) return err(400, "INVALID", "v19_name_taken", { name: `${v.name}-${label}`, next: `${v.name}-${label}-${SUFFIXES[0]}` });
+  v.labels[port] = label;
+  return null;
+}
+
 export interface V17Ctx extends Pick<V13Ctx, "ok" | "list" | "hydrateBox" | "pushEvent"> {
   err: (status: number, code: "INVALID" | "NOT_FOUND", key: string, params?: Record<string, string | number>) => Res;
 }
@@ -167,7 +255,8 @@ export interface V17Ctx extends Pick<V13Ctx, "ok" | "list" | "hydrateBox" | "pus
 /** Ghép trường v1.7 vào Box (wake_on_request, port_access, app). */
 export function hydrateV17(b: MBox, box: Box): Box {
   const v = ensure(b);
-  return { ...box, wake_on_request: b.wake_on_request ?? true, ...(b.port_access ? { port_access: b.port_access } : {}), app: v.app };
+  return { ...box, wake_on_request: b.wake_on_request ?? true, ...(b.port_access ? { port_access: b.port_access } : {}), app: v.app,
+    subdomain: v.name, port_labels: Object.fromEntries(Object.entries(v.labels).map(([k, l]) => [k, l])) };
 }
 
 /** Log app cho luồng SSE ?follow=1 (mock): đọc từ offset, thỉnh thoảng sinh dòng mới. */
@@ -208,6 +297,20 @@ export function handleV17(s: MockState, ctx: V17Ctx, M: string, segs: string[], 
       b.wake_on_request = body.wake_on_request;
       ctx.pushEvent({ actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "box.settings", message: `wake_on_request=${body.wake_on_request}`, cost_usd: null });
     }
+    if (typeof body.subdomain === "string") {
+      const v = ensure(b);
+      const raw = body.subdomain;
+      const name = slugifyName(raw, 0) || raw.trim().toLowerCase();
+      if (name !== v.name) {
+        if (!boxNameOk(name)) return err(400, "INVALID", "v19_bad_name", { name: raw });
+        if (RESERVED_NAMES.has(name)) return err(400, "INVALID", "v19_name_reserved", { name });
+        const used = usedHosts(b.id);
+        if (clash(used, name, v.labels)) return err(400, "INVALID", "v19_name_taken", { name, next: freeName(used, name, v.labels) });
+        const old = v.name;
+        v.name = name;
+        ctx.pushEvent({ actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "box.settings", message: `gateway name ${old} → ${name}`, cost_usd: null });
+      }
+    }
     return ok(ctx.hydrateBox(b));
   }
   if (r2 !== "ports" && r2 !== "app") return null;
@@ -217,15 +320,22 @@ export function handleV17(s: MockState, ctx: V17Ctx, M: string, segs: string[], 
 
   if (r2 === "ports") {
     if (!r3) {
-      if (M === "GET") return ok({ box_id: b.id, url: b.ports.length ? portView(b, v, b.ports[0]).url : "", ports: b.ports.map((p) => portView(b, v, p)) });
+      if (M === "GET") return ok(portsResult(b, v));
       if (M === "POST") {
         const p = Number(body.port);
         if (!Number.isInteger(p) || p < 1 || p > 65535) return err(400, "INVALID", "v17_bad_port");
+        if (typeof body.label === "string" && body.label) {
+          const e = setLabel(b, v, p, body.label, err);
+          if (e) return e;
+        }
         if (!b.ports.includes(p)) {
           b.ports.push(p);
-          ctx.pushEvent({ actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "box.port_exposed", message: `port ${p}`, cost_usd: null });
+          ensureNames(b, v);
+          ctx.pushEvent({ actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "box.port_exposed", message: `port ${p} → ${gatewayURL(b, v, p)}`, cost_usd: null });
         }
-        return ok({ box_id: b.id, url: portView(b, v, b.ports[0]).url, ports: b.ports.map((x) => portView(b, v, x)) });
+        const res = portsResult(b, v);
+        res.ports.sort((x, y) => (x.port === p ? -1 : y.port === p ? 1 : 0));
+        return ok(res);
       }
       return null;
     }
@@ -234,13 +344,22 @@ export function handleV17(s: MockState, ctx: V17Ctx, M: string, segs: string[], 
     if (!b.ports.includes(port)) return err(404, "NOT_FOUND", "v17_port_not_exposed", { port, box: b.id });
     if (!r4 && M === "PUT") {
       const a = String(body.access ?? "");
-      if (a !== "public" && a !== "token") return err(400, "INVALID", "v17_bad_access");
-      b.port_access = { ...(b.port_access ?? {}), [String(port)]: a };
-      ctx.pushEvent({ actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "box.port_access", message: `port ${port} access=${a}`, cost_usd: null });
+      const label = typeof body.label === "string" ? body.label : "";
+      if (!label && a !== "public" && a !== "token") return err(400, "INVALID", "v17_bad_access");
+      if (a && a !== "public" && a !== "token") return err(400, "INVALID", "v17_bad_access");
+      if (label) {
+        const e = setLabel(b, v, port, label, err);
+        if (e) return e;
+        ctx.pushEvent({ actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "box.port", message: `port ${port} label → ${v.labels[port]}`, cost_usd: null });
+      }
+      if (a) {
+        b.port_access = { ...(b.port_access ?? {}), [String(port)]: a };
+        ctx.pushEvent({ actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "box.port_access", message: `port ${port} access=${a}`, cost_usd: null });
+      }
       return ok(portView(b, v, port));
     }
     if (r4 === "tokens") {
-      if (!r5 && M === "GET") return ok({ box_id: b.id, port, access: accessFor(b, port), gateway_url: gatewayURL(v, port), items: v.tokens.filter((t) => t.port === port).map(publicTok).reverse() });
+      if (!r5 && M === "GET") return ok({ box_id: b.id, port, access: accessFor(b, port), gateway_url: gatewayURL(b, v, port), items: v.tokens.filter((t) => t.port === port).map(publicTok).reverse() });
       if (!r5 && M === "POST") {
         const ttl = body.ttl_s === undefined || body.ttl_s === null || body.ttl_s === 0 ? 86400 : Number(body.ttl_s);
         if (!Number.isFinite(ttl) || ttl < 60 || ttl > 2592000) return err(400, "INVALID", "v17_bad_ttl");
@@ -248,7 +367,7 @@ export function handleV17(s: MockState, ctx: V17Ctx, M: string, segs: string[], 
         v.tokens.push(t);
         if (body.private !== false) b.port_access = { ...(b.port_access ?? {}), [String(port)]: "token" };
         ctx.pushEvent({ actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "url_token.created", message: `port ${port} ${t.prefix}… ttl=${ttl}s`, cost_usd: null });
-        return ok({ ...publicTok(t), token: t._secret, url: `${gatewayURL(v, port)}?token=${t._secret}` }, 201);
+        return ok({ ...publicTok(t), token: t._secret, url: `${gatewayURL(b, v, port)}?token=${t._secret}` }, 201);
       }
       if (r5 && M === "DELETE") {
         const t = v.tokens.find((x) => x.id === r5 && x.port === port);

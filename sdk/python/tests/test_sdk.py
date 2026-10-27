@@ -242,5 +242,16 @@ def test_v17_app_gateway_tokens(core):
             assert caps["e2b"]["private_preview"] and not caps["prized"]["private_preview"]
             gw_info = bx.gateway()
             assert gw_info["mode"] in ("host", "path", "relative") and "hark" in gw_info["reserved"]
+            # v1.9 readable names
+            assert gw.endswith("/x/sdk-py-app/") and gw_info["url_pattern"].endswith("<name>/")
+            r = bx.rename_url(box["id"], "Py Shop")
+            assert r["subdomain"] == "py-shop"
+            pv = bx.ports(box["id"])
+            assert pv["name"] == "py-shop" and pv["ports"][0]["gateway_url"].endswith("/x/py-shop/") and pv["ports"][0]["primary"]
+            assert pv["ports"][0]["alias_url"].endswith("-%d/" % port)
+            assert bx.set_port_label(box["id"], port, "site")["label"] == "site"
+            with pytest.raises(Exception) as ei:
+                bx.rename_url(box["id"], "hark")
+            assert "reserved" in str(ei.value)
         finally:
             bx.down(box["id"])

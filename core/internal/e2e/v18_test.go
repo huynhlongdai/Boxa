@@ -115,7 +115,7 @@ func TestGatewayDomainPrivatePreview(t *testing.T) {
 	// GET /v1/gateway
 	var gi manager.GatewayInfo
 	e.must(e.admin, "GET", "/gateway", nil, &gi)
-	if gi.Mode != "host" || gi.Domain != "example.test" || gi.DomainSource != "env" || gi.URLPattern != "https://<key>-<port>.example.test/" ||
+	if gi.Mode != "host" || gi.Domain != "example.test" || gi.DomainSource != "env" || gi.URLPattern != "https://<name>.example.test/" || gi.AliasPattern != "https://<key>-<port>.example.test/" ||
 		!gi.InternetFacing || gi.ProviderPreview != "auto" || !gi.PrivatePreviews {
 		t.Fatalf("gateway info %+v", gi)
 	}
@@ -139,17 +139,24 @@ func TestGatewayDomainPrivatePreview(t *testing.T) {
 	if !h.PrivateTraffic || !fk.private[h.ProviderRef] {
 		t.Fatalf("host not private: %+v", h)
 	}
-	re := regexp.MustCompile(`^https://([0-9a-f]{20}-8000)\.example\.test/$`)
-	m := re.FindStringSubmatch(got.URL)
-	if m == nil {
+	// v1.9: readable host <name>.<domain>; the <key>-<port> alias keeps working
+	if got.URL != "https://web.example.test/" {
 		t.Fatalf("box url %q", got.URL)
 	}
-	host := m[1] + ".example.test"
+	host := "web.example.test"
 	var pr manager.PortsResult
 	e.must(ag, "GET", "/boxes/"+b.ID+"/ports", nil, &pr)
 	pv := pr.Ports[0]
 	if pv.Kind != manager.KindGateway || pv.URL != got.URL || pv.GatewayURL != got.URL || !pv.Public || pv.ProviderPreview != "private" || strings.Contains(pv.URL, prev.URL) {
 		t.Fatalf("port view %+v", pv)
+	}
+	re := regexp.MustCompile(`^https://([0-9a-f]{20}-8000)\.example\.test/$`)
+	m := re.FindStringSubmatch(pv.AliasURL)
+	if m == nil || pv.Label != "web" || !pv.Primary {
+		t.Fatalf("alias url %+v", pv)
+	}
+	if st, body := hostDo(t, e.srv.URL, m[1]+".example.test", "/", nil); st != 200 || body != "hello from "+h.ProviderRef {
+		t.Fatalf("alias → %d %q", st, body)
 	}
 
 	// the gateway adds the traffic token upstream (and drops a client's own)

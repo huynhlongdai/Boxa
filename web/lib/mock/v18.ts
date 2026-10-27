@@ -1,4 +1,4 @@
-// MOCK MODE v1.8: gateway trên domain thật (URL <key>-<port>.<domain>) + preview private của provider.
+// MOCK MODE v1.8/v1.9: gateway trên domain thật (URL dễ đọc <name>.<domain>, <name>-<label>.<domain>; alias <key>-<port>) + preview private của provider.
 // Bám theo core/internal/manager/gatewaydomain.go (GET /v1/gateway).
 import type { GatewayInfo, ProviderPreviewMode } from "../types";
 import type { MockState } from "./seed";
@@ -21,7 +21,7 @@ export function gatewayInfo(s: MockState, check: boolean): GatewayInfo {
   const mode = (g.provider_preview || "auto") as ProviderPreviewMode;
   return {
     mode: "host", domain, domain_source: g.domain ? "settings" : "env", public_url: `https://gw.${domain}`,
-    url_pattern: `https://<key>-<port>.${domain}/`, internet_facing: true, reserved: RESERVED,
+    url_pattern: `https://<name>.${domain}/`, label_pattern: `https://<name>-<label>.${domain}/`, alias_pattern: `https://<key>-<port>.${domain}/`, internet_facing: true, reserved: RESERVED,
     provider_preview: mode, provider_preview_source: g.provider_preview ? "settings" : "default", private_previews: mode !== "public",
     providers: PROVIDERS,
     ...(check ? { check: { ok: true, status: 200, latency_ms: 70 + Math.round(Math.random() * 40), checked_at: new Date().toISOString() } } : {}),

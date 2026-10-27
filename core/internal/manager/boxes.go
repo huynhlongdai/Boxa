@@ -108,6 +108,26 @@ func (m *Manager) CreateBox(ctx context.Context, p *Principal, req boxyaml.Reque
 	if needs != nil {
 		b.Profile = needs.Profile
 	}
+	// v1.9 readable gateway name + port labels
+	if b.App != nil && b.App.Label != "" && b.App.Port > 0 {
+		b.PortLabels = map[int]string{b.App.Port: b.App.Label}
+	}
+	if b.Subdomain == "" && req.Subdomain == "" {
+		// the requested name / slug before it was made unique (a taken one
+		// gets a word suffix below, never the slug's random digits)
+		for _, s := range []string{req.Name, req.Slug, baseTemplate} {
+			if n := model.Slugify(s, model.MaxBoxNameLen); n != "" && hasLetter(n) {
+				b.Subdomain = n
+				break
+			}
+		}
+	}
+	if req.Subdomain != "" {
+		if err := m.claimExplicitName(ctx, b, req.Subdomain); err != nil {
+			return nil, false, err
+		}
+	}
+	m.ensureNames(ctx, b)
 	b.Estimate = m.previewEstimate(ctx, b, agent, baseTemplate)
 	if err := m.Store.PutBox(ctx, b); err != nil {
 		return nil, false, err
@@ -525,6 +545,9 @@ func (m *Manager) decorateBox(ctx context.Context, b *model.Box) *model.Box {
 	if b.WakeOnRequest == nil { // v1.7: report the default explicitly
 		on := true
 		b.WakeOnRequest = &on
+	}
+	if pp := PrimaryPort(b); pp > 0 && b.Subdomain != "" && b.URL != "" && b.URL == m.GatewayAliasURL(b, pp) {
+		b.URL = m.GatewayURL(b, pp) // v1.9: the readable URL first
 	}
 	return b
 }

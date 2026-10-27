@@ -35,8 +35,18 @@ var ReservedSubdomains = []string{
 // "-<digits>" suffix) can match it.
 var boxLabelRE = regexp.MustCompile(`^[0-9a-f]{20}-[0-9]{1,5}$`)
 
-// IsBoxLabel reports whether a DNS label is a box gateway label.
+// IsBoxLabel reports whether a DNS label is a legacy box gateway label
+// (<key>-<port>, kept as an alias since v1.9).
 func IsBoxLabel(label string) bool { return boxLabelRE.MatchString(label) }
+
+// nameLabelRE is the shape of a readable gateway label: <name> or
+// <name>-<label> (one DNS label, at most 63 characters).
+var nameLabelRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
+
+// IsNameLabel reports whether label can be a readable box address.
+func IsNameLabel(label string) bool {
+	return nameLabelRE.MatchString(label) && !strings.Contains(label, "--")
+}
 
 // IsReservedSubdomain reports whether label is reserved at the gateway domain.
 func IsReservedSubdomain(label string) bool {
@@ -102,6 +112,8 @@ func (m *Manager) GatewayHost(ctx context.Context, host string) (kind, seg strin
 		return "box", label
 	case IsReservedSubdomain(label):
 		return "reserved", ""
+	case IsNameLabel(label):
+		return "box", label // v1.9 readable <name> / <name>-<label>; 404 when no box has it
 	}
 	return "other", ""
 }
@@ -179,11 +191,14 @@ func (m *Manager) previewHeaders(ctx context.Context, h *model.Host) (map[string
 // GatewayInfo is GET /v1/gateway: how box URLs are formed and whether the
 // gateway answers from the internet.
 type GatewayInfo struct {
-	Mode            string            `json:"mode"` // host | path | relative
-	Domain          string            `json:"domain"`
-	DomainSource    string            `json:"domain_source"` // env | settings | none
-	PublicURL       string            `json:"public_url"`
-	URLPattern      string            `json:"url_pattern"`
+	Mode         string `json:"mode"` // host | path | relative
+	Domain       string `json:"domain"`
+	DomainSource string `json:"domain_source"` // env | settings | none
+	PublicURL    string `json:"public_url"`
+	URLPattern   string `json:"url_pattern"`
+	// v1.9: other ports by label, and the legacy <key>-<port> alias
+	LabelPattern    string            `json:"label_pattern"`
+	AliasPattern    string            `json:"alias_pattern"`
 	InternetFacing  bool              `json:"internet_facing"`
 	Reserved        []string          `json:"reserved"`
 	ProviderPreview string            `json:"provider_preview"`        // effective mode
@@ -238,11 +253,15 @@ func (m *Manager) Gateway(ctx context.Context, check bool) *GatewayInfo {
 	}
 	switch {
 	case g.Domain != "":
-		g.Mode, g.URLPattern = "host", "https://<key>-<port>."+g.Domain+"/"
+		g.Mode, g.URLPattern = "host", "https://<name>."+g.Domain+"/"
+		g.LabelPattern, g.AliasPattern = "https://<name>-<label>."+g.Domain+"/", "https://<key>-<port>."+g.Domain+"/"
 	case m.Cfg.PublicURL != "":
-		g.Mode, g.URLPattern = "path", strings.TrimRight(m.Cfg.PublicURL, "/")+"/x/<key>-<port>/"
+		pu := strings.TrimRight(m.Cfg.PublicURL, "/")
+		g.Mode, g.URLPattern = "path", pu+"/x/<name>/"
+		g.LabelPattern, g.AliasPattern = pu+"/x/<name>-<label>/", pu+"/x/<key>-<port>/"
 	default:
-		g.Mode, g.URLPattern = "relative", "/x/<key>-<port>/"
+		g.Mode, g.URLPattern = "relative", "/x/<name>/"
+		g.LabelPattern, g.AliasPattern = "/x/<name>-<label>/", "/x/<key>-<port>/"
 	}
 	g.InternetFacing = m.gatewayInternetFacing(ctx)
 	g.PrivatePreviews = m.wantPrivatePreview(ctx)

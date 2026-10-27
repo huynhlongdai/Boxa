@@ -43,6 +43,9 @@ type Request struct {
 	// v1.7: supervised app (process supervisor) and wake-on-request (default on).
 	App           *model.AppSpec `json:"app,omitempty"`
 	WakeOnRequest *bool          `json:"wake_on_request,omitempty"`
+	// v1.9: the box's readable gateway name (https://<subdomain>.<domain>/);
+	// default: name, else slug (a taken derived name gets a word suffix).
+	Subdomain string `json:"subdomain,omitempty"`
 }
 
 type Spec struct {

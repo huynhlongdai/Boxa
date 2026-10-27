@@ -47,6 +47,8 @@ class Box(TypedDict, total=False):
     locale: str
     error: str
     next: List[str]
+    subdomain: str
+    port_labels: Dict[str, str]
 
 
 class ExecResult(TypedDict, total=False):

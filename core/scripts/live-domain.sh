@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Live v1.8 test: the Boxaz gateway on a real domain (host-based URLs
-# https://<key>-<port>.<domain> behind a Cloudflare Tunnel, see
+# https://<key>-<port>.<domain> (alias since v1.9; readable https://<name>.<domain>) behind a Cloudflare Tunnel, see
 # deploy/cloudflare-tunnel) and private provider previews.
 #
 # Runs against a core that is ALREADY up behind the tunnel (deploy/

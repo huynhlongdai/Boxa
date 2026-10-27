@@ -101,7 +101,14 @@
   "Use \"public\" or \"token\".": "请使用 \"public\" 或 \"token\"。",
   "Set it first: PUT /v1/boxes/{id}/app (box app set).": "请先设置：PUT /v1/boxes/{id}/app（box app set）。",
   "Set BOXAZ_PUBLIC_URL to an internet-reachable URL of core so the sandbox can dial in, or use a provider with preview URLs.": "将 BOXAZ_PUBLIC_URL 设为可从互联网访问的 core 地址，以便沙箱回连；或使用带预览 URL 的提供商。",
-  "Use a bare domain such as example.com (box URLs become <key>-<port>.example.com).": "请使用裸域名，例如 example.com（box URL 将变为 <key>-<port>.example.com）。"
+  "Use a bare domain such as example.com (box URLs become <name>.example.com).": "请使用裸域名，例如 example.com（box URL 将变为 <name>.example.com）。",
+  "Use 1-40 lowercase letters, digits and '-', e.g. \"demo-app\".": "使用 1-40 个小写字母、数字和 '-'，例如 \"demo-app\"。",
+  "Pick another name; reserved names belong to other services of the domain.": "请换一个名称；保留名称属于该域名的其他服务。",
+  "Pick another name, or let Boxaz add a word suffix by leaving it out.": "请换一个名称，或留空让 Boxaz 自动添加一个单词后缀。",
+  "Use a word like web, api, admin or db (letters first, at most 20 characters).": "使用 web、api、admin 或 db 这样的单词（以字母开头，最多 20 个字符）。",
+  "Each port of a box needs its own label.": "box 的每个端口都需要自己的标签。",
+  "Pick another label or rename the box.": "请换一个标签或给 box 改名。",
+  "Pass access (public | token) and/or label (e.g. api).": "传入 access（public | token）和/或 label（例如 api）。"
  },
  "msg": {
   "%s bootstrap exit %d: %s": "%s 引导命令退出码 %d：%s",
@@ -265,7 +272,14 @@
   "box %s has no app": "box %s 没有应用",
   "provider %s is not configured": "provider %s 尚未配置",
   "gateway.provider_preview must be auto, private or public": "gateway.provider_preview 必须是 auto、private 或 public",
-  "gateway.domain %q is not a valid domain": "gateway.domain %q 不是有效的域名"
+  "gateway.domain %q is not a valid domain": "gateway.domain %q 不是有效的域名",
+  "invalid box name %q: %s": "box 名称 %q 无效：%s",
+  "box name %q is reserved": "box 名称 %q 已保留",
+  "box name %q is taken (%s is in use)": "box 名称 %q 已被占用（%s 正在使用）",
+  "invalid port label %q: %s": "端口标签 %q 无效：%s",
+  "label %q is already used by port %d": "标签 %q 已被端口 %d 使用",
+  "%s is already in use by another box": "%s 已被另一个 box 使用",
+  "nothing to change: pass access or label": "没有要修改的内容：请传入 access 或 label"
  },
  "text": {
   "agentsmd.budget_box": "本盒子 $%.2f",
@@ -367,6 +381,6 @@
   "snip.tools": "适用于任何函数调用 LLM 的工具定义",
   "snip.uncertain": "注意：不同版本的配置格式可能不同；若失败请查看该工具的 MCP 文档。",
   "llms.h_apps": "Web 应用、Boxaz URL 与令牌（v1.7）",
-  "llms.apps": "- 用 box_app_set {start, port, repo?, install?, ready_http?} 运行常驻服务：Boxaz 克隆仓库、只安装一次、启动应用，崩溃后按退避策略重启，在唤醒 / 恢复 / 克隆后重新启动，并在应用就绪前保持流量。用 box_app_status 和 box_app_logs 查看（GET /v1/boxes/{id}/app/logs?follow=1 以 SSE 推送）。优先于 `nohup … &`。\n- 每个已开放的端口都有 gateway_url，即固定的 Boxaz URL（box_url）：首个请求会唤醒休眠的 box（wake_on_request，默认开启；PATCH /v1/boxes/{id}），WebSocket 与 SSE 无缓冲透传。\n- 用 box_url_token 私密分享：仅限一个 box+端口、会过期且可吊销的令牌（`?token=`、`Authorization: Bearer` 或 `X-Boxaz-Token`）；端口切换为 access=token。注意：令牌只保护 Boxaz URL。配置了网关域名或可公网访问的 BOXAZ_PUBLIC_URL 时，E2B 和 Novita 沙箱以私有方式创建：其预览域名在缺少沙箱流量令牌时返回 403（只有网关会附带该令牌），端口显示 provider_preview=private。端口显示 provider_preview=public 时（Daytona，或 BOXAZ_PROVIDER_PREVIEW=public），服务商预览 URL 仍可被任何知道沙箱 ID 的人访问；不要依赖令牌保护那里的机密。\n- GET /v1/capabilities 按服务商列出：memory_pause、wake_on_http_native、wake_via_gateway、fork、inbound_http、max_runtime。\n- GET /v1/gateway 显示网关域名、URL 格式（https://<key>-<port>.<domain>/）、保留子域名和服务商预览策略。"
+  "llms.apps": "- 用 box_app_set {start, port, repo?, install?, ready_http?} 运行常驻服务：Boxaz 克隆仓库、只安装一次、启动应用，崩溃后按退避策略重启，在唤醒 / 恢复 / 克隆后重新启动，并在应用就绪前保持流量。用 box_app_status 和 box_app_logs 查看（GET /v1/boxes/{id}/app/logs?follow=1 以 SSE 推送）。优先于 `nohup … &`。\n- 每个已开放的端口都有 gateway_url，即固定的 Boxaz URL（box_url）：首个请求会唤醒休眠的 box（wake_on_request，默认开启；PATCH /v1/boxes/{id}），WebSocket 与 SSE 无缓冲透传。\n- 用 box_url_token 私密分享：仅限一个 box+端口、会过期且可吊销的令牌（`?token=`、`Authorization: Bearer` 或 `X-Boxaz-Token`）；端口切换为 access=token。注意：令牌只保护 Boxaz URL。配置了网关域名或可公网访问的 BOXAZ_PUBLIC_URL 时，E2B 和 Novita 沙箱以私有方式创建：其预览域名在缺少沙箱流量令牌时返回 403（只有网关会附带该令牌），端口显示 provider_preview=private。端口显示 provider_preview=public 时（Daytona，或 BOXAZ_PROVIDER_PREVIEW=public），服务商预览 URL 仍可被任何知道沙箱 ID 的人访问；不要依赖令牌保护那里的机密。\n- GET /v1/capabilities 按服务商列出：memory_pause、wake_on_http_native、wake_via_gateway、fork、inbound_http、max_runtime。\n- GET /v1/gateway 显示网关域名、URL 格式（https://<key>-<port>.<domain>/）、保留子域名和服务商预览策略。\n- 可读 URL（v1.9）：https://<name>.<domain>/ 指向 box 的主端口（应用端口，否则第一个端口），https://<name>-<label>.<domain>/ 指向其他端口（label = web、api、db…，绝不是数字）。名称在创建时取自 subdomain / name / slug；用 box_url {name} 或 PATCH /v1/boxes/{id} {subdomain} 改名，用 box_url {port, label} 给端口命名。旧的 <key>-<port> 地址仍可用（alias_url）。按名称的 URL 可被猜到：私有应用请用 box_url_token。"
  }
 }

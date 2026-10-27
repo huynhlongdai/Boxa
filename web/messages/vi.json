@@ -1638,7 +1638,22 @@
       "refresh": "Tải lại",
       "noLogs": "Chưa có output."
     },
-    "previewPrivate": "URL preview riêng của provider cho port này từ chối truy cập thẳng (sandbox private): chỉ URL Boxaz này vào được app."
+    "previewPrivate": "URL preview riêng của provider cho port này từ chối truy cập thẳng (sandbox private): chỉ URL Boxaz này vào được app.",
+    "nameTitle": "Địa chỉ box",
+    "name": "Tên",
+    "nameHint": "Tên trần trỏ vào port chính (demo-app.example.com); các port khác là tên-nhãn (demo-app-api.example.com). Chữ thường, chữ số và dấu gạch ngang.",
+    "rename": "Đổi tên",
+    "renamed": "Địa chỉ mới: {name}",
+    "primary": "chính",
+    "label": "Nhãn",
+    "labelEdit": "Đổi nhãn",
+    "labelSave": "Lưu",
+    "labelSaved": "Port {port} giờ là “{label}”",
+    "labelPh": "vd. api",
+    "alias": "Địa chỉ cũ",
+    "aliasHint": "Địa chỉ cũ dạng key-port vẫn dùng được.",
+    "guessable": "URL theo tên dễ đoán. App riêng tư hãy bật “Yêu cầu token”.",
+    "exposeLabel": "Nhãn (tuỳ chọn)"
   },
   "gateway": {
     "title": "Gateway domain",
@@ -1668,6 +1683,9 @@
     "provPublic": "preview công khai",
     "provNone": "không có host preview",
     "reserved": "Subdomain dành riêng (không bao giờ trỏ vào box)",
-    "recheck": "Kiểm tra ngay"
+    "recheck": "Kiểm tra ngay",
+    "labelPattern": "Các port khác",
+    "aliasPattern": "Địa chỉ cũ (alias)",
+    "guessable": "URL theo tên đoán được: app riêng tư hãy dùng chế độ token (URL token)."
   }
 }

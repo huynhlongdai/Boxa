@@ -292,6 +292,13 @@ TOK=$("$BIN/box" url "$AB" $APORT --token --ttl 10m | awk '/^token /{print $2}')
 C=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "$GW?token=$TOK"); [[ $C == 302* && $C != *bxt_* ]] && pass "?token= exchanged for a cookie + redirect without it" || fail "query token $C"
 TID=$("$BIN/box" url "$AB" $APORT --tokens | awk 'NR==2{print $1}'); "$BIN/box" url "$AB" $APORT --revoke "$TID" >/dev/null
 [ "$(curl -s -o /dev/null -w '%{http_code}' -H "X-Boxaz-Token: $TOK" "$GW")" = 401 ] && pass "revoked token → 401" || fail "revoke"
+echo "== v1.9 readable gateway names"
+[[ $GW == "$BOXAZ_URL/x/e2e-app/" ]] && pass "gateway URL is the box name, no numbers: $GW" || fail "name url $GW"
+"$BIN/box" url "$AB" $APORT --public >/dev/null
+N=$("$BIN/box" url "$AB" --name "Shop E2E" | sed -n 1p); [ "$N" = "name: shop-e2e" ] || fail "rename $N"
+P=$(KEY=$AKEY api GET /boxes/$AB/ports); NGW=$BOXAZ_URL$(echo "$P" | jq -r .ports[0].gateway_url); AL=$BOXAZ_URL$(echo "$P" | jq -r .ports[0].alias_url)
+[ "$(curl -s "$NGW")" = app-ok ] && [ "$(curl -s "$AL")" = app-ok ] && [ "$(curl -s -o /dev/null -w '%{http_code}' "$GW")" = 404 ] && pass "box url --name: $NGW serves the app, alias $(basename "$AL") still works, old name 404" || fail "renamed $NGW $AL"
+O=$("$BIN/box" url "$AB" --name hark 2>&1) && fail "reserved name accepted" || { [[ $O == *reserved* ]] && pass "reserved name refused: $(echo "$O" | sed -n 1p | cut -c1-70)…" || fail "reserved $O"; }
 api GET /capabilities | jq -e 'any(.items[]; .provider=="e2b" and .wake_on_http_native and .memory_pause) and any(.items[]; .provider=="prized" and (.inbound_http|not)) and all(.items[]; .wake_via_gateway)' >/dev/null && pass "GET /capabilities: lifecycle flags per provider" || fail caps
 "$BIN/box" down "$AB" >/dev/null
 
