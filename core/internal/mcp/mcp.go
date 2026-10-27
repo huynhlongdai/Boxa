@@ -322,6 +322,13 @@ func callTool(ctx context.Context, c Caller, name string, a args) (int, []byte, 
 		if err := need("box_id"); err != nil {
 			return 0, nil, err
 		}
+		if name == "box_ssh_info" && a.s("public_key") != "" { // v1.11 short-lived certificate
+			in := map[string]any{"box": a.s("box_id"), "public_key": a.s("public_key")}
+			if a.has("ttl_s") {
+				in["ttl_s"] = int(a.num("ttl_s"))
+			}
+			return c.Do(ctx, "POST", "/ssh/certs", in)
+		}
 		if name == "box_forward" && a.has("port") {
 			st, b, err := c.Do(ctx, "POST", "/boxes/"+esc(a.s("box_id"))+"/forward-ports", map[string]any{"port": int(a.num("port"))})
 			if err != nil || st >= 300 {
@@ -329,6 +336,53 @@ func callTool(ctx context.Context, c Caller, name string, a args) (int, []byte, 
 			}
 		}
 		return c.Do(ctx, "GET", "/boxes/"+esc(a.s("box_id"))+"/access", nil)
+	case "box_browser":
+		if err := need("box_id"); err != nil {
+			return 0, nil, err
+		}
+		base := "/boxes/" + esc(a.s("box_id")) + "/browser"
+		switch a.s("action") {
+		case "status":
+			return c.Do(ctx, "GET", base, nil)
+		case "stop":
+			return c.Do(ctx, "DELETE", base, nil)
+		}
+		in := map[string]any{}
+		if a.has("ttl_s") {
+			in["ttl_s"] = int(a.num("ttl_s"))
+		}
+		if a.has("headless") {
+			in["headless"] = a.b("headless")
+		}
+		return c.Do(ctx, "POST", base, in)
+	case "box_desktop":
+		if err := need("box_id"); err != nil {
+			return 0, nil, err
+		}
+		base := "/boxes/" + esc(a.s("box_id")) + "/desktop"
+		in := map[string]any{}
+		if a.has("ttl_s") {
+			in["ttl_s"] = int(a.num("ttl_s"))
+		}
+		if a.has("view_only") {
+			in["view_only"] = a.b("view_only")
+		}
+		switch a.s("action") {
+		case "status":
+			return c.Do(ctx, "GET", base, nil)
+		case "stop":
+			return c.Do(ctx, "DELETE", base, nil)
+		case "share":
+			return c.Do(ctx, "POST", base+"/shares", in)
+		case "shares":
+			return c.Do(ctx, "GET", base+"/shares", nil)
+		case "revoke_shares":
+			return c.Do(ctx, "DELETE", base+"/shares/all", nil)
+		}
+		if a.has("width") {
+			in["width"], in["height"] = int(a.num("width")), int(a.num("height"))
+		}
+		return c.Do(ctx, "POST", base, in)
 	case "box_terminal_sessions":
 		if err := need("box_id"); err != nil {
 			return 0, nil, err

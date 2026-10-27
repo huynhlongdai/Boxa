@@ -60,10 +60,10 @@ func (s *Server) routesAccessP1(r chi.Router) {
 
 // routesAccessP1Open registers the v1.11 sockets and pages (own auth).
 func (s *Server) routesAccessP1Open(r chi.Router) {
-	r.HandleFunc("/boxes/{id}/cdp", func(w http.ResponseWriter, r *http.Request) {
+	r.Get("/boxes/{id}/cdp", func(w http.ResponseWriter, r *http.Request) {
 		s.accessCDP(w, r, nil, "/v1/boxes/"+chi.URLParam(r, "id")+"/cdp")
 	})
-	r.HandleFunc("/boxes/{id}/cdp/*", func(w http.ResponseWriter, r *http.Request) {
+	r.Get("/boxes/{id}/cdp/*", func(w http.ResponseWriter, r *http.Request) {
 		s.accessCDP(w, r, nil, "/v1/boxes/"+chi.URLParam(r, "id")+"/cdp")
 	})
 	r.Get("/boxes/{id}/vnc", func(w http.ResponseWriter, r *http.Request) { s.accessVNC(w, r, nil) })

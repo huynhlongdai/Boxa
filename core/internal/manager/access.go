@@ -732,6 +732,8 @@ type AccessInfo struct {
 	TCP      AccessTCP         `json:"tcp"`
 	Terminal AccessTerminal    `json:"terminal"`
 	SSH      AccessSSH         `json:"ssh"`
+	CDP      AccessAddon       `json:"cdp"`     // v1.11 browser endpoint
+	Desktop  AccessAddon       `json:"desktop"` // v1.11 VNC desktop
 	Commands map[string]string `json:"commands"`
 	Notes    []string          `json:"notes,omitempty"`
 	Tickets  string            `json:"tickets"` // POST endpoint
@@ -743,6 +745,16 @@ type AccessTCP struct {
 	CoreURL      string `json:"core_url"` // wss://core/v1/boxes/{id}/tcp?port={port}
 	AllowedPorts []int  `json:"allowed_ports"`
 	Auth         string `json:"auth"`
+}
+
+// AccessAddon describes the on-demand browser or desktop of a box (v1.11).
+type AccessAddon struct {
+	URL     string `json:"url"`      // wss://<name>.<domain>/.boxaz/{cdp,vnc}?ticket=…
+	CoreURL string `json:"core_url"` // same on core
+	Page    string `json:"page,omitempty"`
+	Start   string `json:"start"` // REST call that starts it and returns a ticketed URL
+	Running bool   `json:"running"`
+	Clients int    `json:"clients"`
 }
 
 // AccessTerminal describes the durable web terminal.
@@ -778,7 +790,7 @@ func (m *Manager) Access(ctx context.Context, p *Principal, ref string) (*Access
 		name = b.Slug
 	}
 	out := &AccessInfo{BoxID: b.ID, Name: name, Live: m.LiveAccess(b.ID), Commands: map[string]string{},
-		Tickets: "POST /v1/boxes/" + b.ID + "/tickets {purpose: terminal|tcp|ssh, port?, ttl_s?}"}
+		Tickets: "POST /v1/boxes/" + b.ID + "/tickets {purpose: terminal|tcp|ssh|cdp|vnc, port?, ttl_s?, view_only?}"}
 	if d := m.GatewayDomain(ctx); d != "" && b.Subdomain != "" {
 		out.Host = b.Subdomain + "." + d
 	}
@@ -808,12 +820,27 @@ func (m *Manager) Access(ctx context.Context, p *Principal, ref string) (*Access
 	known, fp := m.SSHKnownHosts()
 	out.SSH = AccessSSH{URL: h, CoreURL: c, Host: alias, ProxyCommand: "box ssh-proxy %h", Command: "box ssh " + name,
 		KnownHosts: known, Fingerprint: fp, Direct: m.SSHDirect(),
-		Features: "shell, exec, pty, env, window-change, signals, local port forwarding (ssh -L, VS Code / Cursor Remote-SSH), sftp when the box has an sftp-server; no -R / agent / X11 forwarding",
+		Features: "shell, exec, pty, env, window-change, signals, local port forwarding (ssh -L, VS Code / Cursor Remote-SSH), sftp / scp always (the box's sftp-server, else served by core), short-lived user certificates (POST /v1/ssh/certs); no -R / agent / X11 forwarding",
 		Config:   SSHConfigBlock([]string{alias}, "box ssh-proxy %h")}
 	out.Commands["forward"] = "box forward " + name + " <remote-port> [local-port]"
 	out.Commands["ssh"] = "box ssh " + name
 	out.Commands["ssh_exec"] = "box ssh " + name + " -- uname -a"
 	out.Commands["ssh_config"] = "box ssh-config --write"
+	out.Commands["ssh_cert"] = "box ssh-cert " + name + " --ttl 12h"
+	out.Commands["sftp"] = "box sftp " + name + " put ./file.txt /tmp/"
+	out.Commands["scp"] = "scp -o ProxyCommand='box ssh-proxy %h' -o HostKeyAlias=" + SSHHostKeyAlias + " ./file.txt boxaz@" + alias + ":/tmp/"
+	out.Commands["browser"] = "box browser " + name
+	out.Commands["desktop"] = "box desktop " + name
+	out.Commands["desktop_share"] = "box desktop " + name + " --share --ttl 1h"
+	live := m.LiveAccess(b.ID)
+	a := m.addonsOf(b.ID)
+	a.mu.Lock()
+	bUp, dUp := a.browserUp, a.desktopUp
+	a.mu.Unlock()
+	h, c = m.accessURLs(ctx, b, model.PurposeCDP, 0, "")
+	out.CDP = AccessAddon{URL: h, CoreURL: c, Start: "POST /v1/boxes/" + b.ID + "/browser", Running: bUp, Clients: live["cdp"]}
+	h, c = m.accessURLs(ctx, b, model.PurposeVNC, 0, "")
+	out.Desktop = AccessAddon{URL: h, CoreURL: c, Page: strings.TrimSuffix(m.desktopPageURL(ctx, b, "ticket", ""), "?ticket="), Start: "POST /v1/boxes/" + b.ID + "/desktop", Running: dUp, Clients: live["vnc"]}
 	out.Commands["ssh_proxy"] = "ssh -o ProxyCommand='box ssh-proxy %h' -o HostKeyAlias=" + SSHHostKeyAlias + " boxaz@" + alias
 	if out.SSH.Direct != "" {
 		host, port, _ := net.SplitHostPort(out.SSH.Direct)
