@@ -409,6 +409,26 @@ export class Boxaz {
   /** Gateway domain, box URL pattern (v1.9 https://<name>.<domain>/ + label/alias patterns), reserved subdomains, provider-preview policy; check probes the public URL. */
   gateway(check = false) { return this.request<GatewayInfo>("GET", "/gateway", { query: check ? { check: "1" } : undefined }); }
 
+  // ---- v1.10 access: tickets, TCP forward, SSH gateway, durable terminal ----
+  /** How to reach the box beyond HTTP: commands (box forward / box ssh / ssh-config), WebSocket endpoints, allowed TCP ports, terminal sessions, SSH host key. */
+  access(id: string) { return this.request<AccessInfo>("GET", `/boxes/${enc(id)}/access`); }
+  /** Single-use access ticket (terminal | tcp | ssh): `ticket` is shown once, `url` is the WebSocket to open; redeem before expires_at (default 60 s). */
+  ticket(id: string, purpose: TicketPurpose, opts: { port?: number; ttl_s?: number; session_id?: string; allow?: boolean } = {}) {
+    return this.request<AccessTicket>("POST", `/boxes/${enc(id)}/tickets`, { body: { purpose, ...opts } });
+  }
+  tickets(id: string) { return this.request<List<AccessTicket>>("GET", `/boxes/${enc(id)}/tickets`); }
+  /** Revoke one ticket (or "all"); the sessions it opened close. */
+  revokeTicket(id: string, ticketId = "all") { return this.request<{ revoked: number }>("DELETE", `/boxes/${enc(id)}/tickets/${enc(ticketId)}`); }
+  /** Add an in-box port to the TCP forward allowlist (exposed ports and 22 always are). */
+  allowForwardPort(id: string, port: number) { return this.request<{ box_id: string; allowed_ports: number[] }>("POST", `/boxes/${enc(id)}/forward-ports`, { body: { port } }); }
+  terminals(id: string) { return this.request<List<TerminalSession> & { detach_ttl_s: number }>("GET", `/boxes/${enc(id)}/terminals`); }
+  killTerminal(id: string, sessionId = "all") { return this.request<{ killed: number }>("DELETE", `/boxes/${enc(id)}/terminals/${enc(sessionId)}`); }
+  /** SSH gateway host key (known_hosts line + fingerprint), direct listener, ProxyCommand. */
+  sshInfo() { return this.request<{ known_hosts: string; host_key_fingerprint: string; host_key_alias: string; direct: string; proxy_command: string; domain: string }>("GET", "/ssh"); }
+  sshKeys() { return this.request<List<SshKey>>("GET", "/ssh/keys"); }
+  addSshKey(publicKey: string, name?: string) { return this.request<SshKey>("POST", "/ssh/keys", { body: { public_key: publicKey, name } }); }
+  deleteSshKey(keyId: string) { return this.request<{ deleted: boolean }>("DELETE", `/ssh/keys/${enc(keyId)}`); }
+
   // ---- misc ----
   templates() { return this.request<List<Template>>("GET", "/templates"); }
   overview() { return this.request<Record<string, unknown>>("GET", "/overview"); }
@@ -511,6 +531,26 @@ export interface PortView { port: number; url: string; kind: string; public: boo
 export interface PortsResult { box_id: string; url: string; /** v1.9 */ name?: string; primary_port?: number; ports: PortView[] }
 export interface UrlToken { id: string; box_id: string; port: number; label?: string; prefix: string; token?: string; url?: string; expires_at: string; created_at: string; revoked_at?: string; expired?: boolean }
 export interface LifecycleCaps { memory_pause: boolean; wake_on_http_native: boolean; wake_via_gateway: boolean; fork: boolean; inbound_http: boolean; max_runtime: number; private_preview?: boolean; note?: string }
+// v1.10 access
+export type TicketPurpose = "terminal" | "tcp" | "ssh";
+export interface AccessTicket {
+  id: string; box_id: string; purpose: TicketPurpose; port?: number; session_id?: string; prefix: string;
+  /** Only in the create response. */ ticket?: string; url?: string; core_url?: string; command?: string;
+  expires_at: string; created_at: string; redeemed_at?: string; revoked_at?: string; live?: number;
+}
+export interface TerminalSession {
+  id: string; box_id: string; name?: string; cols: number; rows: number; viewers: number; controlled: boolean;
+  created_at: string; last_io: string; detached_at?: string; expires_at?: string; exited?: boolean; exit_code?: number; buffered_bytes: number;
+}
+export interface SshKey { id: string; name: string; public_key: string; fingerprint: string; agent_id?: string; created_at: string }
+export interface AccessInfo {
+  box_id: string; name?: string; host?: string; link: "boxd" | "agent" | "agent-on-demand" | "none"; live: Record<string, number>;
+  tcp: { url: string; core_url: string; allowed_ports: number[]; auth: string };
+  terminal: { url: string; core_url: string; detach_ttl_s: number; sessions: TerminalSession[] };
+  ssh: { url: string; core_url: string; host: string; proxy_command: string; command: string; config: string; known_hosts: string; host_key_fingerprint: string; direct?: string; features: string };
+  commands: Record<string, string>; notes?: string[]; tickets: string;
+}
+
 export interface GatewayInfo {
   mode: "host" | "path" | "relative"; domain: string; domain_source: "env" | "settings" | "none"; public_url: string; url_pattern: string; /** v1.9 */ label_pattern?: string; alias_pattern?: string; internet_facing: boolean;
   reserved: string[]; provider_preview: "auto" | "private" | "public"; provider_preview_source: "env" | "settings" | "default"; private_previews: boolean;

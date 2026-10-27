@@ -87,10 +87,10 @@ test("discovery + tool formats", { skip }, async () => {
   assert.equal((await bx.health()).ok, true);
   assert.equal((await bx.agentKinds()).items.length, 22);
   const oa = await asOpenAITools(bx);
-  assert.equal(oa.length, 26);
+  assert.equal(oa.length, 30);
   assert.ok(oa.some((t) => t.function.name === "box_exec_batch"));
   assert.equal((await asAnthropicTools(bx))[0].input_schema.type, "object");
-  assert.equal((await asGeminiTools(bx))[0].functionDeclarations.length, 26);
+  assert.equal((await asGeminiTools(bx))[0].functionDeclarations.length, 30);
   assert.ok((await bx.llmsTxt()).startsWith("# Boxaz"));
   assert.equal((await bx.openapi()).openapi, "3.1.0");
   const sn = await new Boxaz({ apiKey: admin, baseUrl: url }).snippet(agentId, undefined, "zh");
@@ -238,6 +238,31 @@ test("v1.7 supervised app / gateway wake / URL tokens / capabilities", { skip },
     assert.ok(pv.name === "ts-shop" && pv.ports[0].gateway_url!.endsWith("/x/ts-shop/") && pv.ports[0].primary && pv.ports[0].alias_url!.endsWith(`-${port}/`));
     assert.equal((await bx.setPortLabel(box.id, port, "site")).label, "site");
     await assert.rejects(bx.renameUrl(box.id, "hark"), /reserved/);
+  } finally {
+    await bx.deleteBox(box.id);
+  }
+});
+
+test("v1.10 access: tickets, forward allowlist, terminals, ssh keys", { skip }, async () => {
+  const bx = new Boxaz({ apiKey: key, baseUrl: url });
+  const box = await bx.createBox({ template: "base", lifecycle: "session", slug: "sdk-ts-acc" });
+  try {
+    const t = await bx.ticket(box.id, "terminal");
+    assert.ok(t.ticket!.startsWith("bxa_") && t.url!.includes("ticket=bxa_") && t.url!.includes("/terminal"));
+    await assert.rejects(bx.ticket(box.id, "tcp", { port: 6392 }), /allowlist/);
+    const tt = await bx.ticket(box.id, "tcp", { port: 6392, allow: true });
+    assert.ok(tt.url!.includes("port=6392"));
+    const items = (await bx.tickets(box.id)).items;
+    assert.ok(items.length === 2 && items.every((i) => !i.ticket));
+    assert.equal((await bx.revokeTicket(box.id)).revoked, 2);
+    assert.ok((await bx.allowForwardPort(box.id, 6393)).allowed_ports.includes(6392));
+    const a = await bx.access(box.id);
+    assert.ok(a.commands.forward.startsWith("box forward ") && a.tcp.allowed_ports.includes(6393) && a.ssh.config.includes("ssh-proxy"));
+    assert.deepEqual((await bx.terminals(box.id)).items, []);
+    assert.equal((await bx.sshInfo()).host_key_alias, "boxaz-ssh");
+    const k = await bx.addSshKey("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHriFbNRs2ilXN0Y7F+viZSJ0GcP4uLy8TuLjh/ttcww sdk-test");
+    assert.ok(k.fingerprint.startsWith("SHA256:") && k.name === "sdk-test");
+    await bx.deleteSshKey(k.id);
   } finally {
     await bx.deleteBox(box.id);
   }

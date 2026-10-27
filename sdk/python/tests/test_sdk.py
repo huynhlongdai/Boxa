@@ -15,10 +15,10 @@ def test_discovery(core):
     assert len(bx.agent_kinds()["items"]) == 22
     tools = as_openai_tools(bx)
     names = {t["function"]["name"] for t in tools}
-    assert {"box_up", "box_exec_batch", "box_fork", "box_quote"} <= names and len(names) == 26
+    assert {"box_up", "box_exec_batch", "box_fork", "box_quote"} <= names and len(names) == 30
     assert as_openai_tools(bx, responses_api=True)[0]["name"] == "box_ensure"
     assert as_anthropic_tools(bx)[0]["input_schema"]["type"] == "object"
-    assert len(as_gemini_tools(bx)[0]["functionDeclarations"]) == 26
+    assert len(as_gemini_tools(bx)[0]["functionDeclarations"]) == 30
     assert bx.llms_txt().startswith("# Boxaz")
     assert bx.openapi()["openapi"] == "3.1.0"
 
@@ -253,5 +253,39 @@ def test_v17_app_gateway_tokens(core):
             with pytest.raises(Exception) as ei:
                 bx.rename_url(box["id"], "hark")
             assert "reserved" in str(ei.value)
+        finally:
+            bx.down(box["id"])
+
+
+SSH_PUB = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHriFbNRs2ilXN0Y7F+viZSJ0GcP4uLy8TuLjh/ttcww sdk-test"
+
+
+def test_v110_access(core):
+    from boxaz import Boxaz, BoxazError
+    url, akey = core["url"], core["key"]
+    with Boxaz(akey, url) as bx:
+        box = bx.up(template="base", lifecycle="session", slug="sdk-py-acc")
+        try:
+            t = bx.ticket(box["id"], "terminal")
+            assert t["ticket"].startswith("bxa_") and "ticket=bxa_" in t["url"] and "/terminal" in t["url"]
+            with pytest.raises(BoxazError):
+                bx.ticket(box["id"], "tcp")  # needs a port
+            with pytest.raises(BoxazError):
+                bx.ticket(box["id"], "tcp", port=6390)  # not in the allowlist
+            tt = bx.ticket(box["id"], "tcp", port=6390, allow=True)
+            assert "port=6390" in tt["url"]
+            items = bx.tickets(box["id"])["items"]
+            assert len(items) == 2 and all("ticket" not in i and "hash" not in i for i in items)
+            assert bx.revoke_ticket(box["id"])["revoked"] == 2
+            assert 6390 in bx.allow_forward_port(box["id"], 6391)["allowed_ports"]
+            a = bx.access(box["id"])
+            assert a["commands"]["forward"].startswith("box forward ") and 6391 in a["tcp"]["allowed_ports"]
+            assert "ssh-proxy" in a["ssh"]["config"] and a["ssh"]["known_hosts"].startswith("boxaz-ssh ssh-ed25519 ")
+            assert bx.terminals(box["id"])["items"] == []
+            assert bx.ssh_info()["host_key_alias"] == "boxaz-ssh"
+            k = bx.add_ssh_key(SSH_PUB)
+            assert k["fingerprint"].startswith("SHA256:") and k["name"] == "sdk-test"
+            assert any(x["id"] == k["id"] for x in bx.ssh_keys()["items"])
+            bx.delete_ssh_key(k["id"])
         finally:
             bx.down(box["id"])

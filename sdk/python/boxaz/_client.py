@@ -389,6 +389,53 @@ class _Base:
         subdomains and provider-preview policy; ``check=True`` probes the public URL."""
         return self._call("GET", "/gateway" + ("?check=1" if check else ""))
 
+    # -- v1.10 access: tickets, TCP forward, SSH gateway, durable terminal ------
+    def access(self, box_id: str) -> Dict[str, Any]:
+        """How to reach the box beyond HTTP: ``commands`` (box forward / box ssh / ssh-config), the
+        WebSocket endpoints (``tcp.url``, ``terminal.url``, ``ssh.url``), allowed TCP ports, terminal
+        sessions and the SSH gateway host key (``ssh.known_hosts``)."""
+        return self._call("GET", f"/boxes/{_q(box_id)}/access")
+
+    def ticket(self, box_id: str, purpose: str, *, port: Optional[int] = None, ttl_s: Optional[int] = None,
+               session_id: Optional[str] = None, allow: Optional[bool] = None) -> Dict[str, Any]:
+        """Single-use access ticket (``purpose`` = "terminal" | "tcp" | "ssh"). ``ticket`` (bxa_…) is shown
+        once with ``url`` = the WebSocket to open (``…&ticket=``); redeem it before ``expires_at``
+        (default 60 s). tcp needs ``port``; ``allow=True`` adds it to the forward allowlist."""
+        return self._call("POST", f"/boxes/{_q(box_id)}/tickets", _clean({"purpose": purpose, "port": port, "ttl_s": ttl_s,
+                                                                          "session_id": session_id, "allow": allow}))
+
+    def tickets(self, box_id: str) -> Dict[str, Any]:
+        return self._call("GET", f"/boxes/{_q(box_id)}/tickets")
+
+    def revoke_ticket(self, box_id: str, ticket_id: str = "all") -> Dict[str, Any]:
+        """Revoke one ticket (or "all"); sessions opened with it close within a second."""
+        return self._call("DELETE", f"/boxes/{_q(box_id)}/tickets/{_q(ticket_id)}")
+
+    def allow_forward_port(self, box_id: str, port: int) -> Dict[str, Any]:
+        """Add an in-box port to the TCP forward allowlist (exposed ports and 22 always are)."""
+        return self._call("POST", f"/boxes/{_q(box_id)}/forward-ports", {"port": int(port)})
+
+    def terminals(self, box_id: str) -> Dict[str, Any]:
+        """Durable terminal sessions of the box (``items``: id, viewers, cols, rows, expires_at…)."""
+        return self._call("GET", f"/boxes/{_q(box_id)}/terminals")
+
+    def kill_terminal(self, box_id: str, session_id: str = "all") -> Dict[str, Any]:
+        return self._call("DELETE", f"/boxes/{_q(box_id)}/terminals/{_q(session_id)}")
+
+    def ssh_info(self) -> Dict[str, Any]:
+        """SSH gateway host key (known_hosts line + fingerprint), direct listener, ProxyCommand."""
+        return self._call("GET", "/ssh")
+
+    def ssh_keys(self) -> Dict[str, Any]:
+        return self._call("GET", "/ssh/keys")
+
+    def add_ssh_key(self, public_key: str, name: Optional[str] = None) -> Dict[str, Any]:
+        """Register a public key for the direct SSH listener (``ssh <box-name>@ssh.<domain>``)."""
+        return self._call("POST", "/ssh/keys", _clean({"public_key": public_key, "name": name}))
+
+    def delete_ssh_key(self, key_id: str) -> Dict[str, Any]:
+        return self._call("DELETE", f"/ssh/keys/{_q(key_id)}")
+
     # -- misc ----------------------------------------------------------------
     def templates(self) -> Dict[str, List[Template]]:
         return self._call("GET", "/templates")
