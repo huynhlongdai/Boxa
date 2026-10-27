@@ -7,11 +7,13 @@ package api
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -30,13 +32,18 @@ const gatewayCookie = "boxaz_ut"
 // values with the bxt_ prefix are consumed, so an app's own ?token= is kept.
 var tokenQueryParams = []string{"token", "boxaz_token", legacyTokenParam}
 
-var previewTransport = func() *http.Transport {
-	t := http.DefaultTransport.(*http.Transport).Clone()
-	t.MaxIdleConnsPerHost = 16
-	t.IdleConnTimeout = 60 * time.Second
-	t.ForceAttemptHTTP2 = false // keep WebSocket upgrades on HTTP/1.1
-	return t
-}()
+// previewTransport talks HTTP/1.1 only (ALPN http/1.1): WebSocket upgrades
+// need it, and a clone of DefaultTransport would still offer h2 via ALPN.
+var previewTransport = &http.Transport{
+	Proxy:                 http.ProxyFromEnvironment,
+	DialContext:           (&net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+	TLSClientConfig:       &tls.Config{NextProtos: []string{"http/1.1"}},
+	TLSNextProto:          map[string]func(string, *tls.Conn) http.RoundTripper{},
+	MaxIdleConnsPerHost:   16,
+	IdleConnTimeout:       60 * time.Second,
+	TLSHandshakeTimeout:   10 * time.Second,
+	ExpectContinueTimeout: time.Second,
+}
 
 // gatewayToken finds a Boxaz URL token in the request: header, query, cookie.
 func gatewayToken(r *http.Request) (tok, src string) {
@@ -250,6 +257,14 @@ func (s *Server) proxyGateway(w http.ResponseWriter, r *http.Request, b *model.B
 				pr.Out.Host = inHost
 			}
 			h := pr.Out.Header
+			// edge headers of the inbound hop (Cloudflare tunnel / CDN) must not
+			// reach an upstream that sits behind a CDN itself (loop detection)
+			for k := range h {
+				lk := strings.ToLower(k)
+				if strings.HasPrefix(lk, "cf-") || lk == "cdn-loop" || lk == "true-client-ip" || lk == "x-real-ip" || strings.HasPrefix(lk, "x-forwarded-") {
+					h.Del(k)
+				}
+			}
 			h.Del("X-Boxaz-Token")
 			h.Del("X-Boxaz-No-Wake")
 			if strings.HasPrefix(h.Get("Authorization"), "Bearer "+manager.URLTokenPrefix) {

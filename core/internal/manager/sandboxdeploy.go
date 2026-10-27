@@ -290,6 +290,11 @@ func (m *Manager) cloneSandbox(ctx context.Context, p *Principal, src *model.Box
 		if err := m.Hub.Call(ctx, h.ID, proto.MCreate, proto.CreateParams{BoxID: nb.ID, AgentID: nb.AgentID, AgentsMD: m.agentsMD(ctx, nb, agent)}, nil); err != nil {
 			return fail(mapHostErr(err))
 		}
+		// the fork copied the source's memory: its in-box ingress agent and
+		// quick tunnels would dial in as the source box (and steal its
+		// traffic); stop them in the child, the clone gets its own on demand
+		m.Hub.Call(ctx, h.ID, proto.MExec, proto.ExecParams{BoxID: nb.ID, Cwd: "/", TimeoutS: 30, TailLines: 5,
+			Command: `D="$HOME/.boxd"; for f in "$D"/ingress.pid "$D"/tunnel-*.pid; do [ -f "$f" ] && kill "$(cat "$f")" 2>/dev/null; rm -f "$f"; done; true`}, nil)
 		method = srcHost.Provider + " native fork"
 	} else {
 		sn, err := m.snapshotBox(ctx, src, p.Actor())
