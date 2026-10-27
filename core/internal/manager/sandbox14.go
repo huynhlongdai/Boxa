@@ -80,7 +80,7 @@ func (m *Manager) attachShim(ctx context.Context, h *model.Host) error {
 	if err != nil {
 		return err
 	}
-	m.Hub.RegisterVirtual(h.ID, sandbox.NewShim(sp.Driver(), sandbox.ParseCred(tok), h.ProviderRef))
+	m.Hub.RegisterVirtual(h.ID, m.newShim(sp, sandbox.ParseCred(tok), h.ProviderRef))
 	return nil
 }
 
@@ -158,7 +158,7 @@ func (m *Manager) createSandboxHost(ctx context.Context, p *Principal, sp sandbo
 		if h.Region == "" {
 			h.Region = "global"
 		}
-		m.Hub.RegisterVirtual(h.ID, sandbox.NewShim(sp.Driver(), sandbox.ParseCred(token), hd.Ref))
+		m.Hub.RegisterVirtual(h.ID, m.newShim(sp, sandbox.ParseCred(token), hd.Ref))
 		how = "T3: exec-only shim at the gateway"
 	}
 	m.Store.PutHost(ctx, h)
@@ -212,7 +212,7 @@ func (m *Manager) decorateSandboxOption(ctx context.Context, o *selector.Option,
 	}
 	note := fmt.Sprintf("%s sandbox (%s, %s): per-second billing", info.Name, info.Caps.Isolation, o.Tier)
 	if o.Tier == "T3" {
-		note += "; exec-only shim: no terminal, snapshots or egress rules"
+		note += "; exec-only shim: no terminal or egress rules (snapshots are tarballs kept by the gateway)"
 	}
 	o.Notes = append(o.Notes, note)
 	if info.Pricing.Confidence != "docs" {

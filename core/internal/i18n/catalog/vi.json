@@ -85,7 +85,11 @@
   "Wake the box first (box_sleep wake=true) or fork a snapshot instead.": "Đánh thức box trước (box_sleep wake=true) hoặc fork từ snapshot.",
   "Your agent policy does not allow this; ask the operator to change the policy.": "Chính sách của agent không cho phép việc này; nhờ người vận hành đổi chính sách.",
   "min is 0..20 and max >= min.": "min từ 0 đến 20 và max >= min.",
-  "priority is 0..99 (0 = chain order); caps are >= 0 (0 = no cap).": "priority từ 0 đến 99 (0 = theo thứ tự chuỗi); các trần >= 0 (0 = không giới hạn)."
+  "priority is 0..99 (0 = chain order); caps are >= 0 (0 = no cap).": "priority từ 0 đến 99 (0 = theo thứ tự chuỗi); các trần >= 0 (0 = không giới hạn).",
+  "Clone of a T2 (boxd dial-in) sandbox is not supported; switch the provider to sandbox_mode=shim or use box_fork with object storage.": "Chưa hỗ trợ nhân bản sandbox T2 (boxd dial-in); chuyển nhà cung cấp sang sandbox_mode=shim hoặc dùng box_fork với object storage.",
+  "Pass the port your server listens on, e.g. 8000.": "Truyền cổng mà server của bạn đang lắng nghe, ví dụ 8000.",
+  "Retry, or box_fork (snapshot based) instead.": "Thử lại, hoặc dùng box_fork (dựa trên snapshot).",
+  "Wake the box first (box_sleep wake=true).": "Đánh thức box trước (box_sleep wake=true)."
  },
  "msg": {
   "%s bootstrap exit %d: %s": "%s: lệnh khởi động thoát với mã %d: %s",
@@ -227,7 +231,12 @@
   "value is required": "thiếu value",
   "warm pool %d: invalid min/max": "warm pool %d: min/max không hợp lệ",
   "warm pool %d: template is required": "warm pool %d: cần chọn template",
-  "yaml: %s": "yaml: %s"
+  "yaml: %s": "yaml: %s",
+  "%s fork: %v": "%s fork: %v",
+  "cannot clone a dial-in sandbox box": "không thể nhân bản box sandbox kiểu dial-in",
+  "native fork needs a running sandbox": "fork gốc của nhà cung cấp cần sandbox đang chạy",
+  "port must be 1-65535": "cổng phải trong khoảng 1-65535",
+  "provider %s is not a sandbox provider": "nhà cung cấp %s không phải nhà cung cấp sandbox"
  },
  "text": {
   "agentsmd.budget_box": "$%.2f cho box này",

@@ -60,6 +60,9 @@ func (m *Manager) Clone(ctx context.Context, p *Principal, id string, in CloneIn
 	if err != nil {
 		return nil, err
 	}
+	if h, err := m.Store.GetHost(ctx, src.HostID); err == nil && h.Billing == "sandbox" {
+		return m.cloneSandbox(ctx, p, src, h, agent, slug)
+	}
 	now := time.Now().UTC()
 	nb := &model.Box{ID: secret.ID("box"), Slug: slug, AgentID: src.AgentID, AgentName: src.AgentName, Status: model.StatusProvisioning,
 		Lifecycle: src.Lifecycle, Template: src.Template, Spec: src.Spec, Provider: src.Provider, Region: src.Region, HostID: src.HostID,

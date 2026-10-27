@@ -61,8 +61,8 @@ func TestToolMapping(t *testing.T) {
 	if r.Error == nil || r.Error.Code != -32601 {
 		t.Fatalf("%+v", r)
 	}
-	if len(Tools) != 21 {
-		t.Fatalf("contract v1.3 requires 21 tools, have %d", len(Tools))
+	if len(Tools) != 22 {
+		t.Fatalf("contract v1.5 requires 22 tools, have %d", len(Tools))
 	}
 }
 

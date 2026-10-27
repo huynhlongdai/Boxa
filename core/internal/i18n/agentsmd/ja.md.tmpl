@@ -33,4 +33,5 @@
 - 長いコマンド: `async: true` にして `box_job(job_id, wait_s=30)` で待ちます。
 - 複数コマンド: `box_exec_batch`（1 往復）。
 - 危険な変更の前にスナップショット（`box_snapshot`）を取り、`box_restore` や `box_fork` で別案を試せます。
+- Web アプリの公開: 0.0.0.0:<port> でバックグラウンド起動し（`box_exec` async）、`box_url(port)` で公開 HTTPS URL を取得します。
 - 作業が終わったら `box_down` でボックスを削除してください。

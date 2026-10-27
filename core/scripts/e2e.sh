@@ -119,11 +119,11 @@ tar tzf "$SNAPFILE" | grep -q 'work/notes/a.txt' && pass "snapshot = tar.gz cont
 echo "== MCP"
 R=$(curl -s -X POST "$BOXA_URL/mcp" -H "Authorization: Bearer $AKEY" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
 N=$(echo "$R" | jq '.result.tools | length'); echo "    tools: $(echo "$R" | jq -c '[.result.tools[].name]')"
-[ "$N" = 21 ] && pass "MCP HTTP tools/list → 21 tools" || fail "mcp http"
+[ "$N" = 22 ] && pass "MCP HTTP tools/list → 22 tools" || fail "mcp http"
 R=$(curl -s -X POST "$BOXA_URL/mcp" -H "Authorization: Bearer $AKEY" -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"box_exec\",\"arguments\":{\"box_id\":\"$BOX\",\"command\":\"echo via-mcp\"}}}")
 echo "$R" | jq -e '.result.isError==false and .result.structuredContent.stdout_tail=="via-mcp"' >/dev/null && pass "MCP tools/call box_exec" || fail "mcp call"
 R=$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' '{"jsonrpc":"2.0","method":"notifications/initialized"}' '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | "$BIN/box" mcp)
-[ "$(echo "$R" | jq -s '.[] | select(.id==2) | .result.tools | length')" = 21 ] && pass "MCP stdio (box mcp) tools/list → 21 tools" || fail "mcp stdio"
+[ "$(echo "$R" | jq -s '.[] | select(.id==2) | .result.tools | length')" = 22 ] && pass "MCP stdio (box mcp) tools/list → 22 tools" || fail "mcp stdio"
 
 echo "== v1.1 discovery (no auth)"
 curl -sf "$BOXA_URL/v1/openapi.json" | jq -e '.openapi=="3.1.0" and (.paths|has("/v1/quote")) and (.paths|has("/v1/boxes/{id}/fork"))' >/dev/null \
@@ -131,10 +131,10 @@ curl -sf "$BOXA_URL/v1/openapi.json" | jq -e '.openapi=="3.1.0" and (.paths|has(
 LT=$(curl -sf "$BOXA_URL/llms.txt"); [[ $LT == "# Boxa"* ]] && pass "llms.txt" || fail llms
 LF=$(curl -sf -H 'Accept-Language: vi' "$BOXA_URL/llms-full.txt"); grep -q 'Bắt đầu nhanh' <<<"$LF" && grep -q '/a2a' <<<"$LF" && pass "llms-full.txt localized (vi)" || fail llms-full
 curl -sf "$BOXA_URL/.well-known/mcp.json" | jq -e '.transport.url|endswith("/mcp")' >/dev/null && pass ".well-known/mcp.json" || fail mcpcard
-curl -sf "$BOXA_URL/.well-known/agent.json" | jq -e '.protocolVersion=="0.3.0" and (.skills|length)==22' >/dev/null && pass ".well-known/agent.json (A2A card, exec + 21 tool skills)" || fail agentcard
+curl -sf "$BOXA_URL/.well-known/agent.json" | jq -e '.protocolVersion=="0.3.0" and (.skills|length)==23' >/dev/null && pass ".well-known/agent.json (A2A card, exec + 22 tool skills)" || fail agentcard
 for F in openai anthropic gemini mcp; do
   N=$(curl -sf "$BOXA_URL/v1/tools?format=$F" | jq 'if type=="array" then (if .[0].functionDeclarations then .[0].functionDeclarations|length else length end) else .tools|length end')
-  [ "$N" = 21 ] && pass "tools?format=$F → $N" || fail "tools $F ($N)"
+  [ "$N" = 22 ] && pass "tools?format=$F → $N" || fail "tools $F ($N)"
 done
 [ "$(curl -sf $BOXA_URL/v1/agent-kinds | jq '.items|length')" = 22 ] && pass "agent-kinds → 22" || fail kinds
 
@@ -258,6 +258,12 @@ SH=$(api GET /hosts | jq -c --arg h "$SHID" '[.items[]|select(.id==$h)][0]|{bill
 [ "$SH" = '{"billing":"sandbox","driver":"shim","provider":"fakesbx"}' ] && pass "box placed on a single-box sandbox host (T3 shim): $SH" || fail "sbxhost $SH"
 J=$(KEY=$AKEY api POST /boxes/$SBID/exec -d '{"command":"echo sbx-ok > f.txt && cat f.txt && pwd"}')
 echo "$J" | jq -e '.exit_code==0 and (.stdout_tail|test("sbx-ok")) and (.stdout_tail|test("sbxhome/work"))' >/dev/null && pass "exec through the YAML adapter + T3 shim (/work mapped into the sandbox)" || { echo "$J"; fail sbxexec; }
+SN=$(KEY=$AKEY api POST /boxes/$SBID/snapshot -d '{}')
+echo "$SN" | jq -e '.size_mb>0 and (.location|startswith("local://"))' >/dev/null && pass "T3 snapshot: tarball pulled to core ($(echo "$SN" | jq -c '{size_mb,location}'))" || { echo "$SN"; fail sbxsnap; }
+KEY=$AKEY api POST /boxes/$SBID/exec -d '{"command":"echo broken > f.txt"}' >/dev/null
+KEY=$AKEY api POST /boxes/$SBID/restore -d "{\"snapshot_id\":\"$(echo "$SN" | jq -r .id)\"}" >/dev/null
+[ "$("$BIN/box" read "$SBID" f.txt)" = sbx-ok ] && pass "T3 restore puts /work back (f.txt = sbx-ok)" || fail sbxrestore
+P=$("$BIN/box" url "$SBID" 8000); [[ $P == 8000*none* ]] && pass "box url on a provider without previews says so: $(echo $P | cut -c1-60)…" || fail "sbxurl $P"
 "$BIN/box" down "$SBID" >/dev/null
 for i in $(seq 40); do grep -q '^DELETE /v1/sandboxes/' "$WORK/fsb/calls.log" && break; sleep 0.25; done
 grep -q '^DELETE /v1/sandboxes/' "$WORK/fsb/calls.log" && pass "box down → sandbox deleted at the provider (per-second billing stops)" || fail sbxdelete

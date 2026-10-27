@@ -1406,7 +1406,7 @@
     "tierHelp": {
       "T1": "Raw server/VM: boxd + Incus, billed hourly or monthly",
       "T2": "Sandbox API: boxd runs inside the sandbox and dials in to Core; full terminal and snapshots",
-      "T3": "Exec-only API: a gateway shim answers for boxd; no terminal, snapshots or egress rules"
+      "T3": "Exec-only API: a gateway shim answers for boxd; no terminal or egress rules; snapshots are tarballs kept by the gateway, preview URLs where the provider has them"
     },
     "ver": {
       "live": "Live-verified",

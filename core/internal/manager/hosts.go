@@ -31,10 +31,10 @@ func (m *Manager) AuthHost(ctx context.Context, token string) (any, error) {
 		return hostAuth{global: true}, nil
 	}
 	h := secret.Hash(token)
-	if host, err := m.Store.GetHostByToken(ctx, h); err == nil {
+	if host, err := m.Store.GetHostByToken(ctx, h); err == nil && host.Status != "deleted" {
 		return hostAuth{hostID: host.ID}, nil
 	}
-	if host, err := m.Store.GetHostByBootstrap(ctx, h); err == nil {
+	if host, err := m.Store.GetHostByBootstrap(ctx, h); err == nil && host.Status != "deleted" {
 		return hostAuth{hostID: host.ID, bootstrap: true}, nil
 	}
 	return nil, errors.New("unknown host token")
@@ -80,6 +80,9 @@ func (m *Manager) RegisterHost(ctx context.Context, a any, hello proto.Hello) (p
 			return proto.Welcome{}, err
 		}
 		host = h
+	}
+	if host.Status == "deleted" {
+		return proto.Welcome{}, errors.New("host " + host.ID + " was deleted")
 	}
 	w := proto.Welcome{HostID: host.ID}
 	if j := m.meshJoin(ctx, host); j != nil {
@@ -162,7 +165,7 @@ func (m *Manager) HostMetrics(hostID string, mt proto.Metrics) {
 
 func (m *Manager) HostDisconnected(hostID string) {
 	ctx := context.Background()
-	if h, err := m.Store.GetHost(ctx, hostID); err == nil {
+	if h, err := m.Store.GetHost(ctx, hostID); err == nil && h.Status != "deleted" {
 		h.Connected = false
 		m.Store.PutHost(ctx, h)
 		m.Emit(ctx, "system", "", "", "host.disconnected", "host "+hostID+" tunnel closed", nil)
@@ -356,14 +359,17 @@ func (m *Manager) destroyHost(ctx context.Context, h *model.Host, actor, why str
 			}
 		}
 	}
-	if p, ok := m.Hub.Peer(h.ID); ok {
-		p.Close()
-	}
-	m.Hub.RegisterVirtual(h.ID, nil)
+	// Persist the deletion before closing the tunnel: HostDisconnected (and a
+	// boxd that redials at once) must find the host already deleted, or a
+	// stale read-modify-write resurrects it as ready.
 	h.Status, h.Connected, h.TokenHash, h.BootstrapHash = "deleted", false, "", ""
 	if err := m.Store.PutHost(ctx, h); err != nil {
 		return err
 	}
+	if p, ok := m.Hub.Peer(h.ID); ok {
+		p.Close()
+	}
+	m.Hub.RegisterVirtual(h.ID, nil)
 	m.Emit(ctx, actor, "", "", "host.deleted", "host "+h.ID+" destroyed: "+why, nil)
 	m.Broker.Publish(events.Msg{Type: "overview.updated", Data: map[string]any{"reason": "host.deleted"}, Public: true})
 	return nil

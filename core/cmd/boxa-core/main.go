@@ -115,6 +115,7 @@ func main() {
 		LocalPriceMonth:    localPrice,
 		LedgerInterval:     envDur("BOXA_LEDGER_INTERVAL", time.Minute),
 		ReaperInterval:     envDur("BOXA_REAPER_INTERVAL", 30*time.Second),
+		SnapshotDir:        filepath.Join(dataDir, "snapshots"),
 		PriceFeedInterval:  envDur("BOXA_PRICE_FEED_INTERVAL", 6*time.Hour),
 		PriceFeedURL:       env("BOXA_PRICE_FEED_URL", "https://battleships.dev"),
 		PriceFeedAllowlist: allow,

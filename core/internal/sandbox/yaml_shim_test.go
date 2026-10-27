@@ -302,8 +302,38 @@ func TestShimT3(t *testing.T) {
 	if len(lr.Boxes) != 1 {
 		t.Fatal(lr)
 	}
-	if err := call(proto.MSnapshot, proto.SnapshotParams{BoxID: "b1"}, nil); err == nil || !strings.Contains(err.Error(), "exec-only") {
-		t.Fatalf("snapshot must be unsupported: %v", err)
+	// T3 snapshot: tarball pulled to the gateway; restore in place and fork
+	// (Create) onto another sandbox
+	s.SnapDir = t.TempDir()
+	var sr proto.SnapshotResult
+	if err := call(proto.MSnapshot, proto.SnapshotParams{BoxID: "b1", SnapshotID: "snap_1"}, &sr); err != nil || !strings.HasPrefix(sr.Location, "local://") || sr.SizeMB <= 0 {
+		t.Fatalf("snapshot %+v %v", sr, err)
+	}
+	os.WriteFile(filepath.Join(root, "work", "src", "a.py"), []byte("broken\n"), 0o644)
+	os.WriteFile(filepath.Join(root, "work", "junk.txt"), []byte("x"), 0o644)
+	if err := call(proto.MRestore, proto.RestoreParams{BoxID: "b1", SnapshotID: "snap_1", Location: sr.Location}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, "work", "src", "a.py")); string(b) != "x = 1\nprint(x)\n" {
+		t.Fatalf("restored a.py %q", b)
+	}
+	if _, err := os.Stat(filepath.Join(root, "work", "junk.txt")); err == nil {
+		t.Fatal("restore must replace /work")
+	}
+	root2 := t.TempDir()
+	s2 := NewShim(&localDriver{root: root2}, Cred{}, "l2")
+	if err := s2.Call(bg, proto.MRestore, proto.RestoreParams{BoxID: "b2", SnapshotID: "snap_1", Location: sr.Location, Create: true,
+		Box: proto.CreateParams{AgentsMD: "# fork\n", Setup: []string{"exit 9"}}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root2, "work", "src", "a.py")); string(b) != "x = 1\nprint(x)\n" {
+		t.Fatalf("forked a.py %q", b)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root2, "AGENTS.md")); string(b) != "# fork\n" {
+		t.Fatalf("a fork keeps its own AGENTS.md: %q", b)
+	}
+	if pe, ok := call(proto.MClone, proto.CloneParams{SourceID: "b1", BoxID: "b3"}, nil).(*proto.Error); !ok || pe.Code != "UNSUPPORTED" {
+		t.Fatal("in-host clone stays unsupported on a T3 shim")
 	}
 	if err := call(proto.MDelete, proto.BoxRef{BoxID: "b1"}, nil); err != nil {
 		t.Fatal(err)

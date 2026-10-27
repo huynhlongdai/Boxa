@@ -85,7 +85,11 @@
   "Wake the box first (box_sleep wake=true) or fork a snapshot instead.": "先唤醒 box（box_sleep wake=true），或改为从快照 fork。",
   "Your agent policy does not allow this; ask the operator to change the policy.": "你的智能体策略不允许此操作；请让运维人员修改策略。",
   "min is 0..20 and max >= min.": "min 为 0..20，且 max >= min。",
-  "priority is 0..99 (0 = chain order); caps are >= 0 (0 = no cap).": "priority 为 0..99（0 = 按链顺序）；上限 >= 0（0 = 不限）。"
+  "priority is 0..99 (0 = chain order); caps are >= 0 (0 = no cap).": "priority 为 0..99（0 = 按链顺序）；上限 >= 0（0 = 不限）。",
+  "Clone of a T2 (boxd dial-in) sandbox is not supported; switch the provider to sandbox_mode=shim or use box_fork with object storage.": "不支持克隆 T2（boxd dial-in）沙箱；请将提供商切换为 sandbox_mode=shim，或配合对象存储使用 box_fork。",
+  "Pass the port your server listens on, e.g. 8000.": "请传入服务器监听的端口，例如 8000。",
+  "Retry, or box_fork (snapshot based) instead.": "请重试，或改用 box_fork（基于快照）。",
+  "Wake the box first (box_sleep wake=true).": "请先唤醒 box（box_sleep wake=true）。"
  },
  "msg": {
   "%s bootstrap exit %d: %s": "%s 引导命令退出码 %d：%s",
@@ -227,7 +231,12 @@
   "value is required": "必须提供 value",
   "warm pool %d: invalid min/max": "预热池 %d：min/max 无效",
   "warm pool %d: template is required": "预热池 %d：需要指定模板",
-  "yaml: %s": "yaml：%s"
+  "yaml: %s": "yaml：%s",
+  "%s fork: %v": "%s 分叉：%v",
+  "cannot clone a dial-in sandbox box": "无法克隆 dial-in 模式的沙箱 box",
+  "native fork needs a running sandbox": "原生分叉需要正在运行的沙箱",
+  "port must be 1-65535": "端口必须在 1-65535 之间",
+  "provider %s is not a sandbox provider": "提供商 %s 不是沙箱提供商"
  },
  "text": {
   "agentsmd.budget_box": "本盒子 $%.2f",

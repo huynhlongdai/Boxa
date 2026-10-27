@@ -20,6 +20,8 @@ func (s *Server) routesV13(r chi.Router) {
 	r.Post("/boxes/ensure", s.ensure)
 	r.Get("/boxes/{id}/resume", s.resume)
 	r.Post("/boxes/{id}/clone", s.clone)
+	r.Get("/boxes/{id}/ports", s.boxPorts)
+	r.Post("/boxes/{id}/ports", s.exposePort)
 	r.Get("/boxes/{id}/rightsize", s.rightsizeBox)
 	r.Get("/rightsize", s.rightsizeAll)
 	r.Get("/catalog", s.catalog)
@@ -125,6 +127,29 @@ func (s *Server) clone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 201, withNext(b, nextForBox(b)))
+}
+
+func (s *Server) boxPorts(w http.ResponseWriter, r *http.Request) {
+	res, err := s.M.Ports(r.Context(), pr(r), chi.URLParam(r, "id"))
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	writeJSON(w, 200, res)
+}
+
+func (s *Server) exposePort(w http.ResponseWriter, r *http.Request) {
+	var in manager.ExposeInput
+	if err := decode(r, &in); err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	res, err := s.M.Expose(r.Context(), pr(r), chi.URLParam(r, "id"), in)
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	writeJSON(w, 200, res)
 }
 
 func (s *Server) rightsizeBox(w http.ResponseWriter, r *http.Request) {

@@ -72,3 +72,11 @@ EOF
 - `GET /v1/sandbox/providers` (tier, adapter, verification, capabilities, per-second prices, regions, docs), `POST /v1/sandbox/adapters/lint` (validate a custom YAML adapter). `PUT /v1/providers/{id}/token` returns `group`, `adapter`, `verification`, `docs`.
 - `POST /v1/recommend` accepts `untrusted` and `fork`; container-based sandboxes are rejected for untrusted code. Catalog rows carry `tier` and per-second price.
 - Env: `BOXA_SANDBOX_ADAPTERS_DIR`, `BOXA_SANDBOX_MODE=auto|dial|shim`, `BOXA_AUTO_SANDBOX`, `BOXA_PROVIDER_CHAIN` (T1 chain then sandbox chain), `BOXA_PUBLIC_URL` must be internet-reachable for T2 dial mode.
+
+## v1.5 additions (2026-10-27) — deploying apps on sandbox boxes
+- `GET /v1/boxes/{id}/ports` → `{box_id, url, ports:[{port, url, kind: provider-preview|ingress|none, public, note?}]}`; `POST /v1/boxes/{id}/ports {port}` exposes a port of a live box (same answer, the new port first). Sandbox boxes answer with the provider's preview host (E2B `https://<port>-<id>.e2b.app`, Novita `https://<port>-<id>.<domain>`); the box `url` is the first port's preview URL. Providers without previews (Prized) answer `kind=none`.
+- MCP adds `box_url {box_id, port?}` (22 tools); CLI `box url <box> [port]`, `box clone <box> [--slug]`.
+- T3 (shim) boxes now support `box_snapshot` / `box_restore` / `box_fork`: the snapshot is a tar.gz of `/work`, `/memory`, `AGENTS.md` kept by core (`location=local://…`, ≤64 MB unless object storage is configured, then uploaded from the sandbox); a T3 snapshot restores into any T3 box and forks onto a fresh sandbox of the same provider.
+- `POST /v1/boxes/{id}/clone` on a sandbox box: provider-native fork when the provider has one (E2B, Prized; memory and running processes included), else snapshot → new sandbox → restore (Novita). `placement_reason` names the method.
+- `box_sleep` on a sandbox box pauses it at the provider; wake resumes it (also for reaper idle sleep).
+

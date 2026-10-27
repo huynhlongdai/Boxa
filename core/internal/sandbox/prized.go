@@ -34,7 +34,7 @@ type prizedSandbox struct {
 func NewPrized(c *http.Client, base string) *Prized {
 	p := &Prized{h: newHTTP(c), base: strings.TrimRight(orStr(base, "https://api.prized.dev/api/v1"), "/"), tb: map[string]string{}}
 	p.info = Info{ID: "prized", Name: "Prized Sandboxes", Tier: "T2", Adapter: "native", Verification: VerifiedLive,
-		VerifiedNote: "Full lifecycle verified live on the free tier on 2026-10-27: create (wait=running) ~3.8 s, exec ~50-200 ms, file put/get, pause/resume, fork, delete; also boxa-core box up/exec/down end to end.",
+		VerifiedNote: "Full lifecycle verified live on the free tier on 2026-10-27: create (wait=running) ~3.8 s, exec ~50-200 ms, file put/get, pause/resume, fork, delete; also boxa-core box up/exec/down end to end. Deploy test 2026-10-27: no preview URL (ports report kind none), sleep/wake ~0.3 s, T3 snapshot ~0.32 s, restore ~0.79 s, clone via native fork ~1.2 s.",
 		Docs:         "https://prized.dev/docs/sandboxes-api", Website: "https://prized.dev/sandboxes", Initials: "PZ", Color: "#7c5cff",
 		Caps:    Capabilities{Background: true, Pause: true, Fork: true, Files: true, BootMS: 4000, MaxLifetimeS: 7 * 24 * 3600, MaxCPU: 32, MaxRAMMB: 131072, Isolation: "microvm"},
 		Pricing: Pricing{CPUSecond: 0.04 / 3600, GBSecond: 0.0125 / 3600, DiskGBSecond: 0.0001 / 3600, Source: "https://prized.dev/docs/billing#sandboxes", Confidence: "docs", Note: "per second, no minimum; paused = storage only"},

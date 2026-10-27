@@ -53,6 +53,7 @@ type Config struct {
 	AutoSandbox        bool             // v1.4: box_up may create sandboxes without approval (BOXA_AUTO_SANDBOX)
 	SandboxMode        string           // v1.4: auto | dial (T2) | shim (T3) default for sandbox providers
 	SandboxEmptyAfter  time.Duration    // v1.4: destroy an empty sandbox host after this (default 1 min)
+	SnapshotDir        string           // T3 sandbox snapshots (gateway tarballs); default $BOXA_DATA_DIR/snapshots
 	ObjectStore        *objstore.Config // snapshot storage from env (nil = settings/local)
 	TelegramAPI        string           // override https://api.telegram.org (tests)
 	// v1.3

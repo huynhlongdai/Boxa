@@ -170,6 +170,10 @@ func TestE2BRecorded(t *testing.T) {
 	if err != nil || ch.ID != "sbx2" || ch.Template != "base" {
 		t.Fatalf("fork %+v %v", ch, err)
 	}
+	// preview host as served live (2026-10-27: https://8000-<id>.e2b.app → 200, public)
+	if u, err := d.PreviewURL(bg, c, "sbx2", 8000); err != nil || u != "https://8000-sbx2.e2b.app" {
+		t.Fatalf("preview %q %v", u, err)
+	}
 	if _, err := d.Exec(bg, c, "sbx2", ExecRequest{Command: "true"}); err != nil {
 		t.Fatal(err)
 	}
@@ -245,6 +249,10 @@ func TestNovitaRecorded(t *testing.T) {
 	}
 	if b, err := d.GetFile(bg, c, "nsb1", "/home/user/a.txt"); err != nil || string(b) != "data" {
 		t.Fatalf("getfile %q %v", b, err)
+	}
+	// preview host on the sandbox's region domain (live: us-phx-1 → https://8000-<id>.us-phx-1.sandbox.novita.ai, no traffic token)
+	if u, err := d.PreviewURL(bg, c, "nsb1", 8000); err != nil || u != "https://8000-nsb1.sandbox.novita.ai" {
+		t.Fatalf("preview %q %v", u, err)
 	}
 	if err := d.Pause(bg, c, "nsb1"); err != nil {
 		t.Fatal(err)

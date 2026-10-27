@@ -25,7 +25,7 @@ import (
 // ToolNames is the MCP tool list advertised in AGENTS.md (kept in sync with
 // internal/mcp by a test there).
 var ToolNames = []string{"box_ensure", "box_recommend", "box_up", "box_quote", "box_exec", "box_exec_batch", "box_job", "box_logs", "box_read", "box_write",
-	"box_grep", "box_observe", "box_snapshot", "box_restore", "box_clone", "box_fork", "box_sleep", "box_down", "box_list", "box_cost", "box_templates"}
+	"box_grep", "box_observe", "box_snapshot", "box_restore", "box_clone", "box_fork", "box_url", "box_sleep", "box_down", "box_list", "box_cost", "box_templates"}
 
 // BaseURL is the public URL agents use to reach core.
 func (m *Manager) BaseURL() string {
@@ -479,7 +479,9 @@ func (m *Manager) Restore(ctx context.Context, p *Principal, id string, in Resto
 		return nil, model.EH(model.ErrInvalid, "Use box_fork to start a new box from this snapshot.", "cannot restore a box in status %s", b.Status)
 	}
 	download := ""
-	if sn.HostID != "" && sn.HostID != b.HostID {
+	_, snapShim := m.shimHost(ctx, sn.HostID)
+	_, boxShim := m.shimHost(ctx, b.HostID)
+	if sn.HostID != "" && sn.HostID != b.HostID && !(snapShim && boxShim && sn.Storage == "local") {
 		if download = m.presignSnapshot(ctx, sn, "GET"); download == "" {
 			return nil, model.EH(model.ErrInvalid, "Use box_fork to start a new box from this snapshot.", "snapshot %s is on another host", sn.ID)
 		}
@@ -546,6 +548,14 @@ func (m *Manager) Fork(ctx context.Context, p *Principal, id string, in RestoreI
 	hostID := sn.HostID
 	if hostID == "" {
 		hostID = src.HostID
+	}
+	if sh, ok := m.shimHost(ctx, hostID); ok && sh.Billing == "sandbox" {
+		// T3 snapshot (tarball at the gateway): fork onto a fresh sandbox
+		slug, err := m.uniqueSlug(ctx, in.Slug, src.Slug+"-fork")
+		if err != nil {
+			return nil, err
+		}
+		return m.forkSandboxSnapshot(ctx, p, src, sn, sh, agent, slug)
 	}
 	// Snapshots in object storage can be forked onto any host; local ones
 	// only on the host that holds them.

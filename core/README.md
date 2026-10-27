@@ -280,7 +280,7 @@ Ngoài VPS/VM thô (T1), Boxa thuê được sandbox của các dịch vụ "San
 
 **Hai cách chạy (`sandbox_mode`, theo provider hoặc `BOXA_SANDBOX_MODE`).**
 - **T2 – dial-in:** core chạy `boxd --dial` trong sandbox bằng bootstrap token dùng một lần, boxd gọi ngược về core qua `BOXA_PUBLIC_URL` và đăng ký như một host bình thường (đủ terminal, snapshot, egress). Cần sandbox giữ được tiến trình nền và core có URL công khai.
-- **T3 – shim:** core trả lời các RPC của boxd bằng exec/file API của provider (`internal/sandbox/shim.go`). Không cần URL công khai, nhưng không có terminal, snapshot hay luật egress.
+- **T3 – shim:** core trả lời các RPC của boxd bằng exec/file API của provider (`internal/sandbox/shim.go`). Không cần URL công khai, nhưng không có terminal hay luật egress. Snapshot T3 là tarball `/work`+`/memory` do core giữ (`internal/sandbox/shimsnap.go`), xem mục 11.
 - `auto` (mặc định) chọn T2 khi provider là T2, giữ được tiến trình nền và `BOXA_PUBLIC_URL` đã đặt, ngược lại thì T3.
 
 **Adapter.** Có hai loại adapter, đều nằm trong `internal/sandbox`. Loại *native* viết bằng Go. Loại *YAML* là adapter khai báo: route HTTP, cách xác thực, đường dẫn JSON, ánh xạ trạng thái. Adapter YAML dựng sẵn nằm trong `builtin/*.yaml`; muốn thêm thì bỏ file vào `BOXA_SANDBOX_ADAPTERS_DIR`. Trước khi nạp, kiểm tra file bằng `POST /v1/sandbox/adapters/lint` (admin key) hoặc màn hình **Hạ tầng → Sandbox API → Adapter YAML tuỳ chỉnh**.
@@ -344,4 +344,30 @@ Mức xác minh: **live** = đã gọi API thật bằng key thật (chỉ các 
 | `E2B_API_KEY`, `DAYTONA_API_KEY`, `PRIZED_API_KEY`, … | — | kết nối provider sandbox lúc khởi động (xem cột "Biến môi trường") |
 
 **Kiểm thử v1.4.** `go test ./...` gồm `sandbox/native_test.go` (httptest cho từng adapter native), `yaml_shim_test.go` (engine YAML + shim), `selector/sandbox_test.go`, `e2e/v14_test.go` (failover sang shim T3, boxd dial-in T2, dọn dẹp). Test live cho Prized là tuỳ chọn: chỉ đọc `BOXA_LIVE_PRIZED=1 PRIZED_API_KEY=…`; tạo sandbox thật (vài giây, free tier) `BOXA_LIVE_PRIZED_CREATE=1 PRIZED_API_KEY=… go test ./internal/sandbox -run PrizedLive`; end to end qua boxa-core `PRIZED_API_KEY=… scripts/live-prized.sh` (shim T3; thêm `PRIZED_MODE=dial BOXA_PUBLIC_URL=https://… BOXA_DIST_DIR=…` cho T2, ví dụ qua cloudflared quick tunnel). Script luôn xoá sandbox nhãn `managed=1` khi kết thúc. E2B / Novita tương tự: `BOXA_LIVE_E2B_CREATE=1 E2B_API_KEY=… go test ./internal/sandbox -run E2BLive` (hoặc `BOXA_LIVE_NOVITA_CREATE=1 NOVITA_API_KEY=… … -run NovitaLive`), end to end `E2B_API_KEY=… scripts/live-e2b.sh` / `NOVITA_API_KEY=… scripts/live-novita.sh`. Danh sách sandbox của E2B trễ vài giây sau khi tạo/xoá, nên script kiểm tra bằng `GET /sandboxes/{id}`. Mọi thứ gửi tới provider (tên, nhãn/metadata `managed`/`mgr-host`, User-Agent) đều trung tính, không chứa tên sản phẩm. `scripts/e2e.sh` có mục v1.4: một adapter YAML trỏ tới `scripts/fake-sandbox.py` (sandbox REST chỉ exec, chạy trên localhost). Mục này kiểm tra lint, kết nối, recommend, tạo box trên host sandbox (shim T3), exec, và sandbox bị xoá khi box kết thúc.
+
+## 11. Deploy app trên sandbox (URL công khai, sleep, snapshot, clone)
+
+Agent dùng box sandbox để chạy web app thật: `box up` → `git clone` + cài đặt → chạy server ở `0.0.0.0:<port>` → lấy URL công khai từ Boxa.
+
+- **URL công khai của port.** Box sandbox lấy URL preview của provider: E2B `https://<port>-<sandboxID>.e2b.app`, Novita `https://<port>-<sandboxID>.<domain>` (vd. `us-phx-1.sandbox.novita.ai`, không cần traffic token), Daytona theo API preview. `url` của box là URL của port đầu tiên trong `ports`. `GET /v1/boxes/:id/ports` liệt kê từng port `{port, url, kind: provider-preview|ingress|none, public, note}`; `POST /v1/boxes/:id/ports {port}` mở thêm port cho box đang chạy. CLI `box url <box> [port]`, MCP tool mới `box_url {box_id, port?}`. Provider không có preview (Prized) trả `kind=none` kèm gợi ý. Khi box ngủ, URL trả 502 cho tới khi wake.
+- **Sleep / wake.** `box sleep` = pause của provider, `box wake` = resume (shim T3 và host T2). Idle sleep của reaper (`idle_minutes`) dùng cùng đường này. Đo live: tiến trình app và file còn nguyên sau khi wake, URL phục vụ lại ngay.
+- **Snapshot T3.** Shim tar `work memory AGENTS.md` trong sandbox, kéo về core (`$BOXA_DATA_DIR/snapshots/<snap>.tar.gz`, `location=local://…`, tối đa 64 MB; lớn hơn cần object storage, khi đó sandbox tự upload lên URL presign). Restore đẩy tarball lên và giải nén thay `/work` + `/memory` (giữ AGENTS.md của box). Snapshot của shim restore được vào box sandbox khác; `box fork` từ snapshot T3 tạo một sandbox mới cùng provider. Retention xoá cả file tarball ở core.
+- **Clone box sandbox.** Provider có fork gốc (E2B, Prized): `POST /boxes/:id/clone` gọi fork của provider (bộ nhớ + đĩa, tiến trình đang chạy cũng được nhân bản), rồi đăng ký sandbox con thành host T3 mới. Provider không có fork (Novita): snapshot → sandbox mới → restore (file được nhân bản, tiến trình phải chạy lại). Box T2 dial-in chưa clone được (trả gợi ý dùng `sandbox_mode=shim`).
+- **Sửa lỗi.** Host đã xoá không còn bị "sống lại": `destroyHost` ghi trạng thái `deleted` trước khi đóng tunnel, `HostDisconnected` bỏ qua host đã xoá, và boxd của host đã xoá không đăng ký lại được (trước đây boxd kết nối lại ngay sau khi bị đóng có thể ghi đè host thành `ready`).
+
+Kết quả live 2026-10-27 (`scripts/live-deploy.sh`, repo `heroku/node-js-sample`, Express trên cổng 8000):
+
+| | E2B | Novita | Prized |
+|---|---|---|---|
+| box up | 0.44 s | 0.69 s | 4.2 s |
+| clone + `npm install` | 3.0 s | 3.0 s | 3.7 s |
+| URL công khai → 200 "Hello World!" | có, 0.14 s | có, 0.2 s | không có preview |
+| sleep (pause) / wake (resume) | 0.19 s / 0.17 s | 0.77 s / 0.21 s | 0.34 s / 0.30 s |
+| tiến trình + file sau wake | còn | còn | file còn |
+| idle sleep (`idle_minutes=1`) | 65 s | 65 s | — |
+| snapshot / restore (0.7 MB) | 0.26 s / 0.14 s | 0.78 s / 0.44 s | 0.32 s / 0.79 s |
+| fork snapshot → sandbox mới | 0.56 s | 1.2 s | — |
+| clone | 1.8 s, fork gốc, app chạy ngay | 1.6 s, qua snapshot, chạy lại app | 1.2 s, fork gốc |
+
+Chạy: `E2B_API_KEY=… scripts/live-deploy.sh`, `SANDBOX_PROVIDER=novita NOVITA_API_KEY=… scripts/live-deploy.sh` (`SKIP_FORK=1`, `SKIP_IDLE=1` để ít sandbox / nhanh hơn). Script tạo tối đa 2 sandbox cùng lúc, có watchdog xoá mọi sandbox `managed=1` sau 280 s, và kiểm tra provider không còn sandbox nào. Test không cần mạng: `e2e/deploy_test.go` (provider giả có/không fork: URL preview, ports, sleep→pause, snapshot/restore, fork, clone, dọn dẹp) và `TestShimT3` (snapshot/restore/fork của shim).
 

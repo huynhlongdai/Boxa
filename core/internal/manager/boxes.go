@@ -427,6 +427,14 @@ func (m *Manager) boxURL(ctx context.Context, b *model.Box, h *model.Host) strin
 	if len(b.Ports) == 0 {
 		return ""
 	}
+	if h != nil && h.Billing == "sandbox" {
+		// sandbox boxes are reached through the provider's preview host
+		// (E2B https://<port>-<id>.e2b.app, Novita …sandbox.novita.ai)
+		if u := m.sandboxPreview(ctx, h, b.Ports[0]); u != "" {
+			return u + "/"
+		}
+		return ""
+	}
 	s := m.Settings(ctx)
 	var u string
 	if s.BaseDomain == "" || s.BaseDomain == "sslip.io" {

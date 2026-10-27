@@ -85,7 +85,11 @@
   "Wake the box first (box_sleep wake=true) or fork a snapshot instead.": "先にボックスを起こす（box_sleep wake=true）か、スナップショットから fork してください。",
   "Your agent policy does not allow this; ask the operator to change the policy.": "エージェントのポリシーで許可されていません。運用者にポリシー変更を依頼してください。",
   "min is 0..20 and max >= min.": "min は 0〜20、max は min 以上にしてください。",
-  "priority is 0..99 (0 = chain order); caps are >= 0 (0 = no cap).": "priority は 0〜99（0 = チェーン順）、上限は 0 以上（0 = 無制限）です。"
+  "priority is 0..99 (0 = chain order); caps are >= 0 (0 = no cap).": "priority は 0〜99（0 = チェーン順）、上限は 0 以上（0 = 無制限）です。",
+  "Clone of a T2 (boxd dial-in) sandbox is not supported; switch the provider to sandbox_mode=shim or use box_fork with object storage.": "T2（boxd dial-in）サンドボックスのクローンは未対応です。プロバイダーを sandbox_mode=shim に切り替えるか、オブジェクトストレージと box_fork を使ってください。",
+  "Pass the port your server listens on, e.g. 8000.": "サーバーが待ち受けているポートを指定してください（例: 8000）。",
+  "Retry, or box_fork (snapshot based) instead.": "再試行するか、代わりに box_fork（スナップショット方式）を使ってください。",
+  "Wake the box first (box_sleep wake=true).": "先に box を起こしてください（box_sleep wake=true）。"
  },
  "msg": {
   "%s bootstrap exit %d: %s": "%s のブートストラップが終了コード %d で失敗: %s",
@@ -227,7 +231,12 @@
   "value is required": "value は必須です",
   "warm pool %d: invalid min/max": "ウォームプール %d: min/max が不正です",
   "warm pool %d: template is required": "ウォームプール %d: テンプレートが必要です",
-  "yaml: %s": "yaml: %s"
+  "yaml: %s": "yaml: %s",
+  "%s fork: %v": "%s フォーク：%v",
+  "cannot clone a dial-in sandbox box": "dial-in 方式のサンドボックス box はクローンできません",
+  "native fork needs a running sandbox": "ネイティブフォークには実行中のサンドボックスが必要です",
+  "port must be 1-65535": "ポートは 1-65535 の範囲で指定してください",
+  "provider %s is not a sandbox provider": "プロバイダー %s はサンドボックスプロバイダーではありません"
  },
  "text": {
   "agentsmd.budget_box": "このボックスに $%.2f",

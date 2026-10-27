@@ -43,6 +43,8 @@ Env: BOXA_URL (default http://localhost:8080), BOXA_API_KEY, BOXA_LANG (vi|en|zh
   box batch <box> [--keep-going] -- <cmd1> ;; <cmd2> ;; ...
   box restore <box> [snapshot_id]
   box fork <box> [snapshot_id] [--slug name]
+  box clone <box> [--slug name]                 (sandbox boxes: provider-native fork when available)
+  box url <box> [port]                          (public URL of a port; with a port, exposes it)
   box yaml <box>
   box mcp                                       (stdio MCP server)
 `
@@ -136,8 +138,10 @@ func main() {
 		err = cmdQuote(ctx, c, args)
 	case "batch":
 		err = cmdBatch(ctx, c, args)
-	case "restore", "fork":
+	case "restore", "fork", "clone":
 		err = cmdRestoreFork(ctx, c, cmd, args)
+	case "url", "ports":
+		err = cmdURL(ctx, c, args)
 	case "yaml":
 		err = cmdYAML(ctx, c, args)
 	case "mcp":
@@ -639,6 +643,50 @@ func cmdRestoreFork(ctx context.Context, c *client.Client, verb string, args []s
 		return err
 	}
 	fmt.Printf("%v  %v  %v\n", b["id"], b["slug"], b["status"])
+	if u, _ := b["url"].(string); u != "" {
+		fmt.Println(u)
+	}
+	return nil
+}
+
+// cmdURL prints the public URL of each port (POST exposes a new port).
+func cmdURL(ctx context.Context, c *client.Client, args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: box url <box> [port]")
+	}
+	var res manager.PortsResult
+	p := "/boxes/" + url.PathEscape(args[0]) + "/ports"
+	var err error
+	if len(args) > 1 {
+		port, perr := strconv.Atoi(args[1])
+		if perr != nil {
+			return fmt.Errorf("port must be a number: %q", args[1])
+		}
+		err = c.JSON(ctx, "POST", p, map[string]any{"port": port}, &res)
+	} else {
+		err = c.JSON(ctx, "GET", p, nil, &res)
+	}
+	if err != nil {
+		return err
+	}
+	if len(res.Ports) == 0 {
+		fmt.Println("no ports exposed; run: box url " + args[0] + " <port>")
+		return nil
+	}
+	for i, v := range res.Ports {
+		if len(args) > 1 && i > 0 {
+			break
+		}
+		u := v.URL
+		if u == "" {
+			u = "-"
+		}
+		fmt.Printf("%d\t%s\t%s", v.Port, u, v.Kind)
+		if v.Note != "" && v.URL == "" {
+			fmt.Printf("\t%s", v.Note)
+		}
+		fmt.Println()
+	}
 	return nil
 }
 

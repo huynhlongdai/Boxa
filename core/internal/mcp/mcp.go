@@ -255,6 +255,14 @@ func callTool(ctx context.Context, c Caller, name string, a args) (int, []byte, 
 			return 0, nil, err
 		}
 		return c.Do(ctx, "POST", "/boxes/"+esc(a.s("box_id"))+"/snapshot", map[string]any{})
+	case "box_url":
+		if err := need("box_id"); err != nil {
+			return 0, nil, err
+		}
+		if a.has("port") {
+			return c.Do(ctx, "POST", "/boxes/"+esc(a.s("box_id"))+"/ports", map[string]any{"port": int(a.num("port"))})
+		}
+		return c.Do(ctx, "GET", "/boxes/"+esc(a.s("box_id"))+"/ports", nil)
 	case "box_sleep":
 		if err := need("box_id"); err != nil {
 			return 0, nil, err

@@ -1406,7 +1406,7 @@
     "tierHelp": {
       "T1": "裸服务器/虚拟机：boxd + Incus，按小时或按月计费",
       "T2": "沙箱 API：boxd 在沙箱内运行并回连 Core，支持终端和快照",
-      "T3": "仅 exec API：网关 shim 代替 boxd 应答，无终端、快照和出站规则"
+      "T3": "仅 exec API：网关 shim 代替 boxd 应答，无终端和出站规则；快照为网关保存的 tar 包，提供商支持时有预览 URL"
     },
     "ver": {
       "live": "实测验证",

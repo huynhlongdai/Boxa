@@ -33,4 +33,5 @@ Bạn đang làm việc trong một **box Boxa**: sandbox Linux dùng xong bỏ,
 - Lệnh chạy lâu: `async: true`, rồi `box_job(job_id, wait_s=30)`.
 - Nhiều lệnh: `box_exec_batch` (một lượt gọi).
 - Snapshot trước khi thay đổi rủi ro (`box_snapshot`), rồi `box_restore` hoặc `box_fork` để thử hướng khác.
+- Chạy web app: khởi động ở 0.0.0.0:<port> dưới nền (`box_exec` async), rồi `box_url(port)` trả về URL HTTPS công khai.
 - Xoá box bằng `box_down` khi xong việc.

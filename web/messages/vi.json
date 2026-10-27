@@ -1406,7 +1406,7 @@
     "tierHelp": {
       "T1": "Server/VM thô: boxd + Incus, tính theo giờ hoặc tháng",
       "T2": "Sandbox API: boxd chạy trong sandbox và dial-in về Core, đủ terminal/snapshot",
-      "T3": "Chỉ exec API: shim ở gateway trả lời thay boxd, không có terminal/snapshot/egress"
+      "T3": "Chỉ exec API: shim ở gateway trả lời thay boxd, không có terminal/egress; snapshot là tarball lưu ở gateway, có URL preview nếu provider hỗ trợ"
     },
     "ver": {
       "live": "Đã chạy thật",

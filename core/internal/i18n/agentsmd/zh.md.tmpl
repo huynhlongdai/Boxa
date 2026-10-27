@@ -33,4 +33,5 @@
 - 长时间命令：`async: true`，然后 `box_job(job_id, wait_s=30)`。
 - 多条命令：`box_exec_batch`（一次往返）。
 - 高风险改动前先快照（`box_snapshot`），再用 `box_restore` 或 `box_fork` 尝试其他方案。
+- 运行 Web 应用：在后台于 0.0.0.0:<port> 启动（`box_exec` async），然后 `box_url(port)` 返回其公网 HTTPS URL。
 - 完成后用 `box_down` 删除盒子。

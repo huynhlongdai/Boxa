@@ -19,13 +19,16 @@ import (
 // Shim is the gateway-side "boxd-shim" for T3 (exec-only) sandboxes: it
 // answers the boxd RPCs core sends to a host by translating them into the
 // provider's exec + file API. One sandbox = one box. Degraded mode: no PTY,
-// no snapshots/clones/egress rules, no async-job cancel; output shaping
-// (tail lines) happens here at the gateway.
+// no egress rules, no async-job cancel, no in-host clone (core clones a
+// sandbox box with the provider's fork or snapshot → new sandbox);
+// snapshots are tarballs pulled to the gateway (shimsnap.go); output
+// shaping (tail lines) happens here at the gateway.
 type Shim struct {
 	D       Driver
 	C       Cred
 	Ref     string // provider sandbox ref
 	WorkDir string // e.g. /home/user → box /work = /home/user/work
+	SnapDir string // gateway directory for T3 snapshot tarballs
 	mu      sync.Mutex
 	boxes   map[string]map[string]string // box id → env
 	last    time.Time
@@ -220,6 +223,25 @@ func (s *Shim) Call(ctx context.Context, method string, params, out any) error {
 			eo.LogID = s.keepLog("$ " + p.Command + "\n--- stdout ---\n" + res.Stdout + "\n--- stderr ---\n" + res.Stderr)
 		}
 		return encodeOut(eo, out)
+	case proto.MSnapshot:
+		var p proto.SnapshotParams
+		if err := decodeInto(params, &p); err != nil {
+			return err
+		}
+		res, err := s.snapshot(ctx, p)
+		if err != nil {
+			return err
+		}
+		return encodeOut(res, out)
+	case proto.MRestore:
+		var p proto.RestoreParams
+		if err := decodeInto(params, &p); err != nil {
+			return err
+		}
+		if err := s.restore(ctx, p); err != nil {
+			return err
+		}
+		return encodeOut(map[string]bool{"ok": true}, out)
 	case proto.MLogRead:
 		var p proto.LogReadParams
 		if err := decodeInto(params, &p); err != nil {

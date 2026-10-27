@@ -7,6 +7,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -176,6 +177,10 @@ func (m *Manager) deleteSnapshot(ctx context.Context, sn *model.Snapshot) {
 				}
 			}
 		}
+	}
+	// T3 sandbox snapshots are tarballs kept by core itself
+	if f := strings.TrimPrefix(sn.Location, "local://"); f != sn.Location && strings.HasPrefix(f, m.snapshotDir()+string(os.PathSeparator)) {
+		os.Remove(f)
 	}
 	m.Store.DeleteSnapshot(ctx, sn.ID)
 }
