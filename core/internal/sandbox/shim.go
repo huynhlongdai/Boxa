@@ -13,6 +13,7 @@ import (
 
 	"boxa/core/internal/boxd"
 	"boxa/core/internal/proto"
+	"boxa/core/internal/secret"
 )
 
 // Shim is the gateway-side "boxd-shim" for T3 (exec-only) sandboxes: it
@@ -28,12 +29,19 @@ type Shim struct {
 	mu      sync.Mutex
 	boxes   map[string]map[string]string // box id → env
 	last    time.Time
+	logs    map[string]string // log id → full output of a truncated exec (in memory, newest shimLogKeep)
+	logIDs  []string
 }
+
+// shimLogKeep bounds the full-output logs a shim keeps for box_logs: the
+// provider answers exec with the whole output, so the gateway keeps it
+// (lost when boxa-core restarts).
+const shimLogKeep = 16
 
 // NewShim builds a shim for one sandbox.
 func NewShim(d Driver, c Cred, ref string) *Shim {
 	wd := strings.TrimRight(orStr(d.Info().WorkDir, "/tmp/boxa"), "/")
-	return &Shim{D: d, C: c, Ref: ref, WorkDir: wd, boxes: map[string]map[string]string{}}
+	return &Shim{D: d, C: c, Ref: ref, WorkDir: wd, boxes: map[string]map[string]string{}, logs: map[string]string{}}
 }
 
 // Unsupported is returned for RPCs an exec-only sandbox cannot serve.
@@ -206,8 +214,24 @@ func (s *Shim) Call(ctx context.Context, method string, params, out any) error {
 		if saved < 0 {
 			saved = 0
 		}
-		return encodeOut(boxd.ExecOut{ExitCode: res.ExitCode, DurationMS: res.DurationMS, StdoutTail: so, StderrTail: se, Truncated: t1 || t2,
-			FilesChanged: []string{}, TokensSaved: saved, TimedOut: res.TimedOut}, out)
+		eo := boxd.ExecOut{ExitCode: res.ExitCode, DurationMS: res.DurationMS, StdoutTail: so, StderrTail: se, Truncated: t1 || t2,
+			FilesChanged: []string{}, TokensSaved: saved, TimedOut: res.TimedOut}
+		if eo.Truncated {
+			eo.LogID = s.keepLog("$ " + p.Command + "\n--- stdout ---\n" + res.Stdout + "\n--- stderr ---\n" + res.Stderr)
+		}
+		return encodeOut(eo, out)
+	case proto.MLogRead:
+		var p proto.LogReadParams
+		if err := decodeInto(params, &p); err != nil {
+			return err
+		}
+		s.mu.Lock()
+		c, ok := s.logs[p.LogID]
+		s.mu.Unlock()
+		if !ok {
+			return &proto.Error{Code: "NOT_FOUND", Message: "log not found (a T3 sandbox keeps the last 16 truncated outputs in memory)"}
+		}
+		return encodeOut(proto.LogReadResult{Content: c}, out)
 	case proto.MExecCancel:
 		return nil // the provider's request/response exec cannot be cancelled mid-flight
 	case proto.MRead:
@@ -332,4 +356,17 @@ func lineRange(s string, from, to int) proto.ReadResult {
 		}
 	}
 	return proto.ReadResult{Content: s, TotalLines: total}
+}
+
+func (s *Shim) keepLog(content string) string {
+	id := secret.ID("log")
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.logs[id] = content
+	s.logIDs = append(s.logIDs, id)
+	for len(s.logIDs) > shimLogKeep {
+		delete(s.logs, s.logIDs[0])
+		s.logIDs = s.logIDs[1:]
+	}
+	return id
 }

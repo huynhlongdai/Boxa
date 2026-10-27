@@ -261,6 +261,20 @@ func TestShimT3(t *testing.T) {
 	if out.ExitCode != 3 || !out.Truncated || !strings.HasSuffix(strings.TrimSpace(out.StdoutTail), filepath.Join(root, "work")) || !strings.Contains(out.StdoutTail, "hey 10") || strings.TrimSpace(out.StderrTail) != "oops" {
 		t.Fatalf("exec out %+v", out)
 	}
+	// a truncated exec keeps its full output for box_logs (MLogRead)
+	var lr0 proto.LogReadResult
+	if out.LogID == "" || call(proto.MLogRead, proto.LogReadParams{LogID: out.LogID}, &lr0) != nil || !strings.Contains(lr0.Content, "hey 1\n") || !strings.Contains(lr0.Content, "oops") {
+		t.Fatalf("log %q → %q", out.LogID, lr0.Content)
+	}
+	if pe, ok := call(proto.MLogRead, proto.LogReadParams{LogID: "log_nope"}, &lr0).(*proto.Error); !ok || pe.Code != "NOT_FOUND" {
+		t.Fatal("unknown log id should be NOT_FOUND")
+	}
+	for i := 0; i < shimLogKeep+2; i++ {
+		s.keepLog("x")
+	}
+	if len(s.logs) != shimLogKeep || s.logs[out.LogID] != "" {
+		t.Fatalf("shim keeps %d logs", len(s.logs))
+	}
 	if err := call(proto.MWrite, proto.WriteParams{BoxID: "b1", Path: "/work/src/a.py", Content: "x = 1\nprint(x)\n"}, nil); err != nil {
 		t.Fatal(err)
 	}

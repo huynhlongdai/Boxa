@@ -303,7 +303,7 @@ Ngoài VPS/VM thô (T1), Boxa thuê được sandbox của các dịch vụ "San
 | Provider | Tier | Adapter | Mức xác minh | Isolation | Boot | Capability | Sống tối đa | Giá từ | Biến môi trường |
 |---|---|---|---|---|---|---|---|---|---|
 | boxd.sh (`boxdsh`) | T2 | native | docs | microvm | 300 ms | fork, pause, cổng | không giới hạn | $0.0614/giờ | `BOXDSH_API_KEY`, `BOXDSH_ORG` |
-| Prized Sandboxes (`prized`) | T2 | native | **live** (gọi API thật, chỉ đọc) | microvm | 3000 ms | fork, pause | 7 ngày | $0.0660/giờ | `PRIZED_API_KEY` |
+| Prized Sandboxes (`prized`) | T2 | native | **live** (đã chạy thật toàn bộ vòng đời, free tier) | microvm | 4000 ms | fork, pause | 7 ngày | $0.0660/giờ | `PRIZED_API_KEY` |
 | Daytona (`daytona`) | T2 | native | docs | container | 1000 ms | fork, pause, cổng, GPU | không giới hạn | $0.0669/giờ (ước tính) | `DAYTONA_API_KEY`, `DAYTONA_ORGANIZATION_ID` |
 | Novita Sandbox (`novita`) | T2 | native | mã nguồn SDK | microvm | 1000 ms | pause, cổng | 4 giờ | $0.0763/giờ | `NOVITA_API_KEY`, `NOVITA_TEMPLATES` |
 | E2B (`e2b`) | T2 | native | docs | microvm | 500 ms | fork, pause, cổng | 24 giờ | $0.1089/giờ | `E2B_API_KEY`, `E2B_TEMPLATES` |
@@ -343,5 +343,5 @@ Mức xác minh: **live** = đã gọi API thật bằng key thật (chỉ các 
 | `BOXA_PROVIDER_CHAIN` | chuỗi T1 rồi tới chuỗi sandbox | thứ tự dự phòng (mặc định sandbox: e2b, daytona, novita, prized, boxdsh, runloop, blaxel, boat, agent37, vercel, upstash-box) |
 | `E2B_API_KEY`, `DAYTONA_API_KEY`, `PRIZED_API_KEY`, … | — | kết nối provider sandbox lúc khởi động (xem cột "Biến môi trường") |
 
-**Kiểm thử v1.4.** `go test ./...` gồm `sandbox/native_test.go` (httptest cho từng adapter native), `yaml_shim_test.go` (engine YAML + shim), `selector/sandbox_test.go`, `e2e/v14_test.go` (failover sang shim T3, boxd dial-in T2, dọn dẹp). Test live chỉ đọc cho Prized là tuỳ chọn: `BOXA_LIVE_PRIZED=1 PRIZED_API_KEY=…`. `scripts/e2e.sh` có mục v1.4: một adapter YAML trỏ tới `scripts/fake-sandbox.py` (sandbox REST chỉ exec, chạy trên localhost). Mục này kiểm tra lint, kết nối, recommend, tạo box trên host sandbox (shim T3), exec, và sandbox bị xoá khi box kết thúc.
+**Kiểm thử v1.4.** `go test ./...` gồm `sandbox/native_test.go` (httptest cho từng adapter native), `yaml_shim_test.go` (engine YAML + shim), `selector/sandbox_test.go`, `e2e/v14_test.go` (failover sang shim T3, boxd dial-in T2, dọn dẹp). Test live cho Prized là tuỳ chọn: chỉ đọc `BOXA_LIVE_PRIZED=1 PRIZED_API_KEY=…`; tạo sandbox thật (vài giây, free tier) `BOXA_LIVE_PRIZED_CREATE=1 PRIZED_API_KEY=… go test ./internal/sandbox -run PrizedLive`; end to end qua boxa-core `PRIZED_API_KEY=… scripts/live-prized.sh` (shim T3; thêm `PRIZED_MODE=dial BOXA_PUBLIC_URL=https://… BOXA_DIST_DIR=…` cho T2, ví dụ qua cloudflared quick tunnel). Script luôn xoá sandbox nhãn `boxa=1` khi kết thúc. `scripts/e2e.sh` có mục v1.4: một adapter YAML trỏ tới `scripts/fake-sandbox.py` (sandbox REST chỉ exec, chạy trên localhost). Mục này kiểm tra lint, kết nối, recommend, tạo box trên host sandbox (shim T3), exec, và sandbox bị xoá khi box kết thúc.
 
