@@ -220,8 +220,12 @@ func TestEndToEnd(t *testing.T) {
 	}
 
 	// Terminal (WebSocket PTY).
-	wsURL := "ws" + strings.TrimPrefix(e.srv.URL, "http") + "/v1/boxes/" + box.ID + "/terminal?token=" + ag.Key
-	ws, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	// v1.10: API key only in the Authorization header (never ?token=)
+	wsURL := "ws" + strings.TrimPrefix(e.srv.URL, "http") + "/v1/boxes/" + box.ID + "/terminal"
+	if _, resp, err := websocket.DefaultDialer.Dial(wsURL+"?token="+ag.Key, nil); err == nil || resp == nil || resp.StatusCode != 401 {
+		t.Fatalf("API key in the URL must be refused: %v %v", err, resp)
+	}
+	ws, _, err := websocket.DefaultDialer.Dial(wsURL, http.Header{"Authorization": {"Bearer " + ag.Key}})
 	if err != nil {
 		t.Fatalf("ws: %v", err)
 	}
@@ -298,7 +302,7 @@ func TestEndToEnd(t *testing.T) {
 		json.NewDecoder(resp.Body).Decode(&out)
 		resp.Body.Close()
 		if r, ok := out["result"].(map[string]any); ok {
-			if tools, ok := r["tools"].([]any); ok && len(tools) != 26 {
+			if tools, ok := r["tools"].([]any); ok && len(tools) != 30 {
 				t.Fatalf("want 26 tools, got %d", len(tools))
 			}
 		} else {

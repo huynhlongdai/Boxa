@@ -153,7 +153,7 @@ func (p *Peer) ReadLoop() error {
 			if p.OnFrame != nil {
 				go p.OnFrame(f)
 			}
-		case proto.TTCPData, proto.TTCPClose:
+		case proto.TTCPData, proto.TTCPClose, proto.TTCPEOF:
 			p.deliverStream(f)
 		default:
 			if p.OnFrame != nil {

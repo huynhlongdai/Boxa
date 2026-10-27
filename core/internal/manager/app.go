@@ -315,6 +315,9 @@ type PatchBoxInput struct {
 	// Subdomain (v1.9) renames the box's gateway address
 	// (https://<subdomain>.<domain>/); the old name stops answering at once.
 	Subdomain *string `json:"subdomain,omitempty"`
+	// ForwardPorts (v1.10) replaces the extra in-box ports the TCP stream /
+	// box forward may reach (exposed ports and 22 always are).
+	ForwardPorts *[]int `json:"forward_ports,omitempty"`
 }
 
 // PatchBox changes per-box settings.
@@ -337,6 +340,12 @@ func (m *Manager) PatchBox(ctx context.Context, p *Principal, id string, in Patc
 		v := *in.WakeOnRequest
 		b.WakeOnRequest = &v
 	}
+	if in.ForwardPorts != nil {
+		if err := setForwardPorts(b, *in.ForwardPorts); err != nil {
+			lock.Unlock()
+			return nil, err
+		}
+	}
 	oldName := b.Subdomain
 	if in.Subdomain != nil && model.Slugify(*in.Subdomain, 0) != b.Subdomain {
 		before := namesCopy(b)
@@ -353,6 +362,9 @@ func (m *Manager) PatchBox(ctx context.Context, p *Principal, id string, in Patc
 	}
 	if in.WakeOnRequest != nil {
 		m.Emit(ctx, p.Actor(), b.ID, b.AgentID, "box.settings", fmt.Sprintf("wake_on_request → %v", *in.WakeOnRequest), nil)
+	}
+	if in.ForwardPorts != nil {
+		m.Emit(ctx, p.Actor(), b.ID, b.AgentID, "box.settings", fmt.Sprintf("forward ports → %v", b.ForwardPorts), nil)
 	}
 	b = m.decorateBox(ctx, b)
 	m.publishBox(b)

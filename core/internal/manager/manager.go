@@ -78,6 +78,13 @@ type Config struct {
 	ClientLocation    string        // default agent location for latency estimates (region id, ISO country, lat,lon)
 	Mesh              MeshConfig    // optional headscale mesh
 	HostCacheIP       string        // BOXD_CACHE_HOST written into new hosts' cloud-init (deploy/caches.sh on each host)
+	// v1.10 access
+	DashboardURL      string        // BOXAZ_DASHBOARD_URL: origin allowed to open terminal / tcp / ssh WebSockets
+	AccessOrigins     []string      // BOXAZ_ACCESS_ORIGINS: more allowed origins (comma separated)
+	TerminalDetachTTL time.Duration // BOXAZ_TERMINAL_DETACH_TTL: keep a detached terminal this long (default 10m)
+	TerminalBuffer    int           // BOXAZ_TERMINAL_BUFFER: replay ring per session in bytes (default 256 KiB)
+	SSHAddr           string        // BOXAZ_SSH_ADDR: direct SSH listener, e.g. :2222 ("" = only SSH over WebSocket)
+	SSHPublic         string        // BOXAZ_SSH_PUBLIC: host:port users dial for the direct listener (default from SSHAddr)
 }
 
 func (c *Config) defaults() {
@@ -170,6 +177,7 @@ type Manager struct {
 	app   appState
 	gw    gatewayState
 	names nameState // v1.9 readable gateway names
+	acc   accessState // v1.10 tickets, live sessions, terminals, ssh
 }
 
 // SetObjectStoreHTTP overrides the HTTP client used for object storage (tests).

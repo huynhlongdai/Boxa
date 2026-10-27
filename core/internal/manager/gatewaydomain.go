@@ -26,8 +26,8 @@ import (
 // BOXAZ_GATEWAY_RESERVED adds more (comma separated).
 var ReservedSubdomains = []string{
 	"admin", "api", "app", "assets", "auth", "autoconfig", "autodiscover", "blog", "cdn", "console", "core", "dashboard",
-	"dl", "docs", "ftp", "git", "grafana", "gw", "hark", "help", "imap", "login", "mail", "mcp", "metrics", "mx", "ns", "ns1",
-	"ns2", "pop", "pop3", "portal", "smtp", "sso", "static", "status", "support", "webmail", "ws", "www",
+	"cdp", "dl", "docs", "ftp", "git", "grafana", "gw", "hark", "help", "ide", "imap", "login", "mail", "mcp", "metrics", "mx", "ns", "ns1",
+	"ns2", "pop", "pop3", "portal", "smtp", "ssh", "sso", "static", "status", "support", "tcp", "term", "vnc", "webmail", "ws", "www",
 }
 
 // boxLabelRE is the only label shape the gateway routes to a box:

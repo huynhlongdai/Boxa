@@ -471,6 +471,34 @@ func (d *IncusDriver) ShellCmd(ctx context.Context, id string) (*exec.Cmd, error
 	return exec.Command(d.Bin, "exec", cname(id), "--cwd", "/work", "-t", "--", "bash", "-l"), nil
 }
 
+// ProcCmd (v1.10) builds a shell or a command for proc.open.
+func (d *IncusDriver) ProcCmd(ctx context.Context, id string, p proto.ProcOpenParams) (*exec.Cmd, error) {
+	cwd := p.Cwd
+	if cwd == "" {
+		cwd = "/work"
+	}
+	args := []string{"exec", cname(id), "--cwd", cwd}
+	if p.TTY {
+		args = append(args, "-t")
+		t := p.Term
+		if t == "" {
+			t = "xterm-256color"
+		}
+		args = append(args, "--env", "TERM="+t)
+	} else {
+		args = append(args, "-T")
+	}
+	for _, kv := range p.Env {
+		args = append(args, "--env", kv)
+	}
+	if p.Command != "" {
+		args = append(args, "--", "bash", "-lc", p.Command)
+	} else {
+		args = append(args, "--", "bash", "-l")
+	}
+	return exec.Command(d.Bin, args...), nil
+}
+
 // Addr returns the container's IPv4 on the incus bridge.
 func (d *IncusDriver) Addr(ctx context.Context, id string, port int) (string, error) {
 	out, err := d.incus(ctx, "list", cname(id), "--format", "csv", "-c", "4")

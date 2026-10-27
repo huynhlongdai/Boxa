@@ -33,6 +33,10 @@ func (s *Server) ingressMW(next http.Handler) http.Handler {
 		// is core itself, reserved and unknown subdomains get a 404.
 		switch kind, seg := s.M.GatewayHost(r.Context(), host); kind {
 		case "box":
+			if strings.HasPrefix(r.URL.Path, "/.boxaz/") { // v1.10 terminal / tcp / ssh on the box host
+				s.accessHost(w, r, seg)
+				return
+			}
 			s.gateway(w, r, seg, "")
 			return
 		case "reserved", "other":

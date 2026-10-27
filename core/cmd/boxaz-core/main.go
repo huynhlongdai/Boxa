@@ -156,6 +156,21 @@ func main() {
 		ObjectStore:     objCfg,
 		GatewayDomain:   os.Getenv("BOXAZ_GATEWAY_DOMAIN"),
 		ProviderPreview: os.Getenv("BOXAZ_PROVIDER_PREVIEW"),
+		// v1.10 access
+		DashboardURL: os.Getenv("BOXAZ_DASHBOARD_URL"),
+		SSHAddr:      os.Getenv("BOXAZ_SSH_ADDR"),
+		SSHPublic:    os.Getenv("BOXAZ_SSH_PUBLIC"),
+	}
+	for _, o := range strings.Split(os.Getenv("BOXAZ_ACCESS_ORIGINS"), ",") {
+		if o = strings.TrimSpace(o); o != "" {
+			cfg.AccessOrigins = append(cfg.AccessOrigins, o)
+		}
+	}
+	if d, err := time.ParseDuration(os.Getenv("BOXAZ_TERMINAL_DETACH_TTL")); err == nil && d > 0 {
+		cfg.TerminalDetachTTL = d
+	}
+	if n, err := strconv.Atoi(os.Getenv("BOXAZ_TERMINAL_BUFFER")); err == nil && n >= 4096 {
+		cfg.TerminalBuffer = n
 	}
 	if d, err := time.ParseDuration(os.Getenv("BOXAZ_WAKE_HOLD")); err == nil && d > 0 {
 		cfg.WakeHold = d
@@ -180,6 +195,9 @@ func main() {
 		log.Printf("providers connected from env: %s", strings.Join(ids, ", "))
 	}
 	m.Start(ctx)
+	if err := m.StartSSH(ctx); err != nil {
+		log.Printf("ssh gateway (BOXAZ_SSH_ADDR=%s): %v", cfg.SSHAddr, err)
+	}
 	srv := &http.Server{
 		Addr:              env("BOXAZ_ADDR", ":8080"),
 		Handler:           api.New(m, os.Getenv("BOXAZ_DIST_DIR"), env("BOXAZ_CORS_ORIGINS", "*")),

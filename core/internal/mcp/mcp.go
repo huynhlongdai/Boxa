@@ -300,6 +300,47 @@ func callTool(ctx context.Context, c Caller, name string, a args) (int, []byte, 
 			body["label"] = a.s("label")
 		}
 		return c.Do(ctx, "POST", base+"/tokens", body)
+	case "box_ticket":
+		if err := need("box_id", "purpose"); err != nil {
+			return 0, nil, err
+		}
+		body := map[string]any{"purpose": a.s("purpose")}
+		if a.has("port") {
+			body["port"] = int(a.num("port"))
+		}
+		if a.has("ttl_s") {
+			body["ttl_s"] = int(a.num("ttl_s"))
+		}
+		if a.b("allow") {
+			body["allow"] = true
+		}
+		if a.s("session_id") != "" {
+			body["session_id"] = a.s("session_id")
+		}
+		return c.Do(ctx, "POST", "/boxes/"+esc(a.s("box_id"))+"/tickets", body)
+	case "box_forward", "box_ssh_info":
+		if err := need("box_id"); err != nil {
+			return 0, nil, err
+		}
+		if name == "box_forward" && a.has("port") {
+			st, b, err := c.Do(ctx, "POST", "/boxes/"+esc(a.s("box_id"))+"/forward-ports", map[string]any{"port": int(a.num("port"))})
+			if err != nil || st >= 300 {
+				return st, b, err
+			}
+		}
+		return c.Do(ctx, "GET", "/boxes/"+esc(a.s("box_id"))+"/access", nil)
+	case "box_terminal_sessions":
+		if err := need("box_id"); err != nil {
+			return 0, nil, err
+		}
+		base := "/boxes/" + esc(a.s("box_id")) + "/terminals"
+		if a.s("action") == "kill" {
+			if err := need("session_id"); err != nil {
+				return 0, nil, err
+			}
+			return c.Do(ctx, "DELETE", base+"/"+esc(a.s("session_id")), nil)
+		}
+		return c.Do(ctx, "GET", base, nil)
 	case "box_app_set":
 		if err := need("box_id", "start"); err != nil {
 			return 0, nil, err

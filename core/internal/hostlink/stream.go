@@ -69,7 +69,7 @@ func (p *Peer) deliverStream(f proto.Frame) {
 		return
 	}
 	c.mu.Lock()
-	if f.Type == proto.TTCPClose {
+	if f.Type == proto.TTCPClose || f.Type == proto.TTCPEOF {
 		c.eof = true
 	} else if len(f.Data) > 0 {
 		c.buf = append(c.buf, f.Data)
@@ -194,6 +194,26 @@ func (c *StreamConn) Write(b []byte) (int, error) {
 		b = b[k:]
 	}
 	return n, nil
+}
+
+// CloseWrite half-closes the stream (v1.10): the far end reads EOF, and the
+// stream still delivers what the far end writes.
+func (c *StreamConn) CloseWrite() error {
+	c.mu.Lock()
+	closed := c.closed
+	c.mu.Unlock()
+	if closed {
+		return net.ErrClosed
+	}
+	return c.p.Send(proto.Frame{Type: proto.TTCPEOF, Stream: c.id})
+}
+
+// AttachStream registers the far end of a stream opened by the other side
+// (proc.open: the box end of a process's streams).
+func (p *Peer) AttachStream(id string) *StreamConn {
+	c := newStreamConn(p, id)
+	p.addStream(c)
+	return c
 }
 
 // Close ends the stream on both sides.

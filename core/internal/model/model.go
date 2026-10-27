@@ -97,6 +97,9 @@ type Box struct {
 	// the other ports (https://<subdomain>-<label>.<domain>/).
 	Subdomain  string         `json:"subdomain,omitempty"`
 	PortLabels map[int]string `json:"port_labels,omitempty"`
+	// v1.10: extra in-box ports `box forward` / the TCP stream endpoint may
+	// reach (besides exposed ports and 22).
+	ForwardPorts []int `json:"forward_ports,omitempty"`
 }
 
 // Exposure is how one port of a box is reachable from the internet when the

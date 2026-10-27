@@ -60,6 +60,7 @@ type Agent struct {
 	aliases *aliasTable
 	meshIP  string
 	apps    map[string]*appSup // v1.7 supervised apps (guarded by mu)
+	procs   procTable          // v1.10 proc.open processes
 	appsUp  sync.Once
 }
 
@@ -239,6 +240,15 @@ func (a *Agent) onFrame(p *hostlink.Peer, f proto.Frame) {
 		if f.Method == proto.MTCPOpen {
 			f.Params = a.rewriteIDs(f.Params)
 			p.Reply(f, nil, a.openTCP(p, f))
+			return
+		}
+		switch f.Method {
+		case proto.MProcOpen:
+			f.Params = a.rewriteIDs(f.Params)
+			p.Reply(f, nil, a.openProc(p, f))
+			return
+		case proto.MProcResize, proto.MProcSignal:
+			p.Reply(f, nil, a.procs.handleCtl(f))
 			return
 		}
 		res, err := a.handle(context.Background(), f)
@@ -685,6 +695,26 @@ func (a *Agent) closeAllPTY() {
 	for _, id := range ids {
 		a.closePTY(id)
 	}
+}
+
+// openProc answers proc.open (v1.10): build the command through the driver.
+func (a *Agent) openProc(p *hostlink.Peer, f proto.Frame) error {
+	sp, err := decode[proto.ProcOpenParams](f)
+	if err != nil {
+		return err
+	}
+	var cmd *exec.Cmd
+	if pc, ok := a.drv.(ProcCmder); ok {
+		cmd, err = pc.ProcCmd(context.Background(), sp.BoxID, sp)
+	} else if sp.Command == "" && sp.TTY {
+		cmd, err = a.drv.ShellCmd(context.Background(), sp.BoxID)
+	} else {
+		err = boxErr("INVALID", "driver "+a.drv.Name()+" cannot run commands over proc.open")
+	}
+	if err != nil {
+		return err
+	}
+	return a.procs.serve(p, sp, cmd)
 }
 
 // openTCP answers tcp.open: dial the box port and pump bytes (v1.7 gateway).

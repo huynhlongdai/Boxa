@@ -104,6 +104,19 @@ func ingressOnce(ctx context.Context, cfg IngressAgentConfig) error {
 			p.Reply(f, nil, ingressTCP(p, cfg.Target, f))
 			return
 		}
+		switch f.Method { // v1.10: terminal / SSH sessions in a T3 sandbox
+		case proto.MProcOpen:
+			var sp proto.ProcOpenParams
+			if err := json.Unmarshal(f.Params, &sp); err != nil {
+				p.Reply(f, nil, &proto.Error{Code: "INVALID", Message: err.Error()})
+				return
+			}
+			p.Reply(f, nil, ingressProcs.serve(p, sp, localProcCmd(sp)))
+			return
+		case proto.MProcResize, proto.MProcSignal:
+			p.Reply(f, nil, ingressProcs.handleCtl(f))
+			return
+		}
 		if f.Method != proto.MHTTP {
 			p.Reply(f, nil, &proto.Error{Code: "INVALID", Message: "ingress agent only proxies http.do"})
 			return
@@ -125,6 +138,8 @@ func ingressOnce(ctx context.Context, cfg IngressAgentConfig) error {
 	}()
 	return p.ReadLoop()
 }
+
+var ingressProcs procTable
 
 var ingressAgentClient = &http.Client{
 	Timeout: 60 * time.Second,

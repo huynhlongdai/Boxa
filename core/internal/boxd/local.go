@@ -547,6 +547,34 @@ func (d *LocalDriver) ShellCmd(ctx context.Context, id string) (*exec.Cmd, error
 	return cmd, nil
 }
 
+// ProcCmd (v1.10) builds a shell or a command for proc.open.
+func (d *LocalDriver) ProcCmd(ctx context.Context, id string, p proto.ProcOpenParams) (*exec.Cmd, error) {
+	m, err := d.meta(id)
+	if err != nil {
+		return nil, err
+	}
+	if m.Stopped {
+		return nil, boxErr("BOX_SLEEPING", "box is sleeping")
+	}
+	var cmd *exec.Cmd
+	switch {
+	case p.Command != "":
+		cmd = exec.Command("bash", "-c", p.Command)
+	case p.TTY:
+		cmd = exec.Command("bash", "--noprofile", "--norc", "-i")
+	default:
+		cmd = exec.Command("bash", "--noprofile", "--norc", "-s")
+	}
+	cmd.Dir = filepath.Join(d.dir(id), "work")
+	if p.Cwd != "" {
+		if c, err := d.resolve(id, p.Cwd); err == nil {
+			cmd.Dir = c
+		}
+	}
+	cmd.Env = append(d.env(id, m, nil), "PS1=box:\\w$ ")
+	return cmd, nil
+}
+
 // Addr: local boxes share the host network namespace.
 func (d *LocalDriver) Addr(ctx context.Context, id string, port int) (string, error) {
 	if _, err := d.meta(id); err != nil {

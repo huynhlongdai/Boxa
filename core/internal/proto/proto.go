@@ -24,6 +24,8 @@ const (
 	// v1.7: raw TCP streams (gateway pass-through for WebSocket/SSE/HTTP).
 	TTCPData  = "tcp.data"
 	TTCPClose = "tcp.close"
+	// v1.10: half-close of a stream (the sender writes no more; it still reads).
+	TTCPEOF = "tcp.eof"
 )
 
 // RPC methods (core → boxd).
@@ -55,7 +57,35 @@ const (
 	MAppRestart = "app.restart"     // v1.7: restart the app now
 	MAppEnsure  = "app.ensure"      // v1.7: start the app if its process is gone (after wake/restore/clone)
 	MAppLogs    = "app.logs"        // v1.7: read app output from an offset
+	// v1.10 access: a process in the box wired to streams (PTY or pipes).
+	MProcOpen   = "proc.open"
+	MProcResize = "proc.resize"  // PtyResizeParams
+	MProcSignal = "proc.signal"  // ProcSignalParams
 )
+
+// ProcOpenParams starts a process in a box whose I/O rides streams (v1.10):
+// Stream carries stdin (core → box) and stdout or the PTY output (box → core);
+// Stream+".e" carries stderr (pipe mode); Stream+".x" carries the decimal
+// exit code, written after all output, then every stream closes.
+// Command "" = the box's interactive login shell.
+type ProcOpenParams struct {
+	BoxID   string   `json:"box_id"`
+	Stream  string   `json:"stream"`
+	Command string   `json:"command,omitempty"`
+	Env     []string `json:"env,omitempty"` // KEY=VALUE
+	Cwd     string   `json:"cwd,omitempty"`
+	TTY     bool     `json:"tty,omitempty"`
+	Term    string   `json:"term,omitempty"`
+	Cols    int      `json:"cols,omitempty"`
+	Rows    int      `json:"rows,omitempty"`
+}
+
+// ProcSignalParams delivers a signal (INT, TERM, KILL, HUP, QUIT, USR1, USR2)
+// to a process opened with proc.open.
+type ProcSignalParams struct {
+	Stream string `json:"stream"`
+	Signal string `json:"signal"`
+}
 
 // TCPOpenParams opens stream Stream to BoxID:Port. Data then flows in
 // tcp.data frames (Stream + Data) both ways until a tcp.close frame.

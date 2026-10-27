@@ -77,6 +77,7 @@ func (s *Server) routes() http.Handler {
 		r.Get("/internal/tls-ask", s.tlsAsk)             // Caddy on_demand_tls (bind core to localhost in production)
 		r.Get("/hosts/connect", s.M.Hub.ServeHTTP)       // boxd dial-out (own token auth)
 		r.Get("/ingress/connect", s.M.ServeIngressAgent) // in-box public-URL agent (own token auth)
+		s.routesAccessWS(r)                              // v1.10 terminal / tcp / ssh WebSockets (ticket or Authorization header)
 		r.Group(func(r chi.Router) {
 			r.Use(s.authMW)
 			r.Get("/overview", s.overview)
@@ -106,7 +107,7 @@ func (s *Server) routes() http.Handler {
 			r.Get("/boxes/{id}/observe", s.observe)
 			r.Get("/boxes/{id}/events", s.boxEvents)
 			r.Get("/boxes/{id}/snapshots", s.boxSnapshots)
-			r.Get("/boxes/{id}/terminal", s.terminal)
+			s.routesAccess(r)
 
 			r.Get("/jobs/{id}", s.getJob)
 			r.Post("/jobs/{id}/cancel", s.cancelJob)

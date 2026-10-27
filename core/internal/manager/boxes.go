@@ -986,6 +986,9 @@ func (m *Manager) Sleep(ctx context.Context, p *Principal, id string) (*model.Bo
 }
 
 func (m *Manager) sleepBox(ctx context.Context, b *model.Box, actor, why string) (*model.Box, error) {
+	if b.Status == model.StatusRunning {
+		m.closeAccess(b.ID, "[boxaz] box is going to sleep") // v1.10: terminals, ssh, tcp streams
+	}
 	lock := m.boxLock(b.ID)
 	lock.Lock()
 	defer lock.Unlock()
@@ -1144,6 +1147,7 @@ func (m *Manager) terminateBox(ctx context.Context, b *model.Box, actor, why str
 	if b.Status == model.StatusTerminated {
 		return m.decorateBox(ctx, b), nil
 	}
+	m.closeAccess(b.ID, "[boxaz] box was deleted")
 	lock := m.boxLock(b.ID)
 	if !lock.TryLock() {
 		// provisioning holds the lock; mark terminated and let provision see it
