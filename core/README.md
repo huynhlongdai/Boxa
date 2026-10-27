@@ -170,6 +170,8 @@ Backup: thư mục `/var/lib/boxaz` (SQLite + master key). Nếu dùng Postgres,
 | `BOXAZ_PRICE_FEED_PROVIDERS` | `hetzner-cloud,vultr,contabo,netcup,digitalocean` | allowlist |
 | `BOXAZ_PRICE_FEED_INTERVAL` | `6h` | chu kỳ cập nhật giá |
 | `BOXAZ_DIST_DIR` | — | thư mục phục vụ `/dl/boxd-linux-<arch>` |
+| `BOXAZ_DISABLE_TUNNEL` | `false` | `1` = tắt bước cuối của chuỗi URL công khai (cloudflared quick tunnel trong sandbox); tương đương `settings.disable_tunnel` |
+| `BOXAZ_INGRESS_ASSUME_PUBLIC` | `false` | `1` = coi `BOXAZ_PUBLIC_URL` là truy cập được từ Internet dù tên/IP trông như nội bộ (vd. sau NAT có port-forward) |
 | `BOXAZ_BOXD_URL` | `<public>/dl/boxd` | URL tải boxd cho cloud-init |
 | `BOXAZ_SETUP_COST_USD` | `0.002` | chi phí khởi tạo cộng vào báo giá burst |
 | `BOXAZ_ORPHAN_AFTER` | `24h` | ngưỡng box mồ côi |
@@ -257,9 +259,9 @@ Theo `docs/api-contract-v1.md` mục "v1.1 additions".
 Theo `docs/api-contract-v1.md` mục "v1.2 additions". Mọi thứ dưới đây đã có test với server giả (httptest) — **chưa gọi API thật** của DigitalOcean/Contabo/netcup/R2/B2/Telegram/SMTP.
 
 **Provider mới (`internal/provider`).** Cùng interface với Hetzner/Vultr: `Create/Delete/Status/ValidateToken` + `Regions` + `List` (server do Boxaz tạo, theo tag/nickname), giá lấy từ price feed.
-- **DigitalOcean**: `/v2/droplets` (tag `boxaz`, `boxaz-host-<id>`), cloud-init qua `user_data`, size `s-*`, region `sgp1/fra1/…`.
+- **DigitalOcean**: `/v2/droplets` (tag trung tính `managed`, `mgr-host-<id>`), cloud-init qua `user_data`, size `s-*`, region `sgp1/fra1/…`.
 - **Contabo**: OAuth2 password grant (token cache tới khi hết hạn), `POST /v1/compute/instances` với `x-request-id`, tìm image Ubuntu theo tên; token có dạng `client_id:client_secret:api_user:api_password` hoặc JSON. Lưu ý: Contabo tính tiền theo tháng nên chỉ hợp làm pool.
-- **netcup (SCP REST)**: không có API đặt mua server — Boxaz *nhận* server dự phòng đã đặt sẵn có nickname `boxaz-spare-*`, cài lại image kèm cloud-init và đổi nickname thành `boxaz-<host>`; xoá = trả về `boxaz-spare-*` (không huỷ hợp đồng). Token = refresh token SCP (đổi lấy access token qua Keycloak).
+- **netcup (SCP REST)**: không có API đặt mua server — Boxaz *nhận* server dự phòng đã đặt sẵn có nickname `mgr-spare-*` (tên cũ `boxa-spare-*` vẫn được nhận), cài lại image kèm cloud-init và đổi nickname thành `mgr-<host>`; xoá = trả về `mgr-spare-*` (không huỷ hợp đồng). Token = refresh token SCP (đổi lấy access token qua Keycloak).
 - **Chuỗi dự phòng**: pool hiện có → burst theo `BOXAZ_PROVIDER_CHAIN` (mặc định Hetzner → Vultr → DigitalOcean → Contabo → netcup), chỉ dùng provider đã kết nối và nằm trong policy của agent. Tạo host lỗi thì loại provider đó (`provider:<id>`) và thử provider kế tiếp. `GET /v1/providers` trả thêm `implemented`, `chain_rank`, `token_source`; `GET /v1/providers/:id/regions`, `GET /v1/providers/:id/servers`.
 
 **Snapshot lên object storage (`internal/objstore`, `manager/storage.go`, `boxd/objsync.go`).** Client S3 tự viết (SigV4 + presigned URL, không thêm dependency) cho R2/B2/S3/MinIO. Core ký URL `PUT` lúc snapshot và `GET` lúc restore/fork rồi gửi cho boxd; boxd stream tar.gz thẳng lên/xuống bucket, **secret không bao giờ rời core**. Snapshot có `storage: local|s3`, `remote_url`, `upload_error`. Có bản trên bucket thì restore/fork chạy được ở **host bất kỳ** (trước đây phải cùng host). Retention: `reaper.keep_snapshots` (theo box) + `reaper.snapshot_retention_days`; reaper xoá cả object trên bucket. Không cấu hình (hoặc upload lỗi) → giữ hành vi cũ, snapshot nằm tại host. Cấu hình: env `BOXAZ_S3_*` hoặc `PUT /v1/storage {provider, endpoint, region, bucket, prefix, access_key_id, secret_access_key}` (secret lưu trong kho secret mã hoá với tên dành riêng `BOXAZ_SYS_*`, ẩn khỏi `GET /secrets`); `POST /v1/storage/test` ghi/đọc/xoá một object thử. Test chỉ dùng S3 giả chạy trong process (`objstore.NewFake`, có kiểm chữ ký).
@@ -349,7 +351,12 @@ Mức xác minh: **live** = đã gọi API thật bằng key thật (chỉ các 
 
 Agent dùng box sandbox để chạy web app thật: `box up` → `git clone` + cài đặt → chạy server ở `0.0.0.0:<port>` → lấy URL công khai từ Boxaz.
 
-- **URL công khai của port.** Box sandbox lấy URL preview của provider: E2B `https://<port>-<sandboxID>.e2b.app`, Novita `https://<port>-<sandboxID>.<domain>` (vd. `us-phx-1.sandbox.novita.ai`, không cần traffic token), Daytona theo API preview. `url` của box là URL của port đầu tiên trong `ports`. `GET /v1/boxes/:id/ports` liệt kê từng port `{port, url, kind: provider-preview|ingress|none, public, note}`; `POST /v1/boxes/:id/ports {port}` mở thêm port cho box đang chạy. CLI `box url <box> [port]`, MCP tool mới `box_url {box_id, port?}`. Provider không có preview (Prized) trả `kind=none` kèm gợi ý. Khi box ngủ, URL trả 502 cho tới khi wake.
+- **URL công khai của port.** `GET /v1/boxes/:id/ports` liệt kê từng port `{port, url, kind, public, note, caveats}`; `POST /v1/boxes/:id/ports {port}` mở thêm port cho box đang chạy. CLI `box url <box> [port]`, MCP tool `box_url {box_id, port?}`. `url` của box là URL của port đầu tiên trong `ports`. Boxaz đi theo chuỗi dự phòng, dừng ở bước đầu tiên dùng được:
+  1. `provider-preview` — host preview của provider: E2B `https://<port>-<sandboxID>.e2b.app`, Novita `https://<port>-<sandboxID>.<domain>` (vd. `us-phx-1.sandbox.novita.ai`, không cần traffic token), Daytona theo API preview. Khi box ngủ URL trả 502 cho tới khi wake.
+  2. `ingress` — core phục vụ port ở `<BOXAZ_PUBLIC_URL>/x/<key>-<port>/` (`key` là HMAC theo box, không đoán được) và chuyển từng request qua ingress Proxy sẵn có. Box T2 đã có boxd dial-in nên không cần gì thêm; box T3 (shim) được core thả một agent nhỏ (`boxd ingress`, tải từ `<public>/dl/boxd-linux-<arch>`, cần `BOXAZ_DIST_DIR`) gọi ra `/v1/ingress/connect`. Điều kiện: `BOXAZ_PUBLIC_URL` đã đặt và trông như địa chỉ Internet (không phải localhost/`.local`/IP nội bộ; ép bằng `BOXAZ_INGRESS_ASSUME_PUBLIC=1`) **và** agent kết nối được từ trong sandbox trong 25 s. Hạn chế: URL có tiền tố đường dẫn nên app phải dùng link tương đối; chỉ HTTP, đệm qua core (không WebSocket/streaming, body tối đa 32 MB); request đầu tiên vào box đang ngủ sẽ đánh thức box.
+  3. `tunnel` — Cloudflare quick tunnel chạy trong sandbox (cloudflared tải khi cần, miễn phí, không cần tài khoản) → `https://<random>.trycloudflare.com/`. Hạn chế: không cam kết uptime; URL đổi nếu tunnel phải khởi động lại (vd. wake làm mất tiến trình); request đầu có thể chậm vài giây. Tắt bằng `settings.disable_tunnel` hoặc `BOXAZ_DISABLE_TUNNEL=1`.
+  4. `none` — không có URL; `note` giải thích, `caveats` ghi lý do từng bước bị bỏ qua.
+  Sau khi wake, core dựng lại exposure (khởi động lại agent / kiểm tra lại tunnel, URL mới nếu phải chạy lại); `box down` gỡ hết. Mọi thứ gửi vào sandbox dùng tên trung tính (thư mục `.boxd`, `boxd ingress`, `cloudflared`).
 - **Sleep / wake.** `box sleep` = pause của provider, `box wake` = resume (shim T3 và host T2). Idle sleep của reaper (`idle_minutes`) dùng cùng đường này. Đo live: tiến trình app và file còn nguyên sau khi wake, URL phục vụ lại ngay.
 - **Snapshot T3.** Shim tar `work memory AGENTS.md` trong sandbox, kéo về core (`$BOXAZ_DATA_DIR/snapshots/<snap>.tar.gz`, `location=local://…`, tối đa 64 MB; lớn hơn cần object storage, khi đó sandbox tự upload lên URL presign). Restore đẩy tarball lên và giải nén thay `/work` + `/memory` (giữ AGENTS.md của box). Snapshot của shim restore được vào box sandbox khác; `box fork` từ snapshot T3 tạo một sandbox mới cùng provider. Retention xoá cả file tarball ở core.
 - **Clone box sandbox.** Provider có fork gốc (E2B, Prized): `POST /boxes/:id/clone` gọi fork của provider (bộ nhớ + đĩa, tiến trình đang chạy cũng được nhân bản), rồi đăng ký sandbox con thành host T3 mới. Provider không có fork (Novita): snapshot → sandbox mới → restore (file được nhân bản, tiến trình phải chạy lại). Box T2 dial-in chưa clone được (trả gợi ý dùng `sandbox_mode=shim`).
@@ -361,7 +368,7 @@ Kết quả live 2026-10-27 (`scripts/live-deploy.sh`, repo `heroku/node-js-samp
 |---|---|---|---|
 | box up | 0.44 s | 0.69 s | 4.2 s |
 | clone + `npm install` | 3.0 s | 3.0 s | 3.7 s |
-| URL công khai → 200 "Hello World!" | có, 0.14 s | có, 0.2 s | không có preview |
+| URL công khai → 200 "Hello World!" | có, 0.14 s | có, 0.2 s | không có preview → tunnel / ingress (bảng dưới) |
 | sleep (pause) / wake (resume) | 0.19 s / 0.17 s | 0.77 s / 0.21 s | 0.34 s / 0.30 s |
 | tiến trình + file sau wake | còn | còn | file còn |
 | idle sleep (`idle_minutes=1`) | 65 s | 65 s | — |
@@ -371,3 +378,29 @@ Kết quả live 2026-10-27 (`scripts/live-deploy.sh`, repo `heroku/node-js-samp
 
 Chạy: `E2B_API_KEY=… scripts/live-deploy.sh`, `SANDBOX_PROVIDER=novita NOVITA_API_KEY=… scripts/live-deploy.sh` (`SKIP_FORK=1`, `SKIP_IDLE=1` để ít sandbox / nhanh hơn). Script tạo tối đa 2 sandbox cùng lúc, có watchdog xoá mọi sandbox `managed=1` sau 280 s, và kiểm tra provider không còn sandbox nào. Test không cần mạng: `e2e/deploy_test.go` (provider giả có/không fork: URL preview, ports, sleep→pause, snapshot/restore, fork, clone, dọn dẹp) và `TestShimT3` (snapshot/restore/fork của shim).
 
+Chạy lại sau khi đổi tên (2026-10-27, `live-deploy.sh`): E2B box up 0.44 s, npm install 5.0 s, URL → 200 0.17 s, sleep/wake 0.16/0.19 s, idle sleep 63 s, snapshot/restore 0.31/0.17 s, fork 0.44 s, clone 1.7 s (tiến trình còn); Novita box up 0.58 s, install 4.8 s, URL → 200 0.20 s, sleep/wake 0.59/0.18 s, idle sleep 64 s, snapshot/restore 0.60/0.45 s, fork 1.3 s, clone 1.6 s (chạy lại app). Không lỗi.
+
+**URL công khai trên Prized (không có preview)** — `scripts/live-publicurl.sh` (2026-10-27, `heroku/node-js-sample`, cổng 8000):
+
+| | `MODE=tunnel` (không đặt `BOXAZ_PUBLIC_URL`) | `MODE=ingress` (core lộ ra qua cloudflared quick tunnel làm `BOXAZ_PUBLIC_URL`) |
+|---|---|---|
+| kind / URL | `tunnel`, `https://<random>.trycloudflare.com/` | `ingress`, `<public>/x/<key>-8000/` |
+| box up / clone + `npm install` | 4.3 s / 3.6 s | 4.1 s / 3.4 s |
+| `GET /ports` lần đầu (dựng exposure) | 7.9 s (tải cloudflared + chờ URL) | 0.53 s (tải agent + kết nối) |
+| curl từ ngoài → 200 "Hello World!" | 0.11 s (sau đó 0.08 s) | 0.23 s (sau đó 0.11 s) |
+| URL khi box ngủ | 502 | 200 — request đầu đánh thức box |
+| sleep / wake | 0.26 s / 0.29 s | 0.31 s / 0.19 s |
+| sau wake | tiến trình còn, `GET /ports` 7.2 s, URL giữ nguyên, 200 sau 0.08 s | tiến trình còn, `GET /ports` 9 ms, URL giữ nguyên, 200 sau 0.10 s |
+| box down → URL chết | 0.05 s (tunnel còn trả lời vài giây khi Prized đang xoá, rồi 530) | 0.1 s → 404 ngay |
+
+Chạy: `PRIZED_API_KEY=… scripts/live-publicurl.sh` (tunnel) hoặc `MODE=ingress PRIZED_API_KEY=… scripts/live-publicurl.sh` (cần `cloudflared` trong PATH; script tự build `boxd-linux-amd64/arm64` vào `BOXAZ_DIST_DIR`). Một sandbox, watchdog 280 s. Test không cần mạng: `e2e/publicurl_test.go` (agent boxd thật tải từ `/dl`, cloudflared giả).
+
+
+## 12. Đổi tên Boxa → Boxaz
+
+Sản phẩm đổi tên thành **Boxaz**: binary `boxaz-core` (trước là `boxa-core`), biến môi trường `BOXAZ_*`, systemd `boxaz-core.service`, module Go `boxaz/core`, SDK `boxaz` (Python) / `Boxaz` (TypeScript). Lớp tương thích giữ cấu hình cũ chạy được:
+
+- `BOXA_*` vẫn được đọc khi `BOXAZ_*` cùng tên chưa đặt (tên mới luôn thắng); core in một dòng cảnh báo deprecated lúc khởi động. Dashboard (`next.config.ts`) và SDK làm tương tự với `BOXA_*` / `NEXT_PUBLIC_BOXA_*`.
+- Dữ liệu cũ: `<data>/boxa.db` được dùng nếu chưa có `boxaz.db`; `/var/lib/boxa/memory`, container `boxa-*`, file `.boxa.json` của driver local, secret hệ thống `BOXA_SYS_*`, cookie `boxa_key` / `boxa_locale`, tham số ingress `boxa_token` / cookie `boxa_t` vẫn được nhận.
+- SDK: `import boxa` (Python) và `Boxa`, `BoxaError`… (TypeScript) là alias deprecated.
+- Mọi thứ provider nhìn thấy (tên `mgr-*`, nhãn `managed`/`mgr-host`, User-Agent `sandbox-client/1`) vẫn trung tính, không chứa tên sản phẩm.
