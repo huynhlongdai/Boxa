@@ -36,8 +36,9 @@ type gatewayState struct {
 }
 
 type previewEntry struct {
-	url   string
-	until time.Time
+	url    string
+	header map[string]string
+	until  time.Time
 }
 
 // WakeOp is one in-flight wake of a box.
@@ -56,8 +57,11 @@ const (
 // Upstream tells the gateway how to reach a box port.
 type Upstream struct {
 	Kind       string
-	PreviewURL string          // preview: https://<port>-<id>.<domain>
-	Transport  *http.Transport // stream: dials the box port over the link
+	PreviewURL string // preview: https://<port>-<id>.<domain>
+	// Header is added to every upstream request (v1.8: the provider's
+	// traffic token for private preview hosts, E2B-Traffic-Access-Token).
+	Header    map[string]string
+	Transport *http.Transport // stream: dials the box port over the link
 }
 
 // WakePolicy is the effective wake configuration.
@@ -87,12 +91,12 @@ func (m *Manager) WakePolicy(ctx context.Context) WakePolicy {
 // or BOXAZ_GATEWAY_DOMAIN it is the core-relative path /x/<key>-<port>/.
 func (m *Manager) GatewayURL(b *model.Box, port int) string {
 	seg := m.exposureKey(b.ID) + "-" + strconv.Itoa(port)
-	if m.Cfg.GatewayDomain != "" {
+	if d := m.GatewayDomain(context.Background()); d != "" {
 		scheme := "https://"
 		if strings.HasPrefix(m.Cfg.PublicURL, "http://") {
 			scheme = "http://"
 		}
-		return scheme + seg + "." + strings.TrimPrefix(m.Cfg.GatewayDomain, ".") + "/"
+		return scheme + seg + "." + d + "/"
 	}
 	if m.Cfg.PublicURL == "" {
 		return "/x/" + seg + "/"
@@ -181,19 +185,24 @@ func (m *Manager) streamTransport(boxID string, port int) *http.Transport {
 	return actual.(*http.Transport)
 }
 
-// previewFor returns (cached) the provider preview base URL of a port.
-func (m *Manager) previewFor(ctx context.Context, b *model.Box, port int) string {
+// previewFor returns (cached) the provider preview base URL of a port and
+// the headers a private preview host needs.
+func (m *Manager) previewFor(ctx context.Context, b *model.Box, port int) (string, map[string]string) {
 	key := b.ID + ":" + strconv.Itoa(port)
 	if e, ok := m.gw.previews.Load(key); ok && time.Now().Before(e.(previewEntry).until) {
-		return e.(previewEntry).url
+		return e.(previewEntry).url, e.(previewEntry).header
 	}
 	h, err := m.Store.GetHost(ctx, b.HostID)
 	if err != nil {
-		return ""
+		return "", nil
 	}
 	u := m.sandboxPreview(ctx, h, port)
-	m.gw.previews.Store(key, previewEntry{url: u, until: time.Now().Add(10 * time.Minute)})
-	return u
+	hdr, err := m.previewHeaders(ctx, h)
+	if err != nil {
+		return "", nil // private preview without its token is unreachable: retry next request
+	}
+	m.gw.previews.Store(key, previewEntry{url: u, header: hdr, until: time.Now().Add(10 * time.Minute)})
+	return u, hdr
 }
 
 // GatewayUpstream picks how to reach port of a running box, waiting (until
@@ -202,8 +211,8 @@ func (m *Manager) GatewayUpstream(ctx context.Context, b *model.Box, port int) (
 	virtual := m.Hub.IsVirtual(b.HostID)
 	if virtual {
 		if _, ok := m.ingressPeer(b.ID); !ok {
-			if u := m.previewFor(ctx, b, port); u != "" {
-				return &Upstream{Kind: UpstreamPreview, PreviewURL: strings.TrimRight(u, "/")}, nil
+			if u, hdr := m.previewFor(ctx, b, port); u != "" {
+				return &Upstream{Kind: UpstreamPreview, PreviewURL: strings.TrimRight(u, "/"), Header: hdr}, nil
 			}
 		}
 	}

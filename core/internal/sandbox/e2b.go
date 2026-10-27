@@ -38,8 +38,11 @@ type E2B struct {
 	fork     bool
 	// noAutoResume is set after the API rejected lifecycle autoResume once.
 	noAutoResume bool
-	mu           sync.Mutex
-	meta         map[string]e2bSandbox
+	// privTraffic: the API honours network.allowPublicTraffic=false and
+	// answers a trafficAccessToken (E2B; Novita per its SDK + live check).
+	privTraffic bool
+	mu          sync.Mutex
+	meta        map[string]e2bSandbox
 }
 
 type e2bSandbox struct {
@@ -47,13 +50,16 @@ type e2bSandbox struct {
 	TemplateID      string `json:"templateID"` // build id (e.g. rki5dems9wqfm4r03t7g)
 	Alias           string `json:"alias"`      // template name as created ("base")
 	EnvdAccessToken string `json:"envdAccessToken"`
-	Domain          string `json:"domain"`
-	State           string `json:"state"`
-	CPUCount        int    `json:"cpuCount"`
-	MemoryMB        int    `json:"memoryMB"`
-	EnvdVersion     string `json:"envdVersion"`
-	apiBase         string
-	known           bool // full record seen (Novita's envd has no access token)
+	// TrafficAccessToken is answered by create / connect / fork for
+	// sandboxes created with allowPublicTraffic=false (null otherwise).
+	TrafficAccessToken string `json:"trafficAccessToken"`
+	Domain             string `json:"domain"`
+	State              string `json:"state"`
+	CPUCount           int    `json:"cpuCount"`
+	MemoryMB           int    `json:"memoryMB"`
+	EnvdVersion        string `json:"envdVersion"`
+	apiBase            string
+	known              bool // full record seen (Novita's envd has no access token)
 }
 
 // template is the name the sandbox was created from: the alias, not the
@@ -76,8 +82,13 @@ func (d *E2B) remember(sb e2bSandbox, api, domain string) {
 	}
 	sb.apiBase, sb.known = api, true
 	d.mu.Lock()
-	if old, ok := d.meta[sb.SandboxID]; ok && sb.EnvdAccessToken == "" {
-		sb.EnvdAccessToken = old.EnvdAccessToken
+	if old, ok := d.meta[sb.SandboxID]; ok {
+		if sb.EnvdAccessToken == "" {
+			sb.EnvdAccessToken = old.EnvdAccessToken
+		}
+		if sb.TrafficAccessToken == "" {
+			sb.TrafficAccessToken = old.TrafficAccessToken
+		}
 	}
 	d.meta[sb.SandboxID] = sb
 	d.mu.Unlock()
@@ -86,7 +97,7 @@ func (d *E2B) remember(sb e2bSandbox, api, domain string) {
 // NewE2B returns the E2B driver (apiBase "" = https://api.e2b.app).
 func NewE2B(c *http.Client, apiBase string) *E2B {
 	d := &E2B{h: newHTTP(c), apiBase: orStr(apiBase, "https://api.e2b.app"), domain: "e2b.app", keyHeader: "X-API-Key",
-		idHeader: "E2b-Sandbox-Id", portHeader: "E2b-Sandbox-Port", fork: true, meta: map[string]e2bSandbox{}}
+		idHeader: "E2b-Sandbox-Id", portHeader: "E2b-Sandbox-Port", fork: true, privTraffic: true, meta: map[string]e2bSandbox{}}
 	d.info = Info{ID: "e2b", Name: "E2B", Tier: "T2", Adapter: "native", Verification: VerifiedLive,
 		VerifiedNote: "Full lifecycle verified live on the Hobby plan on 2026-10-27 (template base = 2 vCPU / 512 MB / 22 GB root fs, 20 GB free, envd 0.10.0): create ~0.2 s, create→first exec ~0.35 s, exec ~30-90 ms, 200k-line exec ~0.14 s, file put/get ~25-45 ms, pause ~0.15 s, resume ~0.18 s, fork ~0.5-0.7 s, delete ~55 ms; also boxaz-core box up/exec/down end to end. Control plane per e2b-dev/infra spec/openapi.yml, exec via envd Connect RPC process.Process/Start. Deploy test through boxaz-core (scripts/live-deploy.sh, 2026-10-27): git clone + npm install of heroku/node-js-sample ~3 s; preview URL https://<port>-<id>.e2b.app is public (first 200 in ~0.14 s, 502 while paused); box sleep = pause ~0.19 s, wake = resume ~0.17 s with the app process and files intact; idle sleep after idle_minutes; T3 snapshot ~0.26 s, restore ~0.14 s, fork onto a new sandbox ~0.56 s, clone via native fork ~1.8 s (running process cloned, URL serves at once).",
 		Docs:         "https://e2b.dev/docs", Website: "https://e2b.dev", Initials: "E2", Color: "#ff8800",
@@ -192,6 +203,15 @@ func (d *E2B) Create(ctx context.Context, c Cred, s Spec) (*Sandbox, error) {
 	if len(s.Env) > 0 {
 		body["envVars"] = s.Env
 	}
+	// v1.8: the preview host refuses requests without the sandbox's traffic
+	// access token (create-only option); the Boxaz gateway adds it upstream.
+	if s.PrivateTraffic && d.privTraffic {
+		body["network"] = map[string]any{"allowPublicTraffic": false}
+		// Novita refuses a private sandbox unless envd access is secured
+		// ("secure": true → envdAccessToken, sent as X-Access-Token); E2B
+		// ignores the flag (always secured).
+		body["secure"] = true
+	}
 	// v1.7 native wake: paused sandboxes resume on their own when traffic
 	// reaches the preview host (lifecycle onTimeout=pause + autoResume).
 	// BOXAZ_NATIVE_AUTORESUME=0 turns it off; an API that rejects the field
@@ -221,7 +241,11 @@ func (d *E2B) Create(ctx context.Context, c Cred, s Spec) (*Sandbox, error) {
 		return nil, fmt.Errorf("create answered without sandboxID")
 	}
 	d.remember(sb, api, d.domainFor(c, s.Region))
-	return &Sandbox{ID: sb.SandboxID, State: StateRunning, Region: s.Region, Template: tpl, Meta: map[string]string{"domain": orStr(sb.Domain, d.domainFor(c, s.Region))}}, nil
+	meta := map[string]string{"domain": orStr(sb.Domain, d.domainFor(c, s.Region))}
+	if body["network"] != nil && sb.TrafficAccessToken != "" {
+		meta[MetaPrivateTraffic] = "1"
+	}
+	return &Sandbox{ID: sb.SandboxID, State: StateRunning, Region: s.Region, Template: tpl, Meta: meta}, nil
 }
 
 func (d *E2B) lookup(ctx context.Context, c Cred, id string) (e2bSandbox, error) {
@@ -336,7 +360,11 @@ func (d *E2B) Fork(ctx context.Context, c Cred, id string) (*Sandbox, error) {
 	dom := d.meta[id].Domain
 	d.mu.Unlock()
 	d.remember(ch, api, orStr(dom, d.domainFor(c, "")))
-	return &Sandbox{ID: ch.SandboxID, State: StateRunning, Template: ch.template(), Meta: map[string]string{"domain": orStr(ch.Domain, orStr(dom, d.domain))}}, nil
+	meta := map[string]string{"domain": orStr(ch.Domain, orStr(dom, d.domain))}
+	if ch.TrafficAccessToken != "" {
+		meta[MetaPrivateTraffic] = "1" // the child inherits the source's network config
+	}
+	return &Sandbox{ID: ch.SandboxID, State: StateRunning, Template: ch.template(), Meta: meta}, nil
 }
 
 func (d *E2B) PreviewURL(ctx context.Context, c Cred, id string, port int) (string, error) {
@@ -345,6 +373,35 @@ func (d *E2B) PreviewURL(ctx context.Context, c Cred, id string, port int) (stri
 		return "", err
 	}
 	return fmt.Sprintf("https://%d-%s.%s", port, id, orStr(m.Domain, d.domain)), nil
+}
+
+// PrivateTrafficSupported reports whether Create honours Spec.PrivateTraffic.
+func (d *E2B) PrivateTrafficSupported() bool { return d.privTraffic }
+
+// PreviewHeaders returns the header the preview host wants for a sandbox
+// created with allowPublicTraffic=false: E2B-Traffic-Access-Token (same name
+// on Novita). A token core no longer holds (e.g. after a restart: GET
+// /sandboxes/{id} does not answer it) is fetched again with POST /connect,
+// which answers the sandbox record incl. the token.
+func (d *E2B) PreviewHeaders(ctx context.Context, c Cred, id string) (map[string]string, error) {
+	d.mu.Lock()
+	m := d.meta[id]
+	d.mu.Unlock()
+	if m.TrafficAccessToken == "" {
+		api := orStr(m.apiBase, d.api(c, ""))
+		var sb e2bSandbox
+		if err := d.h.do(ctx, "POST", api+"/sandboxes/"+url.PathEscape(id)+"/connect", d.hdr(c), map[string]any{"timeout": d.resumeTimeout()}, &sb); err != nil {
+			return nil, err
+		}
+		if sb.SandboxID == id {
+			d.remember(sb, api, orStr(m.Domain, d.domainFor(c, "")))
+		}
+		m.TrafficAccessToken = sb.TrafficAccessToken
+	}
+	if m.TrafficAccessToken == "" {
+		return nil, nil // public sandbox: nothing to add
+	}
+	return map[string]string{"E2B-Traffic-Access-Token": m.TrafficAccessToken}, nil
 }
 
 func (d *E2B) List(ctx context.Context, c Cred) ([]Sandbox, error) {

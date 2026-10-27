@@ -257,6 +257,8 @@ func (s *Server) proxyGateway(w http.ResponseWriter, r *http.Request, b *model.B
 				pr.Out.Host = inHost
 			}
 			h := pr.Out.Header
+			// a client must never smuggle its own provider traffic token
+			h.Del("E2b-Traffic-Access-Token")
 			// edge headers of the inbound hop (Cloudflare tunnel / CDN) must not
 			// reach an upstream that sits behind a CDN itself (loop detection)
 			for k := range h {
@@ -290,6 +292,9 @@ func (s *Server) proxyGateway(w http.ResponseWriter, r *http.Request, b *model.B
 			}
 			if ip := clientIP(pr.In); ip != "" {
 				h.Set("X-Forwarded-For", ip)
+			}
+			for k, v := range up.Header {
+				h.Set(k, v) // private preview host: the sandbox traffic token
 			}
 		},
 		Transport:     tr,

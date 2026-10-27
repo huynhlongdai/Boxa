@@ -4,7 +4,7 @@
 import * as React from "react";
 import { useTranslations } from "next-intl";
 import { useSWRConfig } from "swr";
-import { AlertTriangle, ExternalLink, KeyRound, Plus, RefreshCw, RotateCcw, ScrollText, Zap } from "lucide-react";
+import { AlertTriangle, ExternalLink, KeyRound, Plus, RefreshCw, RotateCcw, ScrollText, ShieldCheck, Zap } from "lucide-react";
 import { api, paths } from "@/lib/api";
 import { useAction, useApi } from "@/lib/hooks";
 import { useFmt } from "@/lib/format";
@@ -248,9 +248,14 @@ function PortRow({ box, pv, inbound }: { box: Box; pv: PortView; inbound: boolea
             <a href={providerUrl} target="_blank" rel="noreferrer" className="inline-flex min-w-0 items-center gap-1 break-all text-muted-foreground hover:text-foreground"><Mono>{providerUrl}</Mono> <ExternalLink className="size-3 shrink-0" /></a>
           </div>
         )}
-        {tokenMode && inbound && (
+        {tokenMode && inbound && pv.provider_preview !== "private" && (
           <p className="flex gap-1.5 rounded-md border border-st-warning/30 bg-st-warning/5 p-2 text-[12.5px] text-st-warning" data-testid="preview-caveat">
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" /> {t("previewCaveat")}
+          </p>
+        )}
+        {pv.provider_preview === "private" && (
+          <p className="flex gap-1.5 rounded-md border border-st-running/30 bg-st-running/5 p-2 text-[12.5px] text-st-running" data-testid="preview-private">
+            <ShieldCheck className="mt-0.5 size-3.5 shrink-0" /> {t("previewPrivate")}
           </p>
         )}
         {pv.caveats?.length ? (

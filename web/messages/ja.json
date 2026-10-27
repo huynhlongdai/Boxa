@@ -1637,6 +1637,37 @@
       "follow": "追従",
       "refresh": "更新",
       "noLogs": "まだ出力はありません。"
-    }
+    },
+    "previewPrivate": "このポートのプロバイダー側プレビュー URL は直接アクセスを拒否します（プライベートサンドボックス）。アプリに届くのはこの Boxaz URL だけです。"
+  },
+  "gateway": {
+    "title": "ゲートウェイドメイン",
+    "desc": "独自ドメインで box の URL を提供します。box のポートごとにサブドメインを 1 つ、ワイルドカード DNS レコード経由で（例: Cloudflare Tunnel、deploy/cloudflare-tunnel を参照）。",
+    "mode": "URL 方式",
+    "modeHost": "ホスト名ベース",
+    "modePath": "パスベース",
+    "modeRelative": "相対（公開 URL なし）",
+    "domain": "ゲートウェイドメイン",
+    "domainHint": "素のドメイン（例: example.com）。空 = BOXAZ_PUBLIC_URL 配下のパスベース URL。",
+    "fromEnv": "env で設定",
+    "pattern": "box URL の形式",
+    "publicUrl": "公開 URL（core）",
+    "status": "状態",
+    "reachable": "到達可能 · {ms} ms",
+    "unreachable": "到達不可",
+    "notChecked": "未確認",
+    "previewMode": "プロバイダープレビュー",
+    "previewHint": "auto = ゲートウェイがインターネットから届くときはプライベート。プライベート: 新しい E2B / Novita サンドボックスはプレビューホストへの直接アクセスを拒否し、サンドボックスのトラフィックトークンを付けるゲートウェイだけが入れます。",
+    "pmAuto": "自動",
+    "pmPrivate": "プライベート",
+    "pmPublic": "公開",
+    "privateOn": "新しいサンドボックスはプライベート",
+    "privateOff": "プロバイダープレビューは公開",
+    "providers": "プロバイダー別",
+    "provPrivate": "プレビュー非公開",
+    "provPublic": "プレビュー公開",
+    "provNone": "プレビューホストなし",
+    "reserved": "予約サブドメイン（box には割り当てない）",
+    "recheck": "今すぐ確認"
   }
 }

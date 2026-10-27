@@ -1637,6 +1637,37 @@
       "follow": "Follow",
       "refresh": "Refresh",
       "noLogs": "No output yet."
-    }
+    },
+    "previewPrivate": "The provider's own preview URL for this port refuses direct traffic (private sandbox): only this Boxaz URL reaches the app."
+  },
+  "gateway": {
+    "title": "Gateway domain",
+    "desc": "Box URLs on your own domain, one subdomain per box port, through a wildcard DNS record (e.g. a Cloudflare Tunnel, see deploy/cloudflare-tunnel).",
+    "mode": "URL mode",
+    "modeHost": "host-based",
+    "modePath": "path-based",
+    "modeRelative": "relative (no public URL)",
+    "domain": "Gateway domain",
+    "domainHint": "Bare domain, e.g. example.com. Empty = path-based URLs under BOXAZ_PUBLIC_URL.",
+    "fromEnv": "set by env",
+    "pattern": "Box URL pattern",
+    "publicUrl": "Public URL (core)",
+    "status": "Status",
+    "reachable": "reachable · {ms} ms",
+    "unreachable": "unreachable",
+    "notChecked": "not checked",
+    "previewMode": "Provider previews",
+    "previewHint": "auto = private when the gateway is reachable from the internet. Private: new E2B / Novita sandboxes refuse direct traffic to their preview host; only the gateway (which adds the sandbox traffic token) gets in.",
+    "pmAuto": "auto",
+    "pmPrivate": "private",
+    "pmPublic": "public",
+    "privateOn": "new sandboxes private",
+    "privateOff": "provider previews public",
+    "providers": "Per provider",
+    "provPrivate": "preview private",
+    "provPublic": "preview public",
+    "provNone": "no preview host",
+    "reserved": "Reserved subdomains (never routed to a box)",
+    "recheck": "Check now"
   }
 }

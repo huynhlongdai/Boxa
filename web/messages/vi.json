@@ -1637,6 +1637,37 @@
       "follow": "Theo dõi",
       "refresh": "Tải lại",
       "noLogs": "Chưa có output."
-    }
+    },
+    "previewPrivate": "URL preview riêng của provider cho port này từ chối truy cập thẳng (sandbox private): chỉ URL Boxaz này vào được app."
+  },
+  "gateway": {
+    "title": "Gateway domain",
+    "desc": "URL box trên domain riêng, mỗi port của box một subdomain, qua bản ghi DNS wildcard (vd. Cloudflare Tunnel, xem deploy/cloudflare-tunnel).",
+    "mode": "Kiểu URL",
+    "modeHost": "theo host",
+    "modePath": "theo đường dẫn",
+    "modeRelative": "tương đối (chưa có URL công khai)",
+    "domain": "Gateway domain",
+    "domainHint": "Domain trần, vd. example.com. Để trống = URL theo đường dẫn dưới BOXAZ_PUBLIC_URL.",
+    "fromEnv": "đặt bằng env",
+    "pattern": "Mẫu URL box",
+    "publicUrl": "URL công khai (core)",
+    "status": "Trạng thái",
+    "reachable": "truy cập được · {ms} ms",
+    "unreachable": "không truy cập được",
+    "notChecked": "chưa kiểm tra",
+    "previewMode": "Preview của provider",
+    "previewHint": "auto = private khi gateway truy cập được từ Internet. Private: sandbox E2B / Novita mới từ chối truy cập thẳng vào host preview; chỉ gateway (gửi kèm traffic token của sandbox) vào được.",
+    "pmAuto": "tự động",
+    "pmPrivate": "private",
+    "pmPublic": "public",
+    "privateOn": "sandbox mới ở chế độ private",
+    "privateOff": "preview của provider công khai",
+    "providers": "Theo provider",
+    "provPrivate": "preview private",
+    "provPublic": "preview công khai",
+    "provNone": "không có host preview",
+    "reserved": "Subdomain dành riêng (không bao giờ trỏ vào box)",
+    "recheck": "Kiểm tra ngay"
   }
 }

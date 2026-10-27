@@ -149,12 +149,13 @@ func main() {
 			Enabled: envBool("BOXAZ_MESH_ENABLED"), HeadscaleURL: os.Getenv("BOXAZ_MESH_URL"), APIKey: os.Getenv("BOXAZ_MESH_API_KEY"),
 			User: os.Getenv("BOXAZ_MESH_USER"), BaseDomain: os.Getenv("BOXAZ_MESH_DOMAIN"), DERPHost: os.Getenv("BOXAZ_MESH_DERP_HOST"),
 		},
-		URLKey:        secret.Hash("url:" + master),
-		ProviderChain: chain,
-		AutoSandbox:   envBool("BOXAZ_AUTO_SANDBOX"),
-		SandboxMode:   os.Getenv("BOXAZ_SANDBOX_MODE"),
-		ObjectStore:   objCfg,
-		GatewayDomain: os.Getenv("BOXAZ_GATEWAY_DOMAIN"),
+		URLKey:          secret.Hash("url:" + master),
+		ProviderChain:   chain,
+		AutoSandbox:     envBool("BOXAZ_AUTO_SANDBOX"),
+		SandboxMode:     os.Getenv("BOXAZ_SANDBOX_MODE"),
+		ObjectStore:     objCfg,
+		GatewayDomain:   os.Getenv("BOXAZ_GATEWAY_DOMAIN"),
+		ProviderPreview: os.Getenv("BOXAZ_PROVIDER_PREVIEW"),
 	}
 	if d, err := time.ParseDuration(os.Getenv("BOXAZ_WAKE_HOLD")); err == nil && d > 0 {
 		cfg.WakeHold = d

@@ -243,6 +243,9 @@ type Host struct {
 	Arch     string   `json:"arch,omitempty"`     // amd64 | arm64
 	Features []string `json:"features,omitempty"` // vm, cow:zfs|btrfs|reflink|copy, cache, mesh
 	MeshIP   string   `json:"mesh_ip,omitempty"`  // tailnet address when joined to headscale
+	// v1.8: the provider refuses public traffic to this sandbox's preview
+	// host; only the Boxaz gateway (which adds the traffic token) reaches it.
+	PrivateTraffic bool `json:"private_traffic,omitempty"`
 }
 
 type Provider struct {
@@ -268,13 +271,16 @@ type Provider struct {
 
 // LifecycleCaps tells clients what sleep / wake / fork really mean on a provider.
 type LifecycleCaps struct {
-	MemoryPause      bool   `json:"memory_pause"`        // sleep keeps memory + processes (else: processes restart on wake)
-	WakeOnHTTPNative bool   `json:"wake_on_http_native"` // the provider's own URL wakes a paused box
-	WakeViaGateway   bool   `json:"wake_via_gateway"`    // the Boxaz gateway URL wakes it (always true)
-	Fork             bool   `json:"fork"`                // native fork / clone of a live box
-	InboundHTTP      bool   `json:"inbound_http"`        // the provider exposes ports to the internet itself
-	MaxRuntimeS      int    `json:"max_runtime"`         // max continuous runtime in seconds (0 = unlimited / not documented)
-	Note             string `json:"note,omitempty"`
+	MemoryPause      bool `json:"memory_pause"`        // sleep keeps memory + processes (else: processes restart on wake)
+	WakeOnHTTPNative bool `json:"wake_on_http_native"` // the provider's own URL wakes a paused box
+	WakeViaGateway   bool `json:"wake_via_gateway"`    // the Boxaz gateway URL wakes it (always true)
+	Fork             bool `json:"fork"`                // native fork / clone of a live box
+	InboundHTTP      bool `json:"inbound_http"`        // the provider exposes ports to the internet itself
+	MaxRuntimeS      int  `json:"max_runtime"`         // max continuous runtime in seconds (0 = unlimited / not documented)
+	// PrivatePreview (v1.8): the provider's preview host can refuse traffic
+	// that does not come through the Boxaz gateway (E2B traffic token).
+	PrivatePreview bool   `json:"private_preview"`
+	Note           string `json:"note,omitempty"`
 }
 
 type Offer struct {
@@ -420,6 +426,19 @@ type Settings struct {
 	Location string `json:"location"`
 	// Wake (v1.7) tunes wake-on-request at the Boxaz gateway.
 	Wake WakeSettings `json:"wake"`
+	// Gateway (v1.8) is the host-based gateway domain and how provider
+	// preview hosts are treated; env BOXAZ_GATEWAY_DOMAIN /
+	// BOXAZ_PROVIDER_PREVIEW win over these.
+	Gateway GatewaySettings `json:"gateway"`
+}
+
+// GatewaySettings: Domain "" = path-based gateway URLs under BOXAZ_PUBLIC_URL.
+// ProviderPreview: "auto" (default; private when an internet-facing gateway
+// is configured), "private" (new sandboxes refuse public preview traffic
+// where the provider supports it; URLs go through the gateway) or "public".
+type GatewaySettings struct {
+	Domain          string `json:"domain"`
+	ProviderPreview string `json:"provider_preview"`
 }
 
 // WakeSettings: zero values mean the defaults (hold 10 s, Retry-After 5 s,

@@ -28,9 +28,15 @@ func (s *Server) ingressMW(next http.Handler) http.Handler {
 			return
 		}
 		host := hostOnly(r.Host)
-		// host-based gateway URLs: <key>-<port>.<BOXAZ_GATEWAY_DOMAIN>
-		if d := strings.TrimPrefix(s.M.Cfg.GatewayDomain, "."); d != "" && strings.HasSuffix(strings.ToLower(host), "."+strings.ToLower(d)) {
-			s.gateway(w, r, strings.TrimSuffix(host[:len(host)-len(d)-1], "."), "")
+		// host-based gateway URLs: <key>-<port>.<gateway domain>. Only labels
+		// of that exact shape reach a box; the public URL host (gw.<domain>)
+		// is core itself, reserved and unknown subdomains get a 404.
+		switch kind, seg := s.M.GatewayHost(r.Context(), host); kind {
+		case "box":
+			s.gateway(w, r, seg, "")
+			return
+		case "reserved", "other":
+			gatewayPage(w, r, http.StatusNotFound, model.ErrNotFound, "Nothing here", "No box at this address.", 0)
 			return
 		}
 		if !s.M.IsIngressHost(r.Context(), host) {

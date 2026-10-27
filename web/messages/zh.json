@@ -1637,6 +1637,37 @@
       "follow": "跟随",
       "refresh": "刷新",
       "noLogs": "暂无输出。"
-    }
+    },
+    "previewPrivate": "该端口在服务商处的预览 URL 拒绝直接访问（私有沙箱）：只有这个 Boxaz URL 能访问应用。"
+  },
+  "gateway": {
+    "title": "网关域名",
+    "desc": "在你自己的域名上提供 box URL，每个 box 端口一个子域名，通过通配符 DNS 记录（如 Cloudflare Tunnel，见 deploy/cloudflare-tunnel）。",
+    "mode": "URL 模式",
+    "modeHost": "按主机名",
+    "modePath": "按路径",
+    "modeRelative": "相对路径（无公网 URL）",
+    "domain": "网关域名",
+    "domainHint": "裸域名，如 example.com。留空 = 在 BOXAZ_PUBLIC_URL 下按路径。",
+    "fromEnv": "由环境变量设置",
+    "pattern": "Box URL 格式",
+    "publicUrl": "公网 URL（core）",
+    "status": "状态",
+    "reachable": "可访问 · {ms} ms",
+    "unreachable": "不可访问",
+    "notChecked": "未检查",
+    "previewMode": "服务商预览",
+    "previewHint": "auto = 网关可从公网访问时为私有。私有：新的 E2B / Novita 沙箱拒绝直接访问其预览域名；只有网关（附带沙箱流量令牌）能进入。",
+    "pmAuto": "自动",
+    "pmPrivate": "私有",
+    "pmPublic": "公开",
+    "privateOn": "新沙箱为私有",
+    "privateOff": "服务商预览公开",
+    "providers": "按服务商",
+    "provPrivate": "预览私有",
+    "provPublic": "预览公开",
+    "provNone": "无预览域名",
+    "reserved": "保留子域名（永不指向 box）",
+    "recheck": "立即检查"
   }
 }

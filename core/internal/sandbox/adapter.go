@@ -109,6 +109,9 @@ func (a *adapter) Create(ctx context.Context, token string, req provider.CreateR
 	}
 	z := pickSize(info, Spec{SKU: req.SKU})
 	spec := Spec{Name: req.Name, SKU: z.SKU, CPU: z.CPU, RAMMB: z.RAMMB, DiskGB: z.DiskGB, Region: req.Region, Labels: req.Labels, Template: a.info.DefaultTemplate}
+	if g, ok := a.d.(TrafficGuard); ok && req.PrivateTraffic && g.PrivateTrafficSupported() {
+		spec.PrivateTraffic = true
+	}
 	if spec.Region == "global" {
 		spec.Region = ""
 	}
@@ -137,7 +140,11 @@ func (a *adapter) Create(ctx context.Context, token string, req provider.CreateR
 			return provider.Handle{}, wrapErr(a.info.Name, err)
 		}
 	}
-	return provider.Handle{Ref: sb.ID}, nil
+	hd := provider.Handle{Ref: sb.ID}
+	if sb.Meta[MetaPrivateTraffic] == "1" {
+		hd.Meta = map[string]string{MetaPrivateTraffic: "1"}
+	}
+	return hd, nil
 }
 
 func (a *adapter) Destroy(ctx context.Context, token, ref string) error {

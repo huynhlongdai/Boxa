@@ -230,6 +230,19 @@ for l in $LOCALES; do
 done
 grep -rqs "preview-caveat" .next/static/chunks && grep -rqs "logs-follow" .next/static/chunks && grep -rqs "issue-token-" .next/static/chunks && ok "bundle có UI ports (preview-caveat, issue-token, logs-follow)" || bad "bundle thiếu UI ports"
 
+echo "== v1.8: gateway domain + private provider previews"
+expect "GET /gateway?check=1" "$(jx GET 'gateway?check=1' - 'j.mode+"|"+/^https:\/\/<key>-<port>\./.test(j.url_pattern)+"|"+j.reserved.includes("hark")+"|"+j.providers.find(p=>p.provider==="e2b").private_preview+"|"+j.providers.find(p=>p.provider==="prized").preview_host+"|"+j.check.ok')" "host|true|true|true|false|true"
+expect "GET /capabilities private_preview" "$(jx GET capabilities - 'j.items.find(c=>c.provider==="e2b").private_preview+"|"+j.items.find(c=>c.provider==="prized").private_preview')" "true|false"
+expect "port e2b (token) → provider_preview private" "$(jx GET boxes/box_5e2b70/ports - 'j.ports[0].provider_preview')" "private"
+expect "PUT settings gateway.domain sai → 400" "$(jx PUT settings '{"gateway":{"domain":"not a domain","provider_preview":""}}' 'j.error.code')" "INVALID"
+expect "PUT settings gateway → lưu + /gateway theo" "$(jx PUT settings '{"gateway":{"domain":"Example.COM","provider_preview":"public"}}' 'j.gateway.domain+"|"+j.gateway.provider_preview')" "example.com|public"
+expect "GET /gateway sau khi đổi" "$(jx GET gateway - 'j.domain+"|"+j.domain_source+"|"+j.private_previews')" "example.com|settings|false"
+jx PUT settings '{"gateway":{"domain":"","provider_preview":""}}' 'j.gateway.domain' >/dev/null
+declare -A GWWORD=([vi]="Gateway domain" [en]="Gateway domain" [zh]="网关域名" [ja]="ゲートウェイドメイン")
+for l in $LOCALES; do
+  node -e 'const m=require("./messages/'$l'.json");process.exit(m.gateway&&m.gateway.title==="'"${GWWORD[$l]}"'"&&m.gateway.previewHint&&m.gateway.reserved&&m.gateway.reachable.includes("{ms}")&&m.ports.previewPrivate?0:1)' && ok "[$l] chuỗi gateway.* đủ" || bad "[$l] thiếu chuỗi gateway.*"
+done
+
 echo "== Lỗi được dịch theo ngôn ngữ (code không đổi)"
 declare -A NF=([vi]="Không tìm thấy" [en]="not found" [zh]="未找到" [ja]="見つかりません")
 for l in $LOCALES; do

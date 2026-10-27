@@ -9,6 +9,7 @@ import { discovery } from "./discovery";
 import { DAY, HOUR, MIN, iso, makeSeed, r4, type MockState } from "./seed";
 import { makeSnippet } from "../snippets";
 import { estimateFor, handleV13, recommend, resolveNeeds } from "./v13";
+import { handleV18 } from "./v18";
 import { handleV17, hydrateV17 } from "./v17";
 
 type G = typeof globalThis & { __boxazMock?: MockState };
@@ -444,6 +445,10 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
   if (disc) return disc;
   if (r0 === "agent-kinds") return list(FALLBACK_KINDS);
   if (r0 === "quote" && M === "POST") return quote(s, body);
+
+  // ---- v1.8: gateway domain + private provider previews ----
+  const v18 = handleV18(s, M, segs, q);
+  if (v18) return v18;
 
   // ---- v1.7: ports/gateway, URL token, wake_on_request, app supervisor, capabilities ----
   const v17 = handleV17(s, {
@@ -929,6 +934,12 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
     if (M === "GET") return ok(s.settings);
     if (M === "PUT") {
       const next = { ...s.settings, ...(body as Partial<Settings>) } as Settings;
+      if (next.gateway) {
+        const d = String(next.gateway.domain ?? "").trim().toLowerCase().replace(/^\.+|\.+$/g, "");
+        if (d && !/^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$/.test(d)) return err(400, "INVALID", "bad_gateway_domain");
+        if (!["", "auto", "private", "public"].includes(next.gateway.provider_preview ?? "")) return err(400, "INVALID", "bad_gateway_domain");
+        next.gateway = { domain: d, provider_preview: next.gateway.provider_preview ?? "" };
+      }
       next.features = { ...next.features, gpu: false }; // GPU khoá tới P5
       s.settings = next;
       pushEvent(s, { actor: "user:anh", box_id: null, agent_id: null, type: "settings.updated", message: "Cập nhật cài đặt", cost_usd: null });

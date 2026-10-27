@@ -126,6 +126,11 @@ func (m *Manager) createSandboxHost(ctx context.Context, p *Principal, sp sandbo
 		return nil, err
 	}
 	req := provider.CreateRequest{Name: sandbox.NamePrefix + h.ID[5:], SKU: sku, Region: region, Labels: sandbox.ManagedLabels(h.ID[5:])}
+	// v1.8: refuse public traffic at the provider's preview host when the
+	// gateway is the way in (BOXAZ_PROVIDER_PREVIEW / settings.gateway)
+	if info.Caps.Ports && m.wantPrivatePreview(ctx) && m.privatePreviewSupported(info.ID) {
+		req.PrivateTraffic = true
+	}
 	if mode == "dial" {
 		boot := "bxb_" + secret.RandHex(24)
 		h.BootstrapHash = secret.Hash(boot)
@@ -151,6 +156,7 @@ func (m *Manager) createSandboxHost(ctx context.Context, p *Principal, sp sandbo
 		h = cur
 	}
 	h.ProviderRef = hd.Ref
+	h.PrivateTraffic = hd.Meta[sandbox.MetaPrivateTraffic] == "1"
 	how := "T2: boxd dials in from the sandbox"
 	if mode == "shim" {
 		now := time.Now().UTC()
@@ -162,6 +168,9 @@ func (m *Manager) createSandboxHost(ctx context.Context, p *Principal, sp sandbo
 		how = "T3: exec-only shim at the gateway"
 	}
 	m.Store.PutHost(ctx, h)
+	if h.PrivateTraffic {
+		how += "; provider preview host private (gateway only)"
+	}
 	m.Emit(ctx, p.Actor(), "", "", "host.created", fmt.Sprintf("sandbox %s %s in %s (%s/h, per second) — %s", info.ID, sku, region, fmtUSD(h.PriceHour), how), nil)
 	return h, nil
 }

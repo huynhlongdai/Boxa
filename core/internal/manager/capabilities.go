@@ -44,6 +44,7 @@ func (m *Manager) LifecycleFor(id string) model.LifecycleCaps {
 		}
 	}
 	c.WakeViaGateway = true
+	c.PrivatePreview = c.InboundHTTP && m.privatePreviewSupported(id)
 	return c
 }
 

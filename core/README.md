@@ -158,6 +158,9 @@ Backup: thư mục `/var/lib/boxaz` (SQLite + master key). Nếu dùng Postgres,
 | `BOXAZ_MASTER_KEY` | tự sinh vào `master.key` | khoá mã hoá secrets và token provider |
 | `BOXAZ_ADMIN_KEY` | — | admin key cố định; không đặt thì tự sinh và in một lần |
 | `BOXAZ_ADMIN_KEY_FILE` | — | ghi admin key tự sinh ra file này |
+| `BOXAZ_GATEWAY_DOMAIN` | — | v1.8: URL box host-based `https://<key>-<port>.<domain>/` (cần DNS wildcard + TLS trỏ về core, xem `deploy/cloudflare-tunnel`); thắng `settings.gateway.domain` |
+| `BOXAZ_PROVIDER_PREVIEW` | `auto` | v1.8: `auto` (private khi gateway truy cập được từ Internet) / `private` / `public` — sandbox E2B/Novita có từ chối truy cập thẳng URL preview hay không |
+| `BOXAZ_GATEWAY_RESERVED` | — | v1.8: thêm subdomain dành riêng (phân cách bằng dấu phẩy), không bao giờ trỏ vào box |
 | `BOXAZ_PUBLIC_URL` | — | URL https của core để boxd/cloud-init gọi về (bắt buộc khi tạo host qua provider) |
 | `BASE_DOMAIN` | `sslip.io` | domain cho URL box |
 | `BOXAZ_BOOTSTRAP_TOKEN` | — | token chung cho boxd tự đăng ký (install.sh/dev) |
@@ -429,3 +432,33 @@ Kết quả live 2026-10-27 (`scripts/live-app.sh`, repo `heroku/node-js-sample`
 | URL token: không token / Bearer / `?token=` / sau thu hồi | 401 / 200 / 302 / 401 | 401 / 200 / 302 / 401 |
 
 Chạy: `PROVIDERS="prized e2b" PRIZED_API_KEY=… E2B_API_KEY=… scripts/live-app.sh` (cần `cloudflared`). Mỗi provider tối đa 2 sandbox cùng lúc (box + clone), watchdog xoá mọi sandbox `managed=1` sau 280 s, cuối cùng kiểm tra provider không còn sandbox nào. Test không cần mạng: `e2e/v17_test.go` (gateway, wake, token, app), `boxd/supervisor_test.go`, `sandbox/appscript_test.go`; `scripts/e2e.sh` chạy cả luồng v1.7 với core + boxd thật.
+
+## 14. v1.8 — gateway trên domain thật (boxs.tech) + chặn URL preview của provider
+
+Mục tiêu: URL app ổn định, đẹp, có TLS trên domain riêng, và token URL thật sự bảo vệ được app (không còn đường vòng qua URL preview của provider).
+
+- **Gateway trên domain riêng.** `BOXAZ_GATEWAY_DOMAIN=boxs.tech` + `BOXAZ_PUBLIC_URL=https://gw.boxs.tech`: API/dashboard ở `gw.boxs.tech`, mỗi port của box ở `https://<key>-<port>.boxs.tech/` (key = HMAC 20 hex theo box). Universal SSL miễn phí của Cloudflare chỉ phủ wildcard một cấp nên URL dùng một nhãn `<key>-<port>`. Domain cũng đặt được trong dashboard (`settings.gateway.domain`, env thắng).
+- **Subdomain dành riêng.** Core chỉ chuyển vào box nhãn đúng dạng `^[0-9a-f]{20}-[0-9]{1,5}$`; host của `BOXAZ_PUBLIC_URL` và domain trần là core; danh sách dành riêng (`hark`, `mcp`, `gw`, `www`, `api`, `admin`, `app`, `mail`, `status`, `docs`… + `BOXAZ_GATEWAY_RESERVED`) và mọi nhãn khác trả 404. Trước đây `gw.<domain>` bị hiểu nhầm là box. Bản ghi DNS cụ thể (vd. `hark.boxs.tech`, `mcp.boxs.tech` của tunnel khác) luôn thắng wildcard nên không bị ảnh hưởng.
+- **Cloudflare Tunnel.** `deploy/cloudflare-tunnel/`: `setup.sh` (tạo tunnel remotely-managed qua API, ingress `gw.` + `*.` → core, CNAME proxied, ghi token; idempotent, không đụng tunnel/bản ghi khác), `run.sh` (cloudflared, token qua env), `up.sh` / `down.sh` (một lệnh bật/tắt core + cloudflared). Hướng dẫn chi tiết trong `deploy/cloudflare-tunnel/README.md`.
+- **Đóng lỗ hổng URL preview.** `BOXAZ_PROVIDER_PREVIEW=auto` (mặc định): khi gateway truy cập được từ Internet, sandbox mới của E2B và Novita được tạo private (`network.allowPublicTraffic=false`, Novita kèm `secure: true`). Host preview của provider trả 403 nếu thiếu traffic token; chỉ gateway gửi kèm `E2B-Traffic-Access-Token` lên upstream (header của client bị bỏ). Token lấy từ response create/fork, mất sau khi core khởi động lại thì lấy lại qua `POST /sandboxes/{id}/connect`. Port của sandbox private có `kind: gateway`, `url = gateway_url`, `provider_preview: private`; port token không còn caveat "preview vẫn công khai". Fork gốc (clone) giữ chế độ private. Prized không có host preview (đi qua ingress agent → core, URL cũng là `<key>-<port>.<domain>`). Daytona/adapter khác: preview vẫn công khai, port báo `provider_preview: public` và port token có caveat. `public` tắt cơ chế này.
+- **API.** `GET /v1/gateway[?check=1]` → `{mode: host|path|relative, domain, domain_source, public_url, url_pattern, internet_facing, reserved, provider_preview, provider_preview_source, private_previews, providers:[{provider, preview_host, private_preview, note}], check?:{ok, status, latency_ms, error?}}`. `PortView.provider_preview`, `Host.private_traffic`, capability `private_preview`; `settings.gateway {domain, provider_preview}` (domain sai / mode sai → 400).
+- **Dashboard.** Cài đặt → thẻ *Gateway domain*: kiểu URL, mẫu URL, URL công khai + trạng thái (tự kiểm tra, độ trễ), domain (khoá khi đặt bằng env), chính sách preview, badge theo provider, danh sách subdomain dành riêng. Tab Port & app hiện "preview private" thay cho cảnh báo khi port `provider_preview=private`. Đủ 4 ngôn ngữ; mock `BOXAZ_MOCK=1`.
+
+Kết quả live 2026-10-27 (`scripts/live-domain.sh`, `heroku/node-js-sample` qua app spec, cổng 8000, curl từ ngoài qua DNS-over-HTTPS 1.1.1.1, TLS Let's Encrypt `*.boxs.tech` hợp lệ; tunnel `boxaz-gw` id `5b1d9faa-acb1-4014-bda2-40903ecedb81`):
+
+| | E2B | Novita (us-phx-1) | Prized |
+|---|---|---|---|
+| box up / app ready | 0.51 s / 5.6 s | 0.71 s / 3.5 s | 4.5 s / 5.2 s |
+| `https://<key>-8000.boxs.tech/` → 200 lần đầu / ấm | 275 ms / 115 ms | 326 ms / 155 ms | 183 ms / 109 ms |
+| sleep → request → 200 (wake on request) | 378 ms | 489 ms | 531 ms |
+| URL token: không / Bearer / `?token=` / sau thu hồi | 401 / 200 / 302 / 401 | 401 / 200 / 302 / 401 | 401 / 200 / 302 / 401 |
+| URL preview trực tiếp của provider (chạy / ngủ / port token) | 403 / 403 (không đánh thức) / 403 | 403 / 403 / 403 | không có |
+| SSE qua domain | 5 event trải 2.0 s (không đệm) | — | — |
+| clone (fork gốc) | 200 sau 1.0 s, preview của clone 403 | — | — |
+| box down → URL | 404 | 404 | 404 |
+| core khởi động lại → URL | 200 sau 0.54 s (traffic token lấy lại qua connect) | — | — |
+
+Tổng cộng 6 sandbox (E2B 3, Novita 1, Prized 2), không quá 2 cùng lúc; cuối cùng E2B, Novita (cả 2 region) và Prized đều `[]`. Lần đầu Novita trả 400 "cannot create a sandbox without public access unless you enable secure envd access" → thêm `secure: true`.
+
+Chạy lại: `ENV_FILE=…/gateway.env deploy/cloudflare-tunnel/up.sh`, rồi `ENV_FILE=…/gateway.env PROVIDERS="e2b novita prized" scripts/live-domain.sh`. Test không cần mạng: `e2e/v18_test.go` (provider giả có host preview đòi traffic token: URL theo domain, header lên upstream, header giả của client bị bỏ, host dành riêng/khác → 404, settings, chế độ public), `sandbox/TestE2BPrivateTraffic` (body create, token, lấy lại qua connect cho E2B và Novita).
+

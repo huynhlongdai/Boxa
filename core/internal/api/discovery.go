@@ -228,7 +228,7 @@ func (s *Server) agentCard(w http.ResponseWriter, r *http.Request) {
 		"supportsAuthenticatedExtendedCard": false,
 		"x-boxaz": map[string]any{"mcp": base + "/mcp", "openapi": base + "/v1/openapi.json", "tools": base + "/v1/tools?format=openai",
 			"capabilities": base + "/v1/capabilities",
-			"url_tokens":   "box_url_token protects only the Boxaz gateway URL of a port; a provider preview URL of the same port (E2B, Novita, Daytona) stays reachable at the provider for anyone who knows the sandbox id",
+			"url_tokens":   "box_url_token protects only the Boxaz gateway URL of a port; with a gateway domain / internet-facing public URL, E2B and Novita sandboxes are created private (preview host 403 without the sandbox traffic token, which only the gateway adds; ports report provider_preview=private); where provider_preview=public (Daytona, or BOXAZ_PROVIDER_PREVIEW=public) the provider preview URL stays reachable by anyone who knows the sandbox id",
 			"a2a_methods":  []string{"message/send", "message/stream", "tasks/get", "tasks/cancel", "tasks/resubscribe", "tasks/send", "tasks/sendSubscribe"}},
 	})
 }

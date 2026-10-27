@@ -39,9 +39,9 @@ const rnd = (n: number) => Array.from({ length: n }, () => "abcdefghijkmnpqrstuv
 
 /** Capability lifecycle (giống knownLifecycle trong core/internal/manager/capabilities.go). */
 const KNOWN: Record<string, Omit<CapabilityRow, "provider" | "group" | "wake_via_gateway">> = {
-  e2b: { memory_pause: true, wake_on_http_native: true, fork: true, inbound_http: true, max_runtime: 86400, note: "autoResume on the preview host (set at create); runtime cap 24 h Pro / 1 h Hobby, reset by a resume" },
-  novita: { memory_pause: true, wake_on_http_native: true, fork: false, inbound_http: true, max_runtime: 14400, note: "E2B-compatible autoResume; clone = snapshot → new sandbox" },
-  prized: { memory_pause: true, wake_on_http_native: false, fork: true, inbound_http: false, max_runtime: 604800, note: "no inbound HTTP: the gateway reaches the app through the in-box ingress agent (or a tunnel)" },
+  e2b: { memory_pause: true, wake_on_http_native: true, fork: true, inbound_http: true, max_runtime: 86400, private_preview: true, note: "autoResume on the preview host (set at create); runtime cap 24 h Pro / 1 h Hobby, reset by a resume" },
+  novita: { memory_pause: true, wake_on_http_native: true, fork: false, inbound_http: true, max_runtime: 14400, private_preview: true, note: "E2B-compatible autoResume; clone = snapshot → new sandbox" },
+  prized: { memory_pause: true, wake_on_http_native: false, fork: true, inbound_http: false, max_runtime: 604800, private_preview: false, note: "no inbound HTTP: the gateway reaches the app through the in-box ingress agent (or a tunnel)" },
 };
 
 export function capabilities(s: MockState): CapabilityRow[] {
@@ -131,19 +131,27 @@ function portView(b: MBox, v: V17Box, port: number): PortView {
   const access = accessFor(b, port);
   const gw = gatewayURL(v, port);
   const running = b.status === "running";
+  const caps = KNOWN[b.provider];
+  // v1.8: E2B / Novita sandboxes behind an internet-facing gateway are created private
+  const priv = !!caps?.private_preview;
+  const provider_preview: PortView["provider_preview"] = caps?.inbound_http ? (priv ? "private" : "public") : undefined;
   if (access === "token") {
-    return { port, url: gw, kind: "gateway", public: false, gateway_url: gw, access,
+    return { port, url: gw, kind: "gateway", public: false, gateway_url: gw, access, ...(provider_preview ? { provider_preview } : {}),
       note: "token required: open with ?token=<bxt_…> (exchanged for a cookie), Authorization: Bearer <token> or X-Boxaz-Token; issue one with POST /v1/boxes/{id}/ports/{port}/tokens (box url --token)",
       caveats: ["Boxaz gateway URL: wakes a sleeping box on the first request and passes WebSocket/SSE through"] };
   }
-  const caps = KNOWN[b.provider];
+  if (priv) {
+    return { port, url: gw, kind: "gateway", public: true, gateway_url: gw, access, provider_preview: "private",
+      note: `${b.provider} preview host is private (refuses requests without the sandbox traffic token); served through the Boxaz gateway, which wakes a sleeping box`,
+      caveats: ["Boxaz gateway URL: host-based <key>-<port>.<domain>; WebSocket and SSE pass through; a sleeping box is woken by the first request"] };
+  }
   if (caps?.inbound_http && b.provider !== "prized") {
     const host = b.provider === "e2b" ? "e2b.app" : "sandbox.novita.ai";
-    return { port, url: running ? `https://${port}-i${b.id.slice(4)}.${host}` : "", kind: "provider-preview", public: true, gateway_url: gw, access,
+    return { port, url: running ? `https://${port}-i${b.id.slice(4)}.${host}` : "", kind: "provider-preview", public: true, gateway_url: gw, access, provider_preview: "public",
       caveats: ["provider preview host: public to anyone with the URL", ...(running ? [] : ["box is not running: the provider URL answers only while it runs; the gateway URL wakes it"])] };
   }
-  return { port, url: running ? `https://${GW_DOMAIN}/x/${v.key}-${port}/` : "", kind: running ? "ingress" : "none", public: running, gateway_url: gw, access,
-    caveats: running ? ["Boxaz ingress through core (in-box boxd ingress agent)"] : ["box is not running"] };
+  return { port, url: running ? gw : "", kind: running ? "ingress" : "none", public: running, gateway_url: gw, access,
+    caveats: running ? ["served through core at a host-based gateway URL (in-box boxd ingress agent)"] : ["box is not running"] };
 }
 
 function appView(b: MBox, v: V17Box): AppView {

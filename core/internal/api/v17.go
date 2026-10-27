@@ -28,6 +28,7 @@ func (s *Server) routesV17(r chi.Router) {
 	r.Post("/boxes/{id}/ports/{port}/tokens", s.createURLToken)
 	r.Delete("/boxes/{id}/ports/{port}/tokens/{token_id}", s.revokeURLToken)
 	r.Get("/capabilities", s.capabilities)
+	r.Get("/gateway", s.gatewayInfo) // v1.8
 }
 
 func portParam(r *http.Request) (int, error) {
@@ -230,4 +231,11 @@ func (s *Server) revokeURLToken(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) capabilities(w http.ResponseWriter, r *http.Request) {
 	list(w, s.M.Capabilities(r.Context()))
+}
+
+// gatewayInfo is GET /v1/gateway[?check=1] (v1.8): gateway domain, URL
+// pattern, reserved subdomains, provider-preview policy, public URL check.
+func (s *Server) gatewayInfo(w http.ResponseWriter, r *http.Request) {
+	check := r.URL.Query().Get("check")
+	writeJSON(w, 200, s.M.Gateway(r.Context(), check == "1" || check == "true"))
 }

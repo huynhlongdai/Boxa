@@ -41,6 +41,9 @@ type Config struct {
 	// needs wildcard DNS + TLS pointing at core).
 	WakeHold      time.Duration
 	GatewayDomain string
+	// v1.8: BOXAZ_PROVIDER_PREVIEW = auto | private | public (see
+	// model.GatewaySettings); "" = settings.gateway.provider_preview.
+	ProviderPreview string
 	// PublicURLProbe checks a fresh tunnel URL from core (nil = real HTTP GET; tests stub it).
 	PublicURLProbe     func(ctx context.Context, url string) bool
 	BaseDomain         string // overrides settings.base_domain when set
@@ -367,6 +370,15 @@ func (m *Manager) PutSettings(ctx context.Context, s model.Settings) (model.Sett
 	}
 	if s.Reaper.DefaultTTLSeconds < 60 {
 		s.Reaper.DefaultTTLSeconds = 3600
+	}
+	s.Gateway.Domain = normDomain(s.Gateway.Domain)
+	if d := s.Gateway.Domain; d != "" && !validDomain(d) {
+		return s, model.EH(model.ErrInvalid, "Use a bare domain such as example.com (box URLs become <key>-<port>.example.com).", "gateway.domain %q is not a valid domain", d)
+	}
+	switch s.Gateway.ProviderPreview = strings.ToLower(strings.TrimSpace(s.Gateway.ProviderPreview)); s.Gateway.ProviderPreview {
+	case "", "auto", "private", "public":
+	default:
+		return s, model.E(model.ErrInvalid, "gateway.provider_preview must be auto, private or public")
 	}
 	if s.BudgetMonthUSD < 0 {
 		return s, model.E(model.ErrInvalid, "budget_month_usd must be >= 0")

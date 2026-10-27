@@ -56,8 +56,10 @@ const (
 // Caveats shown with each kind.
 var (
 	caveatIngress = "path-prefixed URL (/x/<key>-<port>/): the app must use relative links (X-Forwarded-Prefix is sent); streamed through core (WebSocket and SSE pass through); a sleeping box is woken by the first request (held up to settings.wake.hold_s, then 503 + Retry-After)"
-	caveatGateway = "Boxaz gateway URL: path-prefixed (/x/<key>-<port>/) unless BOXAZ_GATEWAY_DOMAIN is set; WebSocket and SSE pass through; a sleeping box is woken by the first request"
-	caveatTunnel  = "Cloudflare quick tunnel (trycloudflare.com): free and accountless but without uptime guarantee; the URL changes if the tunnel has to restart (e.g. a wake that lost processes); the first request can take a few seconds"
+	caveatGateway = "Boxaz gateway URL: path-prefixed (/x/<key>-<port>/) unless a gateway domain is set (host-based <key>-<port>.<domain>); WebSocket and SSE pass through; a sleeping box is woken by the first request"
+	// caveatHostGateway replaces caveatIngress when a gateway domain is set.
+	caveatHostGateway = "served through core at a host-based gateway URL (<key>-<port>.<domain>, no path prefix); WebSocket and SSE pass through; a sleeping box is woken by the first request (held up to settings.wake.hold_s, then 503 + Retry-After)"
+	caveatTunnel      = "Cloudflare quick tunnel (trycloudflare.com): free and accountless but without uptime guarantee; the URL changes if the tunnel has to restart (e.g. a wake that lost processes); the first request can take a few seconds"
 )
 
 // ingressState holds the live in-box ingress agents (box id → peer).

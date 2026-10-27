@@ -56,6 +56,11 @@ type Spec struct {
 	Env      map[string]string `json:"env,omitempty"`
 	Labels   map[string]string `json:"labels,omitempty"`
 	TimeoutS int               `json:"timeout_s"` // max lifetime requested (0 = provider default)
+	// PrivateTraffic asks the provider to refuse requests to the sandbox's
+	// preview host that do not carry the sandbox's traffic access token
+	// (E2B network.allowPublicTraffic=false). Only drivers implementing
+	// TrafficGuard honour it.
+	PrivateTraffic bool `json:"private_traffic,omitempty"`
 }
 
 // Sandbox is a created sandbox as seen by the provider.
@@ -208,6 +213,19 @@ type Snapshotter interface {
 type Previewer interface {
 	PreviewURL(ctx context.Context, c Cred, id string, port int) (string, error)
 }
+
+// TrafficGuard is implemented by drivers whose preview host can refuse
+// public traffic (v1.8): sandboxes created with Spec.PrivateTraffic answer
+// 403 unless a request carries the headers PreviewHeaders returns, which only
+// the Boxaz gateway adds upstream.
+type TrafficGuard interface {
+	PrivateTrafficSupported() bool
+	PreviewHeaders(ctx context.Context, c Cred, id string) (map[string]string, error)
+}
+
+// MetaPrivateTraffic is set to "1" in Sandbox.Meta (and provider.Handle.Meta)
+// when the provider confirmed the sandbox refuses public preview traffic.
+const MetaPrivateTraffic = "private_traffic"
 
 // Lister lists sandboxes at the provider.
 type Lister interface {

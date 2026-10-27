@@ -76,6 +76,24 @@ type PortView struct {
 	// tokens, WebSocket/SSE pass-through) and its access mode.
 	GatewayURL string `json:"gateway_url,omitempty"`
 	Access     string `json:"access"` // public | token
+	// v1.8: how the provider's own preview host treats this port: "private"
+	// (refuses traffic that does not come through the gateway), "public"
+	// (reachable directly by anyone who knows the sandbox id) or "" (the
+	// provider has no preview host / not a sandbox box).
+	ProviderPreview string `json:"provider_preview,omitempty"`
+}
+
+const caveatPreviewPublic = "the provider preview URL of this port stays reachable at the provider by anyone who knows the sandbox id (this provider cannot refuse public preview traffic, or the sandbox was created public): the token protects only the Boxaz URL"
+
+// hasPreviewHost reports whether a sandbox provider serves ports on its own
+// preview host.
+func (m *Manager) hasPreviewHost(provider string) bool {
+	sp, ok := m.sandboxProv(provider)
+	if !ok || !sp.Info().Caps.Ports {
+		return false
+	}
+	_, ok = sp.Driver().(sandbox.Previewer)
+	return ok
 }
 
 // PortsResult is GET/POST /v1/boxes/{id}/ports.
@@ -89,6 +107,12 @@ func (m *Manager) portView(ctx context.Context, b *model.Box, h *model.Host, por
 	v := m.portViewChain(ctx, b, h, port)
 	v.Access = b.AccessFor(port)
 	v.GatewayURL = m.GatewayURL(b, port)
+	if h != nil && h.Billing == "sandbox" && m.hasPreviewHost(h.Provider) {
+		v.ProviderPreview = "public"
+		if h.PrivateTraffic {
+			v.ProviderPreview = "private"
+		}
+	}
 	if v.Access == model.AccessToken {
 		// token ports are only handed out through the gateway: never the
 		// provider preview / tunnel URL, which would bypass the token
@@ -96,9 +120,13 @@ func (m *Manager) portView(ctx context.Context, b *model.Box, h *model.Host, por
 		if gw == "" {
 			gw = m.GatewayPath(b, port)
 		}
-		return PortView{Port: port, URL: gw, Kind: KindGateway, Public: false, GatewayURL: v.GatewayURL, Access: v.Access,
+		cav := []string{caveatGateway}
+		if v.ProviderPreview == "public" {
+			cav = append(cav, caveatPreviewPublic)
+		}
+		return PortView{Port: port, URL: gw, Kind: KindGateway, Public: false, GatewayURL: v.GatewayURL, Access: v.Access, ProviderPreview: v.ProviderPreview,
 			Note:    "token required: open with ?token=<bxt_…> (exchanged for a cookie), Authorization: Bearer <token> or X-Boxaz-Token; issue one with POST /v1/boxes/{id}/ports/{port}/tokens (box url --token)",
-			Caveats: []string{caveatGateway}}
+			Caveats: cav}
 	}
 	return v
 }
@@ -106,6 +134,14 @@ func (m *Manager) portView(ctx context.Context, b *model.Box, h *model.Host, por
 func (m *Manager) portViewChain(ctx context.Context, b *model.Box, h *model.Host, port int) PortView {
 	v := PortView{Port: port, Kind: "none"}
 	if h != nil && h.Billing == "sandbox" {
+		if h.PrivateTraffic {
+			// the provider refuses direct preview traffic: the gateway (which
+			// adds the sandbox traffic token upstream) is the only way in
+			v.URL, v.Kind, v.Public = m.GatewayURL(b, port), KindGateway, true
+			v.Note = h.Provider + " preview host is private (refuses requests without the sandbox traffic token); served through the Boxaz gateway, which wakes a sleeping box"
+			v.Caveats = []string{caveatGateway}
+			return v
+		}
 		if u := m.sandboxPreview(ctx, h, port); u != "" {
 			v.URL, v.Kind, v.Public = u+"/", KindPreview, true
 			v.Note = h.Provider + " preview URL: serve on 0.0.0.0:" + strconv.Itoa(port) + "; works while the box runs (sleeping boxes answer 502 until woken)"
@@ -113,6 +149,15 @@ func (m *Manager) portViewChain(ctx context.Context, b *model.Box, h *model.Host
 		}
 		// no provider preview: Boxaz ingress, then an in-box tunnel
 		v = m.ensurePublic(ctx, b, port, false)
+		if v.Kind == "ingress" && m.GatewayDomain(ctx) != "" {
+			// same path through core, but the clean host-based URL (v1.8)
+			v.URL = m.GatewayURL(b, port)
+			for i, c := range v.Caveats {
+				if c == caveatIngress {
+					v.Caveats[i] = caveatHostGateway
+				}
+			}
+		}
 		v.Caveats = append([]string{h.Provider + " has no public preview URLs"}, v.Caveats...)
 		return v
 	}
@@ -283,6 +328,10 @@ func (m *Manager) cloneSandbox(ctx context.Context, p *Principal, src *model.Box
 		}
 		if h, err = m.adoptSandbox(ctx, p, srcHost, child.ID); err != nil {
 			return fail(err)
+		}
+		if child.Meta[sandbox.MetaPrivateTraffic] == "1" || srcHost.PrivateTraffic {
+			h.PrivateTraffic = true // a fork keeps the source's network config
+			m.Store.PutHost(ctx, h)
 		}
 		nb.HostID = h.ID
 		m.Store.PutBox(ctx, nb)

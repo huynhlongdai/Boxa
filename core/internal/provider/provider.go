@@ -29,12 +29,18 @@ type CreateRequest struct {
 	// v1.4 (T2/T3 sandbox providers): shell command run once inside the
 	// sandbox after it starts (starts `boxd --dial`); empty = exec-only shim.
 	Bootstrap string
+	// v1.8: refuse public traffic at the provider's preview host (sandbox
+	// providers implementing sandbox.TrafficGuard; ignored elsewhere).
+	PrivateTraffic bool
 }
 
 // Handle identifies a created host at the provider.
 type Handle struct {
 	Ref string `json:"ref"`
 	IP  string `json:"ip"`
+	// Meta carries provider facts about the created host (v1.8:
+	// "private_traffic" = "1" when the preview host refuses public traffic).
+	Meta map[string]string `json:"meta,omitempty"`
 }
 
 // Caps declares which optional verbs a provider supports.

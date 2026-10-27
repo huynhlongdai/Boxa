@@ -67,6 +67,7 @@ import type {
   AppSpec,
   AppView,
   CapabilityRow,
+  GatewayInfo,
   PortAccess,
   PortsResult,
   PortView,
@@ -223,6 +224,8 @@ export const paths = {
   /** URL SSE (EventSource) cho log app: event `log` {data, offset, truncated}. */
   boxAppLogsStream: (id: string) => `${PROXY_BASE}/boxes/${id}/app/logs?follow=1`,
   capabilities: "/capabilities",
+  // v1.8
+  gateway: (check?: boolean) => `/gateway${check ? "?check=1" : ""}`,
   // v1.1 discovery (không cần auth). Proxy: /api/boxaz/<x> → <BOXAZ_API>/<x>; tiền tố "_root/" → gốc Core (bỏ /v1).
   openapi: "/openapi.json",
   tools: (format: ToolFormat) => `/tools${qs({ format })}`,
@@ -377,6 +380,7 @@ export const api = {
   restartApp: (id: string) => http.post<AppView>(`${paths.boxApp(id)}/restart`),
   appLogs: (id: string, offset?: number) => http.get<AppLogsResult>(paths.boxAppLogs(id, offset)),
   capabilities: () => http.get<List<CapabilityRow>>(paths.capabilities),
+  gateway: (check?: boolean) => http.get<GatewayInfo>(paths.gateway(check)),
 };
 
 export function errMsg(e: unknown): string {

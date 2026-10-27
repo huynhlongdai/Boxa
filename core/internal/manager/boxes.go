@@ -446,11 +446,18 @@ func (m *Manager) boxURL(ctx context.Context, b *model.Box, h *model.Host) strin
 	}
 	if h != nil && h.Billing == "sandbox" {
 		// sandbox boxes are reached through the provider's preview host
-		// (E2B https://<port>-<id>.e2b.app, Novita …sandbox.novita.ai)
+		// (E2B https://<port>-<id>.e2b.app, Novita …sandbox.novita.ai);
+		// a private preview host (v1.8) only through the Boxaz gateway
+		if h.PrivateTraffic {
+			return m.GatewayURL(b, b.Ports[0])
+		}
 		if u := m.sandboxPreview(ctx, h, b.Ports[0]); u != "" {
 			return u + "/"
 		}
 		if e := b.ExposureFor(b.Ports[0]); e != nil { // ingress / tunnel fallback
+			if e.Kind == "ingress" && m.GatewayDomain(ctx) != "" {
+				return m.GatewayURL(b, b.Ports[0])
+			}
 			return e.URL
 		}
 		return ""

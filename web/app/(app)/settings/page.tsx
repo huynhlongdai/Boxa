@@ -17,6 +17,7 @@ import { LocaleGrid } from "@/components/locale-switcher";
 import { LOCALES, LOCALE_NATIVE } from "@/i18n/config";
 import { NotifySettingsCard } from "@/components/boxaz/notify-settings";
 import { StorageSettingsCard } from "@/components/boxaz/storage-settings";
+import { GatewaySettingsCard } from "@/components/boxaz/gateway-settings";
 
 function Form({ initial }: { initial: Settings }) {
   const [s, setS] = React.useState<Settings>(initial);
@@ -87,6 +88,8 @@ function Form({ initial }: { initial: Settings }) {
           </label>
         </CardContent>
       </Card>
+
+      <GatewaySettingsCard value={s.gateway ?? { domain: "", provider_preview: "" }} onChange={(v) => upd("gateway", v)} />
 
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><PiggyBank className="size-4" /> {t("budget")}</CardTitle></CardHeader>

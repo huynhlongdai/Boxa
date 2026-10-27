@@ -371,6 +371,31 @@ export interface Settings {
   features: { gpu: boolean };
   /** v1.1: ngôn ngữ mặc định cho thông báo (Telegram/email) và lỗi API. */
   locale?: string;
+  /** v1.8: gateway domain (URL box <key>-<port>.<domain>) + chính sách preview của provider. Env BOXAZ_GATEWAY_DOMAIN / BOXAZ_PROVIDER_PREVIEW thắng. */
+  gateway?: GatewaySettings;
+}
+
+export type ProviderPreviewMode = "auto" | "private" | "public";
+
+export interface GatewaySettings {
+  domain: string;
+  provider_preview: ProviderPreviewMode | "";
+}
+
+/** v1.8: GET /v1/gateway[?check=1]. */
+export interface GatewayInfo {
+  mode: "host" | "path" | "relative";
+  domain: string;
+  domain_source: "env" | "settings" | "none";
+  public_url: string;
+  url_pattern: string;
+  internet_facing: boolean;
+  reserved: string[];
+  provider_preview: ProviderPreviewMode;
+  provider_preview_source: "env" | "settings" | "default";
+  private_previews: boolean;
+  providers: { provider: string; preview_host: boolean; private_preview: boolean; note: string }[];
+  check?: { ok: boolean; status?: number; latency_ms: number; error?: string; checked_at: string };
 }
 
 export interface FileEntry {
@@ -1052,6 +1077,8 @@ export interface PortView {
   caveats?: string[];
   gateway_url?: string;
   access: PortAccess | string;
+  /** v1.8: host preview của provider cho port này: private (chỉ qua gateway) | public (ai biết sandbox id cũng vào được); không có = provider không có preview. */
+  provider_preview?: "private" | "public";
 }
 
 export interface PortsResult {
@@ -1139,5 +1166,7 @@ export interface CapabilityRow {
   fork: boolean;
   inbound_http: boolean;
   max_runtime: number;
+  /** v1.8: host preview của provider từ chối traffic không đi qua gateway (E2B / Novita traffic token). */
+  private_preview?: boolean;
   note?: string;
 }

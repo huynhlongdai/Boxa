@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"io"
@@ -279,5 +280,69 @@ func TestNovitaRecorded(t *testing.T) {
 	}
 	if e := wrapErr("Novita Sandbox", err); !strings.Contains(e.Error(), "quota/balance") {
 		t.Fatalf("402 not classified as balance: %v", e)
+	}
+}
+
+// TestE2BPrivateTraffic (v1.8): a private sandbox is created with
+// network.allowPublicTraffic=false + secure (Novita requires it; E2B ignores
+// it), the traffic token answered by create is reported as Meta and returned
+// as E2B-Traffic-Access-Token, a forgotten token is fetched again via
+// /connect, and a public sandbox needs no header. Shapes from the live runs
+// of 2026-10-27 (E2B and Novita us-phx-1).
+func TestE2BPrivateTraffic(t *testing.T) {
+	connects := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		key := r.Method + " " + r.URL.Path
+		switch key {
+		case "POST /sandboxes":
+			var b map[string]any
+			json.NewDecoder(r.Body).Decode(&b)
+			nw, _ := b["network"].(map[string]any)
+			if nw == nil {
+				w.WriteHeader(201)
+				io.WriteString(w, `{"alias":"base","envdAccessToken":"e1","sandboxID":"pub1","templateID":"t","trafficAccessToken":null}`)
+				return
+			}
+			if nw["allowPublicTraffic"] != false || b["secure"] != true {
+				t.Errorf("private create body %v", b)
+			}
+			w.WriteHeader(201)
+			io.WriteString(w, `{"alias":"base","envdAccessToken":"e2","sandboxID":"priv1","templateID":"t","trafficAccessToken":"tat-1","domain":null}`)
+		case "POST /sandboxes/priv1/connect":
+			connects++
+			w.WriteHeader(201)
+			io.WriteString(w, `{"alias":"base","envdAccessToken":"e3","sandboxID":"priv1","templateID":"t","trafficAccessToken":"tat-1"}`)
+		default:
+			t.Errorf("unexpected %s", key)
+			w.WriteHeader(500)
+		}
+	}))
+	defer srv.Close()
+	u, _ := url.Parse(srv.URL)
+	c := Cred{"token": "proxy"}
+	bg := context.Background()
+	for _, d := range []*E2B{NewE2B(&http.Client{Transport: &hostRT{to: u}}, ""), NewNovita(&http.Client{Transport: &hostRT{to: u}}, "")} {
+		connects = 0
+		if !d.PrivateTrafficSupported() {
+			t.Fatalf("%s: private traffic unsupported", d.info.ID)
+		}
+		pub, err := d.Create(bg, c, Spec{Template: "base"})
+		if err != nil || pub.Meta[MetaPrivateTraffic] != "" {
+			t.Fatalf("%s public create %+v %v", d.info.ID, pub, err)
+		}
+		sb, err := d.Create(bg, c, Spec{Template: "base", PrivateTraffic: true})
+		if err != nil || sb.Meta[MetaPrivateTraffic] != "1" {
+			t.Fatalf("%s private create %+v %v", d.info.ID, sb, err)
+		}
+		h, err := d.PreviewHeaders(bg, c, "priv1")
+		if err != nil || h["E2B-Traffic-Access-Token"] != "tat-1" || connects != 0 {
+			t.Fatalf("%s headers %v %v (connects %d)", d.info.ID, h, err, connects)
+		}
+		d.mu.Lock()
+		delete(d.meta, "priv1") // core restarted: the token is gone
+		d.mu.Unlock()
+		if h, err = d.PreviewHeaders(bg, c, "priv1"); err != nil || h["E2B-Traffic-Access-Token"] != "tat-1" || connects != 1 {
+			t.Fatalf("%s refetch %v %v (connects %d)", d.info.ID, h, err, connects)
+		}
 	}
 }
