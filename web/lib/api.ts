@@ -73,6 +73,12 @@ import type {
   PortView,
   URLToken,
   URLTokenList,
+  AccessInfo,
+  AccessTicket,
+  SshInfo,
+  SshKey,
+  TerminalList,
+  TicketPurpose,
 } from "./types";
 
 export const PROXY_BASE = "/api/boxaz";
@@ -218,6 +224,12 @@ export const paths = {
   adminUsers: "/admin/users",
   // v1.7
   boxPorts: (id: string) => `/boxes/${id}/ports`,
+  // v1.10: truy cập box
+  boxAccess: (id: string) => `/boxes/${id}/access`,
+  boxTickets: (id: string) => `/boxes/${id}/tickets`,
+  boxTerminals: (id: string) => `/boxes/${id}/terminals`,
+  ssh: "/ssh",
+  sshKeys: "/ssh/keys",
   portTokens: (id: string, port: number) => `/boxes/${id}/ports/${port}/tokens`,
   boxApp: (id: string) => `/boxes/${id}/app`,
   boxAppLogs: (id: string, offset?: number) => `/boxes/${id}/app/logs${qs({ offset })}`,
@@ -382,6 +394,21 @@ export const api = {
   appLogs: (id: string, offset?: number) => http.get<AppLogsResult>(paths.boxAppLogs(id, offset)),
   capabilities: () => http.get<List<CapabilityRow>>(paths.capabilities),
   gateway: (check?: boolean) => http.get<GatewayInfo>(paths.gateway(check)),
+
+  // v1.10: ticket một lần (giá trị chỉ trả một lần; API key luôn ở phía server proxy), terminal bền, forward, SSH
+  access: (id: string) => http.get<AccessInfo>(paths.boxAccess(id)),
+  createTicket: (id: string, body: { purpose: TicketPurpose; port?: number; session_id?: string; ttl_s?: number; allow?: boolean }) =>
+    http.post<AccessTicket>(paths.boxTickets(id), body),
+  tickets: (id: string) => http.get<List<AccessTicket>>(paths.boxTickets(id)),
+  revokeTicket: (id: string, ticketId: string | "all") => http.del<{ revoked: number }>(`${paths.boxTickets(id)}/${encodeURIComponent(ticketId)}`),
+  allowForwardPort: (id: string, port: number) => http.post<{ box_id: string; allowed_ports: number[] }>(`/boxes/${id}/forward-ports`, { port }),
+  setForwardPorts: (id: string, ports: number[]) => http.patch<Box>(paths.box(id), { forward_ports: ports }),
+  terminals: (id: string) => http.get<TerminalList>(paths.boxTerminals(id)),
+  killTerminal: (id: string, sid: string | "all") => http.del<{ killed: number }>(`${paths.boxTerminals(id)}/${encodeURIComponent(sid)}`),
+  sshInfo: () => http.get<SshInfo>(paths.ssh),
+  sshKeys: () => http.get<List<SshKey>>(paths.sshKeys),
+  addSshKey: (body: { name: string; public_key: string }) => http.post<SshKey>(paths.sshKeys, body),
+  deleteSshKey: (kid: string) => http.del<{ deleted: boolean }>(`${paths.sshKeys}/${encodeURIComponent(kid)}`),
 };
 
 export function errMsg(e: unknown): string {

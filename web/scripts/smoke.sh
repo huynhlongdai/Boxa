@@ -47,7 +47,7 @@ check_page() {
   ok "[$l] 200 $path"
 }
 
-ROUTES="/ /boxes /boxes/box_7f3a91 /boxes/box_7f3a91?tab=logs /boxes/box_a9d054?tab=ports /boxes/box_5e2b70?tab=ports /recommend /infra?s=health /infra?s=catalog /infra?s=speed /infra?s=mesh /infra?s=sandbox /infra/adapters /boxes/box_5e2b70 /agents /agents/agt_kecon /costs /infra /templates /secrets /settings /admin /developers /onboarding /login"
+ROUTES="/ /boxes /boxes/box_7f3a91 /boxes/box_7f3a91?tab=logs /boxes/box_a9d054?tab=ports /boxes/box_5e2b70?tab=ports /boxes/box_a9d054?tab=access /boxes/box_a9d054?tab=terminal /boxes/box_51be07?tab=terminal /recommend /infra?s=health /infra?s=catalog /infra?s=speed /infra?s=mesh /infra?s=sandbox /infra/adapters /boxes/box_5e2b70 /agents /agents/agt_kecon /costs /infra /templates /secrets /settings /admin /developers /onboarding /login"
 
 echo "== Trang × ngôn ngữ (cookie boxaz_locale)"
 for l in $LOCALES; do
@@ -255,6 +255,49 @@ declare -A GWWORD=([vi]="Gateway domain" [en]="Gateway domain" [zh]="网关域�
 for l in $LOCALES; do
   node -e 'const m=require("./messages/'$l'.json");process.exit(m.gateway&&m.gateway.title==="'"${GWWORD[$l]}"'"&&m.gateway.previewHint&&m.gateway.reserved&&m.gateway.reachable.includes("{ms}")&&m.ports.previewPrivate?0:1)' && ok "[$l] chuỗi gateway.* đủ" || bad "[$l] thiếu chuỗi gateway.*"
 done
+
+echo "== v1.10: truy cập box (ticket một lần, terminal bền, access, forward-ports, SSH keys)"
+expect "GET /boxes/:id/access" "$(jx GET boxes/box_a9d054/access - 'j.name+"|"+j.host+"|"+j.link+"|"+j.tcp.allowed_ports.includes(2222)+"|"+j.tcp.allowed_ports.includes(3000)+"|"+/ProxyCommand box ssh-proxy %h/.test(j.ssh.config)+"|"+(j.commands.forward==="box forward kecon-story-gen <remote-port> [local-port]")+"|"+j.terminal.detach_ttl_s')" "kecon-story-gen|kecon-story-gen.boxaz.dev|boxd|true|true|true|true|600"
+expect "access: box chỉ exec → link none + note" "$(jx GET boxes/box_u5b3c1/access - 'j.link+"|"+(j.notes.length>0)')" "none|true"
+TK=$(curl -s -X POST "$BASE/api/boxaz/boxes/box_a9d054/tickets" -H 'content-type: application/json' -d '{"purpose":"terminal"}')
+expect "POST tickets terminal → 201 bxa_ + ?ticket= + core_url wss + 60 s" "$(echo "$TK" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);const ttl=Math.round((Date.parse(j.expires_at)-Date.parse(j.created_at))/1000);console.log(j.ticket.startsWith("bxa_box_a9d054_")+"|"+j.url.endsWith("?ticket="+j.ticket)+"|"+j.core_url.startsWith("wss://")+"|"+ttl+"|"+j.purpose+"|"+j.ticket.startsWith(j.prefix))})')" "true|true|true|60|terminal|true"
+SID=$(echo "$TK" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).session_id))')
+expect "GET terminals (phiên mới + detach_ttl_s)" "$(jx GET boxes/box_a9d054/terminals - 'j.detach_ttl_s+"|"+j.items.some(t=>t.id==="'"$SID"'"&&t.viewers===1)+"|"+(j.items.length>=3)')" "600|true|true"
+expect "POST tickets terminal + session_id → gắn lại cùng phiên" "$(jx POST boxes/box_a9d054/tickets "{\"purpose\":\"terminal\",\"session_id\":\"$SID\"}" 'j.session_id+"|"+/[?&]session=/.test(j.url)')" "$SID|true"
+expect "GET tickets: không trả giá trị ticket" "$(jx GET boxes/box_a9d054/tickets - '(j.items.length>=5)+"|"+j.items.every(t=>!("ticket" in t)&&!("url" in t)&&t.prefix.startsWith("bxa_"))')" "true|true"
+expect "POST tickets purpose sai → 400" "$(jx POST boxes/box_a9d054/tickets '{"purpose":"vnc"}' 'j.error.code')" "INVALID"
+expect "POST tickets ttl_s=5 → 400" "$(jx POST boxes/box_a9d054/tickets '{"purpose":"ssh","ttl_s":5}' 'j.error.code')" "INVALID"
+expect "POST tickets tcp port chưa cho phép → 403" "$(jx POST boxes/box_a9d054/tickets '{"purpose":"tcp","port":9999}' 'j.error.code')" "POLICY_DENIED"
+expect "POST tickets tcp allow=true → thêm port" "$(jx POST boxes/box_a9d054/tickets '{"purpose":"tcp","port":9999,"allow":true}' 'j.port+"|"+/\/\.boxaz\/tcp\?port=9999&ticket=bxa_/.test(j.url)')" "9999|true"
+expect "POST tickets ssh → command" "$(jx POST boxes/box_a9d054/tickets '{"purpose":"ssh"}' '/^ssh -p 2222 bxa_/.test(j.command)')" "true"
+expect "POST forward-ports" "$(jx POST boxes/box_a9d054/forward-ports '{"port":5433}' 'j.allowed_ports.includes(5433)+"|"+j.allowed_ports.includes(9999)')" "true|true"
+expect "POST forward-ports port sai → 400" "$(jx POST boxes/box_a9d054/forward-ports '{"port":70000}' 'j.error.code')" "INVALID"
+expect "PATCH forward_ports → gỡ port" "$(jx PATCH boxes/box_a9d054 '{"forward_ports":[5433]}' 'j.forward_ports.join(",")')" "5433"
+expect "access sau PATCH" "$(jx GET boxes/box_a9d054/access - 'j.tcp.allowed_ports.includes(9999)+"|"+j.tcp.allowed_ports.includes(5433)')" "false|true"
+jx PATCH boxes/box_a9d054 '{"forward_ports":[]}' 'j.id' >/dev/null
+expect "DELETE terminals/:sid → killed 1" "$(jx DELETE "boxes/box_a9d054/terminals/$SID" - 'j.killed')" "1"
+expect "DELETE terminals/không-có → 404" "$(jx DELETE boxes/box_a9d054/terminals/term_nope - 'j.error.code')" "NOT_FOUND"
+expect "DELETE tickets/all → thu hồi tất cả" "$(jx DELETE boxes/box_a9d054/tickets/all - '(j.revoked>=4)')" "true"
+expect "GET tickets sau thu hồi" "$(jx GET boxes/box_a9d054/tickets - 'j.items.every(t=>t.revoked_at)+"|"+j.items.every(t=>!t.live)')" "true|true"
+expect "POST tickets box đã hỏng → 404" "$(jx POST boxes/box_b18f6e/tickets '{"purpose":"terminal"}' 'j.error.code')" "NOT_FOUND"
+expect "GET /ssh" "$(jx GET ssh - 'j.host_key_alias+"|"+j.host_key_fingerprint.startsWith("SHA256:")+"|"+j.proxy_command')" "boxaz-ssh|true|box ssh-proxy %h"
+expect "GET /ssh/keys" "$(jx GET ssh/keys - 'j.items.length+"|"+j.items[0].fingerprint.startsWith("SHA256:")')" "1|true"
+expect "POST /ssh/keys sai → 400" "$(jx POST ssh/keys '{"name":"x","public_key":"not a key"}' 'j.error.code')" "INVALID"
+KJ=$(curl -s -X POST "$BASE/api/boxaz/ssh/keys" -H 'content-type: application/json' -d '{"name":"smoke","public_key":"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAISmokeTestKeyOnly0123456789abcdef smoke@ci"}')
+KID=$(echo "$KJ" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).id))')
+expect "POST /ssh/keys → 201" "$(echo "$KJ" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log(j.id.startsWith("sshk_")+"|"+j.name+"|"+j.fingerprint.startsWith("SHA256:"))})')" "true|smoke|true"
+expect "POST /ssh/keys trùng → trả key cũ (idempotent)" "$(jx POST ssh/keys '{"name":"again","public_key":"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAISmokeTestKeyOnly0123456789abcdef smoke@ci"}' 'j.id+"|"+j.name')" "$KID|smoke"
+expect "DELETE /ssh/keys/:id" "$(jx DELETE "ssh/keys/$KID" - 'j.deleted')" "true"
+r=$(curl -s -X POST -b boxaz_locale=ja "$BASE/api/boxaz/boxes/box_a9d054/tickets" -H 'content-type: application/json' -d '{"purpose":"vnc"}')
+grep -qF "不明なチケット用途" <<<"$r" && ok "[ja] lỗi ticket được dịch" || bad "[ja] lỗi ticket: $r"
+declare -A ACCWORD=([vi]="Truy cập" [en]="Access" [zh]="访问" [ja]="アクセス")
+for l in $LOCALES; do
+  body=$(curl -s -b "boxaz_locale=$l" "$BASE/boxes/box_a9d054?tab=access")
+  grep -qF "${ACCWORD[$l]}" <<<"$body" && ok "[$l] tab Truy cập có nhãn '${ACCWORD[$l]}'" || bad "[$l] thiếu nhãn tab '${ACCWORD[$l]}'"
+  node -e 'const m=require("./messages/'$l'.json");process.exit(m.boxDetail.tabs.access==="'"${ACCWORD[$l]}"'"&&m.access.revokeAll&&m.access.sshConfig&&m.access.state.live&&m.sshKeys.title&&m.terminal.newSession&&m.terminal.modeView&&m.terminal.wakeNotice&&m.terminal.mockNotice&&m.terminal.reattached.includes("{bytes}")?0:1)' && ok "[$l] chuỗi access.* / sshKeys.* / terminal v1.10 đủ" || bad "[$l] thiếu chuỗi v1.10"
+done
+grep -rqs "terminal-session-picker" .next/static/chunks && grep -rqs "proto" .next/static/chunks && grep -rqs "access-revoke-all" .next/static/chunks && grep -rqs "ssh-key-add" .next/static/chunks && ok "bundle có UI terminal v1.10 + Truy cập + SSH keys" || bad "bundle thiếu UI v1.10"
+if grep -rqs 'terminal?cols=' .next/static/chunks; then bad "bundle còn URL terminal cũ (không ticket)"; else ok "bundle không còn URL terminal không ticket"; fi
 
 echo "== Lỗi được dịch theo ngôn ngữ (code không đổi)"
 declare -A NF=([vi]="Không tìm thấy" [en]="not found" [zh]="未找到" [ja]="見つかりません")

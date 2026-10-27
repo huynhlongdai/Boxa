@@ -13,6 +13,9 @@ services:
       BOXAZ_ADMIN_KEY: ${BOXAZ_ADMIN_KEY:?set BOXAZ_ADMIN_KEY}
       BOXAZ_MASTER_KEY: ${BOXAZ_MASTER_KEY:?set BOXAZ_MASTER_KEY}
       BOXAZ_BOOTSTRAP_TOKEN: ${BOXAZ_BOOTSTRAP_TOKEN:-}
+      # v1.10: origin of the web dashboard, allowed to open terminal / tcp / ssh WebSockets (more: BOXAZ_ACCESS_ORIGINS, comma separated)
+      BOXAZ_DASHBOARD_URL: ${BOXAZ_DASHBOARD_URL:-}
+      BOXAZ_ACCESS_ORIGINS: ${BOXAZ_ACCESS_ORIGINS:-}
     volumes: ["core-data:/data"]
     ports: ["127.0.0.1:8080:8080"]
     depends_on: [postgres]

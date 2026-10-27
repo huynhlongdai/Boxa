@@ -10,6 +10,7 @@ import { DAY, HOUR, MIN, iso, makeSeed, r4, type MockState } from "./seed";
 import { makeSnippet } from "../snippets";
 import { estimateFor, handleV13, recommend, resolveNeeds } from "./v13";
 import { handleV18 } from "./v18";
+import { handleV110 } from "./v110";
 import { handleV17, hydrateV17 } from "./v17";
 
 type G = typeof globalThis & { __boxazMock?: MockState };
@@ -449,6 +450,13 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
   // ---- v1.8: gateway domain + private provider previews ----
   const v18 = handleV18(s, M, segs, q);
   if (v18) return v18;
+
+  // ---- v1.10: ticket truy cập, terminal bền, access, forward-ports, SSH keys ----
+  const v110 = handleV110(s, {
+    ok, err: (st, code, key, params) => err(st, code, key, params),
+    hydrateBox: (b) => hydrateBox(s, b), pushEvent: (e) => pushEvent(s, e as Omit<BoxazEvent, "id" | "ts">),
+  }, M, segs, body);
+  if (v110) return v110;
 
   // ---- v1.7: ports/gateway, URL token, wake_on_request, app supervisor, capabilities ----
   const v17 = handleV17(s, {

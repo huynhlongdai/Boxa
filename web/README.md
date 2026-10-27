@@ -33,7 +33,9 @@ Mở `/login`, dán API key có scope `admin`. Key được lưu trong cookie **
 |---|---|---|
 | `BOXAZ_API` | `http://localhost:8080/v1` | URL Core cho proxy phía server (đọc lúc chạy) |
 | `NEXT_PUBLIC_BOXAZ_API` | `http://localhost:8080/v1` | Dùng lúc build: hiển thị trong snippet cấu hình, suy ra URL WebSocket terminal. Proxy cũng dùng nếu thiếu `BOXAZ_API` |
-| `NEXT_PUBLIC_BOXAZ_WS` | (suy từ `NEXT_PUBLIC_BOXAZ_API`, `http→ws`) | URL WebSocket riêng cho terminal, vd `wss://boxaz.example.com/v1` |
+| `NEXT_PUBLIC_BOXAZ_WS` | (`core_url` của ticket, rồi suy từ `NEXT_PUBLIC_BOXAZ_API`, `http→ws`) | URL WebSocket riêng cho terminal, vd `wss://boxaz.example.com/v1` |
+
+**Phía Core (v1.10)**: đặt `BOXAZ_DASHBOARD_URL=https://<domain dashboard>` (hoặc thêm vào `BOXAZ_ACCESS_ORIGINS`, cách nhau dấu phẩy) để Core nhận WebSocket terminal từ origin của dashboard; thiếu thì Core trả 403 `POLICY_DENIED` trước khi upgrade. Dev trên localhost được chấp nhận khi Core cũng chạy trên loopback.
 | `BOXAZ_MOCK` | (trống) | `1` luôn mock · `0` không bao giờ · trống = tự mock khi dev mà Core không chạy |
 | `BOXAZ_INSECURE_COOKIE` | (trống) | `1` cho phép cookie không `Secure` khi chạy production qua http nội bộ |
 
@@ -126,7 +128,7 @@ lib/mock/              seed + handler + SSE giả lập
 
 ## Điểm cần Core bổ sung
 
-1. **Xác thực WebSocket terminal**: Core hiện nhận key qua header hoặc `?token=`. Web không nhúng key vào JS nên **không** dùng `?token=`; nó mở thẳng `NEXT_PUBLIC_BOXAZ_WS` (hoặc suy từ `NEXT_PUBLIC_BOXAZ_API`) và dựa vào cookie httpOnly `boxaz_key` mà trình duyệt tự gửi khi cùng site. Cần thêm vào `bearer()` của Core: đọc cookie `boxaz_key` nếu không có header. Chưa có thì terminal (chế độ thật) báo không kết nối được; MOCK MODE vẫn mô phỏng đầy đủ. Route handler của Next không proxy được WebSocket.
+1. ~~Xác thực WebSocket terminal~~: xong ở v1.10. Tab Terminal lấy ticket một lần (`POST /api/boxaz/boxes/{id}/tickets {purpose:"terminal"}`, proxy gắn key phía server) rồi mở `wss://<core>/v1/boxes/{id}/terminal?ticket=bxa_…&proto=2&mode=control|view[&session=…]`. Core không còn nhận cookie hay `?token=` trên WebSocket. Phiên terminal bền: chọn / gắn lại (replay) / mở mới / đóng, tự kết nối lại bằng ticket mới. Tab **Truy cập**: lệnh `box forward` / `box ssh`, ssh-config, port forward, ticket + thu hồi tất cả; Settings có **SSH keys**.
 2. ~~Khôi phục / fork snapshot~~: Core đã có từ v1.1; từ v1.2 snapshot trên R2/B2 khôi phục/fork được ở host bất kỳ.
 3. **Token tiết kiệm & log theo lệnh**: event `box.exec` chưa có `tokens_saved` và `log_id`. Web đọc được đuôi tuỳ chọn ` tokens_saved=<n> log=<id>` nếu Core thêm vào message (mock đã làm vậy); không có thì tab Logs hiện nhật ký sự kiện của box và ô mở log theo `log_id`.
 4. **box.yaml gốc**: tab Cấu hình dựng lại YAML từ object Box vì contract chưa có endpoint trả YAML gốc.

@@ -48,6 +48,8 @@ func (s *Server) llmsHeader(r *http.Request) (string, string, *strings.Builder) 
 	b.WriteString("\n")
 	// v1.7: supervised apps, gateway URLs (wake on request), URL tokens, capabilities
 	fmt.Fprintf(&b, "## %s\n\n%s\n\n", t("llms.h_apps"), t("llms.apps"))
+	// v1.10: box access (tickets, durable terminal, port forward, SSH)
+	fmt.Fprintf(&b, "## %s\n\n%s\n\n", t("llms.h_access"), t("llms.access"))
 	return loc, base, &b
 }
 
@@ -231,6 +233,7 @@ func (s *Server) agentCard(w http.ResponseWriter, r *http.Request) {
 			"gateway_urls": "readable: https://<name>.<domain>/ → the box's primary port (app port, else first port); https://<name>-<label>.<domain>/ → other ports (label web, api, db, …; never a number); legacy <key>-<port> stays as alias_url; name URLs are guessable, use box_url_token for private apps",
 			"url_tokens":   "box_url_token protects only the Boxaz gateway URL of a port; with a gateway domain / internet-facing public URL, E2B and Novita sandboxes are created private (preview host 403 without the sandbox traffic token, which only the gateway adds; ports report provider_preview=private); where provider_preview=public (Daytona, or BOXAZ_PROVIDER_PREVIEW=public) the provider preview URL stays reachable by anyone who knows the sandbox id",
 			"access":       "v1.10: box_forward (box forward <box> <port>: TCP over wss://<name>.<domain>/.boxaz/tcp), box_ssh_info (SSH gateway in core: box ssh / ssh-config / ProxyCommand box ssh-proxy %h, no sshd in the box), box_ticket (single-use, 60 s, per box + purpose; the terminal / tcp / ssh WebSockets never take an API key in the URL), box_terminal_sessions (durable terminal: reattach + replay)",
+			"access_detail": i18n.T(loc, "llms.access"),
 			"a2a_methods":  []string{"message/send", "message/stream", "tasks/get", "tasks/cancel", "tasks/resubscribe", "tasks/send", "tasks/sendSubscribe"}},
 	})
 }

@@ -1187,3 +1187,103 @@ export interface CapabilityRow {
   private_preview?: boolean;
   note?: string;
 }
+
+// ---------------- v1.10: truy cập box (ticket một lần, terminal bền, TCP forward, SSH) ----------------
+export type TicketPurpose = "terminal" | "tcp" | "ssh";
+
+export interface Box {
+  /** v1.10: port thêm mà TCP forward / ssh -L được phép tới (ngoài port đã mở). */
+  forward_ports?: number[];
+}
+
+/** POST/GET /boxes/{id}/tickets — `ticket` chỉ có trong phản hồi tạo (một lần). */
+export interface AccessTicket {
+  id: string;
+  box_id: string;
+  purpose: TicketPurpose;
+  port?: number;
+  session_id?: string;
+  prefix: string;
+  ticket?: string;
+  url?: string;
+  core_url?: string;
+  command?: string;
+  expires_at: string;
+  created_at: string;
+  redeemed_at?: string | null;
+  revoked_at?: string | null;
+  live?: number;
+  actor?: string;
+  key_id?: string;
+}
+
+/** GET /boxes/{id}/terminals — PTY bền (sống qua lúc rớt WebSocket trong detach TTL). */
+export interface TerminalSession {
+  id: string;
+  box_id: string;
+  name?: string;
+  cols: number;
+  rows: number;
+  viewers: number;
+  controlled: boolean;
+  created_at: string;
+  last_io: string;
+  detached_at?: string | null;
+  expires_at?: string | null;
+  exited?: boolean;
+  exit_code?: number | null;
+  buffered_bytes: number;
+  actor?: string;
+}
+
+export interface TerminalList {
+  items: TerminalSession[];
+  detach_ttl_s: number;
+}
+
+/** GET /boxes/{id}/access */
+export interface AccessInfo {
+  box_id: string;
+  name?: string;
+  host?: string;
+  /** boxd | agent | agent-on-demand | none */
+  link: string;
+  live: Record<string, number>;
+  tcp: { url: string; core_url: string; allowed_ports: number[]; auth: string };
+  terminal: { url: string; core_url: string; detach_ttl_s: number; sessions: TerminalSession[] };
+  ssh: {
+    url: string;
+    core_url: string;
+    host: string;
+    proxy_command: string;
+    command: string;
+    config: string;
+    known_hosts: string;
+    host_key_fingerprint: string;
+    direct?: string;
+    features: string;
+  };
+  commands: Record<string, string>;
+  notes?: string[];
+  tickets: string;
+}
+
+export interface SshKey {
+  id: string;
+  name: string;
+  public_key: string;
+  fingerprint: string;
+  agent_id?: string;
+  key_id?: string;
+  created_at: string;
+}
+
+/** GET /ssh */
+export interface SshInfo {
+  known_hosts: string;
+  host_key_fingerprint: string;
+  host_key_alias: string;
+  direct: string;
+  proxy_command: string;
+  domain: string;
+}

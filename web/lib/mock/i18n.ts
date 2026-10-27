@@ -4,6 +4,20 @@ import type { Locale } from "@/i18n/config";
 type Dict = Record<string, string>;
 
 const vi: Dict = {
+  v110_purpose: "Mục đích ticket {purpose} không hợp lệ",
+  v110_purpose_hint: "Dùng purpose terminal, tcp hoặc ssh.",
+  v110_port: "purpose tcp cần port hợp lệ",
+  v110_port_hint: "Truyền port trong box, ví dụ {\"purpose\":\"tcp\",\"port\":5432}.",
+  v110_port_denied: "Port {port} chưa có trong danh sách forward của box",
+  v110_port_denied_hint: "Mở port, hoặc thêm vào danh sách forward (allow=true như box forward).",
+  v110_ttl: "ttl_s ngoài khoảng cho phép",
+  v110_ttl_hint: "Dùng ttl_s từ 10 đến 86400 giây.",
+  v110_gone: "Box {id} đã kết thúc",
+  v110_gone_hint: "Tạo box mới bằng box_up.",
+  v110_ssh_key: "Public key SSH không hợp lệ",
+  v110_ssh_key_hint: "Dán một dòng như trong ~/.ssh/id_ed25519.pub (ssh-ed25519 AAAA… tên).",
+  v110_forward_max: "Box đã cho phép tối đa 32 port forward",
+  v110_forward_max_hint: "Gỡ bớt port trong danh sách forward.",
   v19_bad_name: "Tên box {name} không hợp lệ",
   v19_bad_name_hint: "Dùng 1-40 ký tự chữ thường, chữ số và '-', ví dụ demo-app.",
   v19_name_reserved: "Tên box {name} đã được dành riêng",
@@ -113,6 +127,20 @@ const vi: Dict = {
 };
 
 const en: Dict = {
+  v110_purpose: "unknown ticket purpose {purpose}",
+  v110_purpose_hint: "Use purpose terminal, tcp or ssh.",
+  v110_port: "purpose tcp needs a valid port",
+  v110_port_hint: "Pass the in-box port, e.g. {\"purpose\":\"tcp\",\"port\":5432}.",
+  v110_port_denied: "port {port} is not in the box's forward allowlist",
+  v110_port_denied_hint: "Expose the port, or add it to the forward allowlist (allow=true, as box forward does).",
+  v110_ttl: "ttl_s out of range",
+  v110_ttl_hint: "Use a ttl_s between 10 and 86400.",
+  v110_gone: "box {id} is gone",
+  v110_gone_hint: "Create a new one with box_up.",
+  v110_ssh_key: "invalid SSH public key",
+  v110_ssh_key_hint: "Paste one line like ~/.ssh/id_ed25519.pub (ssh-ed25519 AAAA… name).",
+  v110_forward_max: "the box already allows 32 forward ports",
+  v110_forward_max_hint: "Remove ports from the forward allowlist.",
   v19_bad_name: "invalid box name {name}",
   v19_bad_name_hint: "Use 1-40 lowercase letters, digits and '-', e.g. demo-app.",
   v19_name_reserved: "box name {name} is reserved",
@@ -219,6 +247,20 @@ const en: Dict = {
 };
 
 const zh: Dict = {
+  v110_purpose: "未知的票据用途 {purpose}",
+  v110_purpose_hint: "用途请使用 terminal、tcp 或 ssh。",
+  v110_port: "用途 tcp 需要有效端口",
+  v110_port_hint: "传入 box 内端口，例如 {\"purpose\":\"tcp\",\"port\":5432}。",
+  v110_port_denied: "端口 {port} 不在 box 的转发允许列表中",
+  v110_port_denied_hint: "开放该端口，或将其加入转发允许列表（allow=true，与 box forward 相同）。",
+  v110_ttl: "ttl_s 超出范围",
+  v110_ttl_hint: "ttl_s 请在 10 到 86400 之间。",
+  v110_gone: "box {id} 已结束",
+  v110_gone_hint: "用 box_up 创建新的 box。",
+  v110_ssh_key: "SSH 公钥无效",
+  v110_ssh_key_hint: "粘贴一行，如 ~/.ssh/id_ed25519.pub（ssh-ed25519 AAAA… 名称）。",
+  v110_forward_max: "该 box 已允许 32 个转发端口",
+  v110_forward_max_hint: "请从转发允许列表中移除一些端口。",
   v19_bad_name: "box 名称 {name} 无效",
   v19_bad_name_hint: "使用 1-40 个小写字母、数字和 '-'，例如 demo-app。",
   v19_name_reserved: "box 名称 {name} 已保留",
@@ -325,6 +367,20 @@ const zh: Dict = {
 };
 
 const ja: Dict = {
+  v110_purpose: "不明なチケット用途 {purpose}",
+  v110_purpose_hint: "用途は terminal・tcp・ssh のいずれかです。",
+  v110_port: "用途 tcp には有効なポートが必要です",
+  v110_port_hint: "box 内のポートを渡してください（例: {\"purpose\":\"tcp\",\"port\":5432}）。",
+  v110_port_denied: "ポート {port} は box の転送許可リストにありません",
+  v110_port_denied_hint: "ポートを公開するか、転送許可リストに追加してください（box forward と同じ allow=true）。",
+  v110_ttl: "ttl_s が範囲外です",
+  v110_ttl_hint: "ttl_s は 10〜86400 の範囲で指定してください。",
+  v110_gone: "box {id} は終了しています",
+  v110_gone_hint: "box_up で新しい box を作成してください。",
+  v110_ssh_key: "SSH 公開鍵が無効です",
+  v110_ssh_key_hint: "~/.ssh/id_ed25519.pub のような 1 行を貼り付けてください（ssh-ed25519 AAAA… 名前）。",
+  v110_forward_max: "この box はすでに 32 個の転送ポートを許可しています",
+  v110_forward_max_hint: "転送許可リストからポートを外してください。",
   v19_bad_name: "box 名 {name} が無効です",
   v19_bad_name_hint: "小文字・数字・'-' を 1〜40 文字で使ってください（例: demo-app）。",
   v19_name_reserved: "box 名 {name} は予約されています",
