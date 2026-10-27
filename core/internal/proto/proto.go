@@ -59,8 +59,8 @@ const (
 	MAppLogs    = "app.logs"        // v1.7: read app output from an offset
 	// v1.10 access: a process in the box wired to streams (PTY or pipes).
 	MProcOpen   = "proc.open"
-	MProcResize = "proc.resize"  // PtyResizeParams
-	MProcSignal = "proc.signal"  // ProcSignalParams
+	MProcResize = "proc.resize" // PtyResizeParams
+	MProcSignal = "proc.signal" // ProcSignalParams
 )
 
 // ProcOpenParams starts a process in a box whose I/O rides streams (v1.10):
@@ -145,6 +145,7 @@ type EgressParams struct {
 	BoxID         string   `json:"box_id"`
 	Allow         []string `json:"allow"`
 	DenyByDefault bool     `json:"deny_by_default"`
+	BlockMetadata bool     `json:"block_metadata,omitempty"` // v1.11: drop cloud metadata addresses (default on)
 }
 
 // EgressResult reports how the host enforced the policy.
@@ -154,6 +155,7 @@ type EgressResult struct {
 	Warning  string   `json:"warning,omitempty"`
 	Rules    int      `json:"rules"`
 	Warnings []string `json:"warnings,omitempty"`
+	Metadata bool     `json:"metadata_blocked,omitempty"` // v1.11
 }
 
 type Frame struct {

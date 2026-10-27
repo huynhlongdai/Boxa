@@ -170,6 +170,14 @@ func main() {
 		err = cmdSSHConfig(ctx, c, args)
 	case "ssh-key":
 		err = cmdSSHKey(ctx, c, args)
+	case "ssh-cert":
+		err = cmdSSHCert(ctx, c, args)
+	case "sftp", "scp":
+		err = cmdSFTP(ctx, c, args)
+	case "browser", "cdp":
+		err = cmdBrowser(ctx, c, args)
+	case "desktop", "vnc":
+		err = cmdDesktop(ctx, c, args)
 	case "terminals", "terminal":
 		err = cmdTerminals(ctx, c, args)
 	case "app":

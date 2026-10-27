@@ -35,8 +35,12 @@ const accessUsage = `  box access <box>                             (how to reac
   box ticket <box> terminal|tcp|ssh [--port N] [--ttl 60s] [--json]   (single-use access ticket)
   box forward <box> <remote-port> [local-port] [--bind 127.0.0.1]     (local port → port in the box over WSS)
   box ssh <box> [ssh args…] [-- command]        (OpenSSH through box ssh-proxy; no sshd needed in the box)
-  box ssh-proxy <host> [port]                   (ProxyCommand: ssh -o ProxyCommand='box ssh-proxy %h' …)
-  box ssh-config [--write] [box…]               (Host entries for ~/.ssh/config: VS Code / Cursor Remote-SSH)
+  box ssh-proxy [--anon] <host> [port]          (ProxyCommand: ssh -o ProxyCommand='box ssh-proxy %h' …; --anon: no API key, certificate auth)
+  box ssh-config [--write] [--cert [--ttl 12h]] [box…]   (Host entries for ~/.ssh/config: VS Code / Cursor Remote-SSH; --cert: short-lived certificates)
+  box ssh-cert <box> [--key ~/.ssh/id_ed25519.pub] [--ttl 1h] [--json]   (short-lived SSH user certificate, ≤ 12 h)
+  box sftp <box> put <local> <remote> | get <remote> <local> | ls [dir] | rm <path> | mkdir <dir>   (SFTP through the gateway; always works)
+  box browser <box> [--ttl 1h] [--stop] [--status] [--json]   (CDP endpoint: chromium.connectOverCDP / puppeteer.connect)
+  box desktop <box> [--share [--ttl 1h] [--interactive]] [--revoke-shares] [--stop] [--json]   (desktop over VNC; view-only share links)
   box ssh-key add <file.pub> [--name n] | ls | rm <id>
   box terminals <box> [--kill <session_id>|all]
 `
@@ -284,10 +288,20 @@ type stdioConn struct {
 }
 
 func cmdSSHProxy(ctx context.Context, c *client.Client, args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("usage: box ssh-proxy <host> [port]  (ProxyCommand box ssh-proxy %%h)")
+	anon := false
+	if len(args) > 0 && (args[0] == "--anon" || args[0] == "-anon") {
+		anon, args = true, args[1:]
 	}
-	ws, err := dialAccess(ctx, c, boxRefFromHost(args[0]), manager.CreateTicketInput{Purpose: model.PurposeSSH}, "ssh", "")
+	if len(args) < 1 {
+		return fmt.Errorf("usage: box ssh-proxy [--anon] <host> [port]  (ProxyCommand box ssh-proxy %%h)")
+	}
+	var ws *wsconn.Conn
+	var err error
+	if anon { // v1.11: no ticket / API key — the SSH layer authenticates (certificate or registered key)
+		ws, err = dialSSHAnon(ctx, c, args[0])
+	} else {
+		ws, err = dialAccess(ctx, c, boxRefFromHost(args[0]), manager.CreateTicketInput{Purpose: model.PurposeSSH}, "ssh", "")
+	}
 	if err != nil {
 		return err
 	}
@@ -484,6 +498,8 @@ const sshCfgEnd = "# <<< boxaz ssh-config <<<"
 func cmdSSHConfig(ctx context.Context, c *client.Client, args []string) error {
 	fs := flag.NewFlagSet("ssh-config", flag.ContinueOnError)
 	write := fs.Bool("write", false, "write the block into ~/.ssh/config (replacing an older Boxaz block)")
+	useCert := fs.Bool("cert", false, "authenticate with short-lived certificates (~/.boxaz/id_ed25519; no API key needed by ssh)")
+	certTTL := fs.Duration("ttl", 12*time.Hour, "--cert: certificate lifetime (≤ 12h)")
 	if err := fs.Parse(reorder(fs, args)); err != nil {
 		return err
 	}
@@ -516,7 +532,15 @@ func cmdSSHConfig(ctx context.Context, c *client.Client, args []string) error {
 	proxy := selfPath() + " ssh-proxy %h"
 	var b strings.Builder
 	b.WriteString(sshCfgBegin + "\n")
-	b.WriteString(manager.SSHConfigBlock(hosts, proxy))
+	if *useCert {
+		blk, err := certConfigBlock(ctx, c, names, info.Domain, *certTTL)
+		if err != nil {
+			return err
+		}
+		b.WriteString(blk)
+	} else {
+		b.WriteString(manager.SSHConfigBlock(hosts, proxy))
+	}
 	if info.Domain != "" {
 		b.WriteString(manager.SSHConfigBlock([]string{"*." + info.Domain}, proxy))
 	}

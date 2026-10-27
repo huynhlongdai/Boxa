@@ -85,6 +85,14 @@ type Config struct {
 	TerminalBuffer    int           // BOXAZ_TERMINAL_BUFFER: replay ring per session in bytes (default 256 KiB)
 	SSHAddr           string        // BOXAZ_SSH_ADDR: direct SSH listener, e.g. :2222 ("" = only SSH over WebSocket)
 	SSHPublic         string        // BOXAZ_SSH_PUBLIC: host:port users dial for the direct listener (default from SSHAddr)
+	// v1.11 access P1
+	SFTPMode       string        // BOXAZ_SFTP: auto (box sftp-server, else core) | core | box
+	BrowserIdle    time.Duration // BOXAZ_BROWSER_IDLE: stop the on-demand browser after this long without CDP clients (default 10m)
+	DesktopIdle    time.Duration // BOXAZ_DESKTOP_IDLE: stop the on-demand desktop after this long without viewers (default 15m)
+	AllowMetadata  bool          // BOXAZ_EGRESS_ALLOW_METADATA=1: do not block cloud metadata addresses in box egress
+	BrowserInstall string        // BOXAZ_BROWSER_INSTALL: auto (default) | off — install Chromium in the box when none is found
+	BrowserPort    int           // in-box CDP port (default 9222; tests)
+	VNCPort        int           // in-box RFB port (default 5900; tests)
 }
 
 func (c *Config) defaults() {
@@ -176,7 +184,7 @@ type Manager struct {
 	// v1.7
 	app   appState
 	gw    gatewayState
-	names nameState // v1.9 readable gateway names
+	names nameState   // v1.9 readable gateway names
 	acc   accessState // v1.10 tickets, live sessions, terminals, ssh
 }
 

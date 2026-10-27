@@ -28,10 +28,16 @@ import (
 type Policy struct {
 	Allow         []string `json:"allow"`
 	DenyByDefault bool     `json:"deny_by_default"`
+	// BlockMetadata (v1.11, set by core unless BOXAZ_EGRESS_ALLOW_METADATA=1)
+	// drops cloud metadata addresses even when nothing else is restricted.
+	BlockMetadata bool `json:"block_metadata,omitempty"`
 }
 
 // Active reports whether the policy restricts traffic at all.
 func (p *Policy) Active() bool { return p != nil && (p.DenyByDefault || len(p.Allow) > 0) }
+
+// Enforced reports whether any rule must be installed (allowlist or metadata block).
+func (p *Policy) Enforced() bool { return p != nil && (p.Active() || p.BlockMetadata) }
 
 // Rule is one parsed allowlist entry.
 type Rule struct {
@@ -300,7 +306,7 @@ func IncusCommands(container, nic string, p Policy, targets []Target, allowDNS b
 	if nic == "" {
 		nic = "eth0"
 	}
-	if !p.Active() {
+	if !p.Enforced() {
 		return [][]string{
 			{"config", "device", "unset", container, nic, "security.acls"},
 			{"config", "device", "unset", container, nic, "security.acls.default.egress.action"},
@@ -309,7 +315,15 @@ func IncusCommands(container, nic string, p Policy, targets []Target, allowDNS b
 	}
 	cmds := [][]string{
 		{"network", "acl", "delete", acl}, // may fail when absent (ignored)
-		{"network", "acl", "create", acl, "description=Boxaz egress allowlist for " + container},
+		{"network", "acl", "create", acl, "description=egress policy for " + container},
+	}
+	if p.BlockMetadata {
+		for _, c := range MetadataCIDRs {
+			cmds = append(cmds, []string{"network", "acl", "rule", "add", acl, "egress", "action=drop", "destination=" + c, "description=cloud-metadata"})
+		}
+	}
+	if !p.Active() { // metadata only: everything else allowed
+		return append(cmds, []string{"config", "device", "override", container, nic, "security.acls=" + acl, "security.acls.default.egress.action=allow"})
 	}
 	if allowDNS {
 		cmds = append(cmds,
@@ -355,7 +369,7 @@ func NftScript(container string, srcIPs []string, p Policy, targets []Target, al
 	var b strings.Builder
 	// "add table" + "delete table" makes the script idempotent.
 	fmt.Fprintf(&b, "add table inet %s\ndelete table inet %s\n", table, table)
-	if !p.Active() {
+	if !p.Enforced() {
 		return b.String()
 	}
 	var v4, v6 []string
@@ -378,6 +392,18 @@ func NftScript(container string, srcIPs []string, p Policy, targets []Target, al
 			continue
 		}
 		src := fam.name + " saddr { " + strings.Join(fam.src, ", ") + " }"
+		if p.BlockMetadata {
+			var md []string
+			for _, c := range MetadataCIDRs {
+				if strings.Contains(c, ":") == (fam.name == "ip6") {
+					md = append(md, c)
+				}
+			}
+			fmt.Fprintf(&b, "    %s %s daddr { %s } counter drop\n", src, fam.name, strings.Join(md, ", "))
+		}
+		if !p.Active() {
+			continue
+		}
 		fmt.Fprintf(&b, "    %s ct state established,related accept\n", src)
 		if allowDNS {
 			fmt.Fprintf(&b, "    %s udp dport 53 accept\n    %s tcp dport 53 accept\n", src, src)

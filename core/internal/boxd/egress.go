@@ -54,7 +54,7 @@ func (d *LocalDriver) ApplyEgress(ctx context.Context, p proto.EgressParams) (pr
 // load an nftables table filtering the container's addresses (EgressMode "nft").
 func (d *IncusDriver) ApplyEgress(ctx context.Context, p proto.EgressParams) (proto.EgressResult, error) {
 	name := cname(p.BoxID)
-	pol := egress.Policy{Allow: p.Allow, DenyByDefault: p.DenyByDefault}
+	pol := egress.Policy{Allow: p.Allow, DenyByDefault: p.DenyByDefault, BlockMetadata: p.BlockMetadata}
 	res := proto.EgressResult{Mode: "incus-acl"}
 	if d.EgressMode == "nft" {
 		res.Mode = "nftables"
@@ -63,7 +63,7 @@ func (d *IncusDriver) ApplyEgress(ctx context.Context, p proto.EgressParams) (pr
 	res.Warnings = warns
 	if res.Mode == "nftables" {
 		ips, err := d.containerIPs(ctx, name)
-		if err != nil && pol.Active() {
+		if err != nil && pol.Enforced() {
 			return res, err
 		}
 		script := egress.NftScript(name, ips, pol, targets, hasDomain)
@@ -78,7 +78,7 @@ func (d *IncusDriver) ApplyEgress(ctx context.Context, p proto.EgressParams) (pr
 			}
 			last := strings.Join(args, " ")
 			switch {
-			case i == 0 && pol.Active(), !pol.Active():
+			case i == 0 && pol.Enforced(), !pol.Enforced():
 				// deleting an absent ACL / unsetting absent keys is fine
 			case strings.HasPrefix(last, "config device override"):
 				// NIC already overridden at instance level: set the keys instead.
@@ -91,6 +91,7 @@ func (d *IncusDriver) ApplyEgress(ctx context.Context, p proto.EgressParams) (pr
 			}
 		}
 	}
+	res.Metadata = pol.BlockMetadata
 	if pol.Active() {
 		res.Enforced = true
 		res.Rules = len(targets)

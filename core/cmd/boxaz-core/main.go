@@ -160,6 +160,16 @@ func main() {
 		DashboardURL: os.Getenv("BOXAZ_DASHBOARD_URL"),
 		SSHAddr:      os.Getenv("BOXAZ_SSH_ADDR"),
 		SSHPublic:    os.Getenv("BOXAZ_SSH_PUBLIC"),
+		// v1.11 access P1
+		SFTPMode:       os.Getenv("BOXAZ_SFTP"),
+		AllowMetadata:  envBool("BOXAZ_EGRESS_ALLOW_METADATA"),
+		BrowserInstall: os.Getenv("BOXAZ_BROWSER_INSTALL"),
+	}
+	if d, err := time.ParseDuration(os.Getenv("BOXAZ_BROWSER_IDLE")); err == nil && d > 0 {
+		cfg.BrowserIdle = d
+	}
+	if d, err := time.ParseDuration(os.Getenv("BOXAZ_DESKTOP_IDLE")); err == nil && d > 0 {
+		cfg.DesktopIdle = d
 	}
 	for _, o := range strings.Split(os.Getenv("BOXAZ_ACCESS_ORIGINS"), ",") {
 		if o = strings.TrimSpace(o); o != "" {

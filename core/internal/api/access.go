@@ -37,6 +37,7 @@ func (s *Server) routesAccessWS(r chi.Router) {
 	r.Get("/boxes/{id}/terminal", func(w http.ResponseWriter, r *http.Request) { s.accessTerminal(w, r, nil) })
 	r.Get("/boxes/{id}/tcp", func(w http.ResponseWriter, r *http.Request) { s.accessTCP(w, r, nil) })
 	r.Get("/boxes/{id}/ssh", func(w http.ResponseWriter, r *http.Request) { s.accessSSH(w, r, nil) })
+	s.routesAccessP1Open(r)
 }
 
 // routesAccess registers the authenticated access API.
@@ -52,6 +53,23 @@ func (s *Server) routesAccess(r chi.Router) {
 	r.Get("/ssh/keys", s.listSSHKeys)
 	r.Post("/ssh/keys", s.addSSHKey)
 	r.Delete("/ssh/keys/{kid}", s.deleteSSHKey)
+	r.Post("/ssh/certs", s.issueSSHCert)
+	s.routesAccessP1(r)
+}
+
+func (s *Server) issueSSHCert(w http.ResponseWriter, r *http.Request) {
+	var in manager.SSHCertInput
+	if err := decode(r, &in); err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	c, err := s.M.IssueSSHCert(r.Context(), pr(r), in)
+	if err != nil {
+		writeErr(w, r, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, 201, c)
 }
 
 // accessHost serves /.boxaz/{terminal,tcp,ssh} on a box host.
@@ -59,6 +77,9 @@ func (s *Server) accessHost(w http.ResponseWriter, r *http.Request, seg string) 
 	b, err := s.M.BoxForAccessHost(r.Context(), seg)
 	if err != nil {
 		writeErr(w, r, err)
+		return
+	}
+	if s.accessHostP1(w, r, b) { // v1.11 cdp / vnc / desktop / novnc
 		return
 	}
 	switch strings.TrimSuffix(r.URL.Path, "/") {
@@ -69,7 +90,7 @@ func (s *Server) accessHost(w http.ResponseWriter, r *http.Request, seg string) 
 	case "/.boxaz/ssh":
 		s.accessSSH(w, r, b)
 	default:
-		writeErr(w, r, model.EH(model.ErrNotFound, "Use /.boxaz/terminal, /.boxaz/tcp?port=N or /.boxaz/ssh.", "no access endpoint %s", r.URL.Path))
+		writeErr(w, r, model.EH(model.ErrNotFound, "Use /.boxaz/terminal, /.boxaz/tcp?port=N, /.boxaz/ssh, /.boxaz/cdp, /.boxaz/vnc or /.boxaz/desktop.", "no access endpoint %s", r.URL.Path))
 	}
 }
 
@@ -197,6 +218,28 @@ func (s *Server) accessTCP(w http.ResponseWriter, r *http.Request, hostBox *mode
 
 // accessSSH: SSH protocol over binary WebSocket frames (box ssh-proxy).
 func (s *Server) accessSSH(w http.ResponseWriter, r *http.Request, hostBox *model.Box) {
+	if r.URL.Query().Get("ticket") == "" && r.Header.Get("Authorization") == "" && r.URL.Query().Get("token") == "" {
+		// v1.11: no transport credential — the SSH layer authenticates
+		// (core-signed certificate or a registered key of the box owner).
+		if !s.M.OriginAllowed(r, s.CORSOrigins) {
+			writeErr(w, r, model.EH(model.ErrPolicyDenied, "Use an SSH client (box ssh-proxy --anon %h).", "origin %s may not open box access sockets", r.Header.Get("Origin")))
+			return
+		}
+		b := hostBox
+		if b == nil {
+			var err error
+			if b, err = s.M.BoxForSSH(r.Context(), chi.URLParam(r, "id")); err != nil {
+				writeErr(w, r, err)
+				return
+			}
+		}
+		ws, err := accessUpgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		s.M.ServeSSHAnon(context.Background(), wsconn.New(ws), b)
+		return
+	}
 	c, ok := s.accessAuth(w, r, hostBox, model.PurposeSSH, 0)
 	if !ok {
 		return
@@ -468,7 +511,8 @@ func (s *Server) killTerminal(w http.ResponseWriter, r *http.Request) {
 func (s *Server) sshInfo(w http.ResponseWriter, r *http.Request) {
 	known, fp := s.M.SSHKnownHosts()
 	writeJSON(w, 200, map[string]any{"known_hosts": known, "host_key_fingerprint": fp, "host_key_alias": manager.SSHHostKeyAlias,
-		"direct": s.M.SSHDirect(), "proxy_command": "box ssh-proxy %h", "domain": s.M.GatewayDomain(r.Context())})
+		"direct": s.M.SSHDirect(), "proxy_command": "box ssh-proxy %h", "domain": s.M.GatewayDomain(r.Context()),
+		"user_ca": s.M.SSHUserCA(), "cert_max_ttl_s": int(manager.MaxSSHCertTTL.Seconds()), "sftp": "always (box sftp-server when present, else served by core)"})
 }
 
 func (s *Server) listSSHKeys(w http.ResponseWriter, r *http.Request) {

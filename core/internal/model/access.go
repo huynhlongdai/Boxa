@@ -12,6 +12,11 @@ const (
 	PurposeTerminal = "terminal"
 	PurposeTCP      = "tcp"
 	PurposeSSH      = "ssh"
+	// v1.11
+	PurposeSSHCert = "ssh_cert"  // record of a short-lived SSH user certificate (revocable like a ticket)
+	PurposeCDP     = "cdp"       // Chrome DevTools Protocol endpoint of the box's browser
+	PurposeVNC     = "vnc"       // desktop (RFB over WebSocket)
+	PurposeShare   = "vnc_share" // view-only desktop share link (reusable until it expires or is revoked)
 )
 
 // AccessTicket is one issued ticket (Ticket only in the create response).
@@ -23,10 +28,10 @@ type AccessTicket struct {
 	SessionID  string     `json:"session_id,omitempty"` // terminal: reattach this session only
 	Prefix     string     `json:"prefix"`
 	Ticket     string     `json:"ticket,omitempty"`
-	URL        string     `json:"url,omitempty"`        // where to use it (WebSocket URL with ?ticket=, or ssh command)
-	CoreURL    string     `json:"core_url,omitempty"`   // the same endpoint on core's own host
-	Command    string     `json:"command,omitempty"`    // ssh: ready-to-run command
-	ExpiresAt  time.Time  `json:"expires_at"`           // must be redeemed before
+	URL        string     `json:"url,omitempty"`      // where to use it (WebSocket URL with ?ticket=, or ssh command)
+	CoreURL    string     `json:"core_url,omitempty"` // the same endpoint on core's own host
+	Command    string     `json:"command,omitempty"`  // ssh: ready-to-run command
+	ExpiresAt  time.Time  `json:"expires_at"`         // must be redeemed before
 	CreatedAt  time.Time  `json:"created_at"`
 	RedeemedAt *time.Time `json:"redeemed_at,omitempty"`
 	RevokedAt  *time.Time `json:"revoked_at,omitempty"`
@@ -34,6 +39,13 @@ type AccessTicket struct {
 	Actor      string     `json:"actor,omitempty"`
 	KeyID      string     `json:"key_id,omitempty"`
 	Hash       string     `json:"hash,omitempty"` // stored only
+	// v1.11
+	ViewOnly    bool     `json:"view_only,omitempty"`   // vnc / vnc_share: input from the viewer is dropped by core
+	Reusable    bool     `json:"reusable,omitempty"`    // cdp / vnc_share: may be used until expires_at (not single-use)
+	Serial      uint64   `json:"serial,omitempty"`      // ssh_cert: certificate serial
+	Fingerprint string   `json:"fingerprint,omitempty"` // ssh_cert: SHA256 of the certified public key
+	Principals  []string `json:"principals,omitempty"`  // ssh_cert
+	Uses        int      `json:"uses,omitempty"`        // reusable tickets: times redeemed
 }
 
 // SSHKey is a user public key accepted by the SSH gateway for the owner's boxes.

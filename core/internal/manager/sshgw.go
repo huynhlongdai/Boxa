@@ -42,6 +42,7 @@ import (
 type sshState struct {
 	mu     sync.Mutex
 	signer ssh.Signer
+	ca     ssh.Signer // v1.11 user CA
 	ln     net.Listener
 	fails  map[string][]time.Time // client ip → recent auth failures
 }
@@ -270,19 +271,15 @@ func (m *Manager) sshDirectConfig(signer ssh.Signer) *ssh.ServerConfig {
 			if strings.HasPrefix(c.User(), AccessTicketPrefix) {
 				return byTicket(c)
 			}
-			fp := ssh.FingerprintSHA256(key)
-			ctx := context.Background()
-			for _, k := range m.loadSSHKeys(ctx) {
-				if k.Fingerprint != fp {
-					continue
-				}
-				p, err := m.principalForKey(ctx, k.KeyID)
+			if _, isCert := key.(*ssh.Certificate); isCert { // v1.11: core-signed user certificate
+				perms, err := m.sshCertAuth(key, "", c.User())
 				if err != nil {
-					continue
+					m.sshAuthFailed(ipOf(c))
 				}
-				if b, err := m.ResolveBox(ctx, p, c.User()); err == nil && b.Active() {
-					return &ssh.Permissions{Extensions: map[string]string{"box": b.ID, "key": k.KeyID}}, nil
-				}
+				return perms, err
+			}
+			if perms, err := m.sshRegisteredKeyAuth(key, c.User()); err == nil {
+				return perms, nil
 			}
 			m.sshAuthFailed(ipOf(c))
 			return nil, errors.New("no box for this user and key")
@@ -445,8 +442,6 @@ func (m *Manager) serveSSHConn(ctx context.Context, conn net.Conn, cfg *ssh.Serv
 	m.Emit(context.Background(), t.P.Actor(), b.ID, b.AgentID, "box.ssh", fmt.Sprintf("SSH session closed after %s (%d channels)", time.Since(start).Round(time.Second), nch), nil)
 }
 
-const sftpCommand = `for p in /usr/lib/openssh/sftp-server /usr/libexec/openssh/sftp-server /usr/lib/ssh/sftp-server /usr/libexec/sftp-server /usr/lib/sftp-server; do [ -x "$p" ] && exec "$p"; done; echo "boxaz: this box has no sftp-server (install openssh-sftp-server); use ssh exec or box write" >&2; exit 127`
-
 type ptyReqMsg struct {
 	Term     string
 	Cols     uint32
@@ -476,7 +471,7 @@ func (m *Manager) sshSession(ctx context.Context, b *model.Box, nc ssh.NewChanne
 			return
 		}
 		if req == nil {
-			if proc != nil {
+			if proc != nil && proc.Stdio != nil {
 				proc.Close()
 			}
 			return
@@ -518,7 +513,23 @@ func (m *Manager) sshSession(ctx context.Context, b *model.Box, nc ssh.NewChanne
 					req.Reply(false, nil)
 					continue
 				}
-				sp.Command = sftpCommand
+				// v1.11: the box's sftp-server, else core's own SFTP server
+				peer, err := link()
+				if err != nil {
+					req.Reply(false, nil)
+					fmt.Fprintf(ch.Stderr(), "boxaz: %s\r\n", model.AsAPIError(err).Message)
+					ch.SendRequest("exit-status", false, ssh.Marshal(struct{ Code uint32 }{255}))
+					return
+				}
+				req.Reply(true, nil)
+				go func() {
+					code := m.serveSFTP(ctx, b.ID, peer, ch)
+					ch.SendRequest("exit-status", false, ssh.Marshal(struct{ Code uint32 }{uint32(code)}))
+					ch.CloseWrite()
+					close(done)
+				}()
+				proc = &hostlink.Proc{} // marks the channel as busy
+				continue
 			}
 			if pty != nil && req.Type != "subsystem" {
 				sp.TTY, sp.Term, sp.Cols, sp.Rows = true, pty.Term, int(pty.Cols), int(pty.Rows)
@@ -559,7 +570,7 @@ func (m *Manager) sshSession(ctx context.Context, b *model.Box, nc ssh.NewChanne
 			}(proc)
 		case "window-change":
 			var w struct{ Cols, Rows, Width, Height uint32 }
-			if ssh.Unmarshal(req.Payload, &w) == nil && proc != nil {
+			if ssh.Unmarshal(req.Payload, &w) == nil && proc != nil && proc.Stdio != nil {
 				proc.Resize(int(w.Cols), int(w.Rows))
 			}
 			if req.WantReply {
@@ -567,7 +578,7 @@ func (m *Manager) sshSession(ctx context.Context, b *model.Box, nc ssh.NewChanne
 			}
 		case "signal":
 			var s struct{ Name string }
-			if ssh.Unmarshal(req.Payload, &s) == nil && proc != nil {
+			if ssh.Unmarshal(req.Payload, &s) == nil && proc != nil && proc.Stdio != nil {
 				proc.Signal(s.Name)
 			}
 			if req.WantReply {

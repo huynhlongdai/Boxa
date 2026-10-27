@@ -55,10 +55,14 @@ func (m *Manager) effectiveEgress(ctx context.Context, agent *model.Agent, req *
 // applyEgress pushes the box policy to its host and records the result.
 // Caller holds the box lock or owns the box (provisioning).
 func (m *Manager) applyEgress(ctx context.Context, b *model.Box, clear bool) error {
+	block := !m.Cfg.AllowMetadata
 	if b.Egress == nil && !clear {
+		if block && !m.Hub.IsVirtual(b.HostID) {
+			m.applyMetadataBlock(ctx, b)
+		}
 		return nil
 	}
-	params := proto.EgressParams{BoxID: b.ID}
+	params := proto.EgressParams{BoxID: b.ID, BlockMetadata: block}
 	if b.Egress != nil {
 		params.Allow, params.DenyByDefault = b.Egress.Allow, b.Egress.DenyByDefault
 	}
@@ -81,6 +85,19 @@ func (m *Manager) applyEgress(ctx context.Context, b *model.Box, clear bool) err
 		m.EmitData(ctx, "system", b.ID, b.AgentID, typ, msg, nil, map[string]any{"enforced": res.Enforced, "mode": res.Mode, "rules": res.Rules})
 	}
 	return nil
+}
+
+// applyMetadataBlock (v1.11) installs only the cloud-metadata drop rules on a
+// box without an allowlist. Best effort: a host that cannot filter keeps the
+// box (it is reported as an event).
+func (m *Manager) applyMetadataBlock(ctx context.Context, b *model.Box) {
+	var res proto.EgressResult
+	cctx, cancel := context.WithTimeout(ctx, time.Minute)
+	err := m.Hub.Call(cctx, b.HostID, proto.MEgress, proto.EgressParams{BoxID: b.ID, BlockMetadata: true}, &res)
+	cancel()
+	if err != nil {
+		m.Emit(ctx, "system", b.ID, b.AgentID, "box.egress_not_enforced", "cloud metadata block not applied: "+err.Error(), nil)
+	}
 }
 
 // EgressInput is PUT /boxes/:id/egress.

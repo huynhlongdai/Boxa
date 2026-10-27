@@ -44,11 +44,12 @@ const (
 
 // accessState holds live access connections and terminal sessions.
 type accessState struct {
-	mu    sync.Mutex
-	live  map[string]map[*liveConn]struct{} // ticket id → live connections
-	byBox map[string]map[*liveConn]struct{} // box id → live connections
-	terms termState
-	ssh   sshState
+	mu     sync.Mutex
+	live   map[string]map[*liveConn]struct{} // ticket id → live connections
+	byBox  map[string]map[*liveConn]struct{} // box id → live connections
+	terms  termState
+	ssh    sshState
+	addons addonState // v1.11 browser + desktop
 }
 
 type liveConn struct {
@@ -67,6 +68,8 @@ type CreateTicketInput struct {
 	// Allow adds Port to the box's forward allowlist (tcp) when it is neither
 	// exposed nor already allowed.
 	Allow bool `json:"allow,omitempty"`
+	// ViewOnly (vnc): core drops the viewer's keyboard / mouse input.
+	ViewOnly bool `json:"view_only,omitempty"`
 }
 
 func ticketKey(boxID string) string { return "tickets:" + boxID }
@@ -241,8 +244,13 @@ func (m *Manager) CreateTicket(ctx context.Context, p *Principal, ref string, in
 	}
 	in.Purpose = strings.ToLower(strings.TrimSpace(in.Purpose))
 	switch in.Purpose {
-	case model.PurposeTerminal, model.PurposeSSH:
+	case model.PurposeTerminal, model.PurposeSSH, model.PurposeVNC:
 		in.Port = 0
+	case model.PurposeCDP:
+		in.Port = 0
+		if in.TTLSeconds == 0 {
+			in.TTLSeconds = 3600 // reusable until expiry: connectOverCDP(http) needs two requests
+		}
 	case model.PurposeTCP:
 		if in.Port < 1 || in.Port > 65535 {
 			return nil, model.EH(model.ErrInvalid, "Pass the in-box port, e.g. {\"purpose\":\"tcp\",\"port\":5432}.", "purpose tcp needs a port")
@@ -256,7 +264,7 @@ func (m *Manager) CreateTicket(ctx context.Context, p *Principal, ref string, in
 			}
 		}
 	default:
-		return nil, model.EH(model.ErrInvalid, "Use purpose terminal, tcp or ssh.", "unknown ticket purpose %q", in.Purpose)
+		return nil, model.EH(model.ErrInvalid, "Use purpose terminal, tcp, ssh, cdp or vnc (share links: POST /v1/boxes/{id}/desktop/shares; certificates: POST /v1/ssh/certs).", "unknown ticket purpose %q", in.Purpose)
 	}
 	if in.SessionID != "" && in.Purpose != model.PurposeTerminal {
 		in.SessionID = ""
@@ -271,7 +279,8 @@ func (m *Manager) CreateTicket(ctx context.Context, p *Principal, ref string, in
 	raw := AccessTicketPrefix + b.ID + "_" + secret.RandHex(20)
 	now := time.Now().UTC()
 	t := &model.AccessTicket{ID: secret.ID("tkt"), BoxID: b.ID, Purpose: in.Purpose, Port: in.Port, SessionID: in.SessionID,
-		Prefix: raw[:len(AccessTicketPrefix)+len(b.ID)+5], ExpiresAt: now.Add(ttl), CreatedAt: now, Actor: p.Actor(), Hash: hashToken(raw)}
+		Prefix: raw[:len(AccessTicketPrefix)+len(b.ID)+5], ExpiresAt: now.Add(ttl), CreatedAt: now, Actor: p.Actor(), Hash: hashToken(raw),
+		Reusable: in.Purpose == model.PurposeCDP, ViewOnly: in.Purpose == model.PurposeVNC && in.ViewOnly}
 	if p.Key != nil {
 		t.KeyID = p.Key.ID
 	}
@@ -412,11 +421,14 @@ func (m *Manager) RedeemTicket(ctx context.Context, raw, purpose, boxID string, 
 			t = x
 		}
 	}
-	if t == nil || t.RevokedAt != nil || t.RedeemedAt != nil || now.After(t.ExpiresAt) || t.Purpose != purpose || (purpose == model.PurposeTCP && t.Port != port) {
+	if t == nil || t.RevokedAt != nil || (t.RedeemedAt != nil && !t.Reusable) || now.After(t.ExpiresAt) || t.Purpose != purpose || (purpose == model.PurposeTCP && t.Port != port) {
 		lock.Unlock()
 		return nil, nil, nil, bad
 	}
-	t.RedeemedAt = &now
+	if t.RedeemedAt == nil {
+		t.RedeemedAt = &now
+	}
+	t.Uses++
 	err := m.Store.PutKV(ctx, ticketKey(tb), list)
 	lock.Unlock()
 	if err != nil {
@@ -515,6 +527,7 @@ func (m *Manager) closeAccess(boxID, reason string) {
 		c.close(reason)
 	}
 	m.killBoxTerminals(boxID, reason)
+	m.forgetAddons(boxID)
 }
 
 // LiveAccess counts open interactive connections of a box by kind.
@@ -711,17 +724,17 @@ func (m *Manager) accessURLs(ctx context.Context, b *model.Box, purpose string, 
 
 // AccessInfo is GET /v1/boxes/{id}/access: how to reach the box beyond HTTP.
 type AccessInfo struct {
-	BoxID    string             `json:"box_id"`
-	Name     string             `json:"name,omitempty"`
-	Host     string             `json:"host,omitempty"` // <name>.<domain>
-	Link     string             `json:"link"`           // boxd | agent | agent-on-demand | none
-	Live     map[string]int     `json:"live"`           // open connections by kind
-	TCP      AccessTCP          `json:"tcp"`
-	Terminal AccessTerminal     `json:"terminal"`
-	SSH      AccessSSH          `json:"ssh"`
-	Commands map[string]string  `json:"commands"`
-	Notes    []string           `json:"notes,omitempty"`
-	Tickets  string             `json:"tickets"` // POST endpoint
+	BoxID    string            `json:"box_id"`
+	Name     string            `json:"name,omitempty"`
+	Host     string            `json:"host,omitempty"` // <name>.<domain>
+	Link     string            `json:"link"`           // boxd | agent | agent-on-demand | none
+	Live     map[string]int    `json:"live"`           // open connections by kind
+	TCP      AccessTCP         `json:"tcp"`
+	Terminal AccessTerminal    `json:"terminal"`
+	SSH      AccessSSH         `json:"ssh"`
+	Commands map[string]string `json:"commands"`
+	Notes    []string          `json:"notes,omitempty"`
+	Tickets  string            `json:"tickets"` // POST endpoint
 }
 
 // AccessTCP describes the TCP stream endpoint.
