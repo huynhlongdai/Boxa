@@ -99,6 +99,7 @@ def cdp(url, navigate=None, blocked=None):
     ws = WS(url)
     t_conn = time.time()
     seq = [0]
+    out = {"ok": True}
 
     def call(method, params=None, session=None, timeout=60):
         seq[0] += 1
@@ -108,7 +109,10 @@ def cdp(url, navigate=None, blocked=None):
         ws.send(json.dumps(m))
         end = time.time() + timeout
         while time.time() < end:
-            _, d = ws.recv()
+            try:
+                _, d = ws.recv()
+            except (TimeoutError, OSError, EOFError) as e:
+                raise SystemExit(json.dumps({"ok": False, "error": f"{method}: {e!r}", **out}))
             r = json.loads(d)
             if r.get("id") == seq[0]:
                 if "error" in r:
@@ -116,7 +120,6 @@ def cdp(url, navigate=None, blocked=None):
                 return r.get("result", {})
         raise SystemExit(f"{method}: timeout")
 
-    out = {"ok": True}
     v = call("Browser.getVersion")
     out["product"], out["protocol"] = v.get("product"), v.get("protocolVersion")
     out["connect_ms"] = int((t_conn - t0) * 1000)
@@ -125,7 +128,6 @@ def cdp(url, navigate=None, blocked=None):
     def open_and_eval(u, expr, wait_s=30):
         tid = call("Target.createTarget", {"url": "about:blank"})["targetId"]
         sid = call("Target.attachToTarget", {"targetId": tid, "flatten": True})["sessionId"]
-        call("Page.enable", session=sid)
         nav = call("Page.navigate", {"url": u}, session=sid)
         val = None
         end = time.time() + wait_s

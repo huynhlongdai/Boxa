@@ -39,6 +39,7 @@ PORT="${PORT:-9222}"; LOG="$D/browser.log"
 if listening "$PORT"; then echo "state=running"; if alive "$D/browser.pid"; then echo "pid=$(cat "$D/browser.pid")"; echo "headless=$(cat "$D/browser.headless" 2>/dev/null || echo 1)"; else echo "source=existing"; fi; exit 0; fi
 not_snap() { r=$(readlink -f "$1" 2>/dev/null || echo "$1"); case "$r" in /snap/*) return 1;; esac; if head -c 4096 "$r" 2>/dev/null | grep -q 'snap'; then return 1; fi; return 0; }
 find_browser() {
+  if [ "$SUDO" = NO ] && [ "${HEADLESS:-1}" = 1 ]; then for p in "$HOME"/.cache/ms-playwright/chromium_headless_shell-*/chrome-*/*headless_shell; do [ -x "$p" ] && { echo "$p"; return 0; }; done; fi
   for b in ${BROWSER_BIN:-} chromium chromium-browser google-chrome-stable google-chrome chrome chrome-headless-shell headless_shell; do
     p=$(command -v "$b" 2>/dev/null) || continue; not_snap "$p" && { echo "$p"; return 0; }
   done
@@ -46,6 +47,16 @@ find_browser() {
     [ -x "$p" ] && { echo "$p"; return 0; }
   done
   return 1
+}
+fix_libs() { # rootless: fetch the missing shared libraries as .debs (apt-get download) and unpack them under $D/libs
+  ldd "$B" 2>/dev/null | grep -q "not found" || return 0
+  command -v apt-get >/dev/null 2>&1 && command -v dpkg-deb >/dev/null 2>&1 || return 1
+  mkdir -p "$D/debs" "$D/libs"
+  (cd "$D/debs" && for p in libnspr4 libnss3 libatk1.0-0t64 libatk1.0-0 libatk-bridge2.0-0t64 libatk-bridge2.0-0 libcups2t64 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2t64 libasound2 libatspi2.0-0t64 libatspi2.0-0 libxshmfence1 libwayland-server0 libavahi-common3 libavahi-client3; do apt-get download "$p" >>"$D/install.log" 2>&1 || true; done
+    for f in *.deb; do [ -f "$f" ] && dpkg-deb -x "$f" "$D/libs"; done) 2>>"$D/install.log"
+  L="$D/libs/usr/lib/$(uname -m)-linux-gnu:$D/libs/lib/$(uname -m)-linux-gnu"
+  LD_LIBRARY_PATH="$L" ldd "$B" 2>/dev/null | grep -q "not found" && return 1
+  echo "$L" > "$D/browser.libs"
 }
 SRC=found; B=$(find_browser)
 if [ -z "$B" ]; then
@@ -66,6 +77,9 @@ if [ -z "$B" ]; then
       B=$(find_browser)
     fi
   fi
+  if [ -n "$B" ] && [ "$SUDO" = NO ]; then # no root: system libraries Chromium needs may be missing
+    fix_libs || { echo "error=Chromium installed but system libraries are missing ($(ldd "$B" 2>/dev/null | awk '/not found/ {print $1}' | head -4 | tr '\n' ' ')) and there is no root/sudo to install them"; exit 3; }
+  fi
   [ -z "$B" ] && { echo "error=could not install Chromium (see $D/install.log: needs apt with root/sudo, npx, or x86_64 + internet)"; tail -3 "$D/install.log" 2>/dev/null | tr '\n' ' ' | sed 's/^/detail=/'; echo; exit 3; }
 fi
 PROFILE="${PROFILE:-$HOME/.local/share/bx-browser}"; mkdir -p "$PROFILE" 2>/dev/null || PROFILE="$D/profile"
@@ -80,7 +94,14 @@ start_it() { # $1 = extra flag
     "--host-resolver-rules=$RULES" --window-size="${W:-1280},${H:-800}" $1
   [ "$HL" = 1 ] && set -- "$@" --headless=new --disable-gpu
   [ "$(id -u)" = 0 ] && set -- "$@" --no-sandbox
+  # no unprivileged user namespaces (most containers / microVM images): Chromium's sandbox cannot start renderers
+  if [ "$(id -u)" != 0 ] && ! { command -v unshare >/dev/null 2>&1 && unshare --user --map-root-user true 2>/dev/null; }; then set -- "$@" --no-sandbox; fi
+  MEM=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo 2>/dev/null)
+  if [ -n "$MEM" ] && [ "$MEM" -lt 1500 ]; then set -- "$@" --renderer-process-limit=2 --disable-features=Translate,MediaRouter,OptimizationHints --disable-extensions; fi
+  # tiny boxes (≈512 MB, strict overcommit): V8 cannot reserve its JIT code range ("V8 process OOM … CodeRange") — run JS without JIT
+  if [ -n "$MEM" ] && [ "$MEM" -lt 900 ]; then set -- "$@" --js-flags=--jitless --no-zygote --no-sandbox; fi
   if [ -n "$DISP_ENV" ]; then set -- env "$DISP_ENV" "$@"; fi
+  if [ -f "$D/browser.libs" ]; then set -- env "LD_LIBRARY_PATH=$(cat "$D/browser.libs")" "$@"; fi
   PID=$(detach "$@" about:blank)
   echo "$PID" > "$D/browser.pid"; echo "$HL" > "$D/browser.headless"
   i=0; while [ $i -lt 100 ]; do listening "$PORT" && return 0; kill -0 "$PID" 2>/dev/null || return 1; sleep 0.15; i=$((i+1)); done; return 1
