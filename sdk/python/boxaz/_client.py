@@ -309,6 +309,67 @@ class _Base:
         """Right-sizing suggestion for one box (or all running boxes)."""
         return self._call("GET", f"/boxes/{_q(box_id)}/rightsize" if box_id else "/rightsize")
 
+    # -- v1.7: supervised app, gateway URLs, URL tokens, wake settings ------------
+    def set_app(self, box_id: str, start: str, *, repo: Optional[str] = None, ref: Optional[str] = None,
+                install: Optional[str] = None, port: Optional[int] = None, ready_http: Optional[str] = None,
+                ready_tcp: bool = False, restart: Optional[str] = None, env: Optional[Mapping[str, str]] = None,
+                workdir: Optional[str] = None, backoff_max_s: Optional[int] = None) -> Dict[str, Any]:
+        """Declare the box's long-running app: Boxaz clones ``repo``, runs ``install`` once, starts
+        ``start``, restarts it on crash (``restart`` = always | on-failure | never), starts it again after
+        wake / restore / clone and gates gateway traffic to ``port`` until it is ready. Returns ``{spec, status}``."""
+        ready = {"http": ready_http} if ready_http else ({"tcp": True} if ready_tcp else None)
+        return self._call("PUT", f"/boxes/{_q(box_id)}/app", _clean({
+            "start": start, "repo": repo, "ref": ref, "install": install, "port": port, "ready": ready,
+            "restart": restart, "env": dict(env) if env else None, "workdir": workdir, "backoff_max_s": backoff_max_s}))
+
+    def app(self, box_id: str) -> Dict[str, Any]:
+        """App spec + live status: state (cloning|installing|starting|ready|backoff|exited|stopped|sleeping),
+        ready, restarts, last_exit, started_at, supervisor (boxd | script)."""
+        return self._call("GET", f"/boxes/{_q(box_id)}/app")
+
+    def restart_app(self, box_id: str) -> Dict[str, Any]:
+        return self._call("POST", f"/boxes/{_q(box_id)}/app/restart", {})
+
+    def delete_app(self, box_id: str) -> Dict[str, Any]:
+        return self._call("DELETE", f"/boxes/{_q(box_id)}/app")
+
+    def app_logs(self, box_id: str, offset: int = -1, max_bytes: int = 16384) -> Dict[str, Any]:
+        """App output ``{data, offset, truncated}``; pass the returned ``offset`` to read only new output."""
+        return self._call("GET", f"/boxes/{_q(box_id)}/app/logs", params={"offset": offset, "max": max_bytes})
+
+    def ports(self, box_id: str) -> Dict[str, Any]:
+        """Every exposed port with its public ``url``, ``kind``, ``access`` and stable ``gateway_url``."""
+        return self._call("GET", f"/boxes/{_q(box_id)}/ports")
+
+    def expose(self, box_id: str, port: int) -> Dict[str, Any]:
+        return self._call("POST", f"/boxes/{_q(box_id)}/ports", {"port": port})
+
+    def create_url_token(self, box_id: str, port: int, *, ttl_s: Optional[int] = None, label: Optional[str] = None,
+                         private: Optional[bool] = None) -> Dict[str, Any]:
+        """Issue a scoped, expiring, revocable token for one box port. The response carries ``token``
+        (shown once) and ``url`` (gateway URL + ``?token=``); ``private`` (default True) makes the port
+        require a token."""
+        return self._call("POST", f"/boxes/{_q(box_id)}/ports/{int(port)}/tokens", _clean({"ttl_s": ttl_s, "label": label, "private": private}))
+
+    def url_tokens(self, box_id: str, port: int) -> Dict[str, Any]:
+        return self._call("GET", f"/boxes/{_q(box_id)}/ports/{int(port)}/tokens")
+
+    def revoke_url_token(self, box_id: str, port: int, token_id: str) -> Dict[str, Any]:
+        return self._call("DELETE", f"/boxes/{_q(box_id)}/ports/{int(port)}/tokens/{_q(token_id)}")
+
+    def set_port_access(self, box_id: str, port: int, access: str) -> Dict[str, Any]:
+        """``access`` = "public" (gateway URL works without a token) or "token"."""
+        return self._call("PUT", f"/boxes/{_q(box_id)}/ports/{int(port)}", {"access": access})
+
+    def set_wake_on_request(self, box_id: str, on: bool) -> Box:
+        """Whether a request to the box's gateway URL wakes it while it sleeps (default on)."""
+        return self._call("PATCH", f"/boxes/{_q(box_id)}", {"wake_on_request": bool(on)})
+
+    def capabilities(self) -> Dict[str, Any]:
+        """Lifecycle flags per provider: memory_pause, wake_on_http_native, wake_via_gateway, fork,
+        inbound_http, max_runtime."""
+        return self._call("GET", "/capabilities")
+
     # -- misc ----------------------------------------------------------------
     def templates(self) -> Dict[str, List[Template]]:
         return self._call("GET", "/templates")

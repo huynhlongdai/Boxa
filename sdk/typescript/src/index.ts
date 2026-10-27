@@ -23,6 +23,8 @@ export interface Box {
   forked_from?: string; locale?: string; error?: string; next?: string[];
   /** v1.3 */
   profile?: string; requirements?: Requirements; isolation?: string; estimate?: BoxEstimate; cloned_from?: string; name?: string;
+  /** v1.7 */
+  app?: AppSpec; wake_on_request?: boolean; port_access?: Record<string, PortAccess>;
 }
 
 export interface ExecResult {
@@ -135,6 +137,8 @@ export interface CreateBoxInput {
   profile?: string;
   /** v1.3: declarative needs; Boxaz scores options and auto-picks */
   requirements?: Requirements;
+  /** v1.7: supervised app started with the box; wake on request (default true) */
+  app?: AppSpec; wake_on_request?: boolean;
   /** full box.yaml instead of the fields above */
   yaml?: string;
 }
@@ -368,6 +372,32 @@ export class Boxaz {
   /** Right-sizing suggestion for one box (or all running boxes when id is omitted). */
   rightsize(id?: string) { return this.request<Record<string, unknown>>("GET", id ? `/boxes/${enc(id)}/rightsize` : "/rightsize"); }
 
+  // ---- v1.7: supervised app, gateway URLs, scoped URL tokens, wake settings ----
+  /** Declare the box's long-running app: clone repo, install once, start, restart on crash, start again after wake/restore/clone, gate gateway traffic until ready. */
+  setApp(id: string, spec: AppSpec) { return this.request<AppView>("PUT", `/boxes/${enc(id)}/app`, { body: spec }); }
+  /** App spec + live status (state, ready, restarts, last_exit, supervisor). */
+  app(id: string) { return this.request<AppView>("GET", `/boxes/${enc(id)}/app`); }
+  restartApp(id: string) { return this.request<AppView>("POST", `/boxes/${enc(id)}/app/restart`, { body: {} }); }
+  deleteApp(id: string) { return this.request<AppView>("DELETE", `/boxes/${enc(id)}/app`); }
+  /** App output; pass the returned offset back to read only what is new. */
+  appLogs(id: string, opts: { offset?: number; max?: number } = {}) {
+    return this.request<{ data: string; offset: number; truncated?: boolean }>("GET", `/boxes/${enc(id)}/app/logs`, { query: { offset: opts.offset ?? -1, max: opts.max ?? 16384 } });
+  }
+  /** Exposed ports with url, kind, access and the stable gateway_url. */
+  ports(id: string) { return this.request<PortsResult>("GET", `/boxes/${enc(id)}/ports`); }
+  expose(id: string, port: number) { return this.request<PortsResult>("POST", `/boxes/${enc(id)}/ports`, { body: { port } }); }
+  /** Issue a scoped, expiring, revocable token for one box port (token + url shown once; private defaults to true). */
+  createUrlToken(id: string, port: number, opts: { ttl_s?: number; label?: string; private?: boolean } = {}) {
+    return this.request<UrlToken>("POST", `/boxes/${enc(id)}/ports/${port}/tokens`, { body: opts });
+  }
+  urlTokens(id: string, port: number) { return this.request<{ box_id: string; port: number; access: PortAccess; gateway_url: string; items: UrlToken[] }>("GET", `/boxes/${enc(id)}/ports/${port}/tokens`); }
+  revokeUrlToken(id: string, port: number, tokenId: string) { return this.request<UrlToken>("DELETE", `/boxes/${enc(id)}/ports/${port}/tokens/${enc(tokenId)}`); }
+  setPortAccess(id: string, port: number, access: PortAccess) { return this.request<PortView>("PUT", `/boxes/${enc(id)}/ports/${port}`, { body: { access } }); }
+  /** Whether a request to the gateway URL wakes the sleeping box (default on). */
+  setWakeOnRequest(id: string, on: boolean) { return this.request<Box>("PATCH", `/boxes/${enc(id)}`, { body: { wake_on_request: on } }); }
+  /** Lifecycle capability flags per provider. */
+  capabilities() { return this.request<List<LifecycleCaps & { provider: string; group: string }>>("GET", "/capabilities"); }
+
   // ---- misc ----
   templates() { return this.request<List<Template>>("GET", "/templates"); }
   overview() { return this.request<Record<string, unknown>>("GET", "/overview"); }
@@ -451,3 +481,20 @@ export type BoxaOptions = BoxazOptions;
 export type BoxaEvent = BoxazEvent;
 
 export default Boxaz;
+
+// ---- v1.7 types ----
+export type RestartPolicy = "always" | "on-failure" | "never";
+export interface AppSpec {
+  start: string; repo?: string; ref?: string; install?: string; port?: number;
+  ready?: { http?: string; tcp?: boolean }; restart?: RestartPolicy; env?: Record<string, string>; workdir?: string; backoff_max_s?: number;
+}
+export interface AppStatus {
+  state: "none" | "cloning" | "installing" | "starting" | "ready" | "backoff" | "exited" | "stopped" | "failed" | "sleeping";
+  ready: boolean; pid?: number; restarts: number; last_exit?: number; started_at?: string; ready_at?: string; message?: string; supervisor?: "boxd" | "script"; spec_hash?: string;
+}
+export interface AppView { box_id: string; spec: AppSpec | null; status: AppStatus }
+export type PortAccess = "public" | "token";
+export interface PortView { port: number; url: string; kind: string; public: boolean; note?: string; caveats?: string[]; gateway_url?: string; access: PortAccess }
+export interface PortsResult { box_id: string; url: string; ports: PortView[] }
+export interface UrlToken { id: string; box_id: string; port: number; label?: string; prefix: string; token?: string; url?: string; expires_at: string; created_at: string; revoked_at?: string; expired?: boolean }
+export interface LifecycleCaps { memory_pause: boolean; wake_on_http_native: boolean; wake_via_gateway: boolean; fork: boolean; inbound_http: boolean; max_runtime: number; note?: string }

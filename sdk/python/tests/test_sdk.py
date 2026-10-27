@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 
 import pytest
 
@@ -14,10 +15,10 @@ def test_discovery(core):
     assert len(bx.agent_kinds()["items"]) == 22
     tools = as_openai_tools(bx)
     names = {t["function"]["name"] for t in tools}
-    assert {"box_up", "box_exec_batch", "box_fork", "box_quote"} <= names and len(names) == 22
+    assert {"box_up", "box_exec_batch", "box_fork", "box_quote"} <= names and len(names) == 26
     assert as_openai_tools(bx, responses_api=True)[0]["name"] == "box_ensure"
     assert as_anthropic_tools(bx)[0]["input_schema"]["type"] == "object"
-    assert len(as_gemini_tools(bx)[0]["functionDeclarations"]) == 22
+    assert len(as_gemini_tools(bx)[0]["functionDeclarations"]) == 26
     assert bx.llms_txt().startswith("# Boxaz")
     assert bx.openapi()["openapi"] == "3.1.0"
 
@@ -188,3 +189,55 @@ def test_v14_sandbox_helpers(core):
         assert rec["options"] and all(o["kind"] == "sandbox" and o["fork"] and o["strong_isolation"] and o["tier"] in ("T2", "T3") for o in rec["options"])
         assert any(r.get("provider") == "daytona" and "shared kernel" in r["reason"] for r in rec["rejected"])
         assert any("fork" in r["reason"] for r in rec["rejected"])
+
+
+def test_v17_app_gateway_tokens(core):
+    import shutil
+    import socket
+    import urllib.error
+    import urllib.request
+    if not shutil.which("python3"):
+        pytest.skip("python3 required in the box")
+    from boxaz import Boxaz
+    url, akey = core["url"], core["key"]
+    s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+    def get(u, headers=None):
+        try:
+            with opener.open(urllib.request.Request(u, headers=headers or {}), timeout=30) as r:
+                return r.status, r.read().decode()
+        except urllib.error.HTTPError as e:
+            return e.code, e.read().decode()
+
+    with Boxaz(akey, url) as bx:
+        box = bx.up(template="base", lifecycle="session", slug="sdk-py-app")
+        try:
+            v = bx.set_app(box["id"], "exec python3 -m http.server $PORT --bind 127.0.0.1", install="echo py-sdk > index.html",
+                           port=port, ready_http="/", workdir="/work/site")
+            assert v["spec"]["restart"] == "always"
+            for _ in range(80):
+                st = bx.app(box["id"])["status"]
+                if st["state"] == "ready":
+                    break
+                time.sleep(0.25)
+            assert st["ready"] and st["supervisor"] == "boxd"
+            gw = [p for p in bx.ports(box["id"])["ports"] if p["port"] == port][0]["gateway_url"]
+            full = url + gw if gw.startswith("/") else gw
+            assert get(full) == (200, "py-sdk\n")
+            t = bx.create_url_token(box["id"], port, ttl_s=600, label="sdk")
+            assert t["token"].startswith("bxt_")
+            assert get(full)[0] == 401
+            assert get(full, {"Authorization": "Bearer " + t["token"]})[0] == 200
+            assert bx.url_tokens(box["id"], port)["access"] == "token"
+            bx.revoke_url_token(box["id"], port, t["id"])
+            assert get(full, {"X-Boxaz-Token": t["token"]})[0] == 401
+            bx.set_port_access(box["id"], port, "public")
+            bx.sleep(box["id"])
+            assert get(full) == (200, "py-sdk\n")  # wake on request
+            assert bx.set_wake_on_request(box["id"], False)["wake_on_request"] is False
+            assert "data" in bx.app_logs(box["id"])
+            caps = {c["provider"]: c for c in bx.capabilities()["items"]}
+            assert caps["e2b"]["wake_on_http_native"] and not caps["prized"]["inbound_http"]
+        finally:
+            bx.down(box["id"])

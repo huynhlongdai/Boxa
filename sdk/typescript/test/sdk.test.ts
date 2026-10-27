@@ -87,10 +87,10 @@ test("discovery + tool formats", { skip }, async () => {
   assert.equal((await bx.health()).ok, true);
   assert.equal((await bx.agentKinds()).items.length, 22);
   const oa = await asOpenAITools(bx);
-  assert.equal(oa.length, 22);
+  assert.equal(oa.length, 26);
   assert.ok(oa.some((t) => t.function.name === "box_exec_batch"));
   assert.equal((await asAnthropicTools(bx))[0].input_schema.type, "object");
-  assert.equal((await asGeminiTools(bx))[0].functionDeclarations.length, 22);
+  assert.equal((await asGeminiTools(bx))[0].functionDeclarations.length, 26);
   assert.ok((await bx.llmsTxt()).startsWith("# Boxaz"));
   assert.equal((await bx.openapi()).openapi, "3.1.0");
   const sn = await new Boxaz({ apiKey: admin, baseUrl: url }).snippet(agentId, undefined, "zh");
@@ -201,4 +201,34 @@ test("v1.4 sandbox providers / adapter lint / recommend untrusted+fork", { skip 
   assert.ok(rec.options.length > 0 && rec.options.every((o) => o.kind === "sandbox" && o.fork && o.strong_isolation && (o.tier === "T2" || o.tier === "T3")));
   assert.ok(rec.rejected.some((r) => r.provider === "daytona" && /shared kernel/.test(r.reason)));
   assert.ok(rec.rejected.some((r) => /fork/.test(r.reason)));
+});
+
+test("v1.7 supervised app / gateway wake / URL tokens / capabilities", { skip }, async () => {
+  const bx = new Boxaz({ apiKey: key, baseUrl: url });
+  const port = await freePort();
+  const box = await bx.createBox({ template: "base", lifecycle: "session", slug: "sdk-ts-app" });
+  try {
+    const v = await bx.setApp(box.id, { start: "exec python3 -m http.server $PORT --bind 127.0.0.1", install: "echo ts-sdk > index.html", port, ready: { http: "/" }, workdir: "/work/site" });
+    assert.equal(v.spec?.restart, "always");
+    let st = v.status;
+    for (let i = 0; i < 80 && st.state !== "ready"; i++) { await wait(250); st = (await bx.app(box.id)).status; }
+    assert.equal(st.state, "ready");
+    const p = (await bx.ports(box.id)).ports.find((x) => x.port === port)!;
+    const gw = p.gateway_url!.startsWith("/") ? url + p.gateway_url : p.gateway_url!;
+    assert.equal(await (await fetch(gw)).text(), "ts-sdk\n");
+    const t = await bx.createUrlToken(box.id, port, { ttl_s: 600 });
+    assert.ok(t.token?.startsWith("bxt_"));
+    assert.equal((await fetch(gw)).status, 401);
+    assert.equal((await fetch(gw, { headers: { Authorization: `Bearer ${t.token}` } })).status, 200);
+    await bx.revokeUrlToken(box.id, port, t.id);
+    assert.equal((await fetch(gw, { headers: { "X-Boxaz-Token": t.token! } })).status, 401);
+    await bx.setPortAccess(box.id, port, "public");
+    await bx.sleep(box.id);
+    assert.equal(await (await fetch(gw)).text(), "ts-sdk\n"); // wake on request
+    assert.equal((await bx.setWakeOnRequest(box.id, false)).wake_on_request, false);
+    const caps = new Map((await bx.capabilities()).items.map((c) => [c.provider, c]));
+    assert.ok(caps.get("e2b")?.wake_on_http_native && !caps.get("prized")?.inbound_http);
+  } finally {
+    await bx.deleteBox(box.id);
+  }
 });
