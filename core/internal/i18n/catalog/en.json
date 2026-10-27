@@ -43,7 +43,7 @@
   "llms.snippet_hint": "Get a ready-to-paste config: GET %s/v1/agents/{id}/snippet?kind=<kind>&lang=<vi|en|zh|ja>.",
   "llms.summary": "Boxaz rents cheap, disposable Linux sandboxes (boxes) to AI agents on low-cost VPS providers, picks the cheapest host that fits, sleeps idle boxes and enforces budgets.",
   "mcp.check_args": "Check the tool arguments.",
-  "mcp.instructions": "Boxaz gives you disposable Linux boxes. Typical flow: box_ensure(name, profile) (or box_recommend → box_up) → box_write/box_exec (box_exec_batch for several commands) → box_down. Output is trimmed to save tokens; read full logs with box_logs only when needed. Snapshot before risky changes; box_restore undoes, box_fork branches. Files are also readable as resources (boxaz://box/{id}/file/{path}).",
+  "mcp.instructions": "Boxaz gives you disposable Linux boxes. Typical flow: box_ensure(name, profile) (or box_recommend → box_up) → box_write/box_exec (box_exec_batch for several commands) → box_down. Output is trimmed to save tokens; read full logs with box_logs only when needed. Snapshot before risky changes; box_restore undoes, box_fork branches. Files are also readable as resources (boxaz://box/{id}/file/{path}). Web apps: box_app_set runs and supervises a server; box_url gives its stable Boxaz URL (wakes a sleeping box); box_url_token makes it private (the provider's own preview URL, if any, stays reachable for anyone who knows the sandbox id).",
   "notify.amount": "Amount: $%.4f",
   "notify.approve_hint": "Open the Boxaz dashboard (Overview → Needs you) to approve or reject.",
   "notify.box_failed_body": "Box %s (agent %s) failed: %s",
@@ -99,6 +99,8 @@
   "snip.stdio": "Or local stdio through the box CLI",
   "snip.task": "Create a python box, run python3 -c 'print(42)' in it, report the output, then delete the box.",
   "snip.tools": "Tool schemas for any function-calling LLM",
-  "snip.uncertain": "Note: the config format may differ between versions; check the tool's MCP docs if it fails."
+  "snip.uncertain": "Note: the config format may differ between versions; check the tool's MCP docs if it fails.",
+  "llms.h_apps": "Web apps, Boxaz URLs and tokens (v1.7)",
+  "llms.apps": "- Run long-lived servers with box_app_set {start, port, repo?, install?, ready_http?}: Boxaz clones, installs once, starts the app, restarts it on crash with backoff, starts it again after wake / restore / clone and holds traffic until it is ready. Watch it with box_app_status and box_app_logs (GET /v1/boxes/{id}/app/logs?follow=1 streams SSE). Prefer this over `nohup … &`.\n- Every exposed port has gateway_url, a stable Boxaz URL (box_url): the first request to a sleeping box wakes it (wake_on_request, on by default; PATCH /v1/boxes/{id}), WebSocket and SSE pass through unbuffered.\n- Share privately with box_url_token: an expiring, revocable token for one box+port (`?token=`, `Authorization: Bearer` or `X-Boxaz-Token`); the port switches to access=token. Caveat: the token protects only the Boxaz URL. On providers with their own preview host (E2B, Novita, Daytona) the provider preview URL of that port is still reachable at the provider by anyone who knows the sandbox id; do not rely on the token for secrets there.\n- GET /v1/capabilities lists per provider: memory_pause, wake_on_http_native, wake_via_gateway, fork, inbound_http, max_runtime."
  }
 }

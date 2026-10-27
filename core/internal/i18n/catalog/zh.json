@@ -305,7 +305,7 @@
   "llms.snippet_hint": "获取可直接粘贴的配置：GET %s/v1/agents/{id}/snippet?kind=<kind>&lang=<vi|en|zh|ja>。",
   "llms.summary": "Boxaz 在低价 VPS 上为 AI 智能体提供廉价的一次性 Linux 沙箱（盒子），自动选择最便宜的合适主机，让空闲盒子休眠并控制预算。",
   "mcp.check_args": "请检查工具参数。",
-  "mcp.instructions": "Boxaz 为你提供一次性 Linux 盒子。典型流程：box_ensure(name, profile)（或 box_recommend → box_up）→ box_write/box_exec（多条命令用 box_exec_batch）→ box_down。输出会被裁剪以节省 token；仅在需要时用 box_logs 读取完整日志。高风险改动前先快照；box_restore 可撤销，box_fork 可分支。文件也可作为资源读取（boxaz://box/{id}/file/{path}）。",
+  "mcp.instructions": "Boxaz 为你提供一次性 Linux 盒子。典型流程：box_ensure(name, profile)（或 box_recommend → box_up）→ box_write/box_exec（多条命令用 box_exec_batch）→ box_down。输出会被裁剪以节省 token；仅在需要时用 box_logs 读取完整日志。高风险改动前先快照；box_restore 可撤销，box_fork 可分支。文件也可作为资源读取（boxaz://box/{id}/file/{path}）。 Web 应用：box_app_set 运行并监督服务；box_url 给出固定的 Boxaz URL（可唤醒休眠的 box）；box_url_token 设为私密（服务商自有的预览 URL 若存在，仍可被知道沙箱 ID 的人访问）。",
   "notify.amount": "金额：$%.4f",
   "notify.approve_hint": "打开 Boxaz 控制台（总览 → 待处理）进行批准或拒绝。",
   "notify.box_failed_body": "Box %s（agent %s）失败：%s",
@@ -361,6 +361,8 @@
   "snip.stdio": "或通过 box CLI 使用本地 stdio",
   "snip.task": "创建一个 python 盒子，在其中运行 python3 -c 'print(42)'，报告输出，然后删除盒子。",
   "snip.tools": "适用于任何函数调用 LLM 的工具定义",
-  "snip.uncertain": "注意：不同版本的配置格式可能不同；若失败请查看该工具的 MCP 文档。"
+  "snip.uncertain": "注意：不同版本的配置格式可能不同；若失败请查看该工具的 MCP 文档。",
+  "llms.h_apps": "Web 应用、Boxaz URL 与令牌（v1.7）",
+  "llms.apps": "- 用 box_app_set {start, port, repo?, install?, ready_http?} 运行常驻服务：Boxaz 克隆仓库、只安装一次、启动应用，崩溃后按退避策略重启，在唤醒 / 恢复 / 克隆后重新启动，并在应用就绪前保持流量。用 box_app_status 和 box_app_logs 查看（GET /v1/boxes/{id}/app/logs?follow=1 以 SSE 推送）。优先于 `nohup … &`。\n- 每个已开放的端口都有 gateway_url，即固定的 Boxaz URL（box_url）：首个请求会唤醒休眠的 box（wake_on_request，默认开启；PATCH /v1/boxes/{id}），WebSocket 与 SSE 无缓冲透传。\n- 用 box_url_token 私密分享：仅限一个 box+端口、会过期且可吊销的令牌（`?token=`、`Authorization: Bearer` 或 `X-Boxaz-Token`）；端口切换为 access=token。注意：令牌只保护 Boxaz URL。在有自有预览域名的服务商（E2B、Novita、Daytona）上，该端口的服务商预览 URL 仍可被任何知道沙箱 ID 的人在服务商处访问；不要依赖令牌保护那里的机密。\n- GET /v1/capabilities 按服务商列出：memory_pause、wake_on_http_native、wake_via_gateway、fork、inbound_http、max_runtime。"
  }
 }

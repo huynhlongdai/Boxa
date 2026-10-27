@@ -305,7 +305,7 @@
   "llms.snippet_hint": "貼り付けるだけの設定を取得: GET %s/v1/agents/{id}/snippet?kind=<kind>&lang=<vi|en|zh|ja>。",
   "llms.summary": "Boxaz は低価格 VPS 上で AI エージェントに安価な使い捨て Linux サンドボックス（ボックス）を貸し出し、最安のホストを選び、アイドルのボックスをスリープさせ、予算を守ります。",
   "mcp.check_args": "ツールの引数を確認してください。",
-  "mcp.instructions": "Boxaz は使い捨ての Linux ボックスを提供します。基本の流れ: box_ensure(name, profile)（または box_recommend → box_up）→ box_write/box_exec（複数コマンドは box_exec_batch）→ box_down。出力はトークン節約のため短縮されるので、必要なときだけ box_logs で全ログを読んでください。危険な変更の前にスナップショットを取り、box_restore で元に戻し、box_fork で分岐できます。ファイルはリソース（boxaz://box/{id}/file/{path}）としても読めます。",
+  "mcp.instructions": "Boxaz は使い捨ての Linux ボックスを提供します。基本の流れ: box_ensure(name, profile)（または box_recommend → box_up）→ box_write/box_exec（複数コマンドは box_exec_batch）→ box_down。出力はトークン節約のため短縮されるので、必要なときだけ box_logs で全ログを読んでください。危険な変更の前にスナップショットを取り、box_restore で元に戻し、box_fork で分岐できます。ファイルはリソース（boxaz://box/{id}/file/{path}）としても読めます。 Web アプリ: box_app_set がサーバーを実行・監視し、box_url が固定の Boxaz URL（スリープ中の box を起動）を返し、box_url_token で非公開にします（プロバイダー独自のプレビュー URL があれば、サンドボックス ID を知る人には到達可能なまま）。",
   "notify.amount": "金額: $%.4f",
   "notify.approve_hint": "Boxaz ダッシュボード（概要 → 要対応）で承認または却下してください。",
   "notify.box_failed_body": "Box %s（エージェント %s）が失敗: %s",
@@ -361,6 +361,8 @@
   "snip.stdio": "または box CLI 経由のローカル stdio",
   "snip.task": "python ボックスを作成し、python3 -c 'print(42)' を実行して出力を報告し、ボックスを削除してください。",
   "snip.tools": "関数呼び出し対応 LLM 向けのツール定義",
-  "snip.uncertain": "注意: 設定形式はバージョンにより異なる場合があります。失敗したらツールの MCP ドキュメントを確認してください。"
+  "snip.uncertain": "注意: 設定形式はバージョンにより異なる場合があります。失敗したらツールの MCP ドキュメントを確認してください。",
+  "llms.h_apps": "Web アプリ、Boxaz URL とトークン（v1.7）",
+  "llms.apps": "- 常駐サーバーは box_app_set {start, port, repo?, install?, ready_http?} で実行: Boxaz がクローンし、インストールを一度だけ行い、アプリを起動し、クラッシュ時はバックオフ付きで再起動し、起動 / 復元 / クローン後に再び起動し、準備完了までトラフィックを保留します。box_app_status と box_app_logs で確認できます（GET /v1/boxes/{id}/app/logs?follow=1 は SSE）。`nohup … &` より推奨。\n- 公開した各ポートには gateway_url（固定の Boxaz URL、box_url）があります: スリープ中の box への最初のリクエストで起動し（wake_on_request、既定でオン、PATCH /v1/boxes/{id}）、WebSocket と SSE はバッファなしで通ります。\n- 非公開で共有するには box_url_token: 1 つの box+ポート専用の、期限付きで失効可能なトークン（`?token=`、`Authorization: Bearer` または `X-Boxaz-Token`）。ポートは access=token に切り替わります。注意: トークンが保護するのは Boxaz URL だけです。独自プレビューホストを持つプロバイダー（E2B、Novita、Daytona）では、そのポートのプロバイダープレビュー URL はサンドボックス ID を知っている人なら誰でもプロバイダーで開けます。そこでの秘密保護をトークンに頼らないでください。\n- GET /v1/capabilities はプロバイダーごとに memory_pause、wake_on_http_native、wake_via_gateway、fork、inbound_http、max_runtime を返します。"
  }
 }

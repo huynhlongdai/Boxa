@@ -305,7 +305,7 @@
   "llms.snippet_hint": "Lấy cấu hình dán sẵn: GET %s/v1/agents/{id}/snippet?kind=<kind>&lang=<vi|en|zh|ja>.",
   "llms.summary": "Boxaz cho AI agent thuê sandbox Linux (box) dùng xong bỏ, giá rẻ trên các VPS giá thấp; tự chọn host rẻ nhất phù hợp, cho box rảnh ngủ và giữ ngân sách.",
   "mcp.check_args": "Kiểm tra lại tham số của tool.",
-  "mcp.instructions": "Boxaz cung cấp box Linux dùng xong bỏ. Luồng thường dùng: box_ensure(name, profile) (hoặc box_recommend → box_up) → box_write/box_exec (box_exec_batch cho nhiều lệnh) → box_down. Output được cắt gọn để tiết kiệm token; chỉ đọc log đầy đủ bằng box_logs khi cần. Snapshot trước khi thay đổi rủi ro; box_restore để hoàn tác, box_fork để rẽ nhánh. Tệp cũng đọc được dưới dạng resource (boxaz://box/{id}/file/{path}).",
+  "mcp.instructions": "Boxaz cung cấp box Linux dùng xong bỏ. Luồng thường dùng: box_ensure(name, profile) (hoặc box_recommend → box_up) → box_write/box_exec (box_exec_batch cho nhiều lệnh) → box_down. Output được cắt gọn để tiết kiệm token; chỉ đọc log đầy đủ bằng box_logs khi cần. Snapshot trước khi thay đổi rủi ro; box_restore để hoàn tác, box_fork để rẽ nhánh. Tệp cũng đọc được dưới dạng resource (boxaz://box/{id}/file/{path}). Web app: box_app_set chạy và giám sát server; box_url trả URL Boxaz cố định (đánh thức box đang ngủ); box_url_token đặt chế độ riêng tư (URL preview riêng của provider, nếu có, vẫn truy cập được với ai biết sandbox id).",
   "notify.amount": "Số tiền: $%.4f",
   "notify.approve_hint": "Mở dashboard Boxaz (Tổng quan → Cần anh) để duyệt hoặc từ chối.",
   "notify.box_failed_body": "Box %s (agent %s) lỗi: %s",
@@ -361,6 +361,8 @@
   "snip.stdio": "Hoặc stdio cục bộ qua CLI box",
   "snip.task": "Tạo một box python, chạy python3 -c 'print(42)' trong đó, báo kết quả rồi xoá box.",
   "snip.tools": "Schema tool cho mọi LLM hỗ trợ function calling",
-  "snip.uncertain": "Lưu ý: định dạng cấu hình có thể khác giữa các phiên bản; nếu lỗi hãy xem tài liệu MCP của công cụ."
+  "snip.uncertain": "Lưu ý: định dạng cấu hình có thể khác giữa các phiên bản; nếu lỗi hãy xem tài liệu MCP của công cụ.",
+  "llms.h_apps": "Web app, URL Boxaz và token (v1.7)",
+  "llms.apps": "- Chạy server lâu dài bằng box_app_set {start, port, repo?, install?, ready_http?}: Boxaz clone, cài một lần, chạy app, tự khởi động lại khi crash (có backoff), chạy lại sau wake / restore / clone và giữ traffic đến khi app sẵn sàng. Theo dõi bằng box_app_status và box_app_logs (GET /v1/boxes/{id}/app/logs?follow=1 trả SSE). Nên dùng thay cho `nohup … &`.\n- Mỗi port đã mở có gateway_url, URL Boxaz cố định (box_url): request đầu tiên vào box đang ngủ sẽ đánh thức box (wake_on_request, mặc định bật; PATCH /v1/boxes/{id}), WebSocket và SSE đi thẳng không đệm.\n- Chia sẻ riêng tư bằng box_url_token: token có hạn, thu hồi được, chỉ cho một box+port (`?token=`, `Authorization: Bearer` hoặc `X-Boxaz-Token`); port chuyển sang access=token. Lưu ý: token chỉ bảo vệ URL Boxaz. Trên provider có host preview riêng (E2B, Novita, Daytona), URL preview của provider cho port đó vẫn truy cập được tại provider với bất kỳ ai biết sandbox id; đừng dựa vào token để giữ bí mật ở đó.\n- GET /v1/capabilities liệt kê theo provider: memory_pause, wake_on_http_native, wake_via_gateway, fork, inbound_http, max_runtime."
  }
 }

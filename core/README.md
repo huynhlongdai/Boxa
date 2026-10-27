@@ -404,3 +404,28 @@ Sản phẩm đổi tên thành **Boxaz**: binary `boxaz-core` (trước là `bo
 - Dữ liệu cũ: `<data>/boxa.db` được dùng nếu chưa có `boxaz.db`; `/var/lib/boxa/memory`, container `boxa-*`, file `.boxa.json` của driver local, secret hệ thống `BOXA_SYS_*`, cookie `boxa_key` / `boxa_locale`, tham số ingress `boxa_token` / cookie `boxa_t` vẫn được nhận.
 - SDK: `import boxa` (Python) và `Boxa`, `BoxaError`… (TypeScript) là alias deprecated.
 - Mọi thứ provider nhìn thấy (tên `mgr-*`, nhãn `managed`/`mgr-host`, User-Agent `sandbox-client/1`) vẫn trung tính, không chứa tên sản phẩm.
+
+## 13. v1.7 — app được giám sát, URL Boxaz đánh thức box, URL token
+
+Mục tiêu: agent deploy web app một lần rồi quên — app tự chạy lại, URL không đổi, box ngủ khi rảnh và thức khi có người truy cập.
+
+- **App supervisor.** `PUT /v1/boxes/:id/app {repo?, ref?, install?, start, port?, ready?: {http|tcp}, restart?: always|on-failure|never, env?, workdir?, backoff_max_s?}` khai báo app; Boxaz clone repo (nếu có), chạy `install` một lần cho mỗi spec, chạy `start` (nhận `$PORT`), restart khi crash với backoff (trần mặc định 30 s), chạy lại sau wake / restore / clone và chỉ cho traffic qua gateway khi app sẵn sàng (HTTP status < 500 ở `ready.http`, mặc định TCP trên `port`). Box T1/T2 dùng supervisor trong boxd; box T3 (exec-only) dùng script `setsid` trong sandbox (`status.supervisor = boxd | script`). `GET /app` → `{spec, status: {state, ready, pid, restarts, last_exit, started_at, ready_at, message, supervisor}}`, `POST /app/restart`, `DELETE /app`, `GET /app/logs?offset=&max=` (ring buffer + file; `?follow=1` stream SSE event `log {data, offset, truncated}`). CLI `box app set|status|restart|logs [-f]|rm`, MCP `box_app_set`, `box_app_status`, `box_app_logs`.
+- **Gateway URL theo box + port.** Mỗi port đã mở có `gateway_url` cố định: `<BOXAZ_PUBLIC_URL>/x/<key>-<port>/`, hoặc `https://<key>-<port>.<BOXAZ_GATEWAY_DOMAIN>/` khi đặt `BOXAZ_GATEWAY_DOMAIN` (không còn tiền tố đường dẫn). Gateway chuyển thẳng WebSocket, SSE và body chunked (không đệm) qua link stream của box hoặc host preview của provider (chỉ HTTP/1.1).
+- **Wake on request.** Request vào box đang ngủ đánh thức box, giữ request tối đa `settings.wake.hold_s` (mặc định 10 s, hoặc `BOXAZ_WAKE_HOLD`), chờ app sẵn sàng rồi trả lời; hết thời gian thì trả trang "waking" (trình duyệt) hoặc 503 + `Retry-After` (`settings.wake.retry_after_s`, mặc định 5). HEAD, bot, link preview và health probe (`/healthz`, `/robots.txt`…) không đánh thức box trừ khi `settings.wake.wake_on_probes=true`. Tắt theo box: `PATCH /v1/boxes/:id {wake_on_request: false}`.
+- **URL token.** `POST /v1/boxes/:id/ports/:port/tokens {ttl_s?, label?, private?}` cấp token `bxt_…` chỉ cho box + port đó (mặc định 1 ngày, 60 s … 30 ngày), trả giá trị một lần kèm `url` (`gateway_url?token=…`) và chuyển port sang `access=token`. Token gửi qua `?token=` (đổi sang cookie, 302), `Authorization: Bearer` hoặc `X-Boxaz-Token`; `?token=` của chính app (không có tiền tố `bxt_`) được giữ nguyên. `GET …/tokens` liệt kê (không có giá trị), `DELETE …/tokens/:token_id` thu hồi ngay, `PUT /v1/boxes/:id/ports/:port {access: public|token}`. CLI `box url <box> <port> --token [--ttl 1h]`, MCP `box_url_token`. Không bao giờ chia sẻ credential của provider.
+  - **Lưu ý:** token chỉ bảo vệ URL Boxaz. Port ở chế độ token không còn được Boxaz trả URL preview của provider, nhưng trên provider có host preview riêng (E2B, Novita, Daytona) URL preview đó **vẫn truy cập được tại provider** với bất kỳ ai biết sandbox id (`https://<port>-<sandboxID>.e2b.app`…). Đừng dựa vào token để giữ bí mật trên các provider này; với dữ liệu nhạy cảm hãy để app tự xác thực hoặc dùng provider không có inbound HTTP (Prized, đi qua ingress của Boxaz).
+- **Capability lifecycle.** `GET /v1/capabilities` → mỗi provider `{provider, group, memory_pause, wake_on_http_native, wake_via_gateway, fork, inbound_http, max_runtime, note}` (E2B / Novita / Prized theo tài liệu và đo live, sandbox khác lấy từ capability của adapter, host VPS: sleep dừng container nên app chạy lại khi wake).
+- **Dashboard.** Tab **Port & app** ở trang box: URL Boxaz từng port (copy / mở), bật tắt token, cấp token (thời hạn + nhãn, hiện giá trị một lần), danh sách + thu hồi token, công tắc wake on request, badge capability của provider, trạng thái app (spec, state, restarts, ready) với nút restart và log theo dõi trực tiếp (SSE). Có dữ liệu giả lập khi `BOXAZ_MOCK=1`; chuỗi đủ 4 ngôn ngữ.
+- **Sửa lỗi trong đợt live.** Transport tới host preview chỉ dùng HTTP/1.1 (ALPN h2 làm hỏng WebSocket upgrade), bỏ các header CDN đầu vào trước khi chuyển tiếp, và fork gốc không còn mang theo ingress agent / tunnel của box nguồn.
+
+Kết quả live 2026-10-27 (`scripts/live-app.sh`, repo `heroku/node-js-sample`, `node index.js` trên cổng 8000, core lộ ra Internet qua cloudflared quick tunnel làm `BOXAZ_PUBLIC_URL`):
+
+| | Prized | E2B |
+|---|---|---|
+| sleep → request vào URL Boxaz → 200 (wake on request) | 426 ms | 432 ms |
+| kill app → supervisor restart → ready | 1.7 s | 1.6 s |
+| restore snapshot → app ready | 2.0 s | 1.5 s |
+| clone → app của bản clone ready | 1.7 s | 1.7 s |
+| URL token: không token / Bearer / `?token=` / sau thu hồi | 401 / 200 / 302 / 401 | 401 / 200 / 302 / 401 |
+
+Chạy: `PROVIDERS="prized e2b" PRIZED_API_KEY=… E2B_API_KEY=… scripts/live-app.sh` (cần `cloudflared`). Mỗi provider tối đa 2 sandbox cùng lúc (box + clone), watchdog xoá mọi sandbox `managed=1` sau 280 s, cuối cùng kiểm tra provider không còn sandbox nào. Test không cần mạng: `e2e/v17_test.go` (gateway, wake, token, app), `boxd/supervisor_test.go`, `sandbox/appscript_test.go`; `scripts/e2e.sh` chạy cả luồng v1.7 với core + boxd thật.

@@ -46,6 +46,8 @@ func (s *Server) llmsHeader(r *http.Request) (string, string, *strings.Builder) 
 		}
 	}
 	b.WriteString("\n")
+	// v1.7: supervised apps, gateway URLs (wake on request), URL tokens, capabilities
+	fmt.Fprintf(&b, "## %s\n\n%s\n\n", t("llms.h_apps"), t("llms.apps"))
 	return loc, base, &b
 }
 
@@ -225,6 +227,8 @@ func (s *Server) agentCard(w http.ResponseWriter, r *http.Request) {
 		"skills":                            skills,
 		"supportsAuthenticatedExtendedCard": false,
 		"x-boxaz": map[string]any{"mcp": base + "/mcp", "openapi": base + "/v1/openapi.json", "tools": base + "/v1/tools?format=openai",
-			"a2a_methods": []string{"message/send", "message/stream", "tasks/get", "tasks/cancel", "tasks/resubscribe", "tasks/send", "tasks/sendSubscribe"}},
+			"capabilities": base + "/v1/capabilities",
+			"url_tokens":   "box_url_token protects only the Boxaz gateway URL of a port; a provider preview URL of the same port (E2B, Novita, Daytona) stays reachable at the provider for anyone who knows the sandbox id",
+			"a2a_methods":  []string{"message/send", "message/stream", "tasks/get", "tasks/cancel", "tasks/resubscribe", "tasks/send", "tasks/sendSubscribe"}},
 	})
 }

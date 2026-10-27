@@ -1,4 +1,5 @@
 import { overview, store, tickSpend } from "./handler";
+import { appLogsFrom } from "./v17";
 
 /** SSE giả lập cho MOCK MODE: đẩy overview.updated / box.updated / event.created định kỳ. */
 export function mockStream(signal: AbortSignal): ReadableStream<Uint8Array> {
@@ -46,6 +47,47 @@ export function mockStream(signal: AbortSignal): ReadableStream<Uint8Array> {
           send("event.created", evt);
         }
       }, 5000);
+      signal.addEventListener("abort", () => {
+        if (timer) clearInterval(timer);
+        try {
+          controller.close();
+        } catch {
+          /* noop */
+        }
+      });
+    },
+    cancel() {
+      if (timer) clearInterval(timer);
+    },
+  });
+}
+
+/** v1.7: SSE log app (GET /boxes/{id}/app/logs?follow=1) — event `log` {data, offset, truncated}, giống core/internal/api/v17.go. */
+export function mockAppLogStream(boxId: string, signal: AbortSignal): ReadableStream<Uint8Array> | null {
+  const first = appLogsFrom(store(), boxId, -1);
+  if (!first) return null;
+  const enc = new TextEncoder();
+  let timer: ReturnType<typeof setInterval> | null = null;
+  let next = first.offset;
+  let n = 0;
+  return new ReadableStream({
+    start(controller) {
+      const send = (raw: string) => {
+        try {
+          controller.enqueue(enc.encode(raw));
+        } catch {
+          /* stream đã đóng */
+        }
+      };
+      send(`event: log\ndata: ${JSON.stringify(first)}\n\n`);
+      timer = setInterval(() => {
+        n += 1;
+        const r = appLogsFrom(store(), boxId, next, n % 2 === 0);
+        if (!r) return;
+        if (r.data || r.truncated) send(`event: log\ndata: ${JSON.stringify(r)}\n\n`);
+        else if (n % 15 === 0) send(": ping\n\n");
+        next = r.offset;
+      }, 1000);
       signal.addEventListener("abort", () => {
         if (timer) clearInterval(timer);
         try {

@@ -9,6 +9,7 @@ import { discovery } from "./discovery";
 import { DAY, HOUR, MIN, iso, makeSeed, r4, type MockState } from "./seed";
 import { makeSnippet } from "../snippets";
 import { estimateFor, handleV13, recommend, resolveNeeds } from "./v13";
+import { handleV17, hydrateV17 } from "./v17";
 
 type G = typeof globalThis & { __boxazMock?: MockState };
 
@@ -158,7 +159,7 @@ const EGRESS_RE = /^(\*\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}(:\
 function hydrateBox(s: MockState, b: MockState["boxes"][number]): Box {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { _ready_at, _taken_over, ...rest } = b;
-  return { ...rest, egress: egressFor(s, b), spent_usd: sum(s.ledger.filter((l) => l.box_id === b.id)) };
+  return hydrateV17(b, { ...rest, egress: egressFor(s, b), spent_usd: sum(s.ledger.filter((l) => l.box_id === b.id)) });
 }
 
 function hydrateHost(s: MockState, h: MockState["hosts"][number]): Host {
@@ -443,6 +444,13 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
   if (disc) return disc;
   if (r0 === "agent-kinds") return list(FALLBACK_KINDS);
   if (r0 === "quote" && M === "POST") return quote(s, body);
+
+  // ---- v1.7: ports/gateway, URL token, wake_on_request, app supervisor, capabilities ----
+  const v17 = handleV17(s, {
+    ok, list, err: (st, code, key, params) => err(st, code, key, params),
+    hydrateBox: (b) => hydrateBox(s, b), pushEvent: (e) => pushEvent(s, e as Omit<BoxazEvent, "id" | "ts">),
+  }, M, segs, q, body);
+  if (v17) return v17;
 
   // ---- v1.3: provider manager, recommend, speed, mesh, clone/ensure/resume ----
   const v13 = handleV13(s, {

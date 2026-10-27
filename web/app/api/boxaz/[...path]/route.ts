@@ -9,12 +9,18 @@ import { getTranslations } from "next-intl/server";
 import { sessionKey, coreBase, isMock } from "@/lib/server/config";
 import { LEGACY_LOCALE_COOKIE, LOCALE_COOKIE, normalizeLocale, resolveLocale } from "@/i18n/config";
 import { handleMock } from "@/lib/mock/handler";
-import { mockStream } from "@/lib/mock/stream";
+import { mockAppLogStream, mockStream } from "@/lib/mock/stream";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 type Ctx = { params: Promise<{ path: string[] }> };
+
+/** v1.7: GET /boxes/{id}/app/logs?follow=1 là luồng SSE. */
+function isAppLogFollow(segs: string[], q: URLSearchParams) {
+  const f = q.get("follow");
+  return segs[0] === "boxes" && segs[2] === "app" && segs[3] === "logs" && segs.length === 4 && (f === "1" || f === "true");
+}
 
 const json = (status: number, body: unknown, extra?: Record<string, string>) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json; charset=utf-8", ...extra } });
@@ -41,6 +47,14 @@ async function handle(req: NextRequest, ctx: Ctx) {
       return new Response(mockStream(req.signal), {
         headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive", "X-Boxaz-Mock": "1" },
       });
+    }
+    if (req.method === "GET" && isAppLogFollow(segs, search)) {
+      const st = mockAppLogStream(segs[1], req.signal);
+      if (st) {
+        return new Response(st, {
+          headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive", "X-Accel-Buffering": "no", "X-Boxaz-Mock": "1" },
+        });
+      }
     }
     let body: Record<string, unknown> = {};
     if (!["GET", "HEAD"].includes(req.method)) {
@@ -90,8 +104,9 @@ async function handle(req: NextRequest, ctx: Ctx) {
       const v = upstream.headers.get(h);
       if (v) out.set(h, v);
     }
-    if (segs[0] === "stream") {
+    if (segs[0] === "stream" || isAppLogFollow(segs, search)) {
       out.set("Cache-Control", "no-cache, no-transform");
+      out.set("X-Accel-Buffering", "no");
       out.set("Connection", "keep-alive");
     }
     return new Response(upstream.body, { status: upstream.status, headers: out });

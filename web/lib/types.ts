@@ -1029,3 +1029,115 @@ export interface AdapterLintResult {
   error?: string | null;
   info?: SandboxInfo | null;
 }
+
+// ---------------- v1.7: gateway URL theo box+port, URL token, app supervisor, capabilities ----------------
+export type PortAccess = "public" | "token";
+
+export interface Box {
+  /** v1.7: gateway đánh thức box khi có request (undefined = bật). */
+  wake_on_request?: boolean;
+  /** v1.7: port → public | token (mặc định public). */
+  port_access?: Record<string, PortAccess | string>;
+  /** v1.7: app được supervisor chạy (null/undefined = không có). */
+  app?: AppSpec | null;
+}
+
+export interface PortView {
+  port: number;
+  url: string;
+  /** provider-preview | ingress | tunnel | gateway | none */
+  kind: string;
+  public: boolean;
+  note?: string;
+  caveats?: string[];
+  gateway_url?: string;
+  access: PortAccess | string;
+}
+
+export interface PortsResult {
+  box_id: string;
+  url: string;
+  ports: PortView[];
+}
+
+export interface URLToken {
+  id: string;
+  box_id: string;
+  port: number;
+  label?: string;
+  prefix: string;
+  /** Chỉ có trong response tạo token. */
+  token?: string;
+  /** Chỉ có trong response tạo token: gateway URL kèm ?token=. */
+  url?: string;
+  expires_at: string;
+  created_at: string;
+  revoked_at?: string | null;
+  expired?: boolean;
+}
+
+export interface URLTokenList {
+  box_id: string;
+  port: number;
+  access: PortAccess | string;
+  gateway_url: string;
+  items: URLToken[];
+}
+
+export interface AppReady {
+  http?: string;
+  tcp?: boolean;
+}
+
+export interface AppSpec {
+  repo?: string;
+  ref?: string;
+  install?: string;
+  start: string;
+  port?: number;
+  ready?: AppReady | null;
+  restart?: "always" | "on-failure" | "never" | string;
+  env?: Record<string, string>;
+  workdir?: string;
+  backoff_max_s?: number;
+}
+
+/** cloning | installing | starting | ready | backoff | exited | stopped | sleeping | none */
+export type AppState = string;
+
+export interface AppStatus {
+  state: AppState;
+  ready: boolean;
+  pid?: number;
+  restarts: number;
+  last_exit?: number | null;
+  started_at?: string | null;
+  ready_at?: string | null;
+  message?: string;
+  supervisor?: "boxd" | "script" | string;
+  spec_hash?: string;
+}
+
+export interface AppView {
+  box_id: string;
+  spec: AppSpec | null;
+  status: AppStatus;
+}
+
+export interface AppLogsResult {
+  data: string;
+  offset: number;
+  truncated?: boolean;
+}
+
+export interface CapabilityRow {
+  provider: string;
+  group: "vps" | "sandbox" | string;
+  memory_pause: boolean;
+  wake_on_http_native: boolean;
+  wake_via_gateway: boolean;
+  fork: boolean;
+  inbound_http: boolean;
+  max_runtime: number;
+  note?: string;
+}

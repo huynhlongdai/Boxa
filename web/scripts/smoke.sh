@@ -47,7 +47,7 @@ check_page() {
   ok "[$l] 200 $path"
 }
 
-ROUTES="/ /boxes /boxes/box_7f3a91 /boxes/box_7f3a91?tab=logs /recommend /infra?s=health /infra?s=catalog /infra?s=speed /infra?s=mesh /infra?s=sandbox /infra/adapters /boxes/box_5e2b70 /agents /agents/agt_kecon /costs /infra /templates /secrets /settings /admin /developers /onboarding /login"
+ROUTES="/ /boxes /boxes/box_7f3a91 /boxes/box_7f3a91?tab=logs /boxes/box_a9d054?tab=ports /boxes/box_5e2b70?tab=ports /recommend /infra?s=health /infra?s=catalog /infra?s=speed /infra?s=mesh /infra?s=sandbox /infra/adapters /boxes/box_5e2b70 /agents /agents/agt_kecon /costs /infra /templates /secrets /settings /admin /developers /onboarding /login"
 
 echo "== Trang × ngôn ngữ (cookie boxaz_locale)"
 for l in $LOCALES; do
@@ -189,6 +189,46 @@ expect "POST /sandbox/adapters/lint thiếu trường" "$(jx POST sandbox/adapte
 expect "POST /sandbox/adapters/lint YAML hỏng" "$(jx POST sandbox/adapters/lint '{"yaml":"id: [x"}' 'j.ok')" "false"
 expect "POST /sandbox/adapters/lint hợp lệ" "$(jx POST sandbox/adapters/lint '{"yaml":"id: acme\nname: Acme\nbase_url: https://api.acme.dev\nvalidate: {method: GET, path: /x}\ncreate: {method: POST, path: /x}\nget: {method: GET, path: /x}\ndelete: {method: DELETE, path: /x}\nexec: [{method: POST, path: /x}]\nsizes: [{sku: s, cpu: 1, ram_mb: 1024, disk_gb: 5}]\npricing: {cpu_second: 0.00001, gb_second: 0.000003}\n"}' 'j.ok+"|"+j.info.id+"|"+j.info.adapter+"|"+(j.info.from_usd_h>0)')" "true|acme|yaml|true"
 expect "POST /sandbox/adapters/lint rỗng → 400" "$(jx POST sandbox/adapters/lint '{"yaml":""}' 'j.error.code')" "INVALID"
+
+echo "== v1.7: ports + Boxaz URL, access, URL token, wake_on_request, app supervisor + log SSE, capabilities"
+expect "GET /capabilities" "$(jx GET capabilities - 'j.items.length+"|"+j.items.every(c=>c.wake_via_gateway)+"|"+j.items.find(c=>c.provider==="e2b").wake_on_http_native+"|"+j.items.find(c=>c.provider==="prized").inbound_http')" "17|true|true|false"
+expect "GET /boxes/:id/ports (gateway_url + access)" "$(jx GET boxes/box_a9d054/ports - 'j.ports.length+"|"+j.ports[0].port+"|"+/^https:\/\/[a-z0-9]+-3000\./.test(j.ports[0].gateway_url)+"|"+j.ports[0].access')" "1|3000|true|public"
+expect "port token-only → kind gateway, không lộ URL provider" "$(jx GET boxes/box_5e2b70/ports - 'j.ports[0].kind+"|"+j.ports[0].public+"|"+(j.ports[0].url===j.ports[0].gateway_url)')" "gateway|false|true"
+expect "PUT ports/:port access=token" "$(jx PUT boxes/box_a9d054/ports/3000 '{"access":"token"}' 'j.access+"|"+j.kind')" "token|gateway"
+expect "PUT ports/:port access sai → 400" "$(jx PUT boxes/box_a9d054/ports/3000 '{"access":"open"}' 'j.error.code')" "INVALID"
+expect "PUT ports/:port chưa mở → 404" "$(jx PUT boxes/box_a9d054/ports/4321 '{"access":"token"}' 'j.error.code')" "NOT_FOUND"
+expect "PUT ports/:port access=public" "$(jx PUT boxes/box_a9d054/ports/3000 '{"access":"public"}' 'j.access')" "public"
+TOKJ=$(curl -s -X POST "$BASE/api/boxaz/boxes/box_a9d054/ports/3000/tokens" -H 'content-type: application/json' -d '{"ttl_s":3600,"label":"smoke"}')
+TID=$(echo "$TOKJ" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log(j.id)})')
+expect "POST tokens → 201 bxt_ + url ?token= (một lần)" "$(echo "$TOKJ" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log(j.id.startsWith("utok_")+"|"+j.token.startsWith("bxt_")+"|"+j.url.endsWith("?token="+j.token)+"|"+j.label)})')" "true|true|true|smoke"
+expect "GET tokens: port chuyển sang token, không trả giá trị" "$(jx GET boxes/box_a9d054/ports/3000/tokens - 'j.access+"|"+j.items.length+"|"+j.items.every(t=>!("token" in t)&&!("url" in t))')" "token|1|true"
+expect "POST tokens ttl sai → 400" "$(jx POST boxes/box_a9d054/ports/3000/tokens '{"ttl_s":5}' 'j.error.code')" "INVALID"
+expect "DELETE tokens/:id → revoked_at" "$(jx DELETE "boxes/box_a9d054/ports/3000/tokens/$TID" - '!!j.revoked_at+"|"+j.id')" "true|$TID"
+jx PUT boxes/box_a9d054/ports/3000 '{"access":"public"}' 'j.access' >/dev/null
+expect "GET tokens (seed: 1 hết hạn + 1 đang dùng)" "$(jx GET boxes/box_c4410f/ports/8080/tokens - 'j.items.length+"|"+j.items.filter(t=>t.expired).length')" "2|1"
+expect "POST ports (mở port)" "$(jx POST boxes/box_3f0c88/ports '{"port":8501}' 'j.ports.some(p=>p.port===8501&&p.gateway_url)')" "true"
+expect "PATCH box wake_on_request=false" "$(jx PATCH boxes/box_a9d054 '{"wake_on_request":false}' 'j.wake_on_request')" "false"
+expect "GET box có wake_on_request + app" "$(jx GET boxes/box_a9d054 - 'j.wake_on_request+"|"+j.app.start')" "false|npm start"
+jx PATCH boxes/box_a9d054 '{"wake_on_request":true}' 'j.wake_on_request' >/dev/null
+expect "GET /boxes/:id/app" "$(jx GET boxes/box_a9d054/app - 'j.spec.port+"|"+j.status.state+"|"+j.status.ready+"|"+(j.status.restarts>=1)+"|"+j.status.supervisor')" "3000|ready|true|true|boxd"
+expect "GET app (box không có app)" "$(jx GET boxes/box_7f3a91/app - 'j.spec+"|"+j.status.state')" "null|none"
+expect "POST app/restart → restarts tăng" "$(jx POST boxes/box_a9d054/app/restart - 'j.status.restarts>=2&&j.status.ready')" "true"
+expect "POST app/restart không có app → 404" "$(jx POST boxes/box_7f3a91/app/restart - 'j.error.code')" "NOT_FOUND"
+expect "GET app/logs (offset)" "$(jx GET boxes/box_a9d054/app/logs - '/\[boxd\]/.test(j.data)+"|"+(j.offset>0)')" "true|true"
+OFF=$(jx GET boxes/box_a9d054/app/logs - 'j.offset')
+expect "GET app/logs?offset=<cuối> → rỗng" "$(jx GET "boxes/box_a9d054/app/logs?offset=$OFF" - 'JSON.stringify(j.data)+"|"+j.offset')" "\"\"|$OFF"
+expect "PUT app thiếu start → 400" "$(jx PUT boxes/box_3f0c88/app '{"port":8501}' 'j.error.code')" "INVALID"
+expect "PUT app → starting" "$(jx PUT boxes/box_3f0c88/app '{"start":"streamlit run app.py","port":8501}' 'j.spec.start+"|"+j.status.state+"|"+j.spec.workdir')" "streamlit run app.py|starting|/work"
+sse=$(timeout 4 curl -sN "$BASE/api/boxaz/boxes/box_a9d054/app/logs?follow=1" | head -c 400)
+echo "$sse" | grep -q "^event: log" && echo "$sse" | grep -q '^data: {"data":' && ok "SSE app/logs?follow=1 (event log)" || bad "SSE app logs: $(echo "$sse" | head -c 120)"
+declare -A PORTSWORD=([vi]="Bắt buộc token" [en]="Require token" [zh]="需要令牌" [ja]="トークン必須")
+declare -A TABWORD=([vi]='Port \u0026 app' [en]='Ports \u0026 app' [zh]="端口与应用" [ja]="ポートとアプリ")
+for l in $LOCALES; do
+  body=$(curl -s -b "boxaz_locale=$l" "$BASE/boxes/box_a9d054?tab=ports")
+  grep -qF "${TABWORD[$l]}" <<<"$body" && ok "[$l] tab Ports & app có nhãn '${TABWORD[$l]}'" || bad "[$l] thiếu nhãn tab '${TABWORD[$l]}'"
+  node -e 'const m=require("./messages/'$l'.json");process.exit(m.ports&&m.ports.requireToken==="'"${PORTSWORD[$l]}"'"&&m.ports.previewCaveat&&m.ports.app.logs&&m.boxDetail.tabs.ports?0:1)' && ok "[$l] chuỗi ports.* đủ" || bad "[$l] thiếu chuỗi ports.*"
+done
+grep -rqs "preview-caveat" .next/static/chunks && grep -rqs "logs-follow" .next/static/chunks && grep -rqs "issue-token-" .next/static/chunks && ok "bundle có UI ports (preview-caveat, issue-token, logs-follow)" || bad "bundle thiếu UI ports"
 
 echo "== Lỗi được dịch theo ngôn ngữ (code không đổi)"
 declare -A NF=([vi]="Không tìm thấy" [en]="not found" [zh]="未找到" [ja]="見つかりません")

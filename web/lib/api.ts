@@ -63,6 +63,15 @@ import type {
   ValidateTokenResult,
   WarmPoolSpec,
   WarmView,
+  AppLogsResult,
+  AppSpec,
+  AppView,
+  CapabilityRow,
+  PortAccess,
+  PortsResult,
+  PortView,
+  URLToken,
+  URLTokenList,
 } from "./types";
 
 export const PROXY_BASE = "/api/boxaz";
@@ -206,6 +215,14 @@ export const paths = {
   adminAudit: (f?: { actor?: string; type?: string }) => `/admin/audit${qs(f)}`,
   adminQuotas: "/admin/quotas",
   adminUsers: "/admin/users",
+  // v1.7
+  boxPorts: (id: string) => `/boxes/${id}/ports`,
+  portTokens: (id: string, port: number) => `/boxes/${id}/ports/${port}/tokens`,
+  boxApp: (id: string) => `/boxes/${id}/app`,
+  boxAppLogs: (id: string, offset?: number) => `/boxes/${id}/app/logs${qs({ offset })}`,
+  /** URL SSE (EventSource) cho log app: event `log` {data, offset, truncated}. */
+  boxAppLogsStream: (id: string) => `${PROXY_BASE}/boxes/${id}/app/logs?follow=1`,
+  capabilities: "/capabilities",
   // v1.1 discovery (không cần auth). Proxy: /api/boxaz/<x> → <BOXAZ_API>/<x>; tiền tố "_root/" → gốc Core (bỏ /v1).
   openapi: "/openapi.json",
   tools: (format: ToolFormat) => `/tools${qs({ format })}`,
@@ -345,6 +362,21 @@ export const api = {
   adminQuotas: () => http.get<Quotas>(paths.adminQuotas),
   saveQuotas: (q: Quotas) => http.put<Quotas>(paths.adminQuotas, q),
   adminUsers: () => http.get<List<AdminUser>>(paths.adminUsers),
+
+  // v1.7: ports + gateway URL, URL token, wake_on_request, app supervisor, capabilities
+  boxPorts: (id: string) => http.get<PortsResult>(paths.boxPorts(id)),
+  exposePort: (id: string, port: number) => http.post<PortsResult>(paths.boxPorts(id), { port }),
+  setPortAccess: (id: string, port: number, access: PortAccess) => http.put<PortView>(`/boxes/${id}/ports/${port}`, { access }),
+  portTokens: (id: string, port: number) => http.get<URLTokenList>(paths.portTokens(id, port)),
+  createPortToken: (id: string, port: number, body: { ttl_s?: number; label?: string; private?: boolean }) => http.post<URLToken>(paths.portTokens(id, port), body),
+  revokePortToken: (id: string, port: number, tokenId: string) => http.del<URLToken>(`${paths.portTokens(id, port)}/${encodeURIComponent(tokenId)}`),
+  patchBox: (id: string, body: { wake_on_request?: boolean }) => http.patch<Box>(paths.box(id), body),
+  getApp: (id: string) => http.get<AppView>(paths.boxApp(id)),
+  setApp: (id: string, spec: AppSpec) => http.put<AppView>(paths.boxApp(id), spec),
+  deleteApp: (id: string) => http.del<AppView>(paths.boxApp(id)),
+  restartApp: (id: string) => http.post<AppView>(`${paths.boxApp(id)}/restart`),
+  appLogs: (id: string, offset?: number) => http.get<AppLogsResult>(paths.boxAppLogs(id, offset)),
+  capabilities: () => http.get<List<CapabilityRow>>(paths.capabilities),
 };
 
 export function errMsg(e: unknown): string {
