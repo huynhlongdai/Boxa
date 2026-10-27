@@ -55,7 +55,7 @@ Env: BOXAZ_URL (default http://localhost:8080), BOXAZ_API_KEY, BOXAZ_LANG (vi|en
   box app status|restart|rm <box>
   box app logs <box> [-f] [--bytes 8000]
   box yaml <box>
-  box mcp                                       (stdio MCP server)
+` + accessUsage + `  box mcp                                       (stdio MCP server)
 `
 
 type multi []string
@@ -156,6 +156,22 @@ func main() {
 		err = cmdURL(ctx, c, args)
 	case "yaml":
 		err = cmdYAML(ctx, c, args)
+	case "access":
+		err = cmdAccess(ctx, c, args)
+	case "ticket":
+		err = cmdTicket(ctx, c, args)
+	case "forward":
+		err = cmdForward(ctx, c, args)
+	case "ssh":
+		err = cmdSSH(ctx, c, args)
+	case "ssh-proxy":
+		err = cmdSSHProxy(ctx, c, args)
+	case "ssh-config":
+		err = cmdSSHConfig(ctx, c, args)
+	case "ssh-key":
+		err = cmdSSHKey(ctx, c, args)
+	case "terminals", "terminal":
+		err = cmdTerminals(ctx, c, args)
 	case "app":
 		err = cmdApp(ctx, c, args)
 	case "mcp":

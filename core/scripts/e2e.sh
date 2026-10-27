@@ -119,11 +119,11 @@ tar tzf "$SNAPFILE" | grep -q 'work/notes/a.txt' && pass "snapshot = tar.gz cont
 echo "== MCP"
 R=$(curl -s -X POST "$BOXAZ_URL/mcp" -H "Authorization: Bearer $AKEY" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
 N=$(echo "$R" | jq '.result.tools | length'); echo "    tools: $(echo "$R" | jq -c '[.result.tools[].name]')"
-[ "$N" = 26 ] && pass "MCP HTTP tools/list → 26 tools" || fail "mcp http"
+[ "$N" = 30 ] && pass "MCP HTTP tools/list → 30 tools" || fail "mcp http"
 R=$(curl -s -X POST "$BOXAZ_URL/mcp" -H "Authorization: Bearer $AKEY" -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"box_exec\",\"arguments\":{\"box_id\":\"$BOX\",\"command\":\"echo via-mcp\"}}}")
 echo "$R" | jq -e '.result.isError==false and .result.structuredContent.stdout_tail=="via-mcp"' >/dev/null && pass "MCP tools/call box_exec" || fail "mcp call"
 R=$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' '{"jsonrpc":"2.0","method":"notifications/initialized"}' '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | "$BIN/box" mcp)
-[ "$(echo "$R" | jq -s '.[] | select(.id==2) | .result.tools | length')" = 26 ] && pass "MCP stdio (box mcp) tools/list → 26 tools" || fail "mcp stdio"
+[ "$(echo "$R" | jq -s '.[] | select(.id==2) | .result.tools | length')" = 30 ] && pass "MCP stdio (box mcp) tools/list → 30 tools" || fail "mcp stdio"
 
 echo "== v1.1 discovery (no auth)"
 curl -sf "$BOXAZ_URL/v1/openapi.json" | jq -e '.openapi=="3.1.0" and (.paths|has("/v1/quote")) and (.paths|has("/v1/boxes/{id}/fork"))' >/dev/null \
@@ -131,10 +131,10 @@ curl -sf "$BOXAZ_URL/v1/openapi.json" | jq -e '.openapi=="3.1.0" and (.paths|has
 LT=$(curl -sf "$BOXAZ_URL/llms.txt"); [[ $LT == "# Boxaz"* ]] && pass "llms.txt" || fail llms
 LF=$(curl -sf -H 'Accept-Language: vi' "$BOXAZ_URL/llms-full.txt"); grep -q 'Bắt đầu nhanh' <<<"$LF" && grep -q '/a2a' <<<"$LF" && pass "llms-full.txt localized (vi)" || fail llms-full
 curl -sf "$BOXAZ_URL/.well-known/mcp.json" | jq -e '.transport.url|endswith("/mcp")' >/dev/null && pass ".well-known/mcp.json" || fail mcpcard
-curl -sf "$BOXAZ_URL/.well-known/agent.json" | jq -e '.protocolVersion=="0.3.0" and (.skills|length)==27' >/dev/null && pass ".well-known/agent.json (A2A card, exec + 26 tool skills)" || fail agentcard
+curl -sf "$BOXAZ_URL/.well-known/agent.json" | jq -e '.protocolVersion=="0.3.0" and (.skills|length)==31' >/dev/null && pass ".well-known/agent.json (A2A card, exec + 30 tool skills)" || fail agentcard
 for F in openai anthropic gemini mcp; do
   N=$(curl -sf "$BOXAZ_URL/v1/tools?format=$F" | jq 'if type=="array" then (if .[0].functionDeclarations then .[0].functionDeclarations|length else length end) else .tools|length end')
-  [ "$N" = 26 ] && pass "tools?format=$F → $N" || fail "tools $F ($N)"
+  [ "$N" = 30 ] && pass "tools?format=$F → $N" || fail "tools $F ($N)"
 done
 [ "$(curl -sf $BOXAZ_URL/v1/agent-kinds | jq '.items|length')" = 22 ] && pass "agent-kinds → 22" || fail kinds
 
@@ -301,6 +301,65 @@ P=$(KEY=$AKEY api GET /boxes/$AB/ports); NGW=$BOXAZ_URL$(echo "$P" | jq -r .port
 O=$("$BIN/box" url "$AB" --name hark 2>&1) && fail "reserved name accepted" || { [[ $O == *reserved* ]] && pass "reserved name refused: $(echo "$O" | sed -n 1p | cut -c1-70)…" || fail "reserved $O"; }
 api GET /capabilities | jq -e 'any(.items[]; .provider=="e2b" and .wake_on_http_native and .memory_pause) and any(.items[]; .provider=="prized" and (.inbound_http|not)) and all(.items[]; .wake_via_gateway)' >/dev/null && pass "GET /capabilities: lifecycle flags per provider" || fail caps
 "$BIN/box" down "$AB" >/dev/null
+
+echo "== v1.10 access: tickets, durable terminal, box forward, ssh gateway"
+WSC="python3 $ROOT/scripts/wsclient.py"
+WSB=ws://127.0.0.1:$PORT/v1/boxes/$BOX
+[ "$($WSC "$WSB/terminal?proto=2" --status)" = 401 ] && pass "terminal without a ticket → 401" || fail "terminal no ticket"
+[ "$($WSC "$WSB/terminal?proto=2&token=$AKEY" --status)" = 401 ] && pass "API key in the URL refused (401)" || fail "api key in url"
+TK=$("$BIN/box" ticket "$BOX" terminal)
+[[ $TK == bxa_* ]] || fail "ticket $TK"
+[ "$($WSC "$WSB/terminal?proto=2&ticket=$TK" -H 'Origin: https://evil.example' --status)" = 403 ] && pass "foreign Origin refused (403)" || fail origin
+OUT=$($WSC "$WSB/terminal?proto=2&cols=100&rows=30&ticket=$TK" --send 'export M=rp-$((6*7)); echo $M\n' --until rp-42 2>"$WORK/ctl1") || fail "terminal via ticket"
+SID=$(grep -o '"id":"term_[a-z0-9]*"' "$WORK/ctl1" | head -1 | cut -d'"' -f4)
+[ -n "$SID" ] && pass "terminal via single-use ticket, session $SID" || fail "no session id"
+[ "$($WSC "$WSB/terminal?proto=2&ticket=$TK" --status)" = 401 ] && pass "reused ticket → 401" || fail reuse
+TK2=$("$BIN/box" ticket "$BOX" terminal --ttl 10s); sleep 11
+[ "$($WSC "$WSB/terminal?proto=2&ticket=$TK2" --status)" = 401 ] && pass "expired ticket (ttl 10 s) → 401" || fail expired
+"$BIN/box" terminals "$BOX" | grep -q "$SID.*viewers=0.*detached" && pass "box terminals: session kept after the socket dropped" || fail "terminals list"
+TK3=$("$BIN/box" ticket "$BOX" terminal --session "$SID")
+OUT=$($WSC "$WSB/terminal?proto=2&session=$SID&ticket=$TK3" --send 'echo again-$M\n' --until again-rp-42 2>"$WORK/ctl2") || fail "reattach"
+[[ $OUT == *rp-42*again-rp-42* ]] && grep -q '"created":false' "$WORK/ctl2" && pass "reattach: ring buffer replayed (rp-42) and shell state kept (again-rp-42)" || fail "replay $OUT"
+[[ $("$BIN/box" terminals "$BOX" --kill all) == "killed 1 session(s)" ]] && pass "box terminals --kill all" || fail kill
+EPORT=$((PORT+40)); LPORT=$((PORT+41)); SPORT=$((PORT+42))
+python3 -c "
+import socket,threading
+s=socket.socket(); s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1); s.bind(('127.0.0.1',$EPORT)); s.listen(8)
+def h(c):
+    while True:
+        d=c.recv(4096)
+        if not d: break
+        c.sendall(d)
+    c.close()
+while True:
+    c,_=s.accept(); threading.Thread(target=h,args=(c,),daemon=True).start()" & ECHO_PID=$!
+sleep 0.3
+"$BIN/box" forward "$BOX" $EPORT $LPORT >"$WORK/fwd.log" 2>&1 & FWD_PID=$!
+for i in $(seq 50); do grep -q Forwarding "$WORK/fwd.log" && break; sleep 0.1; done
+echoq() { python3 -c "import socket,sys; s=socket.create_connection(('127.0.0.1',int(sys.argv[1])),timeout=10); s.sendall(sys.argv[2].encode()+b'\n'); b=b''
+while not b.endswith(b'\n'): b+=s.recv(100)
+print(b.decode().strip())" "$@"; }
+[ "$(echoq $LPORT fwd-echo)" = fwd-echo ] && [ "$(echoq $LPORT twice)" = twice ] && pass "box forward $EPORT → 127.0.0.1:$LPORT: echo through the WebSocket stream (2 connections)" || { cat "$WORK/fwd.log"; fail forward; }
+kill $FWD_PID 2>/dev/null || true
+"$BIN/box" access "$BOX" | grep -q "allowed ports \[22 $EPORT\]" && pass "box access: port added to the forward allowlist" || fail "allowlist"
+O=$(BOXAZ_SSH_BUILTIN=1 "$BIN/box" ssh "$BOX" -- 'uname -s; echo ssh-$((6*7))' </dev/null)
+[[ $O == *Linux*ssh-42* ]] && pass "box ssh -- cmd (SSH gateway over WebSocket, no sshd in the box)" || fail "ssh exec $O"
+set +e; BOXAZ_SSH_BUILTIN=1 "$BIN/box" ssh "$BOX" -- 'exit 3' </dev/null; RC=$?; set -e
+[ $RC = 3 ] && pass "ssh exit status propagated (3)" || fail "ssh rc $RC"
+BOXAZ_SSH_BUILTIN=1 "$BIN/box" ssh "$BOX" -L $SPORT:127.0.0.1:$EPORT -- 'sleep 5' </dev/null 2>"$WORK/sshL.log" & SSHL=$!
+for i in $(seq 50); do grep -q forwarding "$WORK/sshL.log" && break; sleep 0.1; done
+[ "$(echoq $SPORT via-ssh-L)" = via-ssh-L ] && pass "ssh -L $SPORT:127.0.0.1:$EPORT (direct-tcpip) echo" || { cat "$WORK/sshL.log"; fail "ssh -L"; }
+wait $SSHL 2>/dev/null || true
+if command -v ssh >/dev/null 2>&1; then
+  mkdir -p "$WORK/home"; SPORT2=$((PORT+43))
+  O=$(HOME=$WORK/home "$BIN/box" ssh "$BOX" -o BatchMode=yes -- 'echo openssh-$((2*21)); tty || true' </dev/null 2>&1) && [[ $O == *openssh-42* ]] && pass "OpenSSH client through ProxyCommand 'box ssh-proxy %h' (host key pinned in ~/.boxaz/known_hosts)" || fail "openssh $O"
+  HOME=$WORK/home "$BIN/box" ssh "$BOX" -o BatchMode=yes -o ExitOnForwardFailure=yes -L $SPORT2:127.0.0.1:$EPORT -- 'sleep 4' </dev/null >"$WORK/osshL.log" 2>&1 & OSSHL=$!
+  for i in $(seq 30); do echoq $SPORT2 x >/dev/null 2>&1 && break; sleep 0.2; done
+  [ "$(echoq $SPORT2 openssh-L)" = openssh-L ] && pass "OpenSSH -L $SPORT2:127.0.0.1:$EPORT echo" || { cat "$WORK/osshL.log"; fail "openssh -L"; }
+  wait $OSSHL 2>/dev/null || true
+fi
+"$BIN/box" ssh-config "$BOX" | grep -q "ProxyCommand .*ssh-proxy %h" && pass "box ssh-config prints a ProxyCommand host block" || fail ssh-config
+kill $ECHO_PID 2>/dev/null || true
 
 echo "== ledger / overview"
 sleep 2.5
