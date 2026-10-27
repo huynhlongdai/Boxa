@@ -301,7 +301,7 @@ export const SANDBOX_INFO: SandboxInfo[] = [
   "tier": "T2",
   "adapter": "native",
   "verification": "live-verified",
-  "verified_note": "E2B-compatible. Verified live in us-phx-1 on 2026-10-27 (template base = 2 vCPU / 512 MB / 22 GB root fs, 20 GB free, envd 0.5.12, no envd access token): create ~0.3 s, create→first exec ~0.27 s, exec ~150-170 ms, 200k-line exec ~0.47 s, file put/get ~150 ms, delete ~0.1 s. Pause/resume and the boxa-core box flow were not run live (account balance ran out: 402 BALANCE_NOT_ENOUGH). Paths/headers (X-API-KEY, api.<domain>, envd 49983) from the novita-sandbox SDK 2.1.1.",
+  "verified_note": "E2B-compatible. Verified live in us-phx-1 on 2026-10-27 (template base = 2 vCPU / 512 MB / 22 GB root fs, 20 GB free, envd 0.5.12, no envd access token): create ~0.3 s, create→first exec ~0.27 s, exec ~150-170 ms, 200k-line exec ~0.47 s, file put/get ~150 ms, delete ~0.1 s. Pause ~0.3 s / resume ~0.15 s / exec after resume ~80 ms (state reaches paused). Through boxa-core (scripts/live-novita.sh, shim): box up ~0.9 s, exec 84-133 ms, MCP 83 ms, 200k-line compaction keeps exit 7, box down ~0.1 s. No fork API. Paths/headers (X-API-KEY, api.<domain>, envd 49983) from the novita-sandbox SDK 2.1.1.",
   "docs": "https://docs.novita.ai/guides/sandbox-overview",
   "website": "https://novita.ai",
   "initials": "NV",
