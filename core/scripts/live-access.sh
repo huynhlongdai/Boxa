@@ -69,7 +69,7 @@ for PROV in $PROVIDERS; do
   if [ "$S" != running ]; then note "$PROV box $S: $(echo "$B" | jq -c .error 2>/dev/null)"; kill $WATCHDOG; continue; fi
   NAME=$(KEY=$AKEY api GET /boxes/$BOX | jq -r .subdomain)
   echo "    box up in $(($(ms)-T0)) ms: $BOX name $NAME provider $(KEY=$AKEY api GET /boxes/$BOX | jq -r .provider)"
-  KEY=$AKEY api POST /boxes/$BOX/exec -d '{"command":"cd /tmp && (command -v python3 >/dev/null && nohup python3 -m http.server 9000 >/tmp/http.log 2>&1 &) ; sleep 1; echo started","timeout_s":30}' | jq -c '{exit_code,stdout_tail}' | sed 's/^/    http.server: /'
+  KEY=$AKEY api POST /boxes/$BOX/exec -d '{"command":"cd /tmp && setsid nohup python3 -m http.server 9000 >/tmp/http.log 2>&1 </dev/null & sleep 1; echo started","timeout_s":30}' | jq -c '{exit_code,stdout_tail}' | sed 's/^/    http.server: /'
 
   # 1. web terminal through the domain with a ticket
   TK=$("$BIN/box" ticket "$BOX" terminal --json)
@@ -99,9 +99,9 @@ for PROV in $PROVIDERS; do
   T0=$(ms)
   O=$(HOME=$WORK/home "$BIN/box" ssh "$NAME" -o BatchMode=yes -- 'uname -a; echo ssh-ok-$((6*7))' </dev/null 2>&1)
   [[ $O == *ssh-ok-42* ]] && pass "ssh (OpenSSH, ProxyCommand through $NAME.$DOMAIN) uname -a in $(($(ms)-T0)) ms: $(echo "$O" | head -1 | cut -c1-90)" || note "ssh: $O"
-  HOME=$WORK/home "$BIN/box" ssh "$NAME" -o BatchMode=yes -o ExitOnForwardFailure=yes -L 19001:127.0.0.1:9000 -- 'sleep 8' </dev/null >"$WORK/sshL.log" 2>&1 & SSHL=$!
+  HOME=$WORK/home "$BIN/box" ssh "$NAME" -v -o LogLevel=VERBOSE -o BatchMode=yes -o ExitOnForwardFailure=yes -L 19001:127.0.0.1:9000 -- 'sleep 8' </dev/null >"$WORK/sshL.log" 2>&1 & SSHL=$!
   C=000; T0=$(ms); for i in $(seq 40); do C=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://127.0.0.1:19001/); [ "$C" = 200 ] && break; sleep 0.25; done
-  [ "$C" = 200 ] && pass "ssh -L 19001:127.0.0.1:9000 → curl → 200 ($(($(ms)-T0)) ms incl. ssh setup)" || note "ssh -L: $C $(cat "$WORK/sshL.log")"
+  [ "$C" = 200 ] && pass "ssh -L 19001:127.0.0.1:9000 → curl → 200 ($(($(ms)-T0)) ms incl. ssh setup)" || note "ssh -L: $C $(grep -v '^debug' "$WORK/sshL.log" | tail -15)"
   wait $SSHL 2>/dev/null
   "$BIN/box" access "$BOX" | sed -n '1,3p' | sed 's/^/    /'
   # 5. down

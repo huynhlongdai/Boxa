@@ -362,9 +362,10 @@ func cmdSSH(ctx context.Context, c *client.Client, args []string) error {
 		}
 	}
 	if sshBin, err := exec.LookPath("ssh"); err == nil && os.Getenv("BOXAZ_SSH_BUILTIN") == "" {
-		argv := []string{"ssh", "-o", "ProxyCommand=" + selfPath() + " ssh-proxy %h", "-o", "HostKeyAlias=" + manager.SSHHostKeyAlias,
-			"-o", "UserKnownHostsFile=" + kh, "-o", "ServerAliveInterval=25", "-o", "LogLevel=ERROR"}
-		argv = append(argv, rest...)
+		// user options first: for -o, OpenSSH keeps the first value it sees
+		argv := append([]string{"ssh"}, rest...)
+		argv = append(argv, "-o", "ProxyCommand="+selfPath()+" ssh-proxy %h", "-o", "HostKeyAlias="+manager.SSHHostKeyAlias,
+			"-o", "UserKnownHostsFile="+kh, "-o", "ServerAliveInterval=25", "-o", "LogLevel=ERROR")
 		argv = append(argv, "boxaz@"+box)
 		argv = append(argv, cmd...)
 		return syscall.Exec(sshBin, argv, os.Environ())
