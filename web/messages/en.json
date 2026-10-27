@@ -800,6 +800,8 @@
     "domainHint": "Box URLs look like <mono>{url}</mono>",
     "urlToken": "Protect box URLs with a token",
     "urlTokenHint": "Adds ?t=… to the URL so strangers can't open it",
+    "tunnel": "Allow in-box tunnels for public URLs",
+    "tunnelHint": "When a sandbox provider has no preview URL and Core is not reachable from the internet, a free Cloudflare quick tunnel runs inside the box (URL can change after a wake)",
     "budget": "Total monthly budget",
     "budgetUsd": "USD / month",
     "budgetHint": "Daily budget = monthly / 30",
@@ -1406,7 +1408,7 @@
     "tierHelp": {
       "T1": "Raw server/VM: boxd + Incus, billed hourly or monthly",
       "T2": "Sandbox API: boxd runs inside the sandbox and dials in to Core; full terminal and snapshots",
-      "T3": "Exec-only API: a gateway shim answers for boxd; no terminal or egress rules; snapshots are tarballs kept by the gateway, preview URLs where the provider has them"
+      "T3": "Exec-only API: a gateway shim answers for boxd; no terminal or egress rules; snapshots are tarballs kept by the gateway, preview URLs where the provider has them, otherwise a public URL via Boxaz ingress or an in-box tunnel"
     },
     "ver": {
       "live": "Live-verified",

@@ -59,7 +59,7 @@ python3 "$ROOT/scripts/fake-sandbox.py" "$FSB_PORT" "$WORK/fsb" >"$WORK/fsb.log"
 
 echo "== start core + boxd (workdir $WORK)"
 BOXAZ_DATA_DIR=$WORK/data BOXAZ_ADMIN_KEY=$ADMIN BOXAZ_BOOTSTRAP_TOKEN=boot-e2e BOXAZ_ADDR=127.0.0.1:$PORT \
-BOXAZ_SANDBOX_ADAPTERS_DIR=$WORK/adapters BOXAZ_AUTO_SANDBOX=1 BOXAZ_PRICE_FEED=off BOXAZ_LEDGER_INTERVAL=1s BOXAZ_LOCAL_PRICE_MONTH=73 BOXA_WARM_INTERVAL=1s BOXAZ_CLIENT_LOCATION=VN \
+BOXAZ_SANDBOX_ADAPTERS_DIR=$WORK/adapters BOXAZ_AUTO_SANDBOX=1 BOXAZ_PRICE_FEED=off BOXAZ_LEDGER_INTERVAL=1s BOXAZ_LOCAL_PRICE_MONTH=73 BOXA_WARM_INTERVAL=1s BOXAZ_CLIENT_LOCATION=VN BOXAZ_DISABLE_TUNNEL=1 \
   "$BIN/boxaz-core" >"$WORK/core.log" 2>&1 & CORE_PID=$!
 for i in $(seq 50); do curl -sf "$BOXAZ_URL/v1/health" >/dev/null && break; sleep 0.1; done
 curl -sf "$BOXAZ_URL/v1/health" | jq -e '.ok == true' >/dev/null && pass "core healthy: $(curl -s $BOXAZ_URL/v1/health | jq -c .components)" || fail health
@@ -263,7 +263,7 @@ echo "$SN" | jq -e '.size_mb>0 and (.location|startswith("local://"))' >/dev/nul
 KEY=$AKEY api POST /boxes/$SBID/exec -d '{"command":"echo broken > f.txt"}' >/dev/null
 KEY=$AKEY api POST /boxes/$SBID/restore -d "{\"snapshot_id\":\"$(echo "$SN" | jq -r .id)\"}" >/dev/null
 [ "$("$BIN/box" read "$SBID" f.txt)" = sbx-ok ] && pass "T3 restore puts /work back (f.txt = sbx-ok)" || fail sbxrestore
-P=$("$BIN/box" url "$SBID" 8000); [[ $P == 8000*none* ]] && pass "box url on a provider without previews says so: $(echo $P | cut -c1-60)…" || fail "sbxurl $P"
+P=$("$BIN/box" url "$SBID" 8000); [[ $P == 8000*none* && $P == *"tunnel fallback is disabled"* && $P == *"ingress skipped"* ]] && pass "box url without previews walks the fallback chain (core on localhost → no ingress, tunnel disabled → none): $(echo $P | cut -c1-60)…" || fail "sbxurl $P"
 "$BIN/box" down "$SBID" >/dev/null
 for i in $(seq 40); do grep -q '^DELETE /v1/sandboxes/' "$WORK/fsb/calls.log" && break; sleep 0.25; done
 grep -q '^DELETE /v1/sandboxes/' "$WORK/fsb/calls.log" && pass "box down → sandbox deleted at the provider (per-second billing stops)" || fail sbxdelete

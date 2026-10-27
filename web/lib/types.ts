@@ -362,6 +362,8 @@ export interface Settings {
   reaper: { idle_minutes: number; default_ttl_seconds: number; keep_snapshots: number; snapshot_retention_days?: number };
   base_domain: string;
   url_token_protect: boolean;
+  /** Tắt fallback tunnel trong box (cloudflared quick tunnel) cho URL công khai. */
+  disable_tunnel?: boolean;
   /** v1.2: box không khai báo egress thì chặn hết (chỉ còn allowlist của agent). */
   egress_deny_by_default?: boolean;
   budget_month_usd: number;

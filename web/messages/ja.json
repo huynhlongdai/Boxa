@@ -800,6 +800,8 @@
     "domainHint": "box の URL は <mono>{url}</mono> の形式になります",
     "urlToken": "box の URL をトークンで保護",
     "urlTokenHint": "URL に ?t=… を付け、第三者が開けないようにします",
+    "tunnel": "公開 URL 用にボックス内トンネルを許可",
+    "tunnelHint": "サンドボックスにプレビュー URL がなく Core がインターネットから到達できない場合、無料の Cloudflare クイックトンネルをボックス内で実行します（復帰後に URL が変わることがあります）",
     "budget": "月間の総予算",
     "budgetUsd": "USD / 月",
     "budgetHint": "1 日の予算 = 月額 / 30",
@@ -1406,7 +1408,7 @@
     "tierHelp": {
       "T1": "素のサーバー/VM：boxd + Incus、時間または月単位課金",
       "T2": "サンドボックス API：boxd がサンドボックス内で動き Core に接続、ターミナルとスナップショット対応",
-      "T3": "exec のみの API：ゲートウェイの shim が boxd の代わりに応答、ターミナル・egress なし。スナップショットはゲートウェイ保存の tar、プロバイダー対応時はプレビュー URL あり"
+      "T3": "exec のみの API：ゲートウェイの shim が boxd の代わりに応答、ターミナル・egress なし。スナップショットはゲートウェイ保存の tar、プロバイダー対応時はプレビュー URL、それ以外は Boxaz ingress またはボックス内トンネルで公開 URL"
     },
     "ver": {
       "live": "実機で検証済み",

@@ -49,6 +49,12 @@ func main() {
 		fmt.Println("boxd", manager.Version)
 		return
 	}
+	// `boxd ingress --dial <ws url> --box <id> --token <tok>`: the in-sandbox
+	// public-URL agent (see internal/boxd/ingressagent.go).
+	if len(os.Args) > 1 && os.Args[1] == "ingress" {
+		runIngress(os.Args[2:])
+		return
+	}
 	// v1.4: `boxd --dial <core url> [--token <bootstrap token>]` (used inside
 	// T2 sandboxes) is the same as BOXD_CORE_URL / BOXD_TOKEN.
 	for i := 1; i < len(os.Args); i++ {
@@ -134,4 +140,37 @@ func memoryRootDefault() string {
 		}
 	}
 	return cur
+}
+
+func runIngress(args []string) {
+	log.SetPrefix("boxd-ingress ")
+	cfg := boxd.IngressAgentConfig{}
+	for i := 0; i < len(args); i++ {
+		k, v, ok := strings.Cut(args[i], "=")
+		if !ok && i+1 < len(args) {
+			v = args[i+1]
+			i++
+		}
+		switch strings.TrimLeft(k, "-") {
+		case "dial":
+			cfg.CoreURL = v
+		case "box":
+			cfg.BoxID = v
+		case "token":
+			cfg.Token = v
+		case "target":
+			cfg.Target = v
+		}
+	}
+	if cfg.Token == "" {
+		cfg.Token = os.Getenv("BOXD_INGRESS_TOKEN")
+	}
+	if cfg.CoreURL == "" || cfg.BoxID == "" || cfg.Token == "" {
+		log.Fatal("usage: boxd ingress --dial <ws(s)://core/v1/ingress/connect> --box <box id> --token <token>")
+	}
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	if err := boxd.RunIngressAgent(ctx, cfg); err != nil {
+		log.Fatal(err)
+	}
 }

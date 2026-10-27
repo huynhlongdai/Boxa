@@ -154,7 +154,7 @@ var Tools = []Tool{
 		Description: "Create a new box from a snapshot of this box (latest; a fresh snapshot is taken if none exists). Use it to try alternatives in parallel.",
 		InputSchema: obj(map[string]any{"box_id": boxID, "snapshot_id": str("snapshot id (default: latest)"), "slug": str("name for the new box")}, "box_id")},
 	{Name: "box_url", Title: "Public URL of a port", REST: "GET|POST /v1/boxes/{id}/ports", Annotations: idem(),
-		Description: "Get the public HTTPS URL of a port in the box so a browser or curl can reach your web app. Pass port to expose it (start the server on 0.0.0.0:<port> first, e.g. box_exec async=true). Sandbox boxes (E2B, Novita, Daytona) answer with the provider's preview host; without port, lists every exposed port.",
+		Description: "Get the public HTTPS URL of a port in the box so a browser or curl can reach your web app. Pass port to expose it (start the server on 0.0.0.0:<port> first, e.g. box_exec async=true). Fallback chain: the provider's preview host (E2B, Novita, Daytona), else Boxaz ingress through core, else an in-box Cloudflare quick tunnel; the answer has kind (provider-preview|ingress|tunnel|none), public and caveats. Without port, lists every exposed port.",
 		InputSchema: obj(map[string]any{"box_id": boxID, "port": intg("port the server listens on, e.g. 8000")}, "box_id")},
 	{Name: "box_sleep", Title: "Sleep or wake box", REST: "POST /v1/boxes/{id}/sleep|wake", Annotations: idem(),
 		Description: "Put a box to sleep to stop compute billing (files are kept). Pass wake=true to wake it instead (exec also auto-wakes).",

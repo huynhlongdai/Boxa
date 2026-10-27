@@ -457,6 +457,7 @@ export function makeSeed(): MockState {
     egress_deny_by_default: false,
     base_domain: "sslip.io",
     url_token_protect: true,
+    disable_tunnel: false,
     budget_month_usd: 60,
     maintenance: { enabled: false, message: "Boxaz đang bảo trì, box vẫn chạy bình thường nhưng không tạo được box mới." },
     features: { gpu: false },

@@ -81,6 +81,10 @@ function Form({ initial }: { initial: Settings }) {
             <span className="min-w-0">{t("urlToken")}<span className="block text-xs text-muted-foreground">{t("urlTokenHint")}</span></span>
             <Switch checked={s.url_token_protect} onCheckedChange={(c) => upd("url_token_protect", c)} />
           </label>
+          <label className="flex items-center justify-between gap-3 self-start rounded-md border border-border px-3 py-2.5 text-[13px] md:col-start-2">
+            <span className="min-w-0">{t("tunnel")}<span className="block text-xs text-muted-foreground">{t("tunnelHint")}</span></span>
+            <Switch checked={!s.disable_tunnel} onCheckedChange={(c) => upd("disable_tunnel", !c)} />
+          </label>
         </CardContent>
       </Card>
 

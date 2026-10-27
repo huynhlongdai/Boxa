@@ -800,6 +800,8 @@
     "domainHint": "URL box sẽ có dạng <mono>{url}</mono>",
     "urlToken": "Bảo vệ URL box bằng token",
     "urlTokenHint": "Thêm ?t=… vào URL, người lạ không mở được",
+    "tunnel": "Cho phép tunnel trong box cho URL công khai",
+    "tunnelHint": "Khi provider sandbox không có URL preview và Core không truy cập được từ Internet, một Cloudflare quick tunnel miễn phí chạy trong box (URL có thể đổi sau khi đánh thức)",
     "budget": "Ngân sách tổng tháng",
     "budgetUsd": "USD / tháng",
     "budgetHint": "Ngân sách ngày = tháng / 30",
@@ -1406,7 +1408,7 @@
     "tierHelp": {
       "T1": "Server/VM thô: boxd + Incus, tính theo giờ hoặc tháng",
       "T2": "Sandbox API: boxd chạy trong sandbox và dial-in về Core, đủ terminal/snapshot",
-      "T3": "Chỉ exec API: shim ở gateway trả lời thay boxd, không có terminal/egress; snapshot là tarball lưu ở gateway, có URL preview nếu provider hỗ trợ"
+      "T3": "Chỉ exec API: shim ở gateway trả lời thay boxd, không có terminal/egress; snapshot là tarball lưu ở gateway, có URL preview nếu provider hỗ trợ, không thì URL công khai qua ingress của Boxaz hoặc tunnel trong box"
     },
     "ver": {
       "live": "Đã chạy thật",

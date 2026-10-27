@@ -800,6 +800,8 @@
     "domainHint": "box URL 形如 <mono>{url}</mono>",
     "urlToken": "用令牌保护 box URL",
     "urlTokenHint": "在 URL 后添加 ?t=…，陌生人无法打开",
+    "tunnel": "允许在 box 内建立隧道以提供公网 URL",
+    "tunnelHint": "沙箱提供商没有预览 URL 且 Core 无法从公网访问时，在 box 内运行免费的 Cloudflare 快速隧道（唤醒后 URL 可能变化）",
     "budget": "每月总预算",
     "budgetUsd": "USD / 月",
     "budgetHint": "每日预算 = 每月 / 30",
@@ -1406,7 +1408,7 @@
     "tierHelp": {
       "T1": "裸服务器/虚拟机：boxd + Incus，按小时或按月计费",
       "T2": "沙箱 API：boxd 在沙箱内运行并回连 Core，支持终端和快照",
-      "T3": "仅 exec API：网关 shim 代替 boxd 应答，无终端和出站规则；快照为网关保存的 tar 包，提供商支持时有预览 URL"
+      "T3": "仅 exec API：网关 shim 代替 boxd 应答，无终端和出站规则；快照为网关保存的 tar 包，提供商支持时有预览 URL，否则通过 Boxaz ingress 或 box 内隧道提供公网 URL"
     },
     "ver": {
       "live": "实测验证",

@@ -129,6 +129,7 @@ var ops = []op{
 	{Method: "GET", Path: "/dl/{file}", Summary: "Download boxd binary (cloud-init)", Tag: "internal", NoAuth: true, Content: "application/octet-stream", Params: []param{{"file", "path", "string", "boxd-linux-amd64|arm64", true}}},
 	{Method: "GET", Path: "/v1/internal/tls-ask", Summary: "Caddy on-demand TLS check", Tag: "internal", NoAuth: true, Params: []param{qp("domain", "string", "hostname")}, Content: "text/plain"},
 	{Method: "GET", Path: "/v1/hosts/connect", Summary: "boxd WebSocket dial-out (host token auth)", Tag: "internal", NoAuth: true, Status: 101},
+	{Method: "GET", Path: "/v1/ingress/connect", Summary: "in-box ingress agent WebSocket (public-URL fallback; per-box token auth)", Tag: "internal", NoAuth: true, Status: 101},
 	// mcp
 	{Method: "POST", Path: "/mcp", Summary: "MCP Streamable HTTP endpoint (JSON-RPC 2.0)", Tag: "mcp", Desc: "tools/list, tools/call, resources/*, prompts/*. Send Accept-Language for localized texts."},
 	{Method: "DELETE", Path: "/mcp", Summary: "End MCP session", Tag: "mcp", Status: 204},
@@ -238,7 +239,7 @@ var ops = []op{
 		Desc: "200 when an existing box is returned (action reused|woken, with resume), 201 when created."},
 	{Method: "GET", Path: "/v1/boxes/{id}/resume", Summary: "Wake if needed and summarise recent state (execs, jobs, files, ports)", Tag: "boxes", Resp: manager.ResumeInfo{}, Params: []param{idP}},
 	{Method: "POST", Path: "/v1/boxes/{id}/clone", Summary: "Clone a live box (copy-on-write on pool hosts; provider-native fork or snapshot → new sandbox for sandbox boxes)", Tag: "boxes", Req: manager.CloneInput{}, Resp: model.Box{}, Status: 201, Params: []param{idP}},
-	{Method: "GET", Path: "/v1/boxes/{id}/ports", Summary: "Public URL of every exposed port (sandbox boxes: provider preview host)", Tag: "boxes", Resp: manager.PortsResult{}, Params: []param{idP}},
+	{Method: "GET", Path: "/v1/boxes/{id}/ports", Summary: "Public URL of every exposed port: provider preview → Boxaz ingress → in-box tunnel (kind, public, caveats)", Tag: "boxes", Resp: manager.PortsResult{}, Params: []param{idP}},
 	{Method: "POST", Path: "/v1/boxes/{id}/ports", Summary: "Expose a port of a live box and get its public URL", Tag: "boxes", Req: manager.ExposeInput{}, Resp: manager.PortsResult{}, Params: []param{idP}},
 	{Method: "GET", Path: "/v1/boxes/{id}/rightsize", Summary: "Right-sizing suggestion from observed usage", Tag: "costs", Resp: manager.RightSize{}, Params: []param{idP}},
 	{Method: "GET", Path: "/v1/rightsize", Summary: "Right-sizing suggestions for all running boxes", Tag: "costs", Resp: manager.RightSize{}, List: true},

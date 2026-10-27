@@ -433,6 +433,9 @@ func (m *Manager) boxURL(ctx context.Context, b *model.Box, h *model.Host) strin
 		if u := m.sandboxPreview(ctx, h, b.Ports[0]); u != "" {
 			return u + "/"
 		}
+		if e := b.ExposureFor(b.Ports[0]); e != nil { // ingress / tunnel fallback
+			return e.URL
+		}
 		return ""
 	}
 	s := m.Settings(ctx)
@@ -985,6 +988,9 @@ func (m *Manager) Wake(ctx context.Context, p *Principal, id string) (*model.Box
 	}
 	b.LastActiveAt = time.Now().UTC()
 	m.setStatus(ctx, b, model.StatusRunning, p.Actor(), "woken")
+	if len(b.Exposures) > 0 { // public-URL fallback: restart agent / re-check tunnel
+		go m.reexpose(b.ID)
+	}
 	return m.decorateBox(ctx, b), nil
 }
 
@@ -1113,6 +1119,7 @@ func (m *Manager) terminateBox(ctx context.Context, b *model.Box, actor, why str
 		}
 	}
 	m.setStatus(ctx, b, model.StatusTerminated, actor, note)
+	m.dropExposures(b.ID)
 	if b.HostID != "" { // v1.4: a sandbox host exists only for its one box
 		if h, err := m.Store.GetHost(ctx, b.HostID); err == nil && h.Billing == "sandbox" && h.Status != "deleted" {
 			go m.destroyHost(context.Background(), h, actor, "its box ended (sandbox billed per second)")

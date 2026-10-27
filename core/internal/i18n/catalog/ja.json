@@ -89,7 +89,8 @@
   "Clone of a T2 (boxd dial-in) sandbox is not supported; switch the provider to sandbox_mode=shim or use box_fork with object storage.": "T2（boxd dial-in）サンドボックスのクローンは未対応です。プロバイダーを sandbox_mode=shim に切り替えるか、オブジェクトストレージと box_fork を使ってください。",
   "Pass the port your server listens on, e.g. 8000.": "サーバーが待ち受けているポートを指定してください（例: 8000）。",
   "Retry, or box_fork (snapshot based) instead.": "再試行するか、代わりに box_fork（スナップショット方式）を使ってください。",
-  "Wake the box first (box_sleep wake=true).": "先に box を起こしてください（box_sleep wake=true）。"
+  "Wake the box first (box_sleep wake=true).": "先に box を起こしてください（box_sleep wake=true）。",
+  "Retry in a few seconds; the in-box ingress agent is (re)connecting.": "数秒後に再試行してください。ボックス内の ingress エージェントが（再）接続中です。"
  },
  "msg": {
   "%s bootstrap exit %d: %s": "%s のブートストラップが終了コード %d で失敗: %s",
@@ -236,7 +237,10 @@
   "cannot clone a dial-in sandbox box": "dial-in 方式のサンドボックス box はクローンできません",
   "native fork needs a running sandbox": "ネイティブフォークには実行中のサンドボックスが必要です",
   "port must be 1-65535": "ポートは 1-65535 の範囲で指定してください",
-  "provider %s is not a sandbox provider": "プロバイダー %s はサンドボックスプロバイダーではありません"
+  "provider %s is not a sandbox provider": "プロバイダー %s はサンドボックスプロバイダーではありません",
+  "ingress agent of %s is not connected": "%s の ingress エージェントが接続されていません",
+  "no box at this address": "このアドレスにボックスはありません",
+  "port %d is not exposed": "ポート %d は公開されていません"
  },
  "text": {
   "agentsmd.budget_box": "このボックスに $%.2f",

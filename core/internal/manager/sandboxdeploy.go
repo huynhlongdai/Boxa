@@ -66,9 +66,12 @@ func (m *Manager) sandboxPreview(ctx context.Context, h *model.Host, port int) s
 type PortView struct {
 	Port   int    `json:"port"`
 	URL    string `json:"url"`
-	Kind   string `json:"kind"`   // provider-preview | ingress | none
+	Kind   string `json:"kind"`   // provider-preview | ingress | tunnel | none
 	Public bool   `json:"public"` // reachable without a Boxaz token
 	Note   string `json:"note,omitempty"`
+	// Caveats explain the limits of the URL's kind and why earlier steps of
+	// the fallback chain (provider preview → ingress → tunnel) were skipped.
+	Caveats []string `json:"caveats,omitempty"`
 }
 
 // PortsResult is GET/POST /v1/boxes/{id}/ports.
@@ -82,10 +85,13 @@ func (m *Manager) portView(ctx context.Context, b *model.Box, h *model.Host, por
 	v := PortView{Port: port, Kind: "none"}
 	if h != nil && h.Billing == "sandbox" {
 		if u := m.sandboxPreview(ctx, h, port); u != "" {
-			v.URL, v.Kind, v.Public = u+"/", "provider-preview", true
+			v.URL, v.Kind, v.Public = u+"/", KindPreview, true
 			v.Note = h.Provider + " preview URL: serve on 0.0.0.0:" + strconv.Itoa(port) + "; works while the box runs (sleeping boxes answer 502 until woken)"
 			return v
 		}
+		// no provider preview: Boxaz ingress, then an in-box tunnel
+		v = m.ensurePublic(ctx, b, port, false)
+		v.Caveats = append([]string{h.Provider + " has no public preview URLs"}, v.Caveats...)
 		return v
 	}
 	if len(b.Ports) > 0 && b.Ports[0] == port && b.URL != "" {

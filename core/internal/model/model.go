@@ -85,6 +85,29 @@ type Box struct {
 	Estimate     *BoxEstimate  `json:"estimate,omitempty"`     // cost/ETA preview + measured time to running
 	ClonedFrom   string        `json:"cloned_from,omitempty"`  // box id this box was copy-on-write cloned from
 	Name         string        `json:"name,omitempty"`         // box_ensure key (defaults to slug)
+	// Exposures are the fallback public URLs of ports on sandbox boxes whose
+	// provider has no preview host (Boxaz ingress or an in-box tunnel).
+	Exposures []Exposure `json:"exposures,omitempty"`
+}
+
+// Exposure is how one port of a box is reachable from the internet when the
+// provider has no preview URL.
+type Exposure struct {
+	Port      int       `json:"port"`
+	Kind      string    `json:"kind"` // ingress | tunnel
+	URL       string    `json:"url"`
+	Since     time.Time `json:"since"`
+	CheckedAt time.Time `json:"checked_at"`
+}
+
+// ExposureFor returns the recorded exposure of a port (nil when none).
+func (b *Box) ExposureFor(port int) *Exposure {
+	for i := range b.Exposures {
+		if b.Exposures[i].Port == port {
+			return &b.Exposures[i]
+		}
+	}
+	return nil
 }
 
 // BoxEgress is the effective egress policy of a box and how it is enforced.
@@ -358,6 +381,9 @@ type Settings struct {
 	} `json:"reaper"`
 	BaseDomain      string `json:"base_domain"`
 	URLTokenProtect bool   `json:"url_token_protect"`
+	// DisableTunnel turns off the in-box tunnel fallback for public URLs
+	// (cloudflared quick tunnel); ingress through core is still used.
+	DisableTunnel bool `json:"disable_tunnel"`
 	// EgressDenyByDefault: boxes without an explicit egress policy get
 	// deny-by-default (only their agent's egress_allowlist is reachable).
 	EgressDenyByDefault bool    `json:"egress_deny_by_default"`

@@ -74,8 +74,9 @@ func (s *Server) routes() http.Handler {
 		r.Get("/agent-kinds", s.agentKinds)
 		r.Get("/profiles", s.profiles)
 		r.Get("/errors", s.errorCatalog)
-		r.Get("/internal/tls-ask", s.tlsAsk)       // Caddy on_demand_tls (bind core to localhost in production)
-		r.Get("/hosts/connect", s.M.Hub.ServeHTTP) // boxd dial-out (own token auth)
+		r.Get("/internal/tls-ask", s.tlsAsk)             // Caddy on_demand_tls (bind core to localhost in production)
+		r.Get("/hosts/connect", s.M.Hub.ServeHTTP)       // boxd dial-out (own token auth)
+		r.Get("/ingress/connect", s.M.ServeIngressAgent) // in-box public-URL agent (own token auth)
 		r.Group(func(r chi.Router) {
 			r.Use(s.authMW)
 			r.Get("/overview", s.overview)

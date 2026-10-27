@@ -685,11 +685,18 @@ func cmdURL(ctx context.Context, c *client.Client, args []string) error {
 		if u == "" {
 			u = "-"
 		}
-		fmt.Printf("%d\t%s\t%s", v.Port, u, v.Kind)
+		pub := "private"
+		if v.Public {
+			pub = "public"
+		}
+		fmt.Printf("%d\t%s\t%s\t%s", v.Port, u, v.Kind, pub)
 		if v.Note != "" && v.URL == "" {
 			fmt.Printf("\t%s", v.Note)
 		}
 		fmt.Println()
+		for _, c := range v.Caveats {
+			fmt.Println("  ! " + c)
+		}
 	}
 	return nil
 }

@@ -31,7 +31,13 @@ const Version = "0.1.0"
 
 // Config is read from env by cmd/boxaz-core.
 type Config struct {
-	PublicURL          string // external base URL of core, e.g. https://core-1-2-3-4.sslip.io
+	PublicURL     string // external base URL of core, e.g. https://core-1-2-3-4.sslip.io
+	DisableTunnel bool   // BOXAZ_DISABLE_TUNNEL: no in-box quick-tunnel fallback for public URLs
+	// AssumePublicURL (BOXAZ_INGRESS_ASSUME_PUBLIC) tries the ingress fallback
+	// even when PublicURL looks private (e.g. sandboxes reach it over a VPN).
+	AssumePublicURL bool
+	// PublicURLProbe checks a fresh tunnel URL from core (nil = real HTTP GET; tests stub it).
+	PublicURLProbe     func(ctx context.Context, url string) bool
 	BaseDomain         string // overrides settings.base_domain when set
 	BootstrapToken     string // shared token letting a boxd self-register (install.sh / dev)
 	AutoBurst          bool   // allow scheduler to rent hourly hosts automatically
@@ -134,7 +140,8 @@ type Manager struct {
 	lastTick      time.Time
 	lastRetention time.Time
 	rate          map[string]*bucket
-	boxLocks      sync.Map // box id → *sync.Mutex
+	boxLocks      sync.Map     // box id → *sync.Mutex
+	ing           ingressState // public-URL fallback: in-box ingress agents
 	startedAt     time.Time
 	ctx           context.Context
 	objHTTP       *http.Client // object storage client (tests inject the fake's client)

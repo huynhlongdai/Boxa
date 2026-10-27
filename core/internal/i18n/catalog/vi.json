@@ -89,7 +89,8 @@
   "Clone of a T2 (boxd dial-in) sandbox is not supported; switch the provider to sandbox_mode=shim or use box_fork with object storage.": "Chưa hỗ trợ nhân bản sandbox T2 (boxd dial-in); chuyển nhà cung cấp sang sandbox_mode=shim hoặc dùng box_fork với object storage.",
   "Pass the port your server listens on, e.g. 8000.": "Truyền cổng mà server của bạn đang lắng nghe, ví dụ 8000.",
   "Retry, or box_fork (snapshot based) instead.": "Thử lại, hoặc dùng box_fork (dựa trên snapshot).",
-  "Wake the box first (box_sleep wake=true).": "Đánh thức box trước (box_sleep wake=true)."
+  "Wake the box first (box_sleep wake=true).": "Đánh thức box trước (box_sleep wake=true).",
+  "Retry in a few seconds; the in-box ingress agent is (re)connecting.": "Thử lại sau vài giây; agent ingress trong box đang (tái) kết nối."
  },
  "msg": {
   "%s bootstrap exit %d: %s": "%s: lệnh khởi động thoát với mã %d: %s",
@@ -236,7 +237,10 @@
   "cannot clone a dial-in sandbox box": "không thể nhân bản box sandbox kiểu dial-in",
   "native fork needs a running sandbox": "fork gốc của nhà cung cấp cần sandbox đang chạy",
   "port must be 1-65535": "cổng phải trong khoảng 1-65535",
-  "provider %s is not a sandbox provider": "nhà cung cấp %s không phải nhà cung cấp sandbox"
+  "provider %s is not a sandbox provider": "nhà cung cấp %s không phải nhà cung cấp sandbox",
+  "ingress agent of %s is not connected": "agent ingress của %s chưa kết nối",
+  "no box at this address": "không có box nào ở địa chỉ này",
+  "port %d is not exposed": "cổng %d chưa được mở"
  },
  "text": {
   "agentsmd.budget_box": "$%.2f cho box này",

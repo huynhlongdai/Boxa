@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"net/url"
 	"strings"
-	"time"
 
 	"boxaz/core/internal/model"
 	"boxaz/core/internal/proto"
@@ -71,12 +70,5 @@ func (m *Manager) Proxy(ctx context.Context, b *model.Box, method, path string, 
 	if len(b.Ports) == 0 {
 		return nil, model.E(model.ErrNotFound, "box exposes no ports")
 	}
-	m.touch(ctx, b)
-	var res proto.HTTPResult
-	cctx, cancel := context.WithTimeout(ctx, 70*time.Second)
-	defer cancel()
-	if err := m.Hub.Call(cctx, b.HostID, proto.MHTTP, proto.HTTPParams{BoxID: b.ID, Port: b.Ports[0], Method: method, Path: path, Headers: hdr, Body: body}, &res); err != nil {
-		return nil, mapHostErr(err)
-	}
-	return &res, nil
+	return m.ProxyPort(ctx, b, b.Ports[0], method, path, hdr, body)
 }
