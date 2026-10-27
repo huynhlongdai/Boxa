@@ -6,7 +6,7 @@ import { Activity, AlertTriangle, FilterX, Plus, Save } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { api, paths } from "@/lib/api";
 import { useAction, useApi } from "@/lib/hooks";
-import type { AdminSystem, AdminUser, Agent, ApiKey, BoxaEvent, Health, List, Quotas, SchedJob, Settings } from "@/lib/types";
+import type { AdminSystem, AdminUser, Agent, ApiKey, BoxazEvent, Health, List, Quotas, SchedJob, Settings } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useFmt } from "@/lib/format";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -17,10 +17,10 @@ import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { ConfirmButton } from "@/components/boxa/confirm";
-import { CopyButton } from "@/components/boxa/code-block";
-import { Dot, Mono } from "@/components/boxa/status";
-import { Empty, ErrorBox, LoadingRows, PageHeader } from "@/components/boxa/page";
+import { ConfirmButton } from "@/components/boxaz/confirm";
+import { CopyButton } from "@/components/boxaz/code-block";
+import { Dot, Mono } from "@/components/boxaz/status";
+import { Empty, ErrorBox, LoadingRows, PageHeader } from "@/components/boxaz/page";
 
 function SystemTab() {
   const { data, error } = useApi<AdminSystem>(paths.adminSystem, { refreshInterval: 15000 });
@@ -96,7 +96,7 @@ function JobsTab() {
 function AuditTab() {
   const [actor, setActor] = React.useState("");
   const [type, setType] = React.useState("");
-  const { data, error } = useApi<List<BoxaEvent>>(paths.adminAudit({ actor: actor || undefined, type: type || undefined }));
+  const { data, error } = useApi<List<BoxazEvent>>(paths.adminAudit({ actor: actor || undefined, type: type || undefined }));
   const t = useTranslations("admin");
   const tc = useTranslations("common");
   const { dateTime } = useFmt();

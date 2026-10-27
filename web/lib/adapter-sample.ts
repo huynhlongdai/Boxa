@@ -1,5 +1,5 @@
 // Mẫu adapter khai báo (YAML) cho màn hình "Adapter YAML tuỳ chỉnh" — cùng cú pháp với core/internal/sandbox/builtin/*.yaml.
-export const SAMPLE_ADAPTER = `# Declarative sandbox adapter (Boxa v1.4) — HTTP templates + JSON paths.
+export const SAMPLE_ADAPTER = `# Declarative sandbox adapter (Boxaz v1.4) — HTTP templates + JSON paths.
 id: acme-sandbox
 name: Acme Sandbox
 tier: T2

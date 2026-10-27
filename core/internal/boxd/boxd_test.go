@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"boxa/core/internal/model"
-	"boxa/core/internal/proto"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/proto"
 )
 
 func TestShapeTail(t *testing.T) {
@@ -109,7 +109,7 @@ func TestLocalDriver(t *testing.T) {
 }
 
 func TestIncusArgv(t *testing.T) {
-	if n := cname("box_ab3cd"); n != "boxa-box-ab3cd" {
+	if n := cname("box_ab3cd"); n != "boxaz-box-ab3cd" {
 		t.Fatal(n)
 	}
 	d := NewIncusDriver("", "")
@@ -124,18 +124,18 @@ func TestIncusArgv(t *testing.T) {
 		t.Fatal(err)
 	}
 	launch := calls[0]
-	for _, want := range []string{"launch images:ubuntu/24.04/cloud boxa-box-x1", "limits.cpu.allowance=50%", "limits.memory=512MiB", "root,size=5GiB", "security.privileged=false"} {
+	for _, want := range []string{"launch images:ubuntu/24.04/cloud boxaz-box-x1", "limits.cpu.allowance=50%", "limits.memory=512MiB", "root,size=5GiB", "security.privileged=false"} {
 		if !strings.Contains(launch, want) {
 			t.Fatalf("launch %q missing %q", launch, want)
 		}
 	}
 	last := calls[len(calls)-1]
-	if !strings.Contains(last, "exec boxa-box-x1 --cwd /work -- timeout -s KILL 900 bash -lc echo hi") {
+	if !strings.Contains(last, "exec boxaz-box-x1 --cwd /work -- timeout -s KILL 900 bash -lc echo hi") {
 		t.Fatalf("setup exec: %q", last)
 	}
 	calls = nil
 	d.Run(ctx, "box_x1", proto.ExecParams{Command: "ls", Env: map[string]string{"B": "2", "A": "1"}, TimeoutS: 10}, io.Discard, io.Discard)
-	if calls[0] != "exec boxa-box-x1 --cwd /work --env A=1 --env B=2 -- timeout -s KILL 10 bash -lc ls" {
+	if calls[0] != "exec boxaz-box-x1 --cwd /work --env A=1 --env B=2 -- timeout -s KILL 10 bash -lc ls" {
 		t.Fatalf("run argv: %q", calls[0])
 	}
 }
@@ -151,7 +151,7 @@ func TestIncusRestoreFork(t *testing.T) {
 	if err := d.Restore(ctx, proto.RestoreParams{BoxID: "box_a", SourceBoxID: "box_a", SnapshotID: "snap_X1"}); err != nil {
 		t.Fatal(err)
 	}
-	if calls[0] != "snapshot restore boxa-box-a snap-x1" {
+	if calls[0] != "snapshot restore boxaz-box-a snap-x1" {
 		t.Fatalf("restore argv %q", calls[0])
 	}
 	calls = nil
@@ -161,7 +161,7 @@ func TestIncusRestoreFork(t *testing.T) {
 		t.Fatal(err)
 	}
 	joined := strings.Join(calls, "\n")
-	for _, want := range []string{"copy boxa-box-a/snap-x1 boxa-box-b", "config set boxa-box-b limits.cpu=2", "config set boxa-box-b limits.memory=1024MiB", "start boxa-box-b"} {
+	for _, want := range []string{"copy boxaz-box-a/snap-x1 boxaz-box-b", "config set boxaz-box-b limits.cpu=2", "config set boxaz-box-b limits.memory=1024MiB", "start boxaz-box-b"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("fork argv missing %q:\n%s", want, joined)
 		}

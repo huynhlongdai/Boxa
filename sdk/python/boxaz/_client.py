@@ -1,4 +1,4 @@
-"""Boxa clients (sync ``Boxa`` and async ``AsyncBoxa``).
+"""Boxaz clients (sync ``Boxaz`` and async ``AsyncBoxaz``).
 
 Uses httpx when installed; falls back to the standard library (urllib) so the
 SDK works with zero dependencies. Both clients expose the same methods; the
@@ -26,13 +26,27 @@ try:  # optional dependency
 except Exception:  # pragma: no cover - exercised when httpx is absent
     httpx = None  # type: ignore
 
-__all__ = ["Boxa", "AsyncBoxa", "BoxaError"]
+__all__ = ["Boxaz", "AsyncBoxaz", "BoxazError"]
+
+def _env(name: str) -> "str | None":
+    """BOXAZ_<name>, falling back to the pre-rename BOXA_<name> (deprecated)."""
+    v = os.environ.get("BOXAZ_" + name)
+    if v:
+        return v
+    old = os.environ.get("BOXA_" + name)
+    if old:
+        import warnings
+
+        warnings.warn(f"BOXA_{name} is deprecated; rename it to BOXAZ_{name}", DeprecationWarning, stacklevel=3)
+        return old
+    return None
+
 
 DEFAULT_URL = "http://localhost:8080"
 RETRYABLE = {"NO_CAPACITY", "PROVIDER_FAILED", "RATE_LIMITED", "INTERNAL"}
 
 
-class BoxaError(Exception):
+class BoxazError(Exception):
     """Error envelope from the API: ``{"error": {code, message, hint, retry_after_s?, docs_url?}}``.
 
     ``code`` is stable across languages; ``message``/``hint`` follow the
@@ -50,14 +64,14 @@ class BoxaError(Exception):
         return self.code in RETRYABLE
 
 
-def _error_from(status: int, body: bytes) -> BoxaError:
+def _error_from(status: int, body: bytes) -> BoxazError:
     try:
         env = _json.loads(body.decode() or "{}").get("error") or {}
     except Exception:
         env = {}
     if not env.get("code"):
-        return BoxaError(status, str(status), body.decode(errors="replace").strip()[:500])
-    return BoxaError(status, env.get("code", ""), env.get("message", ""), env.get("hint", ""),
+        return BoxazError(status, str(status), body.decode(errors="replace").strip()[:500])
+    return BoxazError(status, env.get("code", ""), env.get("message", ""), env.get("hint", ""),
                      env.get("retry_after_s"), env.get("docs_url"), env)
 
 
@@ -81,16 +95,16 @@ def _q(v: str) -> str:
 
 class _Base:
     """Request building shared by both clients. Methods return whatever
-    ``self._call`` returns (a value for Boxa, an awaitable for AsyncBoxa)."""
+    ``self._call`` returns (a value for Boxaz, an awaitable for AsyncBoxaz)."""
 
     def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None, *, lang: Optional[str] = None,
-                 timeout: float = 600.0, max_retries: int = 2, user_agent: str = "boxa-python/1.1"):
-        self.api_key = api_key if api_key is not None else os.environ.get("BOXA_API_KEY", "")
-        url = (base_url or os.environ.get("BOXA_URL") or DEFAULT_URL).rstrip("/")
+                 timeout: float = 600.0, max_retries: int = 2, user_agent: str = "boxaz-python/1.1"):
+        self.api_key = api_key if api_key is not None else _env("API_KEY") or ""
+        url = (base_url or _env("URL") or DEFAULT_URL).rstrip("/")
         if url.endswith("/v1"):
             url = url[:-3]
         self.base_url = url
-        self.lang = lang or os.environ.get("BOXA_LANG") or None
+        self.lang = lang or _env("LANG") or None
         self.timeout = timeout
         self.max_retries = max_retries
         self.user_agent = user_agent
@@ -320,7 +334,7 @@ class _Base:
     @staticmethod
     def _mcp_result(resp: Mapping[str, Any]) -> Any:
         if resp.get("error"):
-            raise BoxaError(400, "INVALID", resp["error"].get("message", "MCP error"))
+            raise BoxazError(400, "INVALID", resp["error"].get("message", "MCP error"))
         res = resp.get("result") or {}
         out = res.get("structuredContent")
         if out is None:
@@ -331,7 +345,7 @@ class _Base:
                 out = text
         if res.get("isError") and isinstance(out, dict) and "error" in out:
             e = out["error"]
-            raise BoxaError(400, e.get("code", "INVALID"), e.get("message", ""), e.get("hint", ""),
+            raise BoxazError(400, e.get("code", "INVALID"), e.get("message", ""), e.get("hint", ""),
                             e.get("retry_after_s"), e.get("docs_url"), out)
         return out
 
@@ -344,16 +358,16 @@ def _parse(status: int, ctype: str, body: bytes, raw: bool) -> Any:
     return _json.loads(body.decode() or "null")
 
 
-def _retry_wait(err: BoxaError, attempt: int) -> float:
+def _retry_wait(err: BoxazError, attempt: int) -> float:
     if err.retry_after_s:
         return min(float(err.retry_after_s), 30.0)
     return min(0.5 * (2 ** attempt), 8.0)
 
 
-class Boxa(_Base):
+class Boxaz(_Base):
     """Synchronous client.
 
-    >>> bx = Boxa()                       # BOXA_URL / BOXA_API_KEY / BOXA_LANG from env
+    >>> bx = Boxaz()                       # BOXAZ_URL / BOXAZ_API_KEY / BOXAZ_LANG from env
     >>> box = bx.create_box("python", "task", ttl_seconds=600)
     >>> bx.exec(box["id"], "python3 -c 'print(42)'")["stdout_tail"]
     '42'
@@ -369,7 +383,7 @@ class Boxa(_Base):
         if self._http is not None:
             self._http.close()
 
-    def __enter__(self) -> "Boxa":
+    def __enter__(self) -> "Boxaz":
         return self
 
     def __exit__(self, *exc: Any) -> None:
@@ -398,7 +412,7 @@ class Boxa(_Base):
             st, ctype, content = self._send(method, url, data, h)
             try:
                 return _parse(st, ctype, content, raw)
-            except BoxaError as e:
+            except BoxazError as e:
                 if not e.retryable or attempt >= self.max_retries:
                     raise
                 time.sleep(_retry_wait(e, attempt))
@@ -414,25 +428,25 @@ class Boxa(_Base):
                 return j
 
     def call_tool(self, name: str, arguments: Optional[Mapping[str, Any]] = None) -> Any:
-        """Execute a Boxa tool by name (as returned by :func:`as_openai_tools`) through the MCP
+        """Execute a Boxaz tool by name (as returned by :func:`as_openai_tools`) through the MCP
         endpoint, so arguments are mapped exactly like the MCP server does."""
         resp = self._call("POST", "/mcp", self._mcp_body(name, arguments or {}))
         return self._mcp_result(resp)
 
 
-class AsyncBoxa(_Base):
+class AsyncBoxaz(_Base):
     """Asynchronous client (httpx.AsyncClient, or urllib in a worker thread)."""
 
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
         self._http = httpx.AsyncClient(timeout=self.timeout, trust_env=not self._loopback) if httpx is not None else None
-        self._sync = None if httpx is not None else Boxa(*args, **kwargs)
+        self._sync = None if httpx is not None else Boxaz(*args, **kwargs)
 
     async def aclose(self) -> None:
         if self._http is not None:
             await self._http.aclose()
 
-    async def __aenter__(self) -> "AsyncBoxa":
+    async def __aenter__(self) -> "AsyncBoxaz":
         return self
 
     async def __aexit__(self, *exc: Any) -> None:
@@ -452,7 +466,7 @@ class AsyncBoxa(_Base):
             r = await self._http.request(method, url, content=data, headers=h)
             try:
                 return _parse(r.status_code, r.headers.get("content-type", ""), r.content, raw)
-            except BoxaError as e:
+            except BoxazError as e:
                 if not e.retryable or attempt >= self.max_retries:
                     raise
                 await asyncio.sleep(_retry_wait(e, attempt))

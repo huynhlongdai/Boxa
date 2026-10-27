@@ -1,4 +1,4 @@
-// MOCK MODE v1.4: provider Sandbox API (T2 dial-in / T3 shim). Bám theo boxa/core/internal/manager/sandbox14.go,
+// MOCK MODE v1.4: provider Sandbox API (T2 dial-in / T3 shim). Bám theo boxaz/core/internal/manager/sandbox14.go,
 // selector/score.go (loại theo capability) và api/v14.go (lint adapter YAML).
 import { parse as parseYaml } from "yaml";
 import type { AdapterLintResult, CatalogItem, Offer, Provider, ProviderPrefs, RecommendOption, Rejection, Requirements, SandboxInfo, SandboxProvider } from "../types";
@@ -18,7 +18,7 @@ export function perHour(info: Pick<SandboxInfo, "pricing">, cpu: number, ramMb: 
   return r4((p.cpu_second * cpu + p.gb_second * (ramMb / 1024) + p.disk_gb_second * diskGb + p.flat_second) * 3600);
 }
 
-/** Chế độ hiệu lực: dial (T2, boxd dial-in) | shim (T3). Mock coi như BOXA_PUBLIC_URL đã đặt. */
+/** Chế độ hiệu lực: dial (T2, boxd dial-in) | shim (T3). Mock coi như BOXAZ_PUBLIC_URL đã đặt. */
 export function sandboxMode(info: SandboxInfo, prefs?: Partial<ProviderPrefs>): "dial" | "shim" {
   const m = (prefs?.sandbox_mode ?? "auto").toLowerCase();
   if (m === "dial" || m === "shim") return m;
@@ -160,7 +160,7 @@ export function lintAdapter(src: string): AdapterLintResult {
     capabilities: { background: false, pause: false, snapshot: false, fork: false, ports: false, pty: false, files: false, gpu: false, boot_ms: 0, max_lifetime_s: 0, max_cpu: 0, max_ram_mb: 0, isolation: "container", ...caps },
     pricing: { cpu_second: 0, gb_second: 0, disk_gb_second: 0, flat_second: 0, source: "", confidence: "estimated", ...pr },
     sizes, regions: (Array.isArray(d.regions) ? d.regions : [{ id: "global", name: String(d.name) }]) as SandboxInfo["regions"],
-    templates: (Array.isArray(d.templates) ? d.templates : []) as string[], default_template: String(d.default_template ?? ""), workdir: String(d.workdir ?? "/tmp/boxa"),
+    templates: (Array.isArray(d.templates) ? d.templates : []) as string[], default_template: String(d.default_template ?? ""), workdir: String(d.workdir ?? "/tmp/box"),
     credentials: ((Array.isArray(d.credentials) ? d.credentials : [{ name: "token", label: "API key", secret: true }]) as SandboxInfo["credentials"]).map((c) => ({ ...c, optional: !!c.optional })),
     env_vars: (Array.isArray(d.env_vars) ? d.env_vars : []) as string[], notes: [], from_usd_h: 0,
   };

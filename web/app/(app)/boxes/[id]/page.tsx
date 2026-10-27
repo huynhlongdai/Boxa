@@ -9,12 +9,12 @@ import { useApi } from "@/lib/hooks";
 import type { Box } from "@/lib/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BoxStatusChip, LifecycleBadge, Mono } from "@/components/boxa/status";
-import { BoxActions } from "@/components/boxa/box-actions";
-import { CloneButton } from "@/components/boxa/box-v13";
-import { BoxPlacementBadges } from "@/components/boxa/sandbox";
-import { ErrorBox } from "@/components/boxa/page";
-import { BoxTerminal } from "@/components/boxa/terminal";
+import { BoxStatusChip, LifecycleBadge, Mono } from "@/components/boxaz/status";
+import { BoxActions } from "@/components/boxaz/box-actions";
+import { CloneButton } from "@/components/boxaz/box-v13";
+import { BoxPlacementBadges } from "@/components/boxaz/sandbox";
+import { ErrorBox } from "@/components/boxaz/page";
+import { BoxTerminal } from "@/components/boxaz/terminal";
 import { OverviewTab, TimelineTab, FilesTab, LogsTab, SnapshotsTab, ConfigTab } from "./tabs";
 
 const TABS = ["overview", "terminal", "timeline", "files", "logs", "snapshots", "config"] as const;

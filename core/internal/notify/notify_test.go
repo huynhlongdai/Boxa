@@ -141,16 +141,16 @@ func TestSMTP(t *testing.T) {
 	for _, ch := range port {
 		p = p*10 + int(ch-'0')
 	}
-	s := SMTP{Host: "127.0.0.1", Port: p, Username: "u", Password: "pw", From: "Boxa <boxa@example.com>", TLS: "none"}
+	s := SMTP{Host: "127.0.0.1", Port: p, Username: "u", Password: "pw", From: "Boxaz <boxaz@example.com>", TLS: "none"}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := s.Send(ctx, Recipients("anh@example.com; ops@example.com, nope"), "[Boxa] Báo cáo", "Hôm qua: $1.23"); err != nil {
+	if err := s.Send(ctx, Recipients("anh@example.com; ops@example.com, nope"), "[Boxaz] Báo cáo", "Hôm qua: $1.23"); err != nil {
 		t.Fatal(err)
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	dec, _ := base64.StdEncoding.DecodeString(f.auth)
-	if string(dec) != "\x00u\x00pw" || f.from != "<boxa@example.com>" || len(f.rcpt) != 2 {
+	if string(dec) != "\x00u\x00pw" || f.from != "<boxaz@example.com>" || len(f.rcpt) != 2 {
 		t.Fatalf("auth=%q from=%q rcpt=%v", dec, f.from, f.rcpt)
 	}
 	if !strings.Contains(f.data, "Subject: =?utf-8?q?") || !strings.Contains(f.data, base64.StdEncoding.EncodeToString([]byte("Hôm qua: $1.23"))) {

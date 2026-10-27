@@ -1,20 +1,20 @@
 [Unit]
-Description=Boxa core (control plane)
+Description=Boxaz core (control plane)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-User=boxa
-Group=boxa
-EnvironmentFile=/etc/boxa/core.env
-ExecStart=/usr/local/bin/boxa-core
-WorkingDirectory=/var/lib/boxa
+User=boxaz
+Group=boxaz
+EnvironmentFile=/etc/boxaz/core.env
+ExecStart=/usr/local/bin/boxaz-core
+WorkingDirectory=/var/lib/boxaz
 Restart=always
 RestartSec=3
 LimitNOFILE=65536
 NoNewPrivileges=true
 ProtectSystem=full
-ReadWritePaths=/var/lib/boxa
+ReadWritePaths=/var/lib/boxaz
 
 [Install]
 WantedBy=multi-user.target

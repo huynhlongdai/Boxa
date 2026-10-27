@@ -13,11 +13,11 @@ import (
 	"sync"
 	"time"
 
-	"boxa/core/internal/boxd"
-	"boxa/core/internal/boxyaml"
-	"boxa/core/internal/model"
-	"boxa/core/internal/proto"
-	"boxa/core/internal/secret"
+	"boxaz/core/internal/boxd"
+	"boxaz/core/internal/boxyaml"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/proto"
+	"boxaz/core/internal/secret"
 )
 
 const kvWarmCfg = "warm_pool"

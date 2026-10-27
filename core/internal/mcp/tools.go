@@ -1,6 +1,6 @@
 package mcp
 
-// Tools is the single source of truth for Boxa's tool definitions. The MCP
+// Tools is the single source of truth for Boxaz's tool definitions. The MCP
 // server (tools/list), GET /v1/tools?format=openai|anthropic|gemini|mcp, the
 // llms-full.txt reference and the SDK helpers are all generated from it.
 
@@ -112,7 +112,7 @@ var Tools = []Tool{
 		Description: "Rank every way to satisfy your needs (warm pre-started container, container on a pool host, Incus VM, new provider server, per-second sandbox API such as E2B / Daytona / Prized / boxd.sh) with price, ETA in seconds, a 0-100 score and plain-language reasons, plus rejected options and why. Creates nothing. Use when unsure which profile/size to pick or when box_up returned NO_CAPACITY.",
 		InputSchema: obj(recommendProps())},
 	{Name: "box_up", Title: "Create a box", REST: "POST /v1/boxes", Annotations: rw(),
-		Description: "Create a Linux sandbox box and wait until it is running (warm-pool hits start in about a second). Prefer box_ensure for long-lived work. Pass profile and optional limits (max_price_hour, location, isolation) and Boxa auto-picks template, size and placement; or pass template + cpu/ram_mb explicitly. The response includes estimate {kind, cost_per_hour, expected_total_usd, eta_seconds, actual_seconds, warm_hit} and next hints.",
+		Description: "Create a Linux sandbox box and wait until it is running (warm-pool hits start in about a second). Prefer box_ensure for long-lived work. Pass profile and optional limits (max_price_hour, location, isolation) and Boxaz auto-picks template, size and placement; or pass template + cpu/ram_mb explicitly. The response includes estimate {kind, cost_per_hour, expected_total_usd, eta_seconds, actual_seconds, warm_hit} and next hints.",
 		InputSchema: obj(specProps(true))},
 	{Name: "box_quote", Title: "Price a box (dry run)", REST: "POST /v1/quote", Annotations: ro(),
 		Description: "Dry-run placement for a spec: where the box would run, cost_per_hour, expected_total_usd for its lifecycle, alternatives, and whether it fits the budget. Creates nothing.",
@@ -265,7 +265,7 @@ func CallTool(ctx context.Context, c Caller, name string, a map[string]any) (int
 	return callTool(ctx, c, name, args(a))
 }
 
-// HasTool reports whether name is a Boxa tool.
+// HasTool reports whether name is a Boxaz tool.
 func HasTool(name string) bool {
 	for _, t := range Tools {
 		if t.Name == name {

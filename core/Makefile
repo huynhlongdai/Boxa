@@ -24,7 +24,7 @@ e2e: build
 dist:
 	@mkdir -p $(DIST)
 	for arch in amd64 arm64; do \
-	  for cmd in boxa-core boxd box; do \
+	  for cmd in boxaz-core boxd box; do \
 	    CGO_ENABLED=0 GOOS=linux GOARCH=$$arch $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(DIST)/$$cmd-linux-$$arch ./cmd/$$cmd || exit 1; \
 	  done; \
 	done
@@ -32,7 +32,7 @@ dist:
 
 # Local dev: core on :8080 with a fixed admin key + local boxd (no isolation).
 run-core: build
-	BOXA_DATA_DIR=./data BOXA_ADMIN_KEY=bx_admin_dev BOXA_BOOTSTRAP_TOKEN=dev-boot $(BIN)/boxa-core
+	BOXAZ_DATA_DIR=./data BOXAZ_ADMIN_KEY=bx_admin_dev BOXAZ_BOOTSTRAP_TOKEN=dev-boot $(BIN)/boxaz-core
 
 run-boxd: build
 	BOXD_CORE_URL=http://127.0.0.1:8080 BOXD_TOKEN=dev-boot BOXD_DRIVER=local BOXD_STATE_DIR=./boxd-state $(BIN)/boxd

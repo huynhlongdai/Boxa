@@ -17,11 +17,11 @@ import (
 	"strings"
 	"time"
 
-	"boxa/core/internal/model"
-	"boxa/core/internal/provider"
-	"boxa/core/internal/sandbox"
-	"boxa/core/internal/secret"
-	"boxa/core/internal/selector"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/provider"
+	"boxaz/core/internal/sandbox"
+	"boxaz/core/internal/secret"
+	"boxaz/core/internal/selector"
 )
 
 const sandboxSeedSource = "sandbox-pricing"
@@ -105,7 +105,7 @@ func (m *Manager) createSandboxHost(ctx context.Context, p *Principal, sp sandbo
 	info := sp.Info()
 	mode := m.sandboxMode(ctx, info)
 	if mode == "dial" && m.Cfg.PublicURL == "" {
-		return nil, model.EH(model.ErrInvalid, "Set BOXA_PUBLIC_URL (reachable from the internet) or switch the provider to sandbox_mode=shim.", "T2 sandboxes need BOXA_PUBLIC_URL so boxd can dial in")
+		return nil, model.EH(model.ErrInvalid, "Set BOXAZ_PUBLIC_URL (reachable from the internet) or switch the provider to sandbox_mode=shim.", "T2 sandboxes need BOXAZ_PUBLIC_URL so boxd can dial in")
 	}
 	if region == "" && len(info.Regions) > 0 {
 		region = info.Regions[0].ID
@@ -167,8 +167,8 @@ func (m *Manager) createSandboxHost(ctx context.Context, p *Principal, sp sandbo
 }
 
 // autoPlace reports whether box_up may rent this kind without approval:
-// burst servers need BOXA_AUTO_BURST; sandboxes also run with
-// BOXA_AUTO_SANDBOX (per-second billing, destroyed with their box).
+// burst servers need BOXAZ_AUTO_BURST; sandboxes also run with
+// BOXAZ_AUTO_SANDBOX (per-second billing, destroyed with their box).
 func (m *Manager) autoPlace(kind string) bool {
 	if kind == selector.KindSandbox {
 		return m.Cfg.AutoBurst || m.Cfg.AutoSandbox

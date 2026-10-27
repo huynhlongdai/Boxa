@@ -1,8 +1,9 @@
-// box: Boxa CLI. Talks to core over REST (BOXA_URL, BOXA_API_KEY).
+// box: Boxaz CLI. Talks to core over REST (BOXAZ_URL, BOXAZ_API_KEY).
 // `box mcp` runs a stdio MCP server exposing the box_* tools, resources and prompts.
 package main
 
 import (
+	"boxaz/core/internal/envcompat"
 	"context"
 	"encoding/json"
 	"flag"
@@ -16,16 +17,16 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"boxa/core/internal/boxyaml"
-	"boxa/core/internal/client"
-	"boxa/core/internal/i18n"
-	"boxa/core/internal/manager"
-	"boxa/core/internal/mcp"
+	"boxaz/core/internal/boxyaml"
+	"boxaz/core/internal/client"
+	"boxaz/core/internal/i18n"
+	"boxaz/core/internal/manager"
+	"boxaz/core/internal/mcp"
 )
 
-const usage = `box — Boxa CLI
+const usage = `box — Boxaz CLI
 
-Env: BOXA_URL (default http://localhost:8080), BOXA_API_KEY, BOXA_LANG (vi|en|zh|ja; default from LANG)
+Env: BOXAZ_URL (default http://localhost:8080), BOXAZ_API_KEY, BOXAZ_LANG (vi|en|zh|ja; default from LANG)
 
   box up [--template python] [--lifecycle task|session|service] [--cpu 1] [--ram 1G] [--disk 10G]
          [--ttl 1h] [--idle 5] [--budget 0.5] [--slug name] [--port 8080] [--secret NAME]
@@ -98,12 +99,15 @@ func printJSON(v any) {
 }
 
 func main() {
+	if n := envcompat.Note(envcompat.Apply()); n != "" {
+		fmt.Fprintln(os.Stderr, "box: warning: "+n)
+	}
 	if len(os.Args) < 2 {
 		fmt.Print(usage)
 		os.Exit(2)
 	}
-	c := client.New(envOr("BOXA_URL", "http://localhost:8080"), os.Getenv("BOXA_API_KEY"))
-	c.Lang = i18n.Normalize(os.Getenv("BOXA_LANG"))
+	c := client.New(envOr("BOXAZ_URL", "http://localhost:8080"), os.Getenv("BOXAZ_API_KEY"))
+	c.Lang = i18n.Normalize(os.Getenv("BOXAZ_LANG"))
 	if c.Lang == "" {
 		c.Lang = i18n.Normalize(os.Getenv("LANG"))
 	}
@@ -145,7 +149,7 @@ func main() {
 	case "yaml":
 		err = cmdYAML(ctx, c, args)
 	case "mcp":
-		s := &mcp.Server{Name: "boxa", Version: manager.Version}
+		s := &mcp.Server{Name: "boxaz", Version: manager.Version}
 		if c.Lang != "" {
 			ctx = i18n.WithLocale(ctx, c.Lang)
 		}
@@ -365,7 +369,7 @@ func cmdExec(ctx context.Context, c *client.Client, args []string) error {
 		fmt.Fprintln(os.Stderr, s)
 	}
 	if t, _ := res["truncated"].(bool); t {
-		fmt.Fprintf(os.Stderr, "[boxa] output truncated; full log: box log %v\n", res["log_id"])
+		fmt.Fprintf(os.Stderr, "[boxaz] output truncated; full log: box log %v\n", res["log_id"])
 	}
 	code := int(res["exit_code"].(float64))
 	if code != 0 {
@@ -481,7 +485,7 @@ func cmdGrep(ctx context.Context, c *client.Client, args []string) error {
 		fmt.Printf("%s:%d:%s\n", m.Path, m.Line, m.Text)
 	}
 	if res.Truncated {
-		fmt.Fprintln(os.Stderr, "[boxa] more matches truncated")
+		fmt.Fprintln(os.Stderr, "[boxaz] more matches truncated")
 	}
 	return nil
 }

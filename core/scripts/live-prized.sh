@@ -2,8 +2,8 @@
 # Live end-to-end test against the real Prized Sandboxes API (creates ONE
 # small free-tier sandbox for well under a minute, then deletes it).
 #   PRIZED_API_KEY=dcp_… scripts/live-prized.sh          (shim / T3 mode)
-#   PRIZED_MODE=dial BOXA_PUBLIC_URL=https://… …          (boxd dial-in / T2)
-# Starts boxa-core + a local boxd, connects prized, asks /recommend for
+#   PRIZED_MODE=dial BOXAZ_PUBLIC_URL=https://… …          (boxd dial-in / T2)
+# Starts boxaz-core + a local boxd, connects prized, asks /recommend for
 # untrusted short-lived work, creates a box on prized, runs exec (incl. a
 # long-output command to see compaction), files, then box down and checks
 # that no managed sandbox is left at Prized.
@@ -12,16 +12,16 @@ cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 BIN=${BIN:-$ROOT/bin}
 PORT=${PORT:-18775}
-WORK=$(mktemp -d /tmp/boxa-live.XXXXXX)
+WORK=$(mktemp -d /tmp/boxaz-live.XXXXXX)
 ADMIN=bx_admin_live_$(date +%s)
 MODE=${PRIZED_MODE:-shim}
 PAPI=https://api.prized.dev/api/v1
-export BOXA_URL=http://127.0.0.1:$PORT
+export BOXAZ_URL=http://127.0.0.1:$PORT
 : "${PRIZED_API_KEY:?set PRIZED_API_KEY}"
 
 pass() { printf '  PASS %s\n' "$*"; }
 fail() { printf '  FAIL %s\n' "$*"; echo "--- core.log"; tail -40 "$WORK/core.log"; exit 1; }
-api() { local m=$1 p=$2; shift 2; curl -sS -X "$m" "$BOXA_URL/v1$p" -H "Authorization: Bearer ${KEY:-$ADMIN}" -H 'Content-Type: application/json' "$@"; }
+api() { local m=$1 p=$2; shift 2; curl -sS -X "$m" "$BOXAZ_URL/v1$p" -H "Authorization: Bearer ${KEY:-$ADMIN}" -H 'Content-Type: application/json' "$@"; }
 papi() { curl -sS -H "Authorization: Bearer $PRIZED_API_KEY" "$@"; }
 ms() { date +%s%3N; }
 
@@ -35,19 +35,19 @@ trap cleanup EXIT
 
 [ -n "${SKIP_BUILD:-}" ] || go build -o "$BIN/" ./cmd/...
 
-BOXA_DATA_DIR=$WORK/data BOXA_ADMIN_KEY=$ADMIN BOXA_BOOTSTRAP_TOKEN=boot-live BOXA_ADDR=127.0.0.1:$PORT \
-BOXA_AUTO_SANDBOX=1 BOXA_PRICE_FEED=off BOXA_LOCAL_PRICE_MONTH=73 BOXA_CLIENT_LOCATION=VN \
-  "$BIN/boxa-core" >"$WORK/core.log" 2>&1 & CORE_PID=$!
-for i in $(seq 50); do curl -sf "$BOXA_URL/v1/health" >/dev/null && break; sleep 0.1; done
-curl -sf "$BOXA_URL/v1/health" >/dev/null || fail "core did not start"
-BOXD_CORE_URL=$BOXA_URL BOXD_TOKEN=boot-live BOXD_DRIVER=local BOXD_STATE_DIR=$WORK/boxd BOXD_IP=127.0.0.1 \
+BOXAZ_DATA_DIR=$WORK/data BOXAZ_ADMIN_KEY=$ADMIN BOXAZ_BOOTSTRAP_TOKEN=boot-live BOXAZ_ADDR=127.0.0.1:$PORT \
+BOXAZ_AUTO_SANDBOX=1 BOXAZ_PRICE_FEED=off BOXAZ_LOCAL_PRICE_MONTH=73 BOXAZ_CLIENT_LOCATION=VN \
+  "$BIN/boxaz-core" >"$WORK/core.log" 2>&1 & CORE_PID=$!
+for i in $(seq 50); do curl -sf "$BOXAZ_URL/v1/health" >/dev/null && break; sleep 0.1; done
+curl -sf "$BOXAZ_URL/v1/health" >/dev/null || fail "core did not start"
+BOXD_CORE_URL=$BOXAZ_URL BOXD_TOKEN=boot-live BOXD_DRIVER=local BOXD_STATE_DIR=$WORK/boxd BOXD_IP=127.0.0.1 \
   "$BIN/boxd" >"$WORK/boxd.log" 2>&1 & BOXD_PID=$!
 for i in $(seq 50); do [ "$(api GET /hosts | jq '[.items[]|select(.connected)]|length')" = 1 ] && break; sleep 0.1; done
 pass "core + local boxd up"
 
 AGENT=$(api POST /agents -d '{"name":"live","kind":"claude-code","budget_day_usd":1}' | jq -r .id)
-export BOXA_API_KEY=$(api POST /keys -d "{\"agent_id\":\"$AGENT\",\"name\":\"live\"}" | jq -r .key)
-AKEY=$BOXA_API_KEY
+export BOXAZ_API_KEY=$(api POST /keys -d "{\"agent_id\":\"$AGENT\",\"name\":\"live\"}" | jq -r .key)
+AKEY=$BOXAZ_API_KEY
 
 R=$(api PUT /providers/prized/token -d "{\"token\":\"$PRIZED_API_KEY\"}")
 echo "$R" | jq -e '.connected' >/dev/null && pass "prized connected (token validated live): $(echo "$R" | jq -c '{id,group,adapter,connected}')" || { echo "$R"; fail connect; }
@@ -87,7 +87,7 @@ echo "    long output: $(echo "$J" | jq -c '{exit_code,truncated,log_id,tokens_s
 echo "$J" | jq -e '.exit_code==7 and .truncated and .tokens_saved>0' >/dev/null && pass "output compaction (tail 5 of 200k lines, exit 7)" || fail compaction
 LOGID=$(echo "$J" | jq -r .log_id)
 [ "$LOGID" != null ] && [ "$("$BIN/box" log "$LOGID" | grep -c '^[0-9]*$')" -ge 200000 ] && pass "full output kept, read back via /logs/$LOGID" || fail "full log"
-T0=$(ms); R=$(curl -s -X POST "$BOXA_URL/mcp" -H "Authorization: Bearer $AKEY" -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"box_exec\",\"arguments\":{\"box_id\":\"$BOX\",\"command\":\"echo via-mcp\"}}}"); T1=$(ms)
+T0=$(ms); R=$(curl -s -X POST "$BOXAZ_URL/mcp" -H "Authorization: Bearer $AKEY" -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"box_exec\",\"arguments\":{\"box_id\":\"$BOX\",\"command\":\"echo via-mcp\"}}}"); T1=$(ms)
 echo "$R" | jq -e '.result.isError==false and .result.structuredContent.stdout_tail=="via-mcp"' >/dev/null && pass "MCP tools/call box_exec ($((T1-T0)) ms)" || { echo "$R"; fail "mcp exec"; }
 OUT=$("$BIN/box" exec "$BOX" -- 'echo cli-ok && pwd'); echo "    box exec: $(echo $OUT)"
 [[ $OUT == cli-ok* ]] && pass "box CLI exec" || fail "cli exec"

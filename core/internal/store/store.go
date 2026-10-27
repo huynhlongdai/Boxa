@@ -1,4 +1,4 @@
-// Package store persists Boxa state. One portable SQL implementation runs on
+// Package store persists Boxaz state. One portable SQL implementation runs on
 // SQLite (modernc.org/sqlite, pure Go, default) and Postgres (pgx stdlib,
 // selected when DATABASE_URL starts with postgres:// or postgresql://).
 package store
@@ -17,7 +17,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "modernc.org/sqlite"
 
-	"boxa/core/internal/model"
+	"boxaz/core/internal/model"
 )
 
 //go:embed migrations/*.sql
@@ -152,7 +152,7 @@ func Open(dsn string) (*SQL, error) {
 		s.dialect = "sqlite"
 		path := strings.TrimPrefix(dsn, "sqlite://")
 		if path == "" {
-			path = "boxa.db"
+			path = "boxaz.db"
 		}
 		q := "?_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(on)"
 		if path == ":memory:" {

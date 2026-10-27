@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"boxa/core/internal/i18n"
-	"boxa/core/internal/manager"
+	"boxaz/core/internal/i18n"
+	"boxaz/core/internal/manager"
 )
 
 type fakeCaller struct{ last string }
@@ -20,7 +20,7 @@ func (f *fakeCaller) Do(ctx context.Context, method, path string, body any) (int
 }
 
 func TestStdio(t *testing.T) {
-	s := &Server{Name: "boxa", Version: "t"}
+	s := &Server{Name: "boxaz", Version: "t"}
 	in := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26"}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
 {"jsonrpc":"2.0","id":2,"method":"tools/list"}
@@ -39,7 +39,7 @@ func TestStdio(t *testing.T) {
 }
 
 func TestToolMapping(t *testing.T) {
-	s := &Server{Name: "boxa"}
+	s := &Server{Name: "boxaz"}
 	fc := &fakeCaller{}
 	r := s.Handle(context.Background(), fc, []byte(`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"box_exec","arguments":{"box_id":"b1","command":"ls","async":true}}}`))
 	if r == nil || r.Error != nil {
@@ -123,7 +123,7 @@ func call(t *testing.T, s *Server, c Caller, method, params string) map[string]a
 }
 
 func TestV11Tools(t *testing.T) {
-	s := &Server{Name: "boxa"}
+	s := &Server{Name: "boxaz"}
 	c := &recCaller{}
 	call(t, s, c, "tools/call", `{"name":"box_exec_batch","arguments":{"box_id":"b1","commands":["ls","pwd"],"stop_on_error":false}}`)
 	call(t, s, c, "tools/call", `{"name":"box_quote","arguments":{"template":"python","ram_mb":2048}}`)
@@ -157,7 +157,7 @@ func TestV11Tools(t *testing.T) {
 }
 
 func TestResourcesAndPrompts(t *testing.T) {
-	s := &Server{Name: "boxa"}
+	s := &Server{Name: "boxaz"}
 	c := &recCaller{}
 	m := call(t, s, c, "initialize", `{"protocolVersion":"2025-06-18"}`)
 	caps := m["capabilities"].(map[string]any)
@@ -172,11 +172,11 @@ func TestResourcesAndPrompts(t *testing.T) {
 	if len(m["resourceTemplates"].([]any)) != 4 {
 		t.Fatal(m)
 	}
-	m = call(t, s, c, "resources/read", `{"uri":"boxa://box/box_1/file/work/a%20b.py"}`)
+	m = call(t, s, c, "resources/read", `{"uri":"boxaz://box/box_1/file/work/a%20b.py"}`)
 	if m["contents"].([]any)[0].(map[string]any)["text"] != "print(1)" || !strings.Contains(c.calls[len(c.calls)-1], "path=%2Fwork%2Fa+b.py") {
 		t.Fatalf("%+v %v", m, c.calls)
 	}
-	m = call(t, s, c, "resources/read", `{"uri":"boxa://log/log_1"}`)
+	m = call(t, s, c, "resources/read", `{"uri":"boxaz://log/log_1"}`)
 	if !strings.Contains(m["contents"].([]any)[0].(map[string]any)["text"].(string), "boom") {
 		t.Fatal(m)
 	}

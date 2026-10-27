@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// logRT records every request/response (bodies trimmed) for BOXA_LIVE_LOG.
+// logRT records every request/response (bodies trimmed) for BOXAZ_LIVE_LOG.
 type logRT struct {
 	w io.Writer
 }
@@ -38,13 +38,13 @@ func (l logRT) RoundTrip(r *http.Request) (*http.Response, error) {
 
 // TestPrizedLiveLifecycle creates ONE real sandbox (free tier, 1 vCPU / 2 GB,
 // maxRuntime 15 min), exercises exec/files/pause/resume, then deletes it.
-// Spends a few cents of credit. Opt-in: BOXA_LIVE_PRIZED_CREATE=1.
+// Spends a few cents of credit. Opt-in: BOXAZ_LIVE_PRIZED_CREATE=1.
 func TestPrizedLiveLifecycle(t *testing.T) {
-	if os.Getenv("BOXA_LIVE_PRIZED_CREATE") != "1" {
-		t.Skip("set BOXA_LIVE_PRIZED_CREATE=1 and PRIZED_API_KEY to run (creates a sandbox)")
+	if os.Getenv("BOXAZ_LIVE_PRIZED_CREATE") != "1" {
+		t.Skip("set BOXAZ_LIVE_PRIZED_CREATE=1 and PRIZED_API_KEY to run (creates a sandbox)")
 	}
 	var w io.Writer = io.Discard
-	if p := os.Getenv("BOXA_LIVE_LOG"); p != "" {
+	if p := os.Getenv("BOXAZ_LIVE_LOG"); p != "" {
 		f, err := os.Create(p)
 		if err != nil {
 			t.Fatal(err)
@@ -115,13 +115,13 @@ func TestPrizedLiveLifecycle(t *testing.T) {
 	}
 
 	t0 = time.Now()
-	data := []byte("hello from boxa\n" + strings.Repeat("x", 4096))
-	if err := d.PutFile(ctx, c, sb.ID, "/home/prized/work/boxa.txt", data); err != nil {
+	data := []byte("hello from sandbox\n" + strings.Repeat("x", 4096))
+	if err := d.PutFile(ctx, c, sb.ID, "/home/prized/work/probe.txt", data); err != nil {
 		t.Errorf("put: %v", err)
 	}
 	tm("put file", t0)
 	t0 = time.Now()
-	got, err := d.GetFile(ctx, c, sb.ID, "/home/prized/work/boxa.txt")
+	got, err := d.GetFile(ctx, c, sb.ID, "/home/prized/work/probe.txt")
 	if err != nil || !bytes.Equal(got, data) {
 		t.Errorf("get: err=%v len=%d", err, len(got))
 	}
@@ -150,7 +150,7 @@ func TestPrizedLiveLifecycle(t *testing.T) {
 			t.Errorf("resume: %v", err)
 		}
 		tm("resume", t0)
-		if r := run("cat /home/prized/work/boxa.txt | head -1"); r != nil && strings.TrimSpace(r.Stdout) != "hello from boxa" {
+		if r := run("cat /home/prized/work/probe.txt | head -1"); r != nil && strings.TrimSpace(r.Stdout) != "hello from sandbox" {
 			t.Errorf("file after resume: %q", r.Stdout)
 		}
 	}
@@ -164,7 +164,7 @@ func TestPrizedLiveLifecycle(t *testing.T) {
 			t.Errorf("fork wait: %v", err)
 		}
 		tm("fork->running", t0)
-		if r, err := d.Exec(ctx, c, ch.ID, ExecRequest{Command: "head -1 /home/prized/work/boxa.txt"}); err != nil || strings.TrimSpace(r.Stdout) != "hello from boxa" {
+		if r, err := d.Exec(ctx, c, ch.ID, ExecRequest{Command: "head -1 /home/prized/work/probe.txt"}); err != nil || strings.TrimSpace(r.Stdout) != "hello from sandbox" {
 			t.Errorf("fork exec: %v %+v", err, r)
 		}
 		if err := d.Delete(ctx, c, ch.ID); err != nil {
@@ -181,8 +181,8 @@ func TestPrizedLiveLifecycle(t *testing.T) {
 // TestPrizedLiveNameReuse: a name (Idempotency-Key) reused after its sandbox
 // was deleted must still create a new running sandbox. Opt-in as above.
 func TestPrizedLiveNameReuse(t *testing.T) {
-	if os.Getenv("BOXA_LIVE_PRIZED_CREATE") != "1" {
-		t.Skip("set BOXA_LIVE_PRIZED_CREATE=1 and PRIZED_API_KEY to run (creates a sandbox)")
+	if os.Getenv("BOXAZ_LIVE_PRIZED_CREATE") != "1" {
+		t.Skip("set BOXAZ_LIVE_PRIZED_CREATE=1 and PRIZED_API_KEY to run (creates a sandbox)")
 	}
 	d := NewPrized(nil, "")
 	c := Cred{"token": os.Getenv("PRIZED_API_KEY")}

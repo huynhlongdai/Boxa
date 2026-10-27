@@ -12,11 +12,11 @@ import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { BoxStatusChip, BOX_STATUSES, LifecycleBadge, Mono, useBoxStatusLabel } from "@/components/boxa/status";
-import { MoneyBudget, BudgetBar } from "@/components/boxa/budget";
-import { BoxActions } from "@/components/boxa/box-actions";
-import { CreateBoxDialog } from "@/components/boxa/create-box";
-import { Empty, ErrorBox, LoadingRows, PageHeader } from "@/components/boxa/page";
+import { BoxStatusChip, BOX_STATUSES, LifecycleBadge, Mono, useBoxStatusLabel } from "@/components/boxaz/status";
+import { MoneyBudget, BudgetBar } from "@/components/boxaz/budget";
+import { BoxActions } from "@/components/boxaz/box-actions";
+import { CreateBoxDialog } from "@/components/boxaz/create-box";
+import { Empty, ErrorBox, LoadingRows, PageHeader } from "@/components/boxaz/page";
 
 const PROVIDERS = ["hetzner", "vultr", "contabo", "digitalocean", "netcup", "local"];
 

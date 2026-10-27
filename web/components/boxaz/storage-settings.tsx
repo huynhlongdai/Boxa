@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ErrorBox } from "@/components/boxa/page";
+import { ErrorBox } from "@/components/boxaz/page";
 
 const PLACEHOLDER: Record<StorageProvider, string> = {
   local: "",
@@ -53,9 +53,9 @@ function StorageForm({ initial }: { initial: StorageView }) {
         {remote ? (
           <>
             <Field label={t("endpoint")}><Input disabled={fromEnv} value={v.endpoint} onChange={(e) => setV({ ...v, endpoint: e.target.value.trim() })} placeholder={PLACEHOLDER[v.provider]} className="font-mono" /></Field>
-            <Field label={t("bucket")}><Input disabled={fromEnv} value={v.bucket} onChange={(e) => setV({ ...v, bucket: e.target.value.trim() })} placeholder="boxa-snapshots" className="font-mono" /></Field>
+            <Field label={t("bucket")}><Input disabled={fromEnv} value={v.bucket} onChange={(e) => setV({ ...v, bucket: e.target.value.trim() })} placeholder="boxaz-snapshots" className="font-mono" /></Field>
             <Field label={t("region")} hint={t("regionHint")}><Input disabled={fromEnv} value={v.region} onChange={(e) => setV({ ...v, region: e.target.value.trim() })} placeholder={v.provider === "r2" ? "auto" : "us-west-004"} className="font-mono" /></Field>
-            <Field label={t("prefix")}><Input disabled={fromEnv} value={v.prefix} onChange={(e) => setV({ ...v, prefix: e.target.value.trim() })} placeholder="boxa" className="font-mono" /></Field>
+            <Field label={t("prefix")}><Input disabled={fromEnv} value={v.prefix} onChange={(e) => setV({ ...v, prefix: e.target.value.trim() })} placeholder="team-a" className="font-mono" /></Field>
             <Field label={t("accessKey")}><Input disabled={fromEnv} autoComplete="off" value={v.access_key_id} onChange={(e) => setV({ ...v, access_key_id: e.target.value.trim() })} className="font-mono" /></Field>
             <Field label={t("secretKey")} hint={initial.has_secret ? t("secretStored") : undefined} className="md:col-span-2">
               <Input disabled={fromEnv} type="password" autoComplete="new-password" value={secret} onChange={(e) => setSecret(e.target.value)} placeholder={initial.has_secret ? "••••••••" : ""} className="font-mono" />

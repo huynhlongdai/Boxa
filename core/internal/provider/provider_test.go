@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"boxa/core/internal/model"
+	"boxaz/core/internal/model"
 )
 
 func TestQuote(t *testing.T) {
@@ -69,7 +69,7 @@ func TestHetznerAdapter(t *testing.T) {
 		t.Fatalf("offers: %+v %v", offers, err)
 	}
 	ci, _ := RenderCloudInit(CloudInitParams{CoreURL: "wss://core/v1/hosts/connect", BootstrapToken: "bxb_x", Provider: "hetzner", Region: "fsn1", BoxdURL: "https://core/dl/boxd"})
-	hd, err := h.Create(ctx, "good", CreateRequest{Name: "boxa-1", SKU: "cx22", Region: "fsn1", CloudInit: ci})
+	hd, err := h.Create(ctx, "good", CreateRequest{Name: "mgr-1", SKU: "cx22", Region: "fsn1", CloudInit: ci})
 	if err != nil || hd.Ref != "42" || hd.IP != "1.2.3.4" {
 		t.Fatalf("create: %+v %v", hd, err)
 	}

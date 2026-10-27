@@ -1,17 +1,17 @@
-# @boxa/sdk — TypeScript SDK
+# @boxaz/sdk — TypeScript SDK
 
-Typed, fetch-based, **zero-dependency** client for [Boxa](../../core/README.md). Runs on Node ≥ 18, Bun,
+Typed, fetch-based, **zero-dependency** client for [Boxaz](../../core/README.md). Runs on Node ≥ 18, Bun,
 Deno, browsers and edge runtimes.
 
 ```bash
 npm i ./sdk/typescript     # build: npm run build (tsc → dist/)
-export BOXA_URL=http://127.0.0.1:8080 BOXA_API_KEY=bx_agent_... BOXA_LANG=vi
+export BOXAZ_URL=http://127.0.0.1:8080 BOXAZ_API_KEY=bx_agent_... BOXAZ_LANG=vi
 ```
 
 ```ts
-import { Boxa, BoxaError } from "@boxa/sdk";
+import { Boxaz, BoxazError } from "@boxaz/sdk";
 
-const bx = new Boxa();                                   // or new Boxa({ apiKey, baseUrl, lang: "ja" })
+const bx = new Boxaz();                                   // or new Boxaz({ apiKey, baseUrl, lang: "ja" })
 const q = await bx.quote({ template: "node", lifecycle: "task", ttl_seconds: 1800 });   // dry run
 const box = await bx.createBox({ template: "node", lifecycle: "task", ttl_seconds: 1800 }, { idempotencyKey: "job-42" });
 const r = await bx.exec(box.id, "node -e 'console.log(42)'");          // ExecResult (+ r.next hints)
@@ -25,7 +25,7 @@ console.log((await bx.boxYaml(box.id)).yaml);
 await bx.down(box.id);
 
 try { await bx.getBox("box_nope"); }
-catch (e) { if (e instanceof BoxaError) console.log(e.code, e.apiMessage, e.hint, e.retryAfterS, e.docsUrl); }
+catch (e) { if (e instanceof BoxazError) console.log(e.code, e.apiMessage, e.hint, e.retryAfterS, e.docsUrl); }
 ```
 
 ### v1.4 — sandbox API providers (T2/T3)
@@ -34,16 +34,16 @@ catch (e) { if (e instanceof BoxaError) console.log(e.code, e.apiMessage, e.hint
 const { items } = await bx.sandboxProviders();          // tier, mode (dial|shim), capabilities, per-second pricing, verification
 const rec = await bx.recommend({ template: "base", untrusted: true, fork: true, requirements: { isolation: "sandbox" } });
 console.log(rec.pick?.provider, rec.pick?.tier, rec.rejected.map((r) => r.reason));
-const lint = await new Boxa({ apiKey: adminKey }).lintAdapter(yamlText);   // { ok, error?, info? } — admin key
+const lint = await new Boxaz({ apiKey: adminKey }).lintAdapter(yamlText);   // { ok, error?, info? } — admin key
 ```
 
 ## Function calling
 
 ```ts
 import OpenAI from "openai";
-import { Boxa, asOpenAITools, handleToolCall } from "@boxa/sdk";
+import { Boxaz, asOpenAITools, handleToolCall } from "@boxaz/sdk";
 
-const bx = new Boxa(), llm = new OpenAI();
+const bx = new Boxaz(), llm = new OpenAI();
 const tools = await asOpenAITools(bx);                    // from GET /v1/tools (same source as MCP)
 const messages: any[] = [{ role: "user", content: "Run node -e 'console.log(6*7)' in a box." }];
 for (;;) {
@@ -65,4 +65,4 @@ and `bx.callTool(name, args)`.
 npm test        # node --experimental-strip-types --test test/*.test.ts  (starts core + boxd from core/bin)
 npm run typecheck
 ```
-Integration tests skip when no core binary / `BOXA_TEST_URL` is available.
+Integration tests skip when no core binary / `BOXAZ_TEST_URL` is available.

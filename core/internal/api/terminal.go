@@ -72,13 +72,13 @@ func (s *Server) terminal(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if exited {
-			send(websocket.TextMessage, []byte("\r\n[boxa] session ended\r\n"))
+			send(websocket.TextMessage, []byte("\r\n[boxaz] session ended\r\n"))
 			finish()
 		}
 	})
 	if err != nil {
 		b, _ := json.Marshal(map[string]any{"error": err.Error()})
-		send(websocket.TextMessage, append([]byte("\r\n[boxa] "), b...))
+		send(websocket.TextMessage, append([]byte("\r\n[boxaz] "), b...))
 		send(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseInternalServerErr, "terminal unavailable"))
 		return
 	}

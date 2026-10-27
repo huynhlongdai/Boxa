@@ -7,13 +7,13 @@ import (
 	"log"
 	"time"
 
-	"boxa/core/internal/events"
-	"boxa/core/internal/model"
-	"boxa/core/internal/proto"
-	"boxa/core/internal/provider"
-	"boxa/core/internal/sandbox"
-	"boxa/core/internal/secret"
-	"boxa/core/internal/store"
+	"boxaz/core/internal/events"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/proto"
+	"boxaz/core/internal/provider"
+	"boxaz/core/internal/sandbox"
+	"boxaz/core/internal/secret"
+	"boxaz/core/internal/store"
 )
 
 type hostAuth struct {
@@ -220,7 +220,7 @@ func (m *Manager) CreateHost(ctx context.Context, p *Principal, provID, sku, reg
 		return m.createSandboxHost(ctx, p, sp, token, sku, region)
 	}
 	if m.Cfg.PublicURL == "" {
-		return nil, model.EH(model.ErrInvalid, "Set BOXA_PUBLIC_URL to the https URL where boxd can reach core.", "BOXA_PUBLIC_URL is not configured")
+		return nil, model.EH(model.ErrInvalid, "Set BOXAZ_PUBLIC_URL to the https URL where boxd can reach core.", "BOXAZ_PUBLIC_URL is not configured")
 	}
 	offers, _ := m.Store.ListOffers(ctx, provID)
 	var off *model.Offer
@@ -253,7 +253,7 @@ func (m *Manager) CreateHost(ctx context.Context, p *Principal, provID, sku, reg
 	if err := m.Store.PutHost(ctx, h); err != nil {
 		return nil, err
 	}
-	hd, err := m.guardedCreate(ctx, prov, token, provider.CreateRequest{Name: "boxa-" + h.ID[5:], SKU: sku, Region: region, CloudInit: ci, Labels: map[string]string{"boxa": "1", "boxa-host": h.ID[5:]}}, h.PriceMonth)
+	hd, err := m.guardedCreate(ctx, prov, token, provider.CreateRequest{Name: sandbox.NamePrefix + h.ID[5:], SKU: sku, Region: region, CloudInit: ci, Labels: sandbox.ManagedLabels(h.ID[5:])}, h.PriceMonth)
 	if err != nil {
 		h.Status = "down"
 		m.Store.PutHost(ctx, h)

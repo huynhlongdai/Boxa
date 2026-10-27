@@ -20,12 +20,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"boxa/core/internal/boxyaml"
-	"boxa/core/internal/i18n"
-	"boxa/core/internal/manager"
-	"boxa/core/internal/mcp"
-	"boxa/core/internal/model"
-	"boxa/core/internal/store"
+	"boxaz/core/internal/boxyaml"
+	"boxaz/core/internal/i18n"
+	"boxaz/core/internal/manager"
+	"boxaz/core/internal/mcp"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/store"
 )
 
 type ctxKey int
@@ -51,11 +51,11 @@ func (s *Server) routes() http.Handler {
 	r := chi.NewRouter()
 	r.Use(s.recoverer, s.ingressMW, s.cors, s.localeMW)
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"name": "boxa-core", "version": manager.Version, "api": "/v1", "mcp": "/mcp", "health": "/v1/health"})
+		writeJSON(w, 200, map[string]any{"name": "boxaz-core", "version": manager.Version, "api": "/v1", "mcp": "/mcp", "health": "/v1/health"})
 	})
 	r.Get("/dl/{file}", s.download)
 	mcpHandler := &mcp.HTTPHandler{
-		Server: &mcp.Server{Name: "boxa", Version: manager.Version},
+		Server: &mcp.Server{Name: "boxaz", Version: manager.Version},
 		CallerFor: func(req *http.Request) mcp.Caller {
 			return &inProcCaller{h: s, auth: req.Header.Get("Authorization"), lang: reqLocale(req)}
 		},
@@ -236,8 +236,11 @@ func bearer(r *http.Request) string {
 	if t := r.URL.Query().Get("token"); t != "" {
 		return t
 	}
-	// Dashboard keeps the key in an httpOnly cookie (boxa_key).
-	if c, err := r.Cookie("boxa_key"); err == nil {
+	// Dashboard keeps the key in an httpOnly cookie (boxaz_key).
+	if c, err := r.Cookie("boxaz_key"); err == nil {
+		return c.Value
+	}
+	if c, err := r.Cookie("boxa_key"); err == nil { // compat: pre-rename cookie
 		return c.Value
 	}
 	return ""
@@ -792,7 +795,7 @@ func (s *Server) costs(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) costsCSV(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
-	w.Header().Set("Content-Disposition", `attachment; filename="boxa-costs.csv"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="boxaz-costs.csv"`)
 	if err := s.M.CostsCSV(r.Context(), pr(r), ledgerFilter(r), w); err != nil {
 		log.Printf("csv: %v", err)
 	}

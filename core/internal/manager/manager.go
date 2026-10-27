@@ -1,10 +1,10 @@
-// Package manager is Boxa core's business logic: box lifecycle (M3),
+// Package manager is Boxaz core's business logic: box lifecycle (M3),
 // scheduler (M4), provider orchestration (M5), reaper (M11), budget/ledger
 // (M12), price feed (M13), secrets (M10), templates (M14), audit (M15).
 package manager
 
 import (
-	"boxa/core/internal/i18n"
+	"boxaz/core/internal/i18n"
 	"context"
 	"errors"
 	"fmt"
@@ -14,22 +14,22 @@ import (
 	"sync"
 	"time"
 
-	"boxa/core/internal/boxyaml"
-	"boxa/core/internal/events"
-	"boxa/core/internal/hostlink"
-	"boxa/core/internal/model"
-	"boxa/core/internal/objstore"
-	"boxa/core/internal/pricefeed"
-	"boxa/core/internal/proto"
-	"boxa/core/internal/provhealth"
-	"boxa/core/internal/provider"
-	"boxa/core/internal/secret"
-	"boxa/core/internal/store"
+	"boxaz/core/internal/boxyaml"
+	"boxaz/core/internal/events"
+	"boxaz/core/internal/hostlink"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/objstore"
+	"boxaz/core/internal/pricefeed"
+	"boxaz/core/internal/proto"
+	"boxaz/core/internal/provhealth"
+	"boxaz/core/internal/provider"
+	"boxaz/core/internal/secret"
+	"boxaz/core/internal/store"
 )
 
 const Version = "0.1.0"
 
-// Config is read from env by cmd/boxa-core.
+// Config is read from env by cmd/boxaz-core.
 type Config struct {
 	PublicURL          string // external base URL of core, e.g. https://core-1-2-3-4.sslip.io
 	BaseDomain         string // overrides settings.base_domain when set
@@ -50,10 +50,10 @@ type Config struct {
 	CreateWait         time.Duration
 	URLKey             string           // HMAC key for box URL tokens (defaults to a random per-process key)
 	ProviderChain      []string         // burst fallback order (default hetzner, vultr, digitalocean, contabo, netcup, then the sandbox chain)
-	AutoSandbox        bool             // v1.4: box_up may create sandboxes without approval (BOXA_AUTO_SANDBOX)
+	AutoSandbox        bool             // v1.4: box_up may create sandboxes without approval (BOXAZ_AUTO_SANDBOX)
 	SandboxMode        string           // v1.4: auto | dial (T2) | shim (T3) default for sandbox providers
 	SandboxEmptyAfter  time.Duration    // v1.4: destroy an empty sandbox host after this (default 1 min)
-	SnapshotDir        string           // T3 sandbox snapshots (gateway tarballs); default $BOXA_DATA_DIR/snapshots
+	SnapshotDir        string           // T3 sandbox snapshots (gateway tarballs); default $BOXAZ_DATA_DIR/snapshots
 	ObjectStore        *objstore.Config // snapshot storage from env (nil = settings/local)
 	TelegramAPI        string           // override https://api.telegram.org (tests)
 	// v1.3

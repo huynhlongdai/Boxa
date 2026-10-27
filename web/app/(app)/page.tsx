@@ -9,11 +9,11 @@ import { pct } from "@/lib/utils";
 import { useFmt } from "@/lib/format";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { KpiCard } from "@/components/boxa/budget";
-import { ApprovalList } from "@/components/boxa/approvals";
-import { StackedCostChart } from "@/components/boxa/charts";
-import { EmergencyButton } from "@/components/boxa/emergency";
-import { ErrorBox, PageHeader } from "@/components/boxa/page";
+import { KpiCard } from "@/components/boxaz/budget";
+import { ApprovalList } from "@/components/boxaz/approvals";
+import { StackedCostChart } from "@/components/boxaz/charts";
+import { EmergencyButton } from "@/components/boxaz/emergency";
+import { ErrorBox, PageHeader } from "@/components/boxaz/page";
 import { Badge } from "@/components/ui/badge";
 
 export default function OverviewPage() {

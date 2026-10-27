@@ -1,4 +1,4 @@
-// Package client is a minimal REST client for the Boxa API (used by the CLI
+// Package client is a minimal REST client for the Boxaz API (used by the CLI
 // and the stdio MCP server).
 package client
 

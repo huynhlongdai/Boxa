@@ -5,7 +5,7 @@ import type {
   ApiKey,
   Approval,
   Box,
-  BoxaEvent,
+  BoxazEvent,
   Host,
   Job,
   LedgerEntry,
@@ -49,7 +49,7 @@ export interface MockState {
   secrets: Secret[];
   snapshots: Snapshot[];
   approvals: Approval[];
-  events: BoxaEvent[];
+  events: BoxazEvent[];
   jobs: Job[];
   logs: Record<string, string>;
   files: Record<string, Record<string, string>>; // box_id -> path -> content
@@ -347,12 +347,12 @@ export function makeSeed(): MockState {
   ];
 
   const snapshots: Snapshot[] = [
-    { id: "snp_kt01", box_id: "box_51be07", size_mb: 812, created_at: ago(7 * HOUR), location: "local:///var/lib/boxd/snapshots/snp_kt01.tar.gz", storage: "s3", remote_url: "s3://boxa-snapshots/boxa/snapshots/box_51be07/snp_kt01.tar.gz" },
+    { id: "snp_kt01", box_id: "box_51be07", size_mb: 812, created_at: ago(7 * HOUR), location: "local:///var/lib/boxd/snapshots/snp_kt01.tar.gz", storage: "s3", remote_url: "s3://boxaz-snapshots/boxaz/snapshots/box_51be07/snp_kt01.tar.gz" },
     { id: "snp_kt00", box_id: "box_51be07", size_mb: 790, created_at: ago(1 * DAY + 3 * HOUR), location: "local:///var/lib/boxd/snapshots/snp_kt00.tar.gz", storage: "local", upload_error: "upload HTTP 403: SignatureDoesNotMatch" },
-    { id: "snp_sc02", box_id: "box_2c81e4", size_mb: 1430, created_at: ago(2 * HOUR), location: "r2://boxa-snapshots/box_2c81e4/snp_sc02" },
-    { id: "snp_kg01", box_id: "box_a9d054", size_mb: 2210, created_at: ago(20 * HOUR), location: "r2://boxa-snapshots/box_a9d054/snp_kg01" },
-    { id: "snp_ra01", box_id: "box_c4410f", size_mb: 640, created_at: ago(1 * DAY), location: "r2://boxa-snapshots/box_c4410f/snp_ra01" },
-    { id: "snp_hr01", box_id: "box_3f0c88", size_mb: 1120, created_at: ago(3 * HOUR), location: "r2://boxa-snapshots/box_3f0c88/snp_hr01" },
+    { id: "snp_sc02", box_id: "box_2c81e4", size_mb: 1430, created_at: ago(2 * HOUR), location: "r2://boxaz-snapshots/box_2c81e4/snp_sc02" },
+    { id: "snp_kg01", box_id: "box_a9d054", size_mb: 2210, created_at: ago(20 * HOUR), location: "r2://boxaz-snapshots/box_a9d054/snp_kg01" },
+    { id: "snp_ra01", box_id: "box_c4410f", size_mb: 640, created_at: ago(1 * DAY), location: "r2://boxaz-snapshots/box_c4410f/snp_ra01" },
+    { id: "snp_hr01", box_id: "box_3f0c88", size_mb: 1120, created_at: ago(3 * HOUR), location: "r2://boxaz-snapshots/box_3f0c88/snp_hr01" },
   ];
 
   const approvals: Approval[] = [
@@ -391,7 +391,7 @@ export function makeSeed(): MockState {
   addJob("box_3f0c88", "python research.py --topic 'giá VPS châu Á 2026'", 0, 312_000, 35, 22800, "Đã đọc 18 nguồn, ghi /memory/notes/vps-asia.md", "", ["/memory/notes/vps-asia.md"]);
   addJob("box_b18f6e", "apt-get install -y build-essential", 100, 61_000, 130, 3900, "Reading package lists...", "E: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 812 (unattended-upgr)\nGợi ý: đợi unattended-upgrades xong hoặc tạo lại box.");
 
-  const events: BoxaEvent[] = [];
+  const events: BoxazEvent[] = [];
   let eid = 1;
   const ev = (minsAgo: number, actor: string, box_id: string | null, agent_id: string | null, type: string, message: string, cost_usd: number | null = null) => {
     events.push({ id: `evt_${String(eid++).padStart(5, "0")}`, ts: iso(now - minsAgo * MIN), actor, box_id, agent_id, type, message, cost_usd });
@@ -451,21 +451,21 @@ export function makeSeed(): MockState {
   const settings: Settings = {
     notify: {
       telegram_chat_id: "-1002233445566", email: "itroot2015@gmail.com", events: ["daily_report", "budget", "approval", "box_failed", "host_down"], daily_report_hour: 21,
-      timezone: "Asia/Ho_Chi_Minh", smtp: { host: "smtp.gmail.com", port: 587, username: "itroot2015@gmail.com", from: "Boxa <itroot2015@gmail.com>", tls: "starttls" },
+      timezone: "Asia/Ho_Chi_Minh", smtp: { host: "smtp.gmail.com", port: 587, username: "itroot2015@gmail.com", from: "Boxaz <itroot2015@gmail.com>", tls: "starttls" },
     },
     reaper: { idle_minutes: 15, default_ttl_seconds: 14400, keep_snapshots: 3, snapshot_retention_days: 30 },
     egress_deny_by_default: false,
     base_domain: "sslip.io",
     url_token_protect: true,
     budget_month_usd: 60,
-    maintenance: { enabled: false, message: "Boxa đang bảo trì, box vẫn chạy bình thường nhưng không tạo được box mới." },
+    maintenance: { enabled: false, message: "Boxaz đang bảo trì, box vẫn chạy bình thường nhưng không tạo được box mới." },
     features: { gpu: false },
   };
 
   const quotas: Quotas = { max_boxes_per_agent: 5, max_cpu_per_box: 8, max_ram_mb_per_box: 16384, max_disk_gb_per_box: 100, rate_limit_per_minute: 600 };
 
   const users: AdminUser[] = [
-    { id: "owner", name: "owner", role: "admin", admin_keys: 1, note: "Boxa v1 chỉ có một người vận hành; agent xác thực bằng key riêng." },
+    { id: "owner", name: "owner", role: "admin", admin_keys: 1, note: "Boxaz v1 chỉ có một người vận hành; agent xác thực bằng key riêng." },
   ];
 
   return {
@@ -478,7 +478,7 @@ export function makeSeed(): MockState {
       { ts: ago(9 * MIN), kind: "budget", channel: "email", ok: false, error: "email not configured (smtp host, from, recipients)", title: "shopee-crawler đã dùng 85% ngân sách ngày" },
     ],
     storage: {
-      provider: "r2", endpoint: "https://8c1f2a.r2.cloudflarestorage.com", region: "auto", bucket: "boxa-snapshots", prefix: "boxa",
+      provider: "r2", endpoint: "https://8c1f2a.r2.cloudflarestorage.com", region: "auto", bucket: "my-snapshots", prefix: "team-a",
       access_key_id: "b1c5f0e3a2d94e7f", configured: true, source: "settings", has_secret: true, keep_snapshots: 3, snapshot_retention_days: 30,
       fallback: "local: snapshots stay on their host (tar.gz / incus snapshot); restore and fork only on that host",
     },

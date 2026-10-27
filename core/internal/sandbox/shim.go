@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"boxa/core/internal/boxd"
-	"boxa/core/internal/proto"
-	"boxa/core/internal/secret"
+	"boxaz/core/internal/boxd"
+	"boxaz/core/internal/proto"
+	"boxaz/core/internal/secret"
 )
 
 // Shim is the gateway-side "boxd-shim" for T3 (exec-only) sandboxes: it
@@ -38,12 +38,12 @@ type Shim struct {
 
 // shimLogKeep bounds the full-output logs a shim keeps for box_logs: the
 // provider answers exec with the whole output, so the gateway keeps it
-// (lost when boxa-core restarts).
+// (lost when boxaz-core restarts).
 const shimLogKeep = 16
 
 // NewShim builds a shim for one sandbox.
 func NewShim(d Driver, c Cred, ref string) *Shim {
-	wd := strings.TrimRight(orStr(d.Info().WorkDir, "/tmp/boxa"), "/")
+	wd := strings.TrimRight(orStr(d.Info().WorkDir, "/tmp/box"), "/")
 	return &Shim{D: d, C: c, Ref: ref, WorkDir: wd, boxes: map[string]map[string]string{}, logs: map[string]string{}}
 }
 
@@ -71,7 +71,7 @@ func encodeOut(res any, out any) error {
 	return json.Unmarshal(b, out)
 }
 
-// boxPath maps a Boxa path (/work/x, x, /memory/x, /AGENTS.md) into the sandbox.
+// boxPath maps a Boxaz path (/work/x, x, /memory/x, /AGENTS.md) into the sandbox.
 func (s *Shim) boxPath(p string) string {
 	p = strings.TrimSpace(p)
 	switch {
@@ -88,7 +88,7 @@ func (s *Shim) boxPath(p string) string {
 func (s *Shim) env(box string) map[string]string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	e := map[string]string{"BOX_WORK": s.WorkDir + "/work", "BOX_MEMORY": s.WorkDir + "/memory", "BOXA_TIER": "T3"}
+	e := map[string]string{"BOX_WORK": s.WorkDir + "/work", "BOX_MEMORY": s.WorkDir + "/memory", "BOX_TIER": "T3"}
 	for k, v := range s.boxes[box] {
 		e[k] = v
 	}
@@ -321,7 +321,7 @@ func (s *Shim) Call(ctx context.Context, method string, params, out any) error {
 
 func (s *Shim) read(ctx context.Context, p proto.ReadParams, out any) error {
 	full := s.boxPath(p.Path)
-	script := "if [ -d " + shq(full) + " ]; then echo __BOXA_DIR__; find " + shq(full) + " -mindepth 1 -maxdepth 1 -printf '%f\\t%y\\t%s\\n' 2>/dev/null | head -500; " +
+	script := "if [ -d " + shq(full) + " ]; then echo __BOX_DIR__; find " + shq(full) + " -mindepth 1 -maxdepth 1 -printf '%f\\t%y\\t%s\\n' 2>/dev/null | head -500; " +
 		"elif [ -f " + shq(full) + " ]; then cat " + shq(full) + "; else echo 'no such file' >&2; exit 2; fi"
 	if f, ok := s.D.(Filer); ok {
 		if data, err := f.GetFile(ctx, s.C, s.Ref, full); err == nil {
@@ -335,9 +335,9 @@ func (s *Shim) read(ctx context.Context, p proto.ReadParams, out any) error {
 	if res.ExitCode == 2 {
 		return &proto.Error{Code: "NOT_FOUND", Message: "no such file: " + p.Path}
 	}
-	if strings.HasPrefix(res.Stdout, "__BOXA_DIR__\n") || res.Stdout == "__BOXA_DIR__" {
+	if strings.HasPrefix(res.Stdout, "__BOX_DIR__\n") || res.Stdout == "__BOX_DIR__" {
 		rr := proto.ReadResult{IsDir: true, Entries: []proto.Entry{}}
-		for _, line := range strings.Split(strings.TrimPrefix(res.Stdout, "__BOXA_DIR__\n"), "\n") {
+		for _, line := range strings.Split(strings.TrimPrefix(res.Stdout, "__BOX_DIR__\n"), "\n") {
 			f := strings.Split(line, "\t")
 			if len(f) != 3 {
 				continue

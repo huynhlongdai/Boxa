@@ -12,14 +12,14 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"boxa/core/internal/agentkit"
-	"boxa/core/internal/i18n"
-	"boxa/core/internal/manager"
-	"boxa/core/internal/mcp"
-	"boxa/core/internal/model"
+	"boxaz/core/internal/agentkit"
+	"boxaz/core/internal/i18n"
+	"boxaz/core/internal/manager"
+	"boxaz/core/internal/mcp"
+	"boxaz/core/internal/model"
 )
 
-// publicBase is BOXA_PUBLIC_URL when set, otherwise the request origin.
+// publicBase is BOXAZ_PUBLIC_URL when set, otherwise the request origin.
 func (s *Server) publicBase(r *http.Request) string {
 	if s.M.Cfg.PublicURL != "" {
 		return strings.TrimRight(s.M.Cfg.PublicURL, "/")

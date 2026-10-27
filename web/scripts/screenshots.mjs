@@ -1,6 +1,6 @@
 // Chụp màn hình các luồng chính (tuỳ chọn). Cần Chromium + playwright-core:
 //   npm i -g playwright-core   (hoặc npx)  ·  CHROMIUM_PATH=/usr/bin/chromium BASE=http://localhost:3199 OUT=./docs/screenshots node scripts/screenshots.mjs
-// Server phải chạy với BOXA_MOCK=1.
+// Server phải chạy với BOXAZ_MOCK=1.
 const { chromium: pw } = await import("playwright-core").catch(() => import("playwright"));
 const browser = await pw.launch({ executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium", headless: true, args: ["--no-sandbox"] });
 const base = process.env.BASE || "http://localhost:3199";

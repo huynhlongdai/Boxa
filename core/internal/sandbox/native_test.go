@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"boxa/core/internal/model"
-	"boxa/core/internal/provider"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/provider"
 )
 
 var bg = context.Background()
@@ -146,7 +146,7 @@ func testE2BLike(t *testing.T, d *E2B, keyHeader, idHeader string) {
 	if err := d.Validate(bg, c); err != nil {
 		t.Fatal(err)
 	}
-	sb, err := d.Create(bg, c, Spec{SKU: "base", Labels: map[string]string{"boxa": "1"}})
+	sb, err := d.Create(bg, c, Spec{SKU: "base", Labels: map[string]string{"managed": "1"}})
 	if err != nil || sb.ID != "sbx1" || sb.State != StateRunning {
 		t.Fatalf("create %+v %v", sb, err)
 	}
@@ -236,7 +236,7 @@ func TestPrizedDriver(t *testing.T) {
 			var b map[string]any
 			json.NewDecoder(r.Body).Decode(&b)
 			res := b["resources"].(map[string]any)
-			if r.URL.Query().Get("wait") != "running" || r.Header.Get("Idempotency-Key") != "boxa-1" || b["template"] != "prized-base-v1" || res["vcpu"].(float64) != 2 || res["memoryMb"].(float64) != 4096 {
+			if r.URL.Query().Get("wait") != "running" || r.Header.Get("Idempotency-Key") != "mgr-1" || b["template"] != "prized-base-v1" || res["vcpu"].(float64) != 2 || res["memoryMb"].(float64) != 4096 {
 				w.WriteHeader(422)
 				w.Write([]byte(`{"error":"unknown_field"}`))
 				return
@@ -293,7 +293,7 @@ func TestPrizedDriver(t *testing.T) {
 	if err := d.Validate(bg, c); err != nil {
 		t.Fatal(err)
 	}
-	sb, err := d.Create(bg, c, Spec{Name: "boxa-1", CPU: 2, RAMMB: 4096, DiskGB: 10, Template: "prized-base-v1"})
+	sb, err := d.Create(bg, c, Spec{Name: "mgr-1", CPU: 2, RAMMB: 4096, DiskGB: 10, Template: "prized-base-v1"})
 	if err != nil || sb.ID != "sbx_1" || sb.State != StateRunning {
 		t.Fatalf("create %+v %v", sb, err)
 	}
@@ -505,12 +505,12 @@ func TestBoxdShDriver(t *testing.T) {
 	if err := d.Validate(bg, c); err != nil {
 		t.Fatal(err)
 	}
-	sb, err := d.Create(bg, c, Spec{Name: "Boxa-Host", CPU: 2, RAMMB: 8192, Env: map[string]string{"A": "1"}})
+	sb, err := d.Create(bg, c, Spec{Name: "Mgr-Host", CPU: 2, RAMMB: 8192, Env: map[string]string{"A": "1"}})
 	if err != nil || sb.ID != "vm_1" || sb.State != StateRunning {
 		t.Fatalf("create %+v %v", sb, err)
 	}
 	cfg, _ := pbFields(pbBytes(gotCreate, 8))
-	if pbStr(gotCreate, 1) != "boxa-host" || pbUint(cfg, 1) != 2 || pbUint(cfg, 2) != 8192<<20 || pbUint(gotCreate, 12) != 1 {
+	if pbStr(gotCreate, 1) != "mgr-host" || pbUint(cfg, 1) != 2 || pbUint(cfg, 2) != 8192<<20 || pbUint(gotCreate, 12) != 1 {
 		t.Fatalf("CreateVm fields %+v cfg %+v", gotCreate, cfg)
 	}
 	r, err := d.Exec(bg, c, "vm_1", ExecRequest{Command: "uname"})
@@ -617,7 +617,7 @@ func TestAdapter(t *testing.T) {
 
 func TestBootstrapScript(t *testing.T) {
 	s := BootstrapScript(BootstrapParams{CoreURL: "wss://core.example/v1/hosts/connect", BootstrapToken: "bxb_it's", BoxdURL: "https://core.example/dl/boxd", Provider: "e2b", Region: "global", WorkDir: "/home/user"})
-	for _, want := range []string{"--dial 'wss://core.example/v1/hosts/connect'", "nohup setsid", "BOXD_DRIVER=sandbox", `'bxb_it'"'"'s'`, "-linux-$A", "/home/user/.boxa"} {
+	for _, want := range []string{"--dial 'wss://core.example/v1/hosts/connect'", "nohup setsid", "BOXD_DRIVER=sandbox", `'bxb_it'"'"'s'`, "-linux-$A", "/home/user/.boxd"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("bootstrap missing %q:\n%s", want, s)
 		}

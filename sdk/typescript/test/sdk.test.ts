@@ -1,4 +1,4 @@
-// Runs against a real local core (core/bin) or BOXA_TEST_URL + BOXA_TEST_ADMIN_KEY; skips otherwise.
+// Runs against a real local core (core/bin) or BOXAZ_TEST_URL + BOXAZ_TEST_ADMIN_KEY; skips otherwise.
 // node --experimental-strip-types --test test/sdk.test.ts
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
@@ -8,17 +8,17 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Boxa, BoxaError, asOpenAITools, asAnthropicTools, asGeminiTools, asToolMap, handleToolCall } from "../src/index.ts";
+import { Boxa, BoxaError, Boxaz, BoxazError, asOpenAITools, asAnthropicTools, asGeminiTools, asToolMap, handleToolCall } from "../src/index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const bin = join(here, "..", "..", "..", "core", "bin");
 const procs: ChildProcess[] = [];
 let work = "";
-let url = process.env.BOXA_TEST_URL ?? "";
-let admin = process.env.BOXA_TEST_ADMIN_KEY ?? "";
+let url = process.env.BOXAZ_TEST_URL ?? "";
+let admin = process.env.BOXAZ_TEST_ADMIN_KEY ?? "";
 let key = "";
 let agentId = "";
-const skip = !url && !(existsSync(join(bin, "boxa-core")) && existsSync(join(bin, "boxd")));
+const skip = !url && !(existsSync(join(bin, "boxaz-core")) && existsSync(join(bin, "boxd")));
 
 const freePort = () => new Promise<number>((res) => { const s = createServer(); s.listen(0, "127.0.0.1", () => { const p = (s.address() as { port: number }).port; s.close(() => res(p)); }); });
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -26,21 +26,21 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 before(async () => {
   if (skip) return;
   if (!url) {
-    work = mkdtempSync(join(tmpdir(), "boxa-sdk-ts-"));
+    work = mkdtempSync(join(tmpdir(), "boxaz-sdk-ts-"));
     const port = await freePort();
     url = `http://127.0.0.1:${port}`;
     admin = "bx_admin_sdk_ts";
-    procs.push(spawn(join(bin, "boxa-core"), [], { env: { ...process.env, BOXA_DATA_DIR: `${work}/data`, BOXA_ADMIN_KEY: admin, BOXA_BOOTSTRAP_TOKEN: "boot-ts", BOXA_ADDR: `127.0.0.1:${port}`, BOXA_PRICE_FEED: "off", BOXA_LOCAL_PRICE_MONTH: "73" }, stdio: ["ignore", "ignore", openSync(`${work}/core.log`, "w")] }));
+    procs.push(spawn(join(bin, "boxaz-core"), [], { env: { ...process.env, BOXAZ_DATA_DIR: `${work}/data`, BOXAZ_ADMIN_KEY: admin, BOXAZ_BOOTSTRAP_TOKEN: "boot-ts", BOXAZ_ADDR: `127.0.0.1:${port}`, BOXAZ_PRICE_FEED: "off", BOXAZ_LOCAL_PRICE_MONTH: "73" }, stdio: ["ignore", "ignore", openSync(`${work}/core.log`, "w")] }));
     for (let i = 0; i < 100; i++) { try { if ((await fetch(url + "/v1/health")).ok) break; } catch { /* starting */ } await wait(100); }
     procs.push(spawn(join(bin, "boxd"), [], { env: { ...process.env, BOXD_CORE_URL: url, BOXD_TOKEN: "boot-ts", BOXD_DRIVER: "local", BOXD_STATE_DIR: `${work}/boxd`, BOXD_IP: "127.0.0.1" }, stdio: ["ignore", "ignore", openSync(`${work}/boxd.log`, "w")] }));
-    const adm = new Boxa({ apiKey: admin, baseUrl: url });
+    const adm = new Boxaz({ apiKey: admin, baseUrl: url });
     for (let i = 0; i < 100; i++) {
       const hs = await adm.request<{ items: { connected: boolean }[] }>("GET", "/hosts");
       if (hs.items.some((h) => h.connected)) break;
       await wait(100);
     }
   }
-  const adm = new Boxa({ apiKey: admin, baseUrl: url });
+  const adm = new Boxaz({ apiKey: admin, baseUrl: url });
   const agent = await adm.createAgent({ name: `sdk-ts-${Date.now()}`, kind: "vercel-ai-sdk", budget_day_usd: 5 });
   agentId = agent.id;
   key = (await adm.createKey(agent.id, "sdk-ts")).key!;
@@ -52,11 +52,11 @@ after(() => {
 });
 
 test("env defaults and url building", () => {
-  process.env.BOXA_URL = "http://example.test:9/v1/";
-  process.env.BOXA_API_KEY = "bx_agent_x";
-  process.env.BOXA_LANG = "vi";
-  const bx = new Boxa();
-  delete process.env.BOXA_URL; delete process.env.BOXA_API_KEY; delete process.env.BOXA_LANG;
+  process.env.BOXAZ_URL = "http://example.test:9/v1/";
+  process.env.BOXAZ_API_KEY = "bx_agent_x";
+  process.env.BOXAZ_LANG = "vi";
+  const bx = new Boxaz();
+  delete process.env.BOXAZ_URL; delete process.env.BOXAZ_API_KEY; delete process.env.BOXAZ_LANG;
   assert.equal(bx.baseUrl, "http://example.test:9");
   assert.equal(bx.headers().Authorization, "Bearer bx_agent_x");
   assert.equal(bx.headers()["Accept-Language"], "vi");
@@ -64,27 +64,45 @@ test("env defaults and url building", () => {
   assert.equal(bx.url("/boxes", { all: true, status: undefined }), "http://example.test:9/v1/boxes?all=true");
 });
 
+test("legacy BOXA_* env + deprecated aliases", () => {
+  const saved = { ...process.env };
+  try {
+    delete process.env.BOXAZ_URL; delete process.env.BOXAZ_API_KEY;
+    process.env.BOXA_URL = "http://legacy.test:9";
+    process.env.BOXA_API_KEY = "bx_agent_old";
+    const bx = new Boxaz();
+    assert.equal(bx.baseUrl, "http://legacy.test:9");
+    assert.equal(bx.headers().Authorization, "Bearer bx_agent_old");
+    process.env.BOXAZ_URL = "http://new.test:9";
+    assert.equal(new Boxaz().baseUrl, "http://new.test:9");
+    assert.equal(Boxa, Boxaz);
+    assert.equal(BoxaError, BoxazError);
+  } finally {
+    process.env = saved;
+  }
+});
+
 test("discovery + tool formats", { skip }, async () => {
-  const bx = new Boxa({ apiKey: key, baseUrl: url });
+  const bx = new Boxaz({ apiKey: key, baseUrl: url });
   assert.equal((await bx.health()).ok, true);
   assert.equal((await bx.agentKinds()).items.length, 22);
   const oa = await asOpenAITools(bx);
-  assert.equal(oa.length, 21);
+  assert.equal(oa.length, 22);
   assert.ok(oa.some((t) => t.function.name === "box_exec_batch"));
   assert.equal((await asAnthropicTools(bx))[0].input_schema.type, "object");
-  assert.equal((await asGeminiTools(bx))[0].functionDeclarations.length, 21);
-  assert.ok((await bx.llmsTxt()).startsWith("# Boxa"));
+  assert.equal((await asGeminiTools(bx))[0].functionDeclarations.length, 22);
+  assert.ok((await bx.llmsTxt()).startsWith("# Boxaz"));
   assert.equal((await bx.openapi()).openapi, "3.1.0");
-  const sn = await new Boxa({ apiKey: admin, baseUrl: url }).snippet(agentId, undefined, "zh");
+  const sn = await new Boxaz({ apiKey: admin, baseUrl: url }).snippet(agentId, undefined, "zh");
   assert.equal(sn.kind, "vercel-ai-sdk");
   assert.equal(sn.language, "typescript");
   assert.equal(sn.locale, "zh");
 });
 
 test("localized errors", { skip }, async () => {
-  const bx = new Boxa({ apiKey: key, baseUrl: url, lang: "ja" });
+  const bx = new Boxaz({ apiKey: key, baseUrl: url, lang: "ja" });
   await assert.rejects(bx.getBox("box_nope"), (e: unknown) => {
-    assert.ok(e instanceof BoxaError);
+    assert.ok(e instanceof BoxazError);
     assert.equal(e.code, "NOT_FOUND");
     assert.equal(e.status, 404);
     assert.match(e.apiMessage, /見つかりません/);
@@ -95,7 +113,7 @@ test("localized errors", { skip }, async () => {
 });
 
 test("box lifecycle: quote, create, exec, batch, run, restore, fork, tools", { skip }, async () => {
-  const bx = new Boxa({ apiKey: key, baseUrl: url });
+  const bx = new Boxaz({ apiKey: key, baseUrl: url });
   const q = await bx.quote({ template: "node", lifecycle: "task", ttl_seconds: 3600, spec: { ram_mb: 256 } });
   assert.equal(q.available, true);
   assert.equal(q.expected_hours, 1);
@@ -139,7 +157,7 @@ test("box lifecycle: quote, create, exec, batch, run, restore, fork, tools", { s
 });
 
 test("v1.3 recommend / ensure / clone / session exec", { skip }, async () => {
-  const bx = new Boxa({ apiKey: key, baseUrl: url });
+  const bx = new Boxaz({ apiKey: key, baseUrl: url });
   const pr = await bx.profiles();
   assert.equal(pr.items.length, 7);
   assert.equal(pr.kinds.length, 22);
@@ -162,15 +180,15 @@ test("v1.3 recommend / ensure / clone / session exec", { skip }, async () => {
 });
 
 test("v1.4 sandbox providers / adapter lint / recommend untrusted+fork", { skip }, async () => {
-  const bx = new Boxa({ apiKey: key, baseUrl: url });
+  const bx = new Boxaz({ apiKey: key, baseUrl: url });
   const sp = await bx.sandboxProviders();
   const ids = new Map(sp.items.map((p) => [p.id, p]));
   for (const id of ["e2b", "novita", "daytona", "prized", "boxdsh", "runloop", "blaxel", "vercel", "boat", "agent37", "upstash-box"]) assert.ok(ids.has(id), id);
   assert.equal(ids.get("prized")?.verification, "live-verified");
   assert.equal(ids.get("upstash-box")?.mode, "shim");
   assert.ok(sp.items.every((p) => p.docs && p.initials && p.from_usd_h > 0 && typeof p.capabilities.fork === "boolean"));
-  await assert.rejects(bx.lintAdapter("id: x"), (e: unknown) => e instanceof BoxaError && ["UNAUTHORIZED", "POLICY_DENIED"].includes(e.code));
-  const adm = new Boxa({ apiKey: admin, baseUrl: url });
+  await assert.rejects(bx.lintAdapter("id: x"), (e: unknown) => e instanceof BoxazError && ["UNAUTHORIZED", "POLICY_DENIED"].includes(e.code));
+  const adm = new Boxaz({ apiKey: admin, baseUrl: url });
   const bad = await adm.lintAdapter("id: x\nname: X\n");
   assert.equal(bad.ok, false);
   assert.match(bad.error ?? "", /missing/);

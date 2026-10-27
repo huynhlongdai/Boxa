@@ -1,8 +1,9 @@
-// boxd: Boxa host agent. Dials OUT to core over WebSocket and runs boxes via
+// boxd: Boxaz host agent. Dials OUT to core over WebSocket and runs boxes via
 // the incus driver (production) or the local driver (dev/tests).
 package main
 
 import (
+	"boxaz/core/internal/envcompat"
 	"context"
 	"fmt"
 	"log"
@@ -14,8 +15,8 @@ import (
 	"syscall"
 	"time"
 
-	"boxa/core/internal/boxd"
-	"boxa/core/internal/manager"
+	"boxaz/core/internal/boxd"
+	"boxaz/core/internal/manager"
 )
 
 func env(k, def string) string {
@@ -41,6 +42,9 @@ func coreWS(u string) string {
 }
 
 func main() {
+	if n := envcompat.Note(envcompat.Apply()); n != "" {
+		log.Printf("boxd: warning: %s", n)
+	}
 	if len(os.Args) > 1 && (os.Args[1] == "version" || os.Args[1] == "--version") {
 		fmt.Println("boxd", manager.Version)
 		return
@@ -83,7 +87,7 @@ func main() {
 	var drv boxd.Driver
 	switch driverName {
 	case "incus":
-		d := boxd.NewIncusDriver(env("BOXD_MEMORY_ROOT", "/var/lib/boxa/memory"), os.Getenv("BOXD_SNAPSHOT_EXPORT_DIR"))
+		d := boxd.NewIncusDriver(env("BOXD_MEMORY_ROOT", memoryRootDefault()), os.Getenv("BOXD_SNAPSHOT_EXPORT_DIR"))
 		d.EgressMode = env("BOXD_EGRESS_MODE", "acl") // acl (Incus network ACL) | nft (nftables)
 		drv = d
 	case "local", "sandbox":
@@ -118,4 +122,16 @@ func main() {
 	defer cancel()
 	log.Printf("driver=%s core=%s state=%s", drv.Name(), coreWS(env("BOXD_CORE_URL", "http://localhost:8080")), stateDir)
 	a.Run(ctx)
+}
+
+// memoryRootDefault is /var/lib/boxd/memory, or the pre-rename
+// /var/lib/boxa/memory when only that one exists on this host.
+func memoryRootDefault() string {
+	const cur, legacy = "/var/lib/boxd/memory", "/var/lib/boxa/memory"
+	if _, err := os.Stat(cur); err != nil {
+		if _, err := os.Stat(legacy); err == nil {
+			return legacy
+		}
+	}
+	return cur
 }

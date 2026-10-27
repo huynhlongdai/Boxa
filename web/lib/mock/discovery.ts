@@ -102,7 +102,7 @@ export function openapi(root: string) {
   pathsObj["/tools"] = { get: { operationId: "tool_schemas", summary: "Tool schemas", security: [], parameters: [{ name: "format", in: "query", schema: { type: "string", enum: ["openai", "anthropic", "gemini", "mcp"] } }], responses: { "200": { description: "OK" } } } };
   return {
     openapi: "3.1.0",
-    info: { title: "Boxa API", version: "1.1.0", description: "Personal cloud boxes for AI agents. Errors carry a stable `code`, a localized `message`/`hint`, and optional `retry_after_s` / `docs_url`." },
+    info: { title: "Boxaz API", version: "1.1.0", description: "Personal cloud boxes for AI agents. Errors carry a stable `code`, a localized `message`/`hint`, and optional `retry_after_s` / `docs_url`." },
     servers: [{ url: `${root}/v1` }],
     components: { securitySchemes: { bearer: { type: "http", scheme: "bearer" } }, schemas: { Error: ERROR_SCHEMA } },
     paths: pathsObj,
@@ -111,13 +111,13 @@ export function openapi(root: string) {
 
 export function llmsTxt(root: string, full = false) {
   const lines = [
-    "# Boxa",
+    "# Boxaz",
     "",
     "> Personal cloud boxes for AI agents: create a box, run commands, read/write files, snapshot, sleep, pay per use under a budget.",
     "",
     "## Connect",
-    `- MCP (streamable HTTP): ${root}/mcp  — header Authorization: Bearer $BOXA_API_KEY`,
-    "- MCP (stdio): `box mcp` with BOXA_URL and BOXA_API_KEY in the environment",
+    `- MCP (streamable HTTP): ${root}/mcp  — header Authorization: Bearer $BOXAZ_API_KEY`,
+    "- MCP (stdio): `box mcp` with BOXAZ_URL and BOXAZ_API_KEY in the environment",
     `- REST: ${root}/v1  — OpenAPI: ${root}/v1/openapi.json`,
     `- Tool schemas: ${root}/v1/tools?format=openai|anthropic|gemini|mcp`,
     `- MCP server card: ${root}/.well-known/mcp.json · A2A agent card: ${root}/.well-known/agent.json`,
@@ -141,13 +141,13 @@ export function llmsTxt(root: string, full = false) {
 
 export function mcpCard(root: string) {
   return {
-    name: "boxa",
-    title: "Boxa",
+    name: "boxaz",
+    title: "Boxaz",
     version: "1.1.0",
     description: "Cloud boxes for AI agents (create, exec, files, snapshots, budgets).",
     transports: [
-      { type: "streamable-http", url: `${root}/mcp`, auth: { type: "bearer", env: "BOXA_API_KEY" } },
-      { type: "stdio", command: "box", args: ["mcp"], env: ["BOXA_URL", "BOXA_API_KEY"] },
+      { type: "streamable-http", url: `${root}/mcp`, auth: { type: "bearer", env: "BOXAZ_API_KEY" } },
+      { type: "stdio", command: "box", args: ["mcp"], env: ["BOXAZ_URL", "BOXAZ_API_KEY"] },
     ],
     tools: TOOLS.map((t) => t.name),
     documentation: `${root}/llms.txt`,
@@ -157,8 +157,8 @@ export function mcpCard(root: string) {
 export function a2aCard(root: string) {
   return {
     protocolVersion: "0.3.0",
-    name: "Boxa",
-    description: "Boxa rents cheap, disposable Linux sandboxes (boxes) to AI agents on low-cost VPS providers.",
+    name: "Boxaz",
+    description: "Boxaz rents cheap, disposable Linux sandboxes (boxes) to AI agents on low-cost VPS providers.",
     url: `${root}/a2a`,
     preferredTransport: "JSONRPC",
     additionalInterfaces: [
@@ -169,13 +169,13 @@ export function a2aCard(root: string) {
     defaultInputModes: ["application/json", "text/plain"],
     defaultOutputModes: ["application/json", "text/plain"],
     capabilities: { streaming: true, pushNotifications: false, stateTransitionHistory: false },
-    securitySchemes: { bearer: { type: "http", scheme: "bearer", description: "Boxa API key" } },
+    securitySchemes: { bearer: { type: "http", scheme: "bearer", description: "Boxaz API key" } },
     security: [{ bearer: [] }],
     skills: [
       { id: "exec", name: "Run a command in a box", description: "Text part = command, metadata.box_id = box. Runs as an async job; the task id is the job id.", tags: ["exec", "sandbox"] },
       ...TOOLS.map((t) => ({ id: t.name, name: t.name, description: `${t.description} A2A: data part {"tool":"${t.name}","arguments":{…}}.`, tags: ["sandbox", t.name.replace("box_", "")] })),
     ],
-    "x-boxa": { a2a_methods: ["message/send", "message/stream", "tasks/get", "tasks/cancel", "tasks/resubscribe", "tasks/send", "tasks/sendSubscribe"] },
+    "x-boxaz": { a2a_methods: ["message/send", "message/stream", "tasks/get", "tasks/cancel", "tasks/resubscribe", "tasks/send", "tasks/sendSubscribe"] },
   };
 }
 

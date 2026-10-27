@@ -17,9 +17,9 @@ import (
 	"testing"
 	"time"
 
-	"boxa/core/internal/manager"
-	"boxa/core/internal/model"
-	"boxa/core/internal/sandbox"
+	"boxaz/core/internal/manager"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/sandbox"
 )
 
 const fakeWD = "/fake-sandbox-home"

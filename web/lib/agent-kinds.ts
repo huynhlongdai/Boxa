@@ -7,7 +7,7 @@ export const TRANSPORTS: Transport[] = ["mcp-http", "mcp-stdio", "rest", "sdk-py
 const k = (id: string, name: string, category: AgentKindCategory, transports: Transport[], doc_url: string | null = null): AgentKindInfo => ({ id, name, category, transports, doc_url });
 
 export const FALLBACK_KINDS: AgentKindInfo[] = [
-  // Đồng bộ với boxa/core internal/agentkit/kinds.go (thứ tự hiển thị)
+  // Đồng bộ với boxaz/core internal/agentkit/kinds.go (thứ tự hiển thị)
   k("claude-code", "Claude Code", "coding", ["mcp-http", "mcp-stdio", "cli"], "https://docs.anthropic.com/en/docs/claude-code/mcp"),
   k("codex-cli", "OpenAI Codex CLI", "coding", ["mcp-stdio", "mcp-http", "cli"], "https://github.com/openai/codex/blob/main/docs/config.md"),
   k("gemini-cli", "Gemini CLI", "coding", ["mcp-http", "mcp-stdio", "cli"], "https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md"),

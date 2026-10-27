@@ -10,10 +10,10 @@ import (
 	"strconv"
 	"time"
 
-	"boxa/core/internal/events"
-	"boxa/core/internal/model"
-	"boxa/core/internal/secret"
-	"boxa/core/internal/store"
+	"boxaz/core/internal/events"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/secret"
+	"boxaz/core/internal/store"
 )
 
 // ---- ledger (spec M12) ----
@@ -522,7 +522,7 @@ func (m *Manager) Suggestions(ctx context.Context, p *Principal) ([]Suggestion, 
 		agents, _ := m.Store.ListAgents(ctx)
 		for _, a := range agents {
 			if a.BudgetDayUSD == 0 && a.BudgetMonthUSD == 0 && a.Name != "operator" {
-				out = append(out, Suggestion{Kind: "set_budget", AgentID: a.ID, Title: "Đặt ngân sách cho " + a.Name, Detail: "Agent chưa có giới hạn ngày/tháng; đặt budget để Boxa tự dừng khi chạy quá tay."})
+				out = append(out, Suggestion{Kind: "set_budget", AgentID: a.ID, Title: "Đặt ngân sách cho " + a.Name, Detail: "Agent chưa có giới hạn ngày/tháng; đặt budget để Boxaz tự dừng khi chạy quá tay."})
 			}
 		}
 	}

@@ -7,7 +7,7 @@
 // of boxes.
 //
 // T2: the sandbox can keep a background process alive, so core starts
-// `boxd --dial` inside it and the sandbox joins Boxa like any host.
+// `boxd --dial` inside it and the sandbox joins Boxaz like any host.
 // T3: the provider only offers request/response exec + files, so a
 // gateway-side Shim answers boxd's RPCs by translating them to the API.
 package sandbox
@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"boxa/core/internal/model"
+	"boxaz/core/internal/model"
 )
 
 // Normalised sandbox states.
@@ -263,7 +263,7 @@ type HTTPError struct {
 
 func (e *HTTPError) Error() string { return fmt.Sprintf("HTTP %d: %s", e.Status, e.Body) }
 
-// wrapErr turns provider errors into Boxa API errors (classified by provhealth).
+// wrapErr turns provider errors into Boxaz API errors (classified by provhealth).
 func wrapErr(name string, err error) error {
 	if err == nil {
 		return nil
@@ -276,7 +276,7 @@ func wrapErr(name string, err error) error {
 		case he.Status == 401 || he.Status == 403:
 			return model.EH(model.ErrUnauthorized, "Create an API key in the "+name+" console and paste it again.", "%s rejected the key (%d): %s", name, he.Status, trim(he.Body, 200))
 		case he.Status == 429:
-			return model.EH(model.ErrProviderFailed, "The provider is rate limiting or a quota is full; Boxa backs off and fails over.", "%s rate limited (429): %s", name, trim(he.Body, 200))
+			return model.EH(model.ErrProviderFailed, "The provider is rate limiting or a quota is full; Boxaz backs off and fails over.", "%s rate limited (429): %s", name, trim(he.Body, 200))
 		case he.Status == 402 || strings.Contains(he.Body, "balance") || strings.Contains(he.Body, "quota"):
 			return model.EH(model.ErrProviderFailed, "Top up or raise the quota in the provider console.", "%s quota/balance (%d): %s", name, he.Status, trim(he.Body, 200))
 		}
@@ -387,7 +387,7 @@ func WaitRunning(ctx context.Context, d Driver, c Cred, id string, timeout time.
 			case StateRunning:
 				return sb, nil
 			case StateError, StateDeleted:
-				return sb, model.EH(model.ErrProviderFailed, "The provider reported a failed sandbox; Boxa fails over to the next provider.", "%s sandbox %s is %s", d.Info().Name, id, sb.State)
+				return sb, model.EH(model.ErrProviderFailed, "The provider reported a failed sandbox; Boxaz fails over to the next provider.", "%s sandbox %s is %s", d.Info().Name, id, sb.State)
 			}
 		}
 		if time.Now().After(deadline) {
@@ -409,6 +409,10 @@ func WaitRunning(ctx context.Context, d Driver, c Cred, id string, timeout time.
 
 // ---- bootstrap (T2) ----
 
+// The in-sandbox dirs (.boxd here, .box for exec session state) are neutral on
+// purpose: bootstrap and exec commands travel through the provider API, and
+// the product name never goes to a provider.
+
 // BootstrapParams fill the in-sandbox boxd start command.
 type BootstrapParams struct {
 	CoreURL        string // ws(s)://core/v1/hosts/connect
@@ -426,9 +430,9 @@ func shq(s string) string { return "'" + strings.ReplaceAll(s, "'", `'"'"'`) + "
 // downloads boxd and starts `boxd --dial <core>` detached (setsid + nohup),
 // so the sandbox dials out to core and registers as a single-box host.
 func BootstrapScript(p BootstrapParams) string {
-	dir := `"$HOME/.boxa"`
+	dir := `"$HOME/.boxd"`
 	if p.WorkDir != "" {
-		dir = shq(strings.TrimRight(p.WorkDir, "/") + "/.boxa")
+		dir = shq(strings.TrimRight(p.WorkDir, "/") + "/.boxd")
 	}
 	var b strings.Builder
 	b.WriteString("set -e; D=" + dir + "; mkdir -p \"$D/state\"; ")

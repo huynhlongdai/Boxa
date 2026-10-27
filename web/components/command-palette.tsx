@@ -15,8 +15,8 @@ import { useFmt } from "@/lib/format";
 import { strip } from "@/lib/text";
 import type { Box, List, Overview } from "@/lib/types";
 import { NAV } from "./nav";
-import { useEmergency } from "./boxa/emergency";
-import { BoxStatusChip } from "./boxa/status";
+import { useEmergency } from "./boxaz/emergency";
+import { BoxStatusChip } from "./boxaz/status";
 import { toastError } from "@/lib/error-toast";
 
 const Ctx = React.createContext<{ open: () => void }>({ open: () => {} });

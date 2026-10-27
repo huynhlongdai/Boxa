@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"boxa/core/internal/model"
-	"boxa/core/internal/provider"
-	"boxa/core/internal/sandbox"
-	"boxa/core/internal/store"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/provider"
+	"boxaz/core/internal/sandbox"
+	"boxaz/core/internal/store"
 )
 
 // Scheduler v1 (spec M4 / v0.3 §5).

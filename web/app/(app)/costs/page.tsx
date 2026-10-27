@@ -14,11 +14,11 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { DonutChart, HBarChart, StackedCostChart } from "@/components/boxa/charts";
-import { Empty, ErrorBox, LoadingRows, PageHeader } from "@/components/boxa/page";
-import { MoneyBudget, BudgetBar } from "@/components/boxa/budget";
-import { Mono } from "@/components/boxa/status";
-import { RightsizeList } from "@/components/boxa/speed";
+import { DonutChart, HBarChart, StackedCostChart } from "@/components/boxaz/charts";
+import { Empty, ErrorBox, LoadingRows, PageHeader } from "@/components/boxaz/page";
+import { MoneyBudget, BudgetBar } from "@/components/boxaz/budget";
+import { Mono } from "@/components/boxaz/status";
+import { RightsizeList } from "@/components/boxaz/speed";
 
 
 export default function CostsPage() {

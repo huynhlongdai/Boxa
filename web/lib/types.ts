@@ -169,7 +169,7 @@ export interface Job {
   finished_at: string | null;
 }
 
-export interface BoxaEvent {
+export interface BoxazEvent {
   id: string;
   ts: string;
   actor: string;
@@ -274,7 +274,7 @@ export interface CostsResponse extends List<LedgerEntry> {
   };
 }
 
-// GET /costs/suggestions → { items: Suggestion[] } (shape theo boxa/core manager.Suggestion)
+// GET /costs/suggestions → { items: Suggestion[] } (shape theo boxaz/core manager.Suggestion)
 export interface Suggestion {
   kind: string;
   title: string;
@@ -420,7 +420,7 @@ export interface QuoteBody {
 export type ToolFormat = "openai" | "anthropic" | "gemini" | "mcp";
 
 // ---- Các shape admin chưa được contract mô tả chi tiết (giả định, cần core xác nhận) ----
-// (shape theo boxa/core; contract v1 chỉ mô tả sơ lược)
+// (shape theo boxaz/core; contract v1 chỉ mô tả sơ lược)
 export interface AdminSystem {
   version: string;
   uptime_s: number;
@@ -545,7 +545,7 @@ export interface StorageTestResult {
 }
 
 // ---------------- v1.3: provider manager, recommend, speed, mesh ----------------
-// Shape bám theo boxa/core/internal (manager/provmgr.go, recommend.go, agent13.go, warmpool.go, speed.go, mesh.go).
+// Shape bám theo boxaz/core/internal (manager/provmgr.go, recommend.go, agent13.go, warmpool.go, speed.go, mesh.go).
 
 /** Requirements: "box cần gì" (POST /recommend, POST /boxes {requirements}). Bỏ trống = dùng mặc định của profile. */
 export interface Requirements {
@@ -955,7 +955,7 @@ export interface MeshKeyResult {
 }
 
 // ---------------- v1.4: Sandbox API providers (T2/T3) ----------------
-// Shape bám theo boxa/core/internal/sandbox/sandbox.go (Info) + manager/sandbox14.go (SandboxProviderView) + api/v14.go (lint).
+// Shape bám theo boxaz/core/internal/sandbox/sandbox.go (Info) + manager/sandbox14.go (SandboxProviderView) + api/v14.go (lint).
 
 export type SandboxMode = "auto" | "dial" | "shim";
 export type Verification = "live-verified" | "docs-verified" | "sdk-source";

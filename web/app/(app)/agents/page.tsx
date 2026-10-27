@@ -12,9 +12,9 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { BudgetBar, MoneyBudget } from "@/components/boxa/budget";
-import { AgentWizard } from "@/components/boxa/agent-wizard";
-import { Empty, ErrorBox, LoadingRows, PageHeader } from "@/components/boxa/page";
+import { BudgetBar, MoneyBudget } from "@/components/boxaz/budget";
+import { AgentWizard } from "@/components/boxaz/agent-wizard";
+import { Empty, ErrorBox, LoadingRows, PageHeader } from "@/components/boxaz/page";
 
 export default function AgentsPage() {
   const { data, error, isLoading, mutate } = useApi<List<Agent>>(paths.agents);

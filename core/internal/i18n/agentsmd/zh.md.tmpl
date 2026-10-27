@@ -1,6 +1,6 @@
-# AGENTS.md — Boxa 盒子 `{{.Slug}}`
+# AGENTS.md — Boxaz 盒子 `{{.Slug}}`
 
-你正在一个 **Boxa 盒子** 中工作：这是为 AI 智能体租用的一次性 Linux 沙箱。
+你正在一个 **Boxaz 盒子** 中工作：这是为 AI 智能体租用的一次性 Linux 沙箱。
 
 ## 身份
 - 盒子：`{{.BoxID}}`（slug `{{.Slug}}`），模板 `{{.Template}}`，生命周期 `{{.Lifecycle}}`
@@ -19,12 +19,12 @@
 - `/memory` — 该智能体所有盒子共享的长期笔记。把以后运行需要知道的内容写在这里。
 - 每次 exec 时，密钥会以环境变量注入：{{.Secrets}}
 
-## 工具（MCP 服务器 `boxa`）
+## 工具（MCP 服务器 `boxaz`）
 {{range .Tools}}- `{{.}}`
 {{end}}
-## 调用 Boxa
-- MCP：`{{.Base}}/mcp`（Streamable HTTP）或 `box mcp`（stdio），请求头 `Authorization: Bearer $BOXA_API_KEY`。
-- REST：`{{.Base}}/v1` — 例如 `curl -X POST {{.Base}}/v1/boxes/{{.BoxID}}/exec -H "Authorization: Bearer $BOXA_API_KEY" -d '{"command":"ls"}'`。
+## 调用 Boxaz
+- MCP：`{{.Base}}/mcp`（Streamable HTTP）或 `box mcp`（stdio），请求头 `Authorization: Bearer $BOXAZ_API_KEY`。
+- REST：`{{.Base}}/v1` — 例如 `curl -X POST {{.Base}}/v1/boxes/{{.BoxID}}/exec -H "Authorization: Bearer $BOXAZ_API_KEY" -d '{"command":"ls"}'`。
 - 发现：`{{.Base}}/llms.txt`、`{{.Base}}/v1/openapi.json`、`{{.Base}}/v1/tools?format=openai`。
 - 发送 `Accept-Language: zh|en|vi|ja` 可获得对应语言的错误信息。
 

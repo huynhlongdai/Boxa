@@ -91,7 +91,7 @@
       "viewer": "閲覧者"
     },
     "lastLogin": "{time} にログイン",
-    "usersNote": "Boxa v1 は運用者 1 人向けです。ダッシュボードへのアクセス = 管理者キー（API キータブで管理）。"
+    "usersNote": "Boxaz v1 は運用者 1 人向けです。ダッシュボードへのアクセス = 管理者キー（API キータブで管理）。"
   },
   "agentDetail": {
     "back": "エージェント",
@@ -133,7 +133,7 @@
     "history": "box 履歴",
     "noBoxes": "このエージェントはまだ box を作成していません",
     "connect": "エージェントを接続",
-    "connectDesc": "トランスポート別の設定 — BOXA_API_KEY と一緒にエージェントへ貼り付けます。"
+    "connectDesc": "トランスポート別の設定 — BOXAZ_API_KEY と一緒にエージェントへ貼り付けます。"
   },
   "agents": {
     "title": "エージェント",
@@ -156,8 +156,8 @@
     "missingKeyHint": "管理者 API キー（bx_live_…）を貼り付けてください。",
     "invalidKey": "API キーが無効か、admin 権限がありません",
     "invalidKeyHint": "`box keys create --admin` で admin スコープのキーを作成してください。",
-    "coreUnreachable": "Boxa Core に接続できません",
-    "coreUnreachableHint": "BOXA_API（{url}）を確認するか、BOXA_MOCK=1 を設定してください。",
+    "coreUnreachable": "Boxaz Core に接続できません",
+    "coreUnreachableHint": "BOXAZ_API（{url}）を確認するか、BOXAZ_MOCK=1 を設定してください。",
     "tryNext": "次に試すこと："
   },
   "approvals": {
@@ -423,14 +423,14 @@
     "billingPool": "プール・月額",
     "billingBurst": "バースト・時間課金",
     "pickAgentFirst": "エージェントを選ぶと、そのポリシーで見積もります。",
-    "descNeed": "ボックスに必要なものを記述すると、Boxa が価格・速度・信頼性で候補を順位付けします。",
+    "descNeed": "ボックスに必要なものを記述すると、Boxaz が価格・速度・信頼性で候補を順位付けします。",
     "mode": "作成方法",
     "modeNeed": "要件から",
     "modeManual": "手動で指定"
   },
   "developers": {
     "title": "エージェント連携",
-    "desc": "エージェントが自力で Boxa に接続するためのすべて：機械可読ドキュメント、ツールスキーマ、サンプル、エラーコード表。",
+    "desc": "エージェントが自力で Boxaz に接続するためのすべて：機械可読ドキュメント、ツールスキーマ、サンプル、エラーコード表。",
     "baseUrl": "Core のベース URL",
     "noAuth": "キー不要",
     "needsKey": "キーが必要",
@@ -446,9 +446,9 @@
       "mcp": "MCP サーバーカード",
       "mcpDesc": "/.well-known/mcp.json：トランスポート（HTTP・stdio）、認証、ツール一覧。",
       "a2a": "A2A エージェントカード",
-      "a2aDesc": "/.well-known/agent.json: 他のエージェントが /a2a で Boxa にタスクを任せられます。",
+      "a2aDesc": "/.well-known/agent.json: 他のエージェントが /a2a で Boxaz にタスクを任せられます。",
       "mcpEndpoint": "MCP エンドポイント",
-      "mcpEndpointDesc": "Streamable HTTP、ヘッダー Authorization: Bearer $BOXA_API_KEY。"
+      "mcpEndpointDesc": "Streamable HTTP、ヘッダー Authorization: Bearer $BOXAZ_API_KEY。"
     },
     "preview": "プレビュー",
     "hidePreview": "閉じる",
@@ -463,9 +463,9 @@
     "quickstart": "クイックスタート（curl）",
     "quickstartDesc": "見積もり → 作成 → 実行 → ジョブ待ち → ログ確認 → 削除。BOX_ID・JOB_ID・LOG_ID は返された値に置き換えてください。",
     "sdk": "SDK と CLI",
-    "sdkDesc": "一度インストールし、BOXA_URL と BOXA_API_KEY で設定します。",
+    "sdkDesc": "一度インストールし、BOXAZ_URL と BOXAZ_API_KEY で設定します。",
     "sdkNote": "SDK のパッケージ名は暫定です。Core の公開時に確認してください。",
-    "cliFromSource": "box CLI（boxa/core のソースから）",
+    "cliFromSource": "box CLI（boxaz/core のソースから）",
     "errors": "エラーコード",
     "errorsDesc": "エージェントは <mono>code</mono>（不変）を読み、<mono>hint</mono> に従います。<mono>message</mono>/<mono>hint</mono> は Accept-Language で翻訳され、<mono>retry_after_s</mono> があれば従ってください。",
     "colCode": "コード",
@@ -488,7 +488,7 @@
       "NOT_FOUND": "その ID の box・ジョブ・ログなどはありません。",
       "NOT_FOUNDHint": "box_list（または対応する一覧）で正しい ID を取得。",
       "UNAUTHORIZED": "キーがないか、失効しています。",
-      "UNAUTHORIZEDHint": "BOXA_API_KEY を確認し、繰り返し再試行しないでください。",
+      "UNAUTHORIZEDHint": "BOXAZ_API_KEY を確認し、繰り返し再試行しないでください。",
       "INVALID": "パラメーターまたは box.yaml が不正です。",
       "INVALIDHint": "message が示す項目・行を直して再送します。",
       "RATE_LIMITED": "リクエストが多すぎます。",
@@ -497,7 +497,7 @@
       "INTERNALHint": "一度だけ再試行し、続く場合は停止して運用者に知らせます。",
       "NO_CAPACITYHint": "スペックを下げる、retry_after_s 待って再試行、または box_quote で代替案を確認。"
     },
-    "a2a": "A2A: Boxa にタスクを任せる",
+    "a2a": "A2A: Boxaz にタスクを任せる",
     "a2aDesc": "他のエージェントは <mono>/a2a</mono> に JSON-RPC を送ります。text part はコマンド（<mono>metadata.box_id</mono> 付き）、<mono>tool</mono> + <mono>arguments</mono> の data part で任意のツールを呼べます。コマンドの task id は job id です。",
     "a2aColMethod": "メソッド",
     "a2aColDoes": "内容",
@@ -580,7 +580,7 @@
     "chainPool": "既存プール",
     "tokenHint": {
       "contabo": "Contabo の API ページの client_id:client_secret:api_user:api_password（または 4 項目の JSON）を貼り付けてください。",
-      "netcup": "SCP のリフレッシュトークン（クライアント scp）を貼り付けてください。予備サーバーのニックネームを boxa-spare-1 にすると Boxa が引き取り再インストールします。",
+      "netcup": "SCP のリフレッシュトークン（クライアント scp）を貼り付けてください。予備サーバーのニックネームを boxaz-spare-1 にすると Boxaz が引き取り再インストールします。",
       "digitalocean": "読み書き権限のある個人アクセストークン。",
       "hetzner": "Hetzner Cloud プロジェクトの Read & Write API トークン。",
       "vultr": "manage_servers 権限のある API キー。"
@@ -638,12 +638,12 @@
   "locale": {
     "label": "言語",
     "dashboard": "表示言語",
-    "dashboardHint": "このブラウザの boxa_locale Cookie に保存されます。Core のエラーもこの言語で返されます。",
+    "dashboardHint": "このブラウザの boxaz_locale Cookie に保存されます。Core のエラーもこの言語で返されます。",
     "notify": "通知と API エラーの既定言語",
     "notifyHint": "Telegram、メール、Accept-Language を送らないエージェントに使われます。"
   },
   "login": {
-    "title": "Boxa にログイン",
+    "title": "Boxaz にログイン",
     "subtitle": "admin スコープの API キーを使用",
     "keyLabel": "管理者 API キー",
     "keyHint": "<mono>box keys create --admin</mono> で作成します。キーは httpOnly Cookie に保存され、JavaScript からは見えません。",
@@ -719,7 +719,7 @@
     "toOverview": "概要へ",
     "viewAgent": "エージェントを見る",
     "waiting": "エージェントの最初の呼び出しを待っています…",
-    "waitingDesc": "<mono>{name}</mono> に設定を貼り付け、<mono>box_list</mono> の実行か box の作成を依頼してください。Boxa が呼び出しを受け取ると画面が自動で進みます。"
+    "waitingDesc": "<mono>{name}</mono> に設定を貼り付け、<mono>box_list</mono> の実行か box の作成を依頼してください。Boxaz が呼び出しを受け取ると画面が自動で進みます。"
   },
   "overview": {
     "title": "概要",
@@ -848,7 +848,7 @@
     },
     "confidence": {
       "verified": "検証済み",
-      "verifiedHint": "Boxa がこのプランを自己テスト済み",
+      "verifiedHint": "Boxaz がこのプランを自己テスト済み",
       "unverified": "未検証",
       "unverifiedHint": "battleships から取得、未テスト",
       "stock_limited": "在庫限定",
@@ -869,13 +869,13 @@
   },
   "terminal": {
     "promptUser": "you",
-    "mockHeader": "# Boxa ターミナル（MOCK）· {id} · {where}",
+    "mockHeader": "# Boxaz ターミナル（MOCK）· {id} · {where}",
     "mockWatching": "# エージェント {agent} を表示中。「操作を引き継ぐ」を押すとコマンドを入力できます。",
     "mockHelp": "モックコマンド：ls [path]、cat [file]、pwd、whoami、clear。その他は /exec で実行",
     "whoami": "you（操作中）",
     "connected": "# PTY {id} に接続しました",
     "wsFailed": "# Core への WebSocket を開けませんでした。",
-    "wsFailedHint": "# ブラウザは WebSocket で Authorization ヘッダーを送れません。Core が httpOnly Cookie「boxa_key」（同一サイト）を受け付けるか、NEXT_PUBLIC_BOXA_WS を Cookie 認証の同一ドメインのエンドポイントに向けてください。",
+    "wsFailedHint": "# ブラウザは WebSocket で Authorization ヘッダーを送れません。Core が httpOnly Cookie「boxaz_key」（同一サイト）を受け付けるか、NEXT_PUBLIC_BOXAZ_WS を Cookie 認証の同一ドメインのエンドポイントに向けてください。",
     "lost": "# ターミナルの接続が切れました",
     "tookOver": "# 操作を引き継ぎました",
     "released": "# エージェントに操作を戻しました",
@@ -1040,13 +1040,13 @@
       "open": "ブレーカー開"
     },
     "breakerHelp": {
-      "closed": "通常どおり：Boxa はこのプロバイダーを普段どおり呼び出します",
+      "closed": "通常どおり：Boxaz はこのプロバイダーを普段どおり呼び出します",
       "half_open": "回復したか確かめるために 1 回だけ試しています",
-      "open": "連続失敗のため一時的にスキップ中。Boxa は次のプロバイダーへ自動で切り替えます"
+      "open": "連続失敗のため一時的にスキップ中。Boxaz は次のプロバイダーへ自動で切り替えます"
     },
     "wizard": {
       "title": "プロバイダーを接続",
-      "desc": "プロバイダーを選んでトークンを貼り付けると、Boxa が確認し、優先度とコスト上限を設定できます。",
+      "desc": "プロバイダーを選んでトークンを貼り付けると、Boxaz が確認し、優先度とコスト上限を設定できます。",
       "steps": "手順",
       "step": {
         "choose": "選択",
@@ -1087,7 +1087,7 @@
     },
     "prefs": {
       "title": "{name} の設定",
-      "desc": "Boxa が自動でサーバーを借りるときの優先度とコスト上限です。",
+      "desc": "Boxaz が自動でサーバーを借りるときの優先度とコスト上限です。",
       "enabled": "利用を許可",
       "enabledHint": "オフにすると、ボックスの配置でこのプロバイダーを使いません。",
       "priority": "優先度",
@@ -1104,7 +1104,7 @@
     },
     "health": {
       "title": "プロバイダーのヘルス",
-      "desc": "Core は各プロバイダーの API を定期的に確認し、レイテンシ・エラー・サーバー構築時間を記録します。失敗が続くとブレーカーが開き、Boxa は次のプロバイダーへ切り替えます。",
+      "desc": "Core は各プロバイダーの API を定期的に確認し、レイテンシ・エラー・サーバー構築時間を記録します。失敗が続くとブレーカーが開き、Boxaz は次のプロバイダーへ切り替えます。",
       "samples": "{n, plural, other {# サンプル}}",
       "hosts": "{n, plural, other {# ホスト}}",
       "priority": "優先度 {n}",
@@ -1172,7 +1172,7 @@
     "title": "WireGuard メッシュ（headscale）",
     "desc": "ホストとサービス用ボックスがプライベートな WireGuard ネットワークでつながります。ACL はエージェントとボックスのポートから自動生成されます。",
     "disabled": "メッシュはオフ",
-    "disabledHint": "Core に BOXA_MESH_URL と BOXA_MESH_API_KEY を設定するとオンになります。",
+    "disabledHint": "Core に BOXAZ_MESH_URL と BOXAZ_MESH_API_KEY を設定するとオンになります。",
     "server": "サーバー",
     "online": "オンラインのノード",
     "hostsJoined": "参加済みホスト",
@@ -1187,7 +1187,7 @@
     "keyTitle": "事前認証キーを作成",
     "keyDesc": "ホストやボックスを正しいタグでメッシュに参加させる使い切りのキーです。",
     "target": "対象",
-    "newHost": "新しいホスト（tag:boxa-host）",
+    "newHost": "新しいホスト（tag:boxaz-host）",
     "hosts": "ホスト",
     "boxes": "ボックス",
     "ttl": "有効期間（分）",
@@ -1259,7 +1259,7 @@
   },
   "rec": {
     "title": "要件からボックスを提案",
-    "desc": "作業内容を記述すると、Boxa がウォームプール・既存プール・VM・新規サーバーを比較し、説明付きの 6 要素で順位付けします。",
+    "desc": "作業内容を記述すると、Boxaz がウォームプール・既存プール・VM・新規サーバーを比較し、説明付きの 6 要素で順位付けします。",
     "profile": "ワークロード",
     "tip": "ヒント：",
     "agentKind": "エージェントの種類",
@@ -1277,7 +1277,7 @@
     "maxLatency": "最大レイテンシ（ms）",
     "arch": "アーキテクチャ",
     "region": "リージョン",
-    "regionHint": "空欄なら Boxa が選びます",
+    "regionHint": "空欄なら Boxaz が選びます",
     "location": "エージェントの場所",
     "locationHint": "国コード（VN）、リージョン、または lat,lon",
     "publicUrl": "公開 URL が必要",
@@ -1442,7 +1442,7 @@
       "noDial": "このプロバイダーはバックグラウンド処理を保持できないため shim (T3) のみ。"
     },
     "modeHelp": {
-      "auto": "バックグラウンド処理が保持でき BOXA_PUBLIC_URL があれば T2、なければ T3",
+      "auto": "バックグラウンド処理が保持でき BOXAZ_PUBLIC_URL があれば T2、なければ T3",
       "dial": "boxd がサンドボックス内で Core に接続：ターミナル・スナップショット・egress 対応",
       "shim": "Core が boxd の代わりに exec API を呼ぶ：公開 URL 不要、機能は限定的"
     },
@@ -1495,7 +1495,7 @@
       "sample": "サンプルを貼る",
       "howTitle": "アダプターの追加手順",
       "how1": "サンプルに沿って YAML を書く（create/get/delete/exec ルート、認証、機能、価格）。",
-      "how2": "ここで検査し、ファイルを <mono>BOXA_SANDBOX_ADAPTERS_DIR</mono> に保存。",
+      "how2": "ここで検査し、ファイルを <mono>BOXAZ_SANDBOX_ADAPTERS_DIR</mono> に保存。",
       "how3": "Core を再起動すると、新しいプロバイダーがサンドボックス API 一覧に表示される。",
       "required": "必須キー：",
       "invalid": "アダプターが無効",

@@ -14,12 +14,12 @@ import (
 	"sync"
 	"time"
 
-	"boxa/core/internal/agentkit"
-	"boxa/core/internal/boxyaml"
-	"boxa/core/internal/manager"
-	"boxa/core/internal/model"
-	"boxa/core/internal/proto"
-	"boxa/core/internal/provider"
+	"boxaz/core/internal/agentkit"
+	"boxaz/core/internal/boxyaml"
+	"boxaz/core/internal/manager"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/proto"
+	"boxaz/core/internal/provider"
 )
 
 type param struct {
@@ -233,7 +233,7 @@ var ops = []op{
 	// v1.3: smart providers, need-based selection, speed, agent support, mesh
 	{Method: "GET", Path: "/v1/profiles", Summary: "Workload profiles + per-agent-kind defaults", Tag: "discovery", NoAuth: true},
 	{Method: "POST", Path: "/v1/recommend", Summary: "Rank placement options for requirements (price, ETA, score, reasons)", Tag: "selection", Req: manager.RecommendInput{}, Resp: manager.RecommendResult{},
-		Desc: "Options: warm (pre-started container), pool (container on a pool host), vm (Incus VM), burst (new provider server), sandbox (v1.4 T2/T3 sandbox API, per-second; requires approval until the provider is connected and BOXA_AUTO_SANDBOX or BOXA_AUTO_BURST is on). Nothing is created."},
+		Desc: "Options: warm (pre-started container), pool (container on a pool host), vm (Incus VM), burst (new provider server), sandbox (v1.4 T2/T3 sandbox API, per-second; requires approval until the provider is connected and BOXAZ_AUTO_SANDBOX or BOXAZ_AUTO_BURST is on). Nothing is created."},
 	{Method: "POST", Path: "/v1/boxes/ensure", Summary: "Get-or-create a box by name (idempotent)", Tag: "boxes", Req: manager.EnsureInput{}, Resp: manager.EnsureResult{}, Status: 200,
 		Desc: "200 when an existing box is returned (action reused|woken, with resume), 201 when created."},
 	{Method: "GET", Path: "/v1/boxes/{id}/resume", Summary: "Wake if needed and summarise recent state (execs, jobs, files, ports)", Tag: "boxes", Resp: manager.ResumeInfo{}, Params: []param{idP}},
@@ -296,9 +296,9 @@ func schemaName(t reflect.Type) string {
 		return "CreateBoxRequest"
 	case t == reflect.TypeOf(model.APIError{}):
 		return "Error"
-	case t.PkgPath() == "boxa/core/internal/agentkit":
+	case t.PkgPath() == "boxaz/core/internal/agentkit":
 		return "Agent" + n
-	case t.PkgPath() == "boxa/core/internal/proto":
+	case t.PkgPath() == "boxaz/core/internal/proto":
 		return n
 	case n == "":
 		return "Object"
@@ -471,14 +471,14 @@ func buildOpenAPI() map[string]any {
 	return map[string]any{
 		"openapi":           "3.1.0",
 		"jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
-		"info": map[string]any{"title": "Boxa API", "version": manager.Version,
+		"info": map[string]any{"title": "Boxaz API", "version": manager.Version,
 			"description": "Cheap disposable Linux boxes for AI agents. MCP at /mcp, tools at /v1/tools, llms.txt at /llms.txt. Errors: {error:{code,message,hint,retry_after_s?,docs_url?}}; send Accept-Language (vi|en|zh|ja) to localize message/hint.",
 			"license":     map[string]any{"name": "Proprietary"}},
 		"servers":    []any{map[string]any{"url": "/"}},
 		"security":   []any{map[string]any{"bearer": []string{}}},
 		"tags":       []any{},
 		"paths":      paths,
-		"components": map[string]any{"schemas": g.defs, "securitySchemes": map[string]any{"bearer": map[string]any{"type": "http", "scheme": "bearer", "description": "Boxa API key (bx_agent_… or bx_admin_…)"}}},
+		"components": map[string]any{"schemas": g.defs, "securitySchemes": map[string]any{"bearer": map[string]any{"type": "http", "scheme": "bearer", "description": "Boxaz API key (bx_agent_… or bx_admin_…)"}}},
 	}
 }
 
@@ -489,7 +489,7 @@ func (s *Server) openapi(w http.ResponseWriter, r *http.Request) {
 	for k, v := range OpenAPI() {
 		doc[k] = v
 	}
-	doc["servers"] = []any{map[string]any{"url": s.publicBase(r), "description": "this Boxa core"}}
+	doc["servers"] = []any{map[string]any{"url": s.publicBase(r), "description": "this Boxaz core"}}
 	writeJSON(w, 200, doc)
 }
 

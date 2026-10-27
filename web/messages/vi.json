@@ -91,7 +91,7 @@
       "viewer": "Chỉ xem"
     },
     "lastLogin": "Đăng nhập {time}",
-    "usersNote": "Boxa v1 dành cho một người vận hành. Quyền truy cập dashboard = key admin (quản lý ở tab API keys)."
+    "usersNote": "Boxaz v1 dành cho một người vận hành. Quyền truy cập dashboard = key admin (quản lý ở tab API keys)."
   },
   "agentDetail": {
     "back": "Agents",
@@ -133,7 +133,7 @@
     "history": "Lịch sử box",
     "noBoxes": "Agent chưa tạo box nào",
     "connect": "Kết nối agent",
-    "connectDesc": "Đoạn cấu hình theo transport — dán vào agent cùng biến BOXA_API_KEY."
+    "connectDesc": "Đoạn cấu hình theo transport — dán vào agent cùng biến BOXAZ_API_KEY."
   },
   "agents": {
     "title": "Agents",
@@ -156,8 +156,8 @@
     "missingKeyHint": "Dán API key admin (bx_live_…).",
     "invalidKey": "API key không hợp lệ hoặc không có quyền admin",
     "invalidKeyHint": "Tạo key scope admin bằng `box keys create --admin`.",
-    "coreUnreachable": "Không kết nối được Boxa Core",
-    "coreUnreachableHint": "Kiểm tra BOXA_API ({url}) hoặc bật BOXA_MOCK=1.",
+    "coreUnreachable": "Không kết nối được Boxaz Core",
+    "coreUnreachableHint": "Kiểm tra BOXAZ_API ({url}) hoặc bật BOXAZ_MOCK=1.",
     "tryNext": "Thử tiếp:"
   },
   "approvals": {
@@ -423,14 +423,14 @@
     "billingPool": "pool · tháng",
     "billingBurst": "burst · giờ",
     "pickAgentFirst": "Chọn agent để báo giá theo chính sách của agent.",
-    "descNeed": "Mô tả box cần gì, Boxa xếp hạng các phương án theo giá, tốc độ và độ tin cậy.",
+    "descNeed": "Mô tả box cần gì, Boxaz xếp hạng các phương án theo giá, tốc độ và độ tin cậy.",
     "mode": "Cách tạo",
     "modeNeed": "Theo nhu cầu",
     "modeManual": "Tự chọn cấu hình"
   },
   "developers": {
     "title": "Cho agent",
-    "desc": "Mọi thứ một agent cần để tự kết nối Boxa: tài liệu máy đọc được, schema tool, lệnh mẫu và bảng mã lỗi.",
+    "desc": "Mọi thứ một agent cần để tự kết nối Boxaz: tài liệu máy đọc được, schema tool, lệnh mẫu và bảng mã lỗi.",
     "baseUrl": "URL gốc của Core",
     "noAuth": "Không cần key",
     "needsKey": "Cần key",
@@ -446,9 +446,9 @@
       "mcp": "MCP server card",
       "mcpDesc": "/.well-known/mcp.json: transport (HTTP, stdio), xác thực, danh sách tool.",
       "a2a": "A2A agent card",
-      "a2aDesc": "/.well-known/agent.json: cho agent khác giao việc cho Boxa qua /a2a.",
+      "a2aDesc": "/.well-known/agent.json: cho agent khác giao việc cho Boxaz qua /a2a.",
       "mcpEndpoint": "MCP endpoint",
-      "mcpEndpointDesc": "Streamable HTTP, header Authorization: Bearer $BOXA_API_KEY."
+      "mcpEndpointDesc": "Streamable HTTP, header Authorization: Bearer $BOXAZ_API_KEY."
     },
     "preview": "Xem trước",
     "hidePreview": "Ẩn",
@@ -463,9 +463,9 @@
     "quickstart": "Bắt đầu nhanh (curl)",
     "quickstartDesc": "Báo giá → tạo box → chạy lệnh → đợi job → xem log → xoá. Thay BOX_ID, JOB_ID, LOG_ID bằng giá trị trả về.",
     "sdk": "SDK & CLI",
-    "sdkDesc": "Cài một lần, dùng biến BOXA_URL và BOXA_API_KEY.",
+    "sdkDesc": "Cài một lần, dùng biến BOXAZ_URL và BOXAZ_API_KEY.",
     "sdkNote": "Tên gói SDK là dự kiến — kiểm tra lại khi Core phát hành.",
-    "cliFromSource": "CLI box (từ mã nguồn boxa/core)",
+    "cliFromSource": "CLI box (từ mã nguồn boxaz/core)",
     "errors": "Mã lỗi",
     "errorsDesc": "Agent đọc <mono>code</mono> (không bao giờ đổi) và làm theo <mono>hint</mono>; <mono>message</mono>/<mono>hint</mono> dịch theo Accept-Language; tôn trọng <mono>retry_after_s</mono> nếu có.",
     "colCode": "Code",
@@ -488,7 +488,7 @@
       "NOT_FOUND": "Không có box/job/log/… với ID đó.",
       "NOT_FOUNDHint": "Gọi box_list (hoặc list tương ứng) để lấy ID đúng.",
       "UNAUTHORIZED": "Thiếu key hoặc key đã bị thu hồi.",
-      "UNAUTHORIZEDHint": "Kiểm tra biến BOXA_API_KEY; đừng thử lại liên tục.",
+      "UNAUTHORIZEDHint": "Kiểm tra biến BOXAZ_API_KEY; đừng thử lại liên tục.",
       "INVALID": "Tham số hoặc box.yaml sai.",
       "INVALIDHint": "Sửa theo message (thường nêu trường/dòng lỗi) rồi gửi lại.",
       "RATE_LIMITED": "Gọi quá nhanh.",
@@ -497,7 +497,7 @@
       "INTERNALHint": "Thử lại một lần; nếu vẫn lỗi, dừng và báo người vận hành.",
       "NO_CAPACITYHint": "Giảm spec, đợi retry_after_s rồi thử lại, hoặc gọi box_quote xem phương án khác."
     },
-    "a2a": "A2A: giao việc cho Boxa",
+    "a2a": "A2A: giao việc cho Boxaz",
     "a2aDesc": "Agent khác gửi JSON-RPC tới <mono>/a2a</mono>: text part là lệnh (kèm <mono>metadata.box_id</mono>), data part <mono>tool</mono> + <mono>arguments</mono> để gọi bất kỳ tool nào. Task id của lệnh chính là job id.",
     "a2aColMethod": "Method",
     "a2aColDoes": "Tác dụng",
@@ -580,7 +580,7 @@
     "chainPool": "Pool đang có",
     "tokenHint": {
       "contabo": "Dán client_id:client_secret:api_user:api_password (hoặc JSON 4 trường) từ trang API của Contabo.",
-      "netcup": "Dán refresh token SCP (client scp). Đặt nickname server dự phòng là boxa-spare-1, Boxa sẽ nhận và cài lại.",
+      "netcup": "Dán refresh token SCP (client scp). Đặt nickname server dự phòng là boxaz-spare-1, Boxaz sẽ nhận và cài lại.",
       "digitalocean": "Personal access token có quyền đọc và ghi.",
       "hetzner": "API token Read & Write của project Hetzner Cloud.",
       "vultr": "API key có quyền manage_servers."
@@ -638,12 +638,12 @@
   "locale": {
     "label": "Ngôn ngữ",
     "dashboard": "Ngôn ngữ giao diện",
-    "dashboardHint": "Lưu trong cookie boxa_locale của trình duyệt này. Lỗi từ Core cũng trả về theo ngôn ngữ này.",
+    "dashboardHint": "Lưu trong cookie boxaz_locale của trình duyệt này. Lỗi từ Core cũng trả về theo ngôn ngữ này.",
     "notify": "Ngôn ngữ thông báo & lỗi API mặc định",
     "notifyHint": "Dùng cho Telegram, email và agent không gửi Accept-Language."
   },
   "login": {
-    "title": "Đăng nhập Boxa",
+    "title": "Đăng nhập Boxaz",
     "subtitle": "Dùng API key có scope admin",
     "keyLabel": "API key admin",
     "keyHint": "Tạo bằng <mono>box keys create --admin</mono>. Key được lưu trong cookie httpOnly, không nằm trong JavaScript.",
@@ -719,7 +719,7 @@
     "toOverview": "Về Tổng quan",
     "viewAgent": "Xem agent",
     "waiting": "Đợi agent gọi lệnh đầu tiên…",
-    "waitingDesc": "Dán đoạn cấu hình vào <mono>{name}</mono> rồi yêu cầu nó chạy <mono>box_list</mono> hoặc tạo một box. Màn hình sẽ tự chuyển khi Boxa nhận được lệnh."
+    "waitingDesc": "Dán đoạn cấu hình vào <mono>{name}</mono> rồi yêu cầu nó chạy <mono>box_list</mono> hoặc tạo một box. Màn hình sẽ tự chuyển khi Boxaz nhận được lệnh."
   },
   "overview": {
     "title": "Tổng quan",
@@ -848,7 +848,7 @@
     },
     "confidence": {
       "verified": "Đã kiểm chứng",
-      "verifiedHint": "Boxa đã tự kiểm thử offer này",
+      "verifiedHint": "Boxaz đã tự kiểm thử offer này",
       "unverified": "Chưa kiểm chứng",
       "unverifiedHint": "Lấy từ battleships, chưa self-test",
       "stock_limited": "Hạn chế hàng",
@@ -869,13 +869,13 @@
   },
   "terminal": {
     "promptUser": "anh",
-    "mockHeader": "# Boxa terminal (MOCK) · {id} · {where}",
+    "mockHeader": "# Boxaz terminal (MOCK) · {id} · {where}",
     "mockWatching": "# Đang xem agent {agent}. Bấm “Chiếm quyền” để gõ lệnh.",
     "mockHelp": "Lệnh mock: ls [path], cat [file], pwd, whoami, clear, mọi lệnh khác gửi qua /exec",
     "whoami": "anh (đang chiếm quyền)",
     "connected": "# Đã kết nối PTY {id}",
     "wsFailed": "# Không mở được WebSocket tới Core.",
-    "wsFailedHint": "# Trình duyệt không gửi được header Authorization cho WebSocket: Core cần chấp nhận cookie httpOnly “boxa_key” (cùng site), hoặc đặt NEXT_PUBLIC_BOXA_WS trỏ tới endpoint cùng domain có xác thực bằng cookie.",
+    "wsFailedHint": "# Trình duyệt không gửi được header Authorization cho WebSocket: Core cần chấp nhận cookie httpOnly “boxaz_key” (cùng site), hoặc đặt NEXT_PUBLIC_BOXAZ_WS trỏ tới endpoint cùng domain có xác thực bằng cookie.",
     "lost": "# Mất kết nối terminal",
     "tookOver": "# Anh đã chiếm quyền",
     "released": "# Đã trả quyền cho agent",
@@ -1040,13 +1040,13 @@
       "open": "Cầu dao mở"
     },
     "breakerHelp": {
-      "closed": "Hoạt động bình thường, Boxa gọi provider này như thường lệ",
+      "closed": "Hoạt động bình thường, Boxaz gọi provider này như thường lệ",
       "half_open": "Đang thử lại một lệnh để xem provider đã ổn chưa",
-      "open": "Tạm bỏ qua provider này sau nhiều lỗi liên tiếp; Boxa tự chuyển sang provider kế tiếp"
+      "open": "Tạm bỏ qua provider này sau nhiều lỗi liên tiếp; Boxaz tự chuyển sang provider kế tiếp"
     },
     "wizard": {
       "title": "Kết nối provider",
-      "desc": "Chọn nhà cung cấp, dán token, Boxa kiểm tra rồi cho anh đặt ưu tiên và trần chi phí.",
+      "desc": "Chọn nhà cung cấp, dán token, Boxaz kiểm tra rồi cho anh đặt ưu tiên và trần chi phí.",
       "steps": "Các bước",
       "step": {
         "choose": "Chọn",
@@ -1087,9 +1087,9 @@
     },
     "prefs": {
       "title": "Thiết lập {name}",
-      "desc": "Ưu tiên và trần chi phí áp dụng khi Boxa tự thuê server.",
+      "desc": "Ưu tiên và trần chi phí áp dụng khi Boxaz tự thuê server.",
       "enabled": "Cho phép dùng",
-      "enabledHint": "Tắt để Boxa bỏ qua provider này khi chọn chỗ đặt box.",
+      "enabledHint": "Tắt để Boxaz bỏ qua provider này khi chọn chỗ đặt box.",
       "priority": "Thứ tự ưu tiên",
       "priorityHint": "1 = thử trước; 0 = theo chuỗi mặc định.",
       "maxHourly": "Trần $/giờ mỗi server",
@@ -1104,7 +1104,7 @@
     },
     "health": {
       "title": "Sức khỏe provider",
-      "desc": "Core gọi thử API của từng provider định kỳ và ghi lại độ trễ, lỗi và thời gian dựng server. Lỗi liên tiếp sẽ mở cầu dao để Boxa chuyển sang provider kế tiếp.",
+      "desc": "Core gọi thử API của từng provider định kỳ và ghi lại độ trễ, lỗi và thời gian dựng server. Lỗi liên tiếp sẽ mở cầu dao để Boxaz chuyển sang provider kế tiếp.",
       "samples": "{n, plural, other {# mẫu}}",
       "hosts": "{n, plural, other {# host}}",
       "priority": "ưu tiên {n}",
@@ -1127,7 +1127,7 @@
       "check": "Kiểm tra ngay",
       "checked": "Đã kiểm tra {name}",
       "reset": "Đặt lại cầu dao",
-      "resetHint": "Đóng cầu dao để Boxa dùng lại provider này ngay",
+      "resetHint": "Đóng cầu dao để Boxaz dùng lại provider này ngay",
       "resetDone": "Đã đặt lại cầu dao của {name}",
       "prefs": "Thiết lập"
     },
@@ -1172,7 +1172,7 @@
     "title": "Mesh WireGuard (headscale)",
     "desc": "Host và box dịch vụ nối với nhau qua mạng riêng WireGuard; ACL sinh tự động theo agent và cổng của box.",
     "disabled": "Mesh đang tắt",
-    "disabledHint": "Đặt BOXA_MESH_URL và BOXA_MESH_API_KEY cho Core để bật mesh.",
+    "disabledHint": "Đặt BOXAZ_MESH_URL và BOXAZ_MESH_API_KEY cho Core để bật mesh.",
     "server": "Máy chủ",
     "online": "Node trực tuyến",
     "hostsJoined": "Host đã tham gia",
@@ -1187,7 +1187,7 @@
     "keyTitle": "Tạo pre-auth key",
     "keyDesc": "Key dùng một lần để một host hoặc box tham gia mesh với đúng tag.",
     "target": "Dành cho",
-    "newHost": "Host mới (tag:boxa-host)",
+    "newHost": "Host mới (tag:boxaz-host)",
     "hosts": "Host",
     "boxes": "Box",
     "ttl": "Hiệu lực (phút)",
@@ -1259,7 +1259,7 @@
   },
   "rec": {
     "title": "Gợi ý box theo nhu cầu",
-    "desc": "Mô tả việc cần làm, Boxa so sánh warm pool, pool sẵn có, VM và server thuê mới rồi xếp hạng theo 6 yếu tố có giải thích.",
+    "desc": "Mô tả việc cần làm, Boxaz so sánh warm pool, pool sẵn có, VM và server thuê mới rồi xếp hạng theo 6 yếu tố có giải thích.",
     "profile": "Loại công việc",
     "tip": "Mẹo:",
     "agentKind": "Loại agent",
@@ -1277,7 +1277,7 @@
     "maxLatency": "Độ trễ tối đa (ms)",
     "arch": "Kiến trúc",
     "region": "Region",
-    "regionHint": "Để trống để Boxa tự chọn",
+    "regionHint": "Để trống để Boxaz tự chọn",
     "location": "Agent chạy ở đâu",
     "locationHint": "Mã nước (VN), region hoặc lat,lon",
     "publicUrl": "Cần URL công khai",
@@ -1419,7 +1419,7 @@
       "sdk": "Provider không công bố REST: đọc từ mã nguồn SDK chính thức"
     },
     "estPrice": "Giá ước tính",
-    "estPriceHelp": "Provider không công bố đơn giá theo giây; Boxa dùng giá ước tính",
+    "estPriceHelp": "Provider không công bố đơn giá theo giây; Boxaz dùng giá ước tính",
     "cap": {
       "unsupported": "{name}: không hỗ trợ",
       "boot": "Boot {v}",
@@ -1442,7 +1442,7 @@
       "noDial": "Provider này không giữ được tiến trình nền nên chỉ chạy shim (T3)."
     },
     "modeHelp": {
-      "auto": "T2 khi sandbox giữ được tiến trình nền và có BOXA_PUBLIC_URL, không thì T3",
+      "auto": "T2 khi sandbox giữ được tiến trình nền và có BOXAZ_PUBLIC_URL, không thì T3",
       "dial": "boxd chạy trong sandbox rồi gọi về Core: đủ terminal, snapshot, egress",
       "shim": "Core gọi exec API thay boxd: không cần URL công khai, ít tính năng hơn"
     },
@@ -1495,7 +1495,7 @@
       "sample": "Dán mẫu",
       "howTitle": "Cách thêm adapter",
       "how1": "Viết YAML theo mẫu (route create/get/delete/exec, auth, capability, giá).",
-      "how2": "Kiểm tra ở đây, rồi lưu file vào thư mục <mono>BOXA_SANDBOX_ADAPTERS_DIR</mono>.",
+      "how2": "Kiểm tra ở đây, rồi lưu file vào thư mục <mono>BOXAZ_SANDBOX_ADAPTERS_DIR</mono>.",
       "how3": "Khởi động lại Core, provider mới hiện trong danh sách Sandbox API để kết nối.",
       "required": "Trường bắt buộc:",
       "invalid": "Adapter chưa hợp lệ",

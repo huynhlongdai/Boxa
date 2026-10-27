@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"boxa/core/internal/model"
+	"boxaz/core/internal/model"
 )
 
 var hopHeaders = map[string]bool{"Connection": true, "Keep-Alive": true, "Proxy-Authenticate": true, "Proxy-Authorization": true, "Te": true, "Trailer": true, "Transfer-Encoding": true, "Upgrade": true}
@@ -28,25 +28,33 @@ func (s *Server) ingressMW(next http.Handler) http.Handler {
 		}
 		b, err := s.M.BoxForHost(r.Context(), host)
 		if err != nil {
-			http.Error(w, "boxa: no running box at this address", http.StatusNotFound)
+			http.Error(w, "boxaz: no running box at this address", http.StatusNotFound)
 			return
 		}
 		if s.M.Settings(r.Context()).URLTokenProtect {
 			want := s.M.URLToken(b.ID)
-			if t := r.URL.Query().Get("boxa_token"); t != "" {
+			tokParam := "boxaz_token"
+			if r.URL.Query().Get(tokParam) == "" && r.URL.Query().Get(legacyTokenParam) != "" {
+				tokParam = legacyTokenParam // compat: links minted before the rename
+			}
+			if t := r.URL.Query().Get(tokParam); t != "" {
 				if t != want {
-					http.Error(w, "boxa: bad token", http.StatusForbidden)
+					http.Error(w, "boxaz: bad token", http.StatusForbidden)
 					return
 				}
-				http.SetCookie(w, &http.Cookie{Name: "boxa_t", Value: t, Path: "/", HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode})
+				http.SetCookie(w, &http.Cookie{Name: "boxaz_t", Value: t, Path: "/", HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode})
 				q := r.URL.Query()
-				q.Del("boxa_token")
+				q.Del(tokParam)
 				r.URL.RawQuery = q.Encode()
 				http.Redirect(w, r, r.URL.RequestURI(), http.StatusFound)
 				return
 			}
-			if c, err := r.Cookie("boxa_t"); err != nil || c.Value != want {
-				http.Error(w, "boxa: this box URL is token-protected (open the URL with ?boxa_token=…)", http.StatusUnauthorized)
+			c, err := r.Cookie("boxaz_t")
+			if err != nil {
+				c, err = r.Cookie(legacyTokenCookie)
+			}
+			if err != nil || c.Value != want {
+				http.Error(w, "boxaz: this box URL is token-protected (open the URL with ?boxaz_token=…)", http.StatusUnauthorized)
 				return
 			}
 		}
@@ -62,7 +70,7 @@ func (s *Server) ingressMW(next http.Handler) http.Handler {
 		res, err := s.M.Proxy(r.Context(), b, r.Method, r.URL.RequestURI(), hdr, body)
 		if err != nil {
 			ae := model.AsAPIError(err)
-			http.Error(w, "boxa: "+ae.Message, http.StatusBadGateway)
+			http.Error(w, "boxaz: "+ae.Message, http.StatusBadGateway)
 			return
 		}
 		for k, vs := range res.Headers {
@@ -86,3 +94,10 @@ func (s *Server) tlsAsk(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(404)
 }
+
+// Pre-rename names of the box URL token (query parameter and cookie), still
+// accepted so existing links keep working.
+const (
+	legacyTokenParam  = "boxa_token"
+	legacyTokenCookie = "boxa_t"
+)

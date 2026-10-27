@@ -19,7 +19,7 @@ import { toastError } from "@/lib/error-toast";
 type ConnState = "connecting" | "open" | "closed" | "mock";
 
 function wsUrl(boxId: string, wsBase: string | null, cols: number, rows: number) {
-  const base = wsBase || (process.env.NEXT_PUBLIC_BOXA_API || "http://localhost:8080/v1").replace(/^http/, "ws");
+  const base = wsBase || (process.env.NEXT_PUBLIC_BOXAZ_API || "http://localhost:8080/v1").replace(/^http/, "ws");
   return `${base.replace(/\/+$/, "")}/boxes/${boxId}/terminal?cols=${cols}&rows=${rows}`;
 }
 
@@ -130,7 +130,7 @@ export function BoxTerminal({ box }: { box: Box }) {
         return;
       }
 
-      // Thật: WebSocket tới Core. Cookie httpOnly boxa_key được trình duyệt gửi kèm khi Core cùng site.
+      // Thật: WebSocket tới Core. Cookie httpOnly boxaz_key được trình duyệt gửi kèm khi Core cùng site.
       const connect = () => {
         setConn("connecting");
         let opened = false;

@@ -1,5 +1,5 @@
 "use client";
-// "Cho agent": mọi thứ agent cần để tự kết nối Boxa (contract v1.1 — discovery, tool schemas, quick start, SDK, mã lỗi).
+// "Cho agent": mọi thứ agent cần để tự kết nối Boxaz (contract v1.1 — discovery, tool schemas, quick start, SDK, mã lỗi).
 import * as React from "react";
 import { useTranslations } from "next-intl";
 import { Bot, Braces, Download, ExternalLink, Eye, EyeOff, FileText, KeyRound, Network, Plug, Terminal, TriangleAlert } from "lucide-react";
@@ -12,10 +12,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { CodeBlock, CopyButton } from "@/components/boxa/code-block";
-import { ErrorBox, LoadingRows, PageHeader } from "@/components/boxa/page";
+import { CodeBlock, CopyButton } from "@/components/boxaz/code-block";
+import { ErrorBox, LoadingRows, PageHeader } from "@/components/boxaz/page";
 
-const API = (process.env.NEXT_PUBLIC_BOXA_API || "http://localhost:8080/v1").replace(/\/+$/, "");
+const API = (process.env.NEXT_PUBLIC_BOXAZ_API || "http://localhost:8080/v1").replace(/\/+$/, "");
 const ROOT = API.replace(/\/v1$/, "");
 const FORMATS: ToolFormat[] = ["openai", "anthropic", "gemini", "mcp"];
 const HTTP: Record<string, number> = { BUDGET_EXCEEDED: 402, NO_CAPACITY: 503, PROVIDER_FAILED: 503, BOX_SLEEPING: 409, TIMEOUT: 504, POLICY_DENIED: 403, NOT_FOUND: 404, UNAUTHORIZED: 401, INVALID: 400, RATE_LIMITED: 429, INTERNAL: 500 };
@@ -155,7 +155,7 @@ function ToolSchemas() {
             <div className="flex flex-wrap gap-2">
               <code className="min-w-0 flex-1 truncate rounded border border-border bg-background px-2 py-1.5 font-mono text-[12px]">GET {API}/tools?format={format}</code>
               <CopyButton text={`${API}/tools?format=${format}`} label={t("copyUrl")} />
-              <Button size="xs" variant="secondary" onClick={() => download(`boxa-tools-${format}.json`, json, "application/json")}><Download /> {t("downloadJson")}</Button>
+              <Button size="xs" variant="secondary" onClick={() => download(`boxaz-tools-${format}.json`, json, "application/json")}><Download /> {t("downloadJson")}</Button>
             </div>
             <CodeBlock code={json} language="json" maxHeight={380} />
           </>
@@ -165,32 +165,32 @@ function ToolSchemas() {
   );
 }
 
-const QUICKSTART = `export BOXA_URL=${ROOT}
-export BOXA_API_KEY=bx_live_…
-H="Authorization: Bearer $BOXA_API_KEY"
+const QUICKSTART = `export BOXAZ_URL=${ROOT}
+export BOXAZ_API_KEY=bx_live_…
+H="Authorization: Bearer $BOXAZ_API_KEY"
 
 # 1. Quote (dry-run, nothing is created)
-curl -s -X POST $BOXA_URL/v1/quote -H "$H" -H "Content-Type: application/json" -H "Accept-Language: en" \\
+curl -s -X POST $BOXAZ_URL/v1/quote -H "$H" -H "Content-Type: application/json" -H "Accept-Language: en" \\
   -d '{"template":"python","lifecycle":"task","spec":{"cpu":2,"ram_mb":2048,"disk_gb":20}}'
 
 # 2. Create a box (safe to retry with the same Idempotency-Key)
-curl -s -X POST $BOXA_URL/v1/boxes -H "$H" -H "Idempotency-Key: $(uuidgen)" -H "Content-Type: application/json" \\
+curl -s -X POST $BOXAZ_URL/v1/boxes -H "$H" -H "Idempotency-Key: $(uuidgen)" -H "Content-Type: application/json" \\
   -d '{"template":"python","lifecycle":"task","spec":{"cpu":2,"ram_mb":2048,"disk_gb":20}}'
 
 # 3. Run several commands in one call
-curl -s -X POST $BOXA_URL/v1/boxes/BOX_ID/exec-batch -H "$H" -H "Content-Type: application/json" \\
+curl -s -X POST $BOXAZ_URL/v1/boxes/BOX_ID/exec-batch -H "$H" -H "Content-Type: application/json" \\
   -d '{"commands":["python -V","pip install -q pytest","pytest -q"],"stop_on_error":true}'
 
 # 4. Long job: async + long-poll
-curl -s -X POST $BOXA_URL/v1/boxes/BOX_ID/exec -H "$H" -H "Content-Type: application/json" \\
+curl -s -X POST $BOXAZ_URL/v1/boxes/BOX_ID/exec -H "$H" -H "Content-Type: application/json" \\
   -d '{"command":"python train.py","async":true}'
-curl -s "$BOXA_URL/v1/jobs/JOB_ID?wait=30" -H "$H"
+curl -s "$BOXAZ_URL/v1/jobs/JOB_ID?wait=30" -H "$H"
 
 # 5. Full output when truncated=true
-curl -s $BOXA_URL/v1/logs/LOG_ID -H "$H"
+curl -s $BOXAZ_URL/v1/logs/LOG_ID -H "$H"
 
 # 6. Done
-curl -s -X DELETE $BOXA_URL/v1/boxes/BOX_ID -H "$H"
+curl -s -X DELETE $BOXAZ_URL/v1/boxes/BOX_ID -H "$H"
 `;
 
 const SDK_LINES = `# Python
@@ -200,17 +200,17 @@ pip install ${SDK_PY}
 pnpm add ${SDK_TS}        # or: npm i ${SDK_TS}
 
 # Environment for every SDK, the CLI and MCP stdio
-export BOXA_URL=${ROOT}
-export BOXA_API_KEY=bx_live_…`;
+export BOXAZ_URL=${ROOT}
+export BOXAZ_API_KEY=bx_live_…`;
 
-const CLI_LINES = `# box CLI — build from the boxa/core repo
-cd boxa/core && go install ./cmd/box
+const CLI_LINES = `# box CLI — build from the boxaz/core repo
+cd boxaz/core && go install ./cmd/box
 box mcp            # MCP over stdio for local agents
 box up --template python && box exec BOX_ID -- python -V`;
 
 const A2A_SEND = `# A2A JSON-RPC 2.0 (protocol 0.3) — POST ${ROOT}/a2a
 # 1) Run a command in a box (task id = job id; blocks up to 30s)
-curl -s -X POST $BOXA_URL/a2a -H "Authorization: Bearer $BOXA_API_KEY" -d '{
+curl -s -X POST $BOXAZ_URL/a2a -H "Authorization: Bearer $BOXAZ_API_KEY" -d '{
   "jsonrpc": "2.0", "id": 1, "method": "message/send",
   "params": {
     "message": { "role": "user", "messageId": "m1", "parts": [{ "kind": "text", "text": "pytest -q" }] },
@@ -218,21 +218,21 @@ curl -s -X POST $BOXA_URL/a2a -H "Authorization: Bearer $BOXA_API_KEY" -d '{
   }
 }'
 
-# 2) Call any Boxa tool as a skill
-curl -s -X POST $BOXA_URL/a2a -H "Authorization: Bearer $BOXA_API_KEY" -d '{
+# 2) Call any Boxaz tool as a skill
+curl -s -X POST $BOXAZ_URL/a2a -H "Authorization: Bearer $BOXAZ_API_KEY" -d '{
   "jsonrpc": "2.0", "id": 2, "method": "message/send",
   "params": { "message": { "role": "user", "parts": [{ "kind": "data",
     "data": { "tool": "box_up", "arguments": { "template": "python", "lifecycle": "task" } } }] } }
 }'`;
 
 const A2A_TASKS = `# Poll, cancel and stream
-curl -s -X POST $BOXA_URL/a2a -H "Authorization: Bearer $BOXA_API_KEY" \
+curl -s -X POST $BOXAZ_URL/a2a -H "Authorization: Bearer $BOXAZ_API_KEY" \
   -d '{"jsonrpc":"2.0","id":3,"method":"tasks/get","params":{"id":"JOB_ID"}}'
-curl -s -X POST $BOXA_URL/a2a -H "Authorization: Bearer $BOXA_API_KEY" \
+curl -s -X POST $BOXAZ_URL/a2a -H "Authorization: Bearer $BOXAZ_API_KEY" \
   -d '{"jsonrpc":"2.0","id":4,"method":"tasks/cancel","params":{"id":"JOB_ID"}}'
 
 # SSE: Task → status-update → artifact-update → status-update (final: true)
-curl -N -X POST $BOXA_URL/a2a -H "Authorization: Bearer $BOXA_API_KEY" -d '{
+curl -N -X POST $BOXAZ_URL/a2a -H "Authorization: Bearer $BOXAZ_API_KEY" -d '{
   "jsonrpc":"2.0","id":5,"method":"message/stream",
   "params":{"message":{"role":"user","parts":[{"kind":"text","text":"make test"}]},"metadata":{"box_id":"BOX_ID"}}
 }'
@@ -244,7 +244,7 @@ const ERROR_ENVELOPE = `{
     "message": "No capacity for 8 vCPU within shopee-crawler's policy",
     "hint": "Lower the spec or allow more providers; retry in 60 seconds.",
     "retry_after_s": 60,
-    "docs_url": "https://boxa.dev/docs/errors#no_capacity"
+    "docs_url": "https://boxaz.dev/docs/errors#no_capacity"
   }
 }`;
 

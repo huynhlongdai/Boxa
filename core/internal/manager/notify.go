@@ -2,7 +2,7 @@ package manager
 
 // Reports & alerts (Telegram + email). Non-secret settings live in
 // settings.notify; the Telegram bot token and SMTP password are system
-// secrets in the encrypted secrets store (BOXA_SYS_*), never returned.
+// secrets in the encrypted secrets store (BOXAZ_SYS_*), never returned.
 
 import (
 	"context"
@@ -12,10 +12,10 @@ import (
 	"sync"
 	"time"
 
-	"boxa/core/internal/i18n"
-	"boxa/core/internal/model"
-	"boxa/core/internal/notify"
-	"boxa/core/internal/store"
+	"boxaz/core/internal/i18n"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/notify"
+	"boxaz/core/internal/store"
 )
 
 const (
@@ -187,7 +187,7 @@ func (m *Manager) publicName() string {
 	if m.Cfg.PublicURL != "" {
 		return m.Cfg.PublicURL
 	}
-	return "Boxa"
+	return "Boxaz"
 }
 
 // deliver sends to the selected channels. force=true reports unconfigured
@@ -210,7 +210,7 @@ func (m *Manager) deliver(ctx context.Context, kind, title, body, channel string
 		cfg.Password, _ = m.systemSecret(ctx, sysSecretSMTP)
 		to := notify.Recipients(s.Email)
 		if cfg.Configured() && len(to) > 0 {
-			err := cfg.Send(ctx, to, "[Boxa] "+title, body)
+			err := cfg.Send(ctx, to, "[Boxaz] "+title, body)
 			out = append(out, result(now, kind, "email", title, err))
 		} else if force {
 			out = append(out, Delivery{TS: now, Kind: kind, Channel: "email", Title: title, Error: "email not configured (smtp host, from, recipients)"})

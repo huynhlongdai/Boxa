@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"boxa/core/internal/model"
-	"boxa/core/internal/provhealth"
-	"boxa/core/internal/provider"
-	"boxa/core/internal/selector"
-	"boxa/core/internal/store"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/provhealth"
+	"boxaz/core/internal/provider"
+	"boxaz/core/internal/selector"
+	"boxaz/core/internal/store"
 )
 
 const kvHealth = "provider_health"
@@ -129,7 +129,7 @@ func (m *Manager) ResetProviderBreaker(ctx context.Context, p *Principal, id str
 func (m *Manager) guardedCreate(ctx context.Context, prov provider.Provider, tok string, req provider.CreateRequest, priceMonth float64) (provider.Handle, error) {
 	id := prov.ID()
 	if ok, why := m.Health.Allow(id); !ok {
-		return provider.Handle{}, model.EH(model.ErrProviderFailed, "Boxa fails over to the next provider automatically; check GET /providers/health.", "%s skipped: %s", id, why)
+		return provider.Handle{}, model.EH(model.ErrProviderFailed, "Boxaz fails over to the next provider automatically; check GET /providers/health.", "%s skipped: %s", id, why)
 	}
 	start := time.Now()
 	h, err := prov.Create(ctx, tok, req)
@@ -193,7 +193,7 @@ func (m *Manager) PutProviderPrefs(ctx context.Context, p *Principal, id string,
 func (m *Manager) capsAllow(ctx context.Context, id, region string, priceHour, priceMonth float64) error {
 	pp := m.ProviderPrefs(ctx, id)
 	deny := func(f string, a ...any) error {
-		return model.EH(model.ErrPolicyDenied, "Raise the cap in Infra → Providers or let Boxa use another provider.", f, a...)
+		return model.EH(model.ErrPolicyDenied, "Raise the cap in Infra → Providers or let Boxaz use another provider.", f, a...)
 	}
 	if !pp.Enabled {
 		return deny("provider %s is disabled in its preferences", id)

@@ -91,7 +91,7 @@
       "viewer": "Viewer"
     },
     "lastLogin": "Signed in {time}",
-    "usersNote": "Boxa v1 is for a single operator. Dashboard access = an admin key (managed in the API keys tab)."
+    "usersNote": "Boxaz v1 is for a single operator. Dashboard access = an admin key (managed in the API keys tab)."
   },
   "agentDetail": {
     "back": "Agents",
@@ -133,7 +133,7 @@
     "history": "Box history",
     "noBoxes": "This agent hasn't created any boxes",
     "connect": "Connect the agent",
-    "connectDesc": "Config per transport — paste it into the agent along with BOXA_API_KEY."
+    "connectDesc": "Config per transport — paste it into the agent along with BOXAZ_API_KEY."
   },
   "agents": {
     "title": "Agents",
@@ -156,8 +156,8 @@
     "missingKeyHint": "Paste an admin API key (bx_live_…).",
     "invalidKey": "The API key is invalid or lacks admin scope",
     "invalidKeyHint": "Create an admin-scope key with `box keys create --admin`.",
-    "coreUnreachable": "Can't reach Boxa Core",
-    "coreUnreachableHint": "Check BOXA_API ({url}) or set BOXA_MOCK=1.",
+    "coreUnreachable": "Can't reach Boxaz Core",
+    "coreUnreachableHint": "Check BOXAZ_API ({url}) or set BOXAZ_MOCK=1.",
     "tryNext": "Try next:"
   },
   "approvals": {
@@ -423,14 +423,14 @@
     "billingPool": "pool · monthly",
     "billingBurst": "burst · hourly",
     "pickAgentFirst": "Pick an agent to quote against its policy.",
-    "descNeed": "Describe what the box needs; Boxa ranks the options by price, speed and reliability.",
+    "descNeed": "Describe what the box needs; Boxaz ranks the options by price, speed and reliability.",
     "mode": "How to create",
     "modeNeed": "By need",
     "modeManual": "Manual spec"
   },
   "developers": {
     "title": "For agents",
-    "desc": "Everything an agent needs to connect to Boxa on its own: machine-readable docs, tool schemas, sample calls and the error table.",
+    "desc": "Everything an agent needs to connect to Boxaz on its own: machine-readable docs, tool schemas, sample calls and the error table.",
     "baseUrl": "Core base URL",
     "noAuth": "No key needed",
     "needsKey": "Key required",
@@ -446,9 +446,9 @@
       "mcp": "MCP server card",
       "mcpDesc": "/.well-known/mcp.json: transports (HTTP, stdio), auth, tool list.",
       "a2a": "A2A agent card",
-      "a2aDesc": "/.well-known/agent.json: lets other agents hand tasks to Boxa via /a2a.",
+      "a2aDesc": "/.well-known/agent.json: lets other agents hand tasks to Boxaz via /a2a.",
       "mcpEndpoint": "MCP endpoint",
-      "mcpEndpointDesc": "Streamable HTTP, header Authorization: Bearer $BOXA_API_KEY."
+      "mcpEndpointDesc": "Streamable HTTP, header Authorization: Bearer $BOXAZ_API_KEY."
     },
     "preview": "Preview",
     "hidePreview": "Hide",
@@ -463,9 +463,9 @@
     "quickstart": "Quick start (curl)",
     "quickstartDesc": "Quote → create → run → wait for the job → read the log → delete. Replace BOX_ID, JOB_ID, LOG_ID with returned values.",
     "sdk": "SDKs & CLI",
-    "sdkDesc": "Install once; configure with BOXA_URL and BOXA_API_KEY.",
+    "sdkDesc": "Install once; configure with BOXAZ_URL and BOXAZ_API_KEY.",
     "sdkNote": "SDK package names are provisional — confirm when Core publishes them.",
-    "cliFromSource": "box CLI (from boxa/core source)",
+    "cliFromSource": "box CLI (from boxaz/core source)",
     "errors": "Error codes",
     "errorsDesc": "Agents read <mono>code</mono> (never changes) and follow <mono>hint</mono>; <mono>message</mono>/<mono>hint</mono> are localized via Accept-Language; honor <mono>retry_after_s</mono> when present.",
     "colCode": "Code",
@@ -488,7 +488,7 @@
       "NOT_FOUND": "No box/job/log/… with that ID.",
       "NOT_FOUNDHint": "Call box_list (or the matching list) to get the right ID.",
       "UNAUTHORIZED": "Missing or revoked key.",
-      "UNAUTHORIZEDHint": "Check BOXA_API_KEY; don't retry in a loop.",
+      "UNAUTHORIZEDHint": "Check BOXAZ_API_KEY; don't retry in a loop.",
       "INVALID": "Bad parameters or box.yaml.",
       "INVALIDHint": "Fix what the message points to (usually a field or line) and resend.",
       "RATE_LIMITED": "Too many requests.",
@@ -497,7 +497,7 @@
       "INTERNALHint": "Retry once; if it persists, stop and tell the operator.",
       "NO_CAPACITYHint": "Lower the spec, wait retry_after_s and retry, or call box_quote for alternatives."
     },
-    "a2a": "A2A: hand tasks to Boxa",
+    "a2a": "A2A: hand tasks to Boxaz",
     "a2aDesc": "Other agents send JSON-RPC to <mono>/a2a</mono>: a text part is a command (with <mono>metadata.box_id</mono>), a data part with <mono>tool</mono> + <mono>arguments</mono> calls any tool. A command's task id is its job id.",
     "a2aColMethod": "Method",
     "a2aColDoes": "What it does",
@@ -580,7 +580,7 @@
     "chainPool": "Existing pool",
     "tokenHint": {
       "contabo": "Paste client_id:client_secret:api_user:api_password (or the 4-field JSON) from Contabo's API page.",
-      "netcup": "Paste an SCP refresh token (client scp). Name spare servers boxa-spare-1; Boxa claims and reinstalls them.",
+      "netcup": "Paste an SCP refresh token (client scp). Name spare servers boxaz-spare-1; Boxaz claims and reinstalls them.",
       "digitalocean": "Personal access token with read and write scope.",
       "hetzner": "Read & Write API token of the Hetzner Cloud project.",
       "vultr": "API key with the manage_servers permission."
@@ -638,12 +638,12 @@
   "locale": {
     "label": "Language",
     "dashboard": "Dashboard language",
-    "dashboardHint": "Stored in this browser's boxa_locale cookie. Errors from Core come back in this language too.",
+    "dashboardHint": "Stored in this browser's boxaz_locale cookie. Errors from Core come back in this language too.",
     "notify": "Default language for notifications & API errors",
     "notifyHint": "Used for Telegram, email and agents that send no Accept-Language."
   },
   "login": {
-    "title": "Sign in to Boxa",
+    "title": "Sign in to Boxaz",
     "subtitle": "Use an API key with admin scope",
     "keyLabel": "Admin API key",
     "keyHint": "Create one with <mono>box keys create --admin</mono>. The key lives in an httpOnly cookie, never in JavaScript.",
@@ -719,7 +719,7 @@
     "toOverview": "Go to Overview",
     "viewAgent": "View agent",
     "waiting": "Waiting for the agent's first call…",
-    "waitingDesc": "Paste the config into <mono>{name}</mono>, then ask it to run <mono>box_list</mono> or create a box. This screen moves on when Boxa receives the call."
+    "waitingDesc": "Paste the config into <mono>{name}</mono>, then ask it to run <mono>box_list</mono> or create a box. This screen moves on when Boxaz receives the call."
   },
   "overview": {
     "title": "Overview",
@@ -848,7 +848,7 @@
     },
     "confidence": {
       "verified": "Verified",
-      "verifiedHint": "Boxa self-tested this offer",
+      "verifiedHint": "Boxaz self-tested this offer",
       "unverified": "Unverified",
       "unverifiedHint": "From battleships, not self-tested yet",
       "stock_limited": "Limited stock",
@@ -869,13 +869,13 @@
   },
   "terminal": {
     "promptUser": "you",
-    "mockHeader": "# Boxa terminal (MOCK) · {id} · {where}",
+    "mockHeader": "# Boxaz terminal (MOCK) · {id} · {where}",
     "mockWatching": "# Watching agent {agent}. Press “Take over” to type commands.",
     "mockHelp": "Mock commands: ls [path], cat [file], pwd, whoami, clear; anything else goes through /exec",
     "whoami": "you (in control)",
     "connected": "# Connected to PTY {id}",
     "wsFailed": "# Couldn't open a WebSocket to Core.",
-    "wsFailedHint": "# Browsers can't send an Authorization header on WebSockets: Core must accept the httpOnly “boxa_key” cookie (same site), or set NEXT_PUBLIC_BOXA_WS to a same-domain endpoint with cookie auth.",
+    "wsFailedHint": "# Browsers can't send an Authorization header on WebSockets: Core must accept the httpOnly “boxaz_key” cookie (same site), or set NEXT_PUBLIC_BOXAZ_WS to a same-domain endpoint with cookie auth.",
     "lost": "# Terminal disconnected",
     "tookOver": "# You took over",
     "released": "# Control returned to the agent",
@@ -1040,13 +1040,13 @@
       "open": "Breaker open"
     },
     "breakerHelp": {
-      "closed": "Normal: Boxa calls this provider as usual",
+      "closed": "Normal: Boxaz calls this provider as usual",
       "half_open": "Trying one call to see whether the provider has recovered",
-      "open": "Skipped after repeated failures; Boxa fails over to the next provider"
+      "open": "Skipped after repeated failures; Boxaz fails over to the next provider"
     },
     "wizard": {
       "title": "Connect a provider",
-      "desc": "Pick a provider, paste a token; Boxa checks it, then you set priority and cost caps.",
+      "desc": "Pick a provider, paste a token; Boxaz checks it, then you set priority and cost caps.",
       "steps": "Steps",
       "step": {
         "choose": "Choose",
@@ -1087,9 +1087,9 @@
     },
     "prefs": {
       "title": "{name} settings",
-      "desc": "Priority and cost caps used when Boxa rents servers on its own.",
+      "desc": "Priority and cost caps used when Boxaz rents servers on its own.",
       "enabled": "Allow use",
-      "enabledHint": "Turn off to make Boxa skip this provider when placing boxes.",
+      "enabledHint": "Turn off to make Boxaz skip this provider when placing boxes.",
       "priority": "Priority",
       "priorityHint": "1 = try first; 0 = default chain order.",
       "maxHourly": "Max $/hour per server",
@@ -1104,7 +1104,7 @@
     },
     "health": {
       "title": "Provider health",
-      "desc": "Core probes each provider API on a schedule and records latency, errors and server provisioning time. Repeated failures open the breaker so Boxa fails over to the next provider.",
+      "desc": "Core probes each provider API on a schedule and records latency, errors and server provisioning time. Repeated failures open the breaker so Boxaz fails over to the next provider.",
       "samples": "{n, plural, one {# sample} other {# samples}}",
       "hosts": "{n, plural, one {# host} other {# hosts}}",
       "priority": "priority {n}",
@@ -1127,7 +1127,7 @@
       "check": "Check now",
       "checked": "{name} checked",
       "reset": "Reset breaker",
-      "resetHint": "Close the breaker so Boxa uses this provider again right away",
+      "resetHint": "Close the breaker so Boxaz uses this provider again right away",
       "resetDone": "{name} breaker reset",
       "prefs": "Settings"
     },
@@ -1172,7 +1172,7 @@
     "title": "WireGuard mesh (headscale)",
     "desc": "Hosts and service boxes reach each other over a private WireGuard network; ACLs are generated from agents and box ports.",
     "disabled": "Mesh is off",
-    "disabledHint": "Set BOXA_MESH_URL and BOXA_MESH_API_KEY for Core to turn it on.",
+    "disabledHint": "Set BOXAZ_MESH_URL and BOXAZ_MESH_API_KEY for Core to turn it on.",
     "server": "Server",
     "online": "Nodes online",
     "hostsJoined": "Hosts joined",
@@ -1187,7 +1187,7 @@
     "keyTitle": "Create a pre-auth key",
     "keyDesc": "A one-time key that lets a host or box join the mesh with the right tags.",
     "target": "For",
-    "newHost": "New host (tag:boxa-host)",
+    "newHost": "New host (tag:boxaz-host)",
     "hosts": "Hosts",
     "boxes": "Boxes",
     "ttl": "Valid for (minutes)",
@@ -1259,7 +1259,7 @@
   },
   "rec": {
     "title": "Recommend a box",
-    "desc": "Describe the job; Boxa compares the warm pool, existing pool hosts, VMs and new servers, then ranks them on six explained factors.",
+    "desc": "Describe the job; Boxaz compares the warm pool, existing pool hosts, VMs and new servers, then ranks them on six explained factors.",
     "profile": "Workload",
     "tip": "Tip:",
     "agentKind": "Agent kind",
@@ -1277,7 +1277,7 @@
     "maxLatency": "Max latency (ms)",
     "arch": "Architecture",
     "region": "Region",
-    "regionHint": "Leave empty to let Boxa choose",
+    "regionHint": "Leave empty to let Boxaz choose",
     "location": "Where the agent runs",
     "locationHint": "Country code (VN), region or lat,lon",
     "publicUrl": "Needs a public URL",
@@ -1419,7 +1419,7 @@
       "sdk": "No published REST reference: read from the official SDK source"
     },
     "estPrice": "Estimated price",
-    "estPriceHelp": "The provider does not publish per-second unit rates; Boxa uses an estimate",
+    "estPriceHelp": "The provider does not publish per-second unit rates; Boxaz uses an estimate",
     "cap": {
       "unsupported": "{name}: not supported",
       "boot": "Boot {v}",
@@ -1442,7 +1442,7 @@
       "noDial": "This provider cannot keep a background process, so it runs as a shim (T3) only."
     },
     "modeHelp": {
-      "auto": "T2 when the sandbox keeps background processes and BOXA_PUBLIC_URL is set, else T3",
+      "auto": "T2 when the sandbox keeps background processes and BOXAZ_PUBLIC_URL is set, else T3",
       "dial": "boxd runs in the sandbox and calls Core: terminal, snapshots, egress",
       "shim": "Core calls the exec API instead of boxd: no public URL needed, fewer features"
     },
@@ -1495,7 +1495,7 @@
       "sample": "Paste sample",
       "howTitle": "How to add an adapter",
       "how1": "Write the YAML from the sample (create/get/delete/exec routes, auth, capabilities, prices).",
-      "how2": "Lint it here, then save the file into <mono>BOXA_SANDBOX_ADAPTERS_DIR</mono>.",
+      "how2": "Lint it here, then save the file into <mono>BOXAZ_SANDBOX_ADAPTERS_DIR</mono>.",
       "how3": "Restart Core; the new provider appears under Sandbox API, ready to connect.",
       "required": "Required keys:",
       "invalid": "Adapter is not valid",

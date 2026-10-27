@@ -1,16 +1,16 @@
-"""Boxa Python SDK — cheap disposable Linux boxes for AI agents.
+"""Deprecated compatibility shim: the SDK was renamed ``boxa`` → ``boxaz``.
 
-    from boxa import Boxa, as_openai_tools, handle_tool_call
-    bx = Boxa()  # BOXA_URL, BOXA_API_KEY, BOXA_LANG
+``import boxa`` keeps working (with a DeprecationWarning) and exposes the old
+class names as aliases of the new ones. New code: ``from boxaz import Boxaz``.
 """
 
-from ._client import AsyncBoxa, Boxa, BoxaError
-from .tools import ahandle_tool_call, as_anthropic_tools, as_gemini_tools, as_openai_tools, handle_tool_call
-from . import types
+import warnings as _warnings
 
-__version__ = "1.1.0"
+from boxaz import *  # noqa: F401,F403
+from boxaz import AsyncBoxaz, Boxaz, BoxazError, __version__, types  # noqa: F401
 
-__all__ = [
-    "Boxa", "AsyncBoxa", "BoxaError", "as_openai_tools", "as_anthropic_tools", "as_gemini_tools",
-    "handle_tool_call", "ahandle_tool_call", "types", "__version__",
-]
+_warnings.warn("the 'boxa' package is deprecated; use 'boxaz' (Boxa → Boxaz)", DeprecationWarning, stacklevel=2)
+
+Boxa = Boxaz
+AsyncBoxa = AsyncBoxaz
+BoxaError = BoxazError

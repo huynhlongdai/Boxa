@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"boxa/core/internal/boxyaml"
-	"boxa/core/internal/model"
-	"boxa/core/internal/store"
+	"boxaz/core/internal/boxyaml"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/store"
 )
 
 // ---- secrets (M10) ----
@@ -52,8 +52,8 @@ func (m *Manager) CreateSecret(ctx context.Context, p *Principal, in SecretInput
 	if in.Value == "" {
 		return nil, model.E(model.ErrInvalid, "value is required")
 	}
-	if strings.HasPrefix(in.Name, model.SystemSecretPrefix) {
-		return nil, model.EH(model.ErrInvalid, "Configure Boxa credentials in Settings (notifications, storage) instead.", "secret names starting with BOXA_SYS_ are reserved")
+	if strings.HasPrefix(in.Name, model.SystemSecretPrefix) || strings.HasPrefix(in.Name, model.LegacySystemSecretPrefix) {
+		return nil, model.EH(model.ErrInvalid, "Configure Boxaz credentials in Settings (notifications, storage) instead.", "secret names starting with BOXAZ_SYS_ are reserved")
 	}
 	if _, err := m.Store.GetSecret(ctx, in.Name); err == nil {
 		return nil, model.EH(model.ErrInvalid, "Use POST /secrets/:name/rotate to change the value.", "secret %s already exists", in.Name)
@@ -249,7 +249,7 @@ func (m *Manager) Users(ctx context.Context) []map[string]any {
 			admin++
 		}
 	}
-	return []map[string]any{{"id": "owner", "name": "owner", "role": "admin", "admin_keys": admin, "note": "Boxa v1 is single-operator; agents authenticate with agent keys."}}
+	return []map[string]any{{"id": "owner", "name": "owner", "role": "admin", "admin_keys": admin, "note": "Boxaz v1 is single-operator; agents authenticate with agent keys."}}
 }
 
 func (m *Manager) Uptime() time.Duration { return time.Since(m.startedAt) }

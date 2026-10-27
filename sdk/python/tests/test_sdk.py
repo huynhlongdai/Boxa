@@ -3,28 +3,28 @@ import json
 
 import pytest
 
-import boxa
-from boxa import AsyncBoxa, Boxa, BoxaError, as_anthropic_tools, as_gemini_tools, as_openai_tools, handle_tool_call
-from boxa import _client
+import boxaz
+from boxaz import AsyncBoxaz, Boxaz, BoxazError, as_anthropic_tools, as_gemini_tools, as_openai_tools, handle_tool_call
+from boxaz import _client
 
 
 def test_discovery(core):
-    bx = Boxa(core["key"], core["url"])
+    bx = Boxaz(core["key"], core["url"])
     assert bx.health()["ok"] is True
     assert len(bx.agent_kinds()["items"]) == 22
     tools = as_openai_tools(bx)
     names = {t["function"]["name"] for t in tools}
-    assert {"box_up", "box_exec_batch", "box_fork", "box_quote"} <= names and len(names) == 21
+    assert {"box_up", "box_exec_batch", "box_fork", "box_quote"} <= names and len(names) == 22
     assert as_openai_tools(bx, responses_api=True)[0]["name"] == "box_ensure"
     assert as_anthropic_tools(bx)[0]["input_schema"]["type"] == "object"
-    assert len(as_gemini_tools(bx)[0]["functionDeclarations"]) == 21
-    assert bx.llms_txt().startswith("# Boxa")
+    assert len(as_gemini_tools(bx)[0]["functionDeclarations"]) == 22
+    assert bx.llms_txt().startswith("# Boxaz")
     assert bx.openapi()["openapi"] == "3.1.0"
 
 
 def test_errors_localized(core):
-    bx = Boxa(core["key"], core["url"], lang="vi")
-    with pytest.raises(BoxaError) as ei:
+    bx = Boxaz(core["key"], core["url"], lang="vi")
+    with pytest.raises(BoxazError) as ei:
         bx.get_box("box_khong_co")
     e = ei.value
     assert e.code == "NOT_FOUND" and e.status == 404 and "không tìm thấy" in e.message and e.docs_url.endswith("#NOT_FOUND")
@@ -32,7 +32,7 @@ def test_errors_localized(core):
 
 
 def test_box_lifecycle_sync(core):
-    with Boxa(core["key"], core["url"]) as bx:
+    with Boxaz(core["key"], core["url"]) as bx:
         q = bx.quote("python", "task", ram_mb=512, ttl_seconds=1800)
         assert q["available"] and q["expected_hours"] == 0.5
         box = bx.create_box("python", "session", ram_mb=512, slug="sdk-py", idempotency_key="sdk-py-1")
@@ -68,7 +68,7 @@ def test_box_lifecycle_sync(core):
 
 def test_async_client(core):
     async def main():
-        async with AsyncBoxa(core["key"], core["url"], lang="ja") as bx:
+        async with AsyncBoxaz(core["key"], core["url"], lang="ja") as bx:
             box = await bx.up("base", "task", ttl_seconds=600, ram_mb=256)
             r = await bx.exec(box["id"], "echo async-hi")
             assert r["stdout_tail"] == "async-hi"
@@ -77,7 +77,7 @@ def test_async_client(core):
             try:
                 await bx.get_box("box_nope")
                 raise AssertionError("expected error")
-            except BoxaError as e:
+            except BoxazError as e:
                 assert e.code == "NOT_FOUND" and "見つかりません" in e.message
             assert (await bx.call_tool("box_list", {}))["items"]
             await bx.down(box["id"])
@@ -87,15 +87,15 @@ def test_async_client(core):
 
 def test_urllib_fallback(core, monkeypatch):
     monkeypatch.setattr(_client, "httpx", None)
-    bx = Boxa(core["key"], core["url"], lang="zh")
+    bx = Boxaz(core["key"], core["url"], lang="zh")
     assert bx._http is None
     assert bx.health()["ok"]
-    with pytest.raises(BoxaError) as ei:
+    with pytest.raises(BoxazError) as ei:
         bx.get_box("box_nope")
     assert "未找到" in ei.value.message
 
     async def main():
-        abx = AsyncBoxa(core["key"], core["url"])
+        abx = AsyncBoxaz(core["key"], core["url"])
         assert abx._http is None
         assert len((await abx.agent_kinds())["items"]) == 22
 
@@ -103,22 +103,42 @@ def test_urllib_fallback(core, monkeypatch):
 
 
 def test_env_defaults(monkeypatch):
-    monkeypatch.setenv("BOXA_URL", "http://example.test:9/v1")
-    monkeypatch.setenv("BOXA_API_KEY", "bx_agent_x")
-    monkeypatch.setenv("BOXA_LANG", "vi")
-    bx = Boxa()
+    monkeypatch.setenv("BOXAZ_URL", "http://example.test:9/v1")
+    monkeypatch.setenv("BOXAZ_API_KEY", "bx_agent_x")
+    monkeypatch.setenv("BOXAZ_LANG", "vi")
+    bx = Boxaz()
     assert bx.base_url == "http://example.test:9" and bx.api_key == "bx_agent_x"
     h = bx._headers()
     assert h["Authorization"] == "Bearer bx_agent_x" and h["Accept-Language"] == "vi"
     assert bx._url("/llms.txt") == "http://example.test:9/llms.txt"
     assert bx._url("/boxes", {"all": True, "status": None}) == "http://example.test:9/v1/boxes?all=true"
-    assert boxa.__version__ == "1.1.0"
+    assert boxaz.__version__ == "1.1.0"
+
+
+def test_legacy_env_and_package(monkeypatch):
+    # Pre-rename BOXA_* env vars and the old `boxa` package keep working.
+    for k in ("BOXAZ_URL", "BOXAZ_API_KEY", "BOXAZ_LANG"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("BOXA_URL", "http://legacy.test:9")
+    monkeypatch.setenv("BOXA_API_KEY", "bx_agent_old")
+    with pytest.warns(DeprecationWarning):
+        bx = Boxaz()
+    assert bx.base_url == "http://legacy.test:9" and bx.api_key == "bx_agent_old"
+    monkeypatch.setenv("BOXAZ_URL", "http://new.test:9")
+    assert Boxaz().base_url == "http://new.test:9"
+    import importlib
+    import sys
+
+    sys.modules.pop("boxa", None)
+    with pytest.warns(DeprecationWarning):
+        boxa = importlib.import_module("boxa")
+    assert boxa.Boxa is Boxaz and boxa.BoxaError is BoxazError and boxa.AsyncBoxa is AsyncBoxaz
 
 
 def test_v13_selection_helpers(core):
-    from boxa import Boxa
+    from boxaz import Boxaz
     url, akey = core["url"], core["key"]
-    with Boxa(akey, url) as bx:
+    with Boxaz(akey, url) as bx:
         pr = bx.profiles()
         assert len(pr["items"]) == 7 and len(pr["kinds"]) == 22
         rec = bx.recommend("general", ram_mb=256, disk_gb=1, max_price_hour=1)
@@ -140,9 +160,9 @@ def test_v13_selection_helpers(core):
 
 
 def test_v14_sandbox_helpers(core):
-    from boxa import Boxa, BoxaError
+    from boxaz import Boxaz, BoxazError
     url, admin, akey = core["url"], core["admin"], core["key"]
-    with Boxa(akey, url) as bx:
+    with Boxaz(akey, url) as bx:
         sp = bx.sandbox_providers()["items"]
         ids = {p["id"]: p for p in sp}
         assert {"e2b", "novita", "daytona", "prized", "boxdsh", "runloop", "blaxel", "vercel", "boat", "agent37", "upstash-box"} <= set(ids)
@@ -152,9 +172,9 @@ def test_v14_sandbox_helpers(core):
         try:
             bx.lint_adapter("id: x")
             raise AssertionError("agent key must not lint adapters")
-        except BoxaError as e:
+        except BoxazError as e:
             assert e.code in ("UNAUTHORIZED", "POLICY_DENIED")
-    with Boxa(admin, url) as adm:
+    with Boxaz(admin, url) as adm:
         bad = adm.lint_adapter("id: x\nname: X\n")
         assert bad["ok"] is False and "missing" in bad["error"]
         good = adm.lint_adapter(

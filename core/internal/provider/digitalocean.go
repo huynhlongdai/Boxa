@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"boxa/core/internal/model"
+	"boxaz/core/internal/model"
 )
 
 // DigitalOcean API v2 adapter (https://docs.digitalocean.com/reference/api/).
@@ -144,7 +144,7 @@ func doState(s string) string {
 }
 
 func (d *DigitalOcean) Create(ctx context.Context, token string, req CreateRequest) (Handle, error) {
-	tags := []string{"boxa"}
+	tags := []string{"managed"}
 	for k, v := range req.Labels {
 		tags = append(tags, sanitizeTag(k+"-"+v))
 	}
@@ -165,7 +165,7 @@ func (d *DigitalOcean) List(ctx context.Context, token string) ([]Server, error)
 	var out struct {
 		Droplets []doDroplet `json:"droplets"`
 	}
-	if err := doJSON(ctx, d.c, "GET", d.BaseURL+"/droplets?per_page=200&tag_name=boxa", token, nil, &out); err != nil {
+	if err := doJSON(ctx, d.c, "GET", d.BaseURL+"/droplets?per_page=200&tag_name=managed", token, nil, &out); err != nil {
 		return nil, authErr(err, "DigitalOcean")
 	}
 	var ss []Server

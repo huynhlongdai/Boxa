@@ -13,9 +13,9 @@ import (
 	"fmt"
 	"time"
 
-	"boxa/core/internal/egress"
-	"boxa/core/internal/model"
-	"boxa/core/internal/proto"
+	"boxaz/core/internal/egress"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/proto"
 )
 
 func (m *Manager) effectiveEgress(ctx context.Context, agent *model.Agent, req *egress.Policy) (*model.BoxEgress, error) {

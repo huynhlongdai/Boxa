@@ -1,5 +1,5 @@
 #cloud-config
-# Boxa T1 host bootstrap: installs Incus + boxd, boxd dials OUT to core.
+# T1 host bootstrap: installs Incus + boxd, boxd dials OUT to core.
 # No inbound port is required on the host.
 package_update: true
 packages:
@@ -23,7 +23,7 @@ write_files:
     permissions: "0644"
     content: |
       [Unit]
-      Description=Boxa host agent (boxd)
+      Description=host agent (boxd)
       After=network-online.target incus.service
       Wants=network-online.target
       [Service]
@@ -35,7 +35,7 @@ write_files:
       WantedBy=multi-user.target
 runcmd:
   - [sh, -c, "incus admin init --minimal || true"]
-  - [sh, -c, "mkdir -p /var/lib/boxd /var/lib/boxa/memory"]
+  - [sh, -c, "mkdir -p /var/lib/boxd /var/lib/boxd/memory"]
   - [sh, -c, "ARCH=$(dpkg --print-architecture); curl -fsSL '{{.BoxdURL}}'-linux-$ARCH -o /usr/local/bin/boxd && chmod +x /usr/local/bin/boxd"]
 {{- if .Mesh}}
   - [sh, -c, "curl -fsSL https://tailscale.com/install.sh | sh"]

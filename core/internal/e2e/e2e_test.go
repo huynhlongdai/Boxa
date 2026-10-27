@@ -15,14 +15,14 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"boxa/core/internal/api"
-	"boxa/core/internal/boxd"
-	"boxa/core/internal/client"
-	"boxa/core/internal/manager"
-	"boxa/core/internal/model"
-	"boxa/core/internal/provider"
-	"boxa/core/internal/secret"
-	"boxa/core/internal/store"
+	"boxaz/core/internal/api"
+	"boxaz/core/internal/boxd"
+	"boxaz/core/internal/client"
+	"boxaz/core/internal/manager"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/provider"
+	"boxaz/core/internal/secret"
+	"boxaz/core/internal/store"
 )
 
 type env struct {
@@ -46,7 +46,7 @@ func setupWith(t *testing.T, mut func(*manager.Config), hosts int) *env {
 func setupReg(t *testing.T, reg *provider.Registry, mut func(*manager.Config), hosts int) *env {
 	t.Helper()
 	dir := t.TempDir()
-	st, err := store.Open(filepath.Join(dir, "boxa.db"))
+	st, err := store.Open(filepath.Join(dir, "boxaz.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -426,7 +426,7 @@ func TestIngress(t *testing.T) {
 	e := setup(t)
 	var b model.Box
 	e.must(e.admin, "POST", "/boxes", map[string]any{"template": "base", "slug": "web", "ports": []int{18931}, "spec": map[string]any{"ram_mb": 256}}, &b)
-	if !strings.HasPrefix(b.URL, "https://web-127-0-0-1.sslip.io/?boxa_token=") {
+	if !strings.HasPrefix(b.URL, "https://web-127-0-0-1.sslip.io/?boxaz_token=") {
 		t.Fatalf("url: %q", b.URL)
 	}
 	var res model.ExecResult
@@ -448,8 +448,8 @@ func TestIngress(t *testing.T) {
 	if r := get("/index.html", nil); r.StatusCode != 401 {
 		t.Fatalf("unprotected: %d", r.StatusCode)
 	}
-	tok := strings.SplitN(b.URL, "boxa_token=", 2)[1]
-	r := get("/?boxa_token="+tok, nil)
+	tok := strings.SplitN(b.URL, "boxaz_token=", 2)[1]
+	r := get("/?boxaz_token="+tok, nil)
 	if r.StatusCode != 302 || len(r.Cookies()) == 0 {
 		t.Fatalf("token redirect: %d", r.StatusCode)
 	}

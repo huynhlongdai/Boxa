@@ -13,12 +13,12 @@ import (
 	"strings"
 	"time"
 
-	"boxa/core/internal/boxyaml"
-	"boxa/core/internal/egress"
-	"boxa/core/internal/model"
-	"boxa/core/internal/provider"
-	"boxa/core/internal/sandbox"
-	"boxa/core/internal/selector"
+	"boxaz/core/internal/boxyaml"
+	"boxaz/core/internal/egress"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/provider"
+	"boxaz/core/internal/sandbox"
+	"boxaz/core/internal/selector"
 )
 
 // RecommendInput is POST /recommend.

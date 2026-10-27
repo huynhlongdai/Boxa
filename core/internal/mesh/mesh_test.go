@@ -18,7 +18,7 @@ func TestRenderConfigAndDERP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"server_url: https://mesh.example.com", "base_domain: boxa.mesh", "region_id: 999", "enabled: true", "path: /etc/headscale/acl.json"} {
+	for _, want := range []string{"server_url: https://mesh.example.com", "base_domain: boxaz.mesh", "region_id: 999", "enabled: true", "path: /etc/headscale/acl.json"} {
 		if !strings.Contains(y, want) {
 			t.Fatalf("config missing %q:\n%s", want, y)
 		}
@@ -38,7 +38,7 @@ func TestGeneratePolicy(t *testing.T) {
 		{ID: "box_c", AgentID: "agt_2", Ports: []int{80}},
 	})
 	js := p.JSON()
-	for _, want := range []string{`"tag:agent-agt-1"`, `"tag:box-box-b:8080,3000"`, `"10.1.0.0/16:*"`, `"1.2.3.4:443"`, `"tag:box-box-c:80"`, `"tag:boxa-core:443,8080"`} {
+	for _, want := range []string{`"tag:agent-agt-1"`, `"tag:box-box-b:8080,3000"`, `"10.1.0.0/16:*"`, `"1.2.3.4:443"`, `"tag:box-box-c:80"`, `"tag:boxaz-core:443,8080"`} {
 		if !strings.Contains(js, want) {
 			t.Fatalf("policy missing %s:\n%s", want, js)
 		}
@@ -71,7 +71,7 @@ func TestClient(t *testing.T) {
 		switch r.URL.Path {
 		case "/api/v1/user":
 			if r.Method == "GET" {
-				w.Write([]byte(`{"users":[{"name":"boxa"}]}`))
+				w.Write([]byte(`{"users":[{"name":"boxaz"}]}`))
 				return
 			}
 			t.Error("must not create an existing user")
@@ -79,7 +79,7 @@ func TestClient(t *testing.T) {
 			json.NewDecoder(r.Body).Decode(&got)
 			w.Write([]byte(`{"preAuthKey":{"id":"9","key":"abc","reusable":false,"ephemeral":true}}`))
 		case "/api/v1/node":
-			if r.URL.Query().Get("user") != "boxa" {
+			if r.URL.Query().Get("user") != "boxaz" {
 				t.Error("user filter")
 			}
 			w.Write([]byte(`{"nodes":[{"id":"1","name":"n1","online":true,"ipAddresses":["100.64.0.5"]}]}`))
@@ -88,14 +88,14 @@ func TestClient(t *testing.T) {
 	defer srv.Close()
 	c := &Client{BaseURL: srv.URL, APIKey: "k"}
 	ctx := context.Background()
-	if err := c.EnsureUser(ctx, "boxa"); err != nil {
+	if err := c.EnsureUser(ctx, "boxaz"); err != nil {
 		t.Fatal(err)
 	}
-	k, err := c.CreatePreAuthKey(ctx, "boxa", []string{TagHost}, false, true, 10*time.Minute)
-	if err != nil || k.Key != "abc" || got["user"] != "boxa" || got["ephemeral"] != true {
+	k, err := c.CreatePreAuthKey(ctx, "boxaz", []string{TagHost}, false, true, 10*time.Minute)
+	if err != nil || k.Key != "abc" || got["user"] != "boxaz" || got["ephemeral"] != true {
 		t.Fatalf("%v %+v %+v", err, k, got)
 	}
-	n, err := c.Nodes(ctx, "boxa")
+	n, err := c.Nodes(ctx, "boxaz")
 	if err != nil || len(n) != 1 || !n[0].Online {
 		t.Fatalf("%v %+v", err, n)
 	}
@@ -104,7 +104,7 @@ func TestClient(t *testing.T) {
 		t.Fatal("auth error expected")
 	}
 	args := strings.Join(TailscaleUpArgs("https://m", "key", "host-1", []string{TagHost}), " ")
-	if !strings.Contains(args, "--login-server=https://m") || !strings.Contains(args, "--advertise-tags=tag:boxa-host") {
+	if !strings.Contains(args, "--login-server=https://m") || !strings.Contains(args, "--advertise-tags=tag:boxaz-host") {
 		t.Fatal(args)
 	}
 }

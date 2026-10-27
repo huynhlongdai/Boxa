@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"boxa/core/internal/model"
+	"boxaz/core/internal/model"
 )
 
 // v1.4: sandbox options are filtered by their capabilities, not by kind.

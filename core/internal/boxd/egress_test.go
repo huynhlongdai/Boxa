@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"boxa/core/internal/proto"
+	"boxaz/core/internal/proto"
 )
 
 func fakeResolver(ctx context.Context, host string) ([]string, error) {
@@ -45,11 +45,11 @@ func TestIncusEgressACL(t *testing.T) {
 	}
 	all := strings.Join(calls, "\n")
 	for _, w := range []string{
-		"network acl create boxa-eg-box-e1",
-		"network acl rule add boxa-eg-box-e1 egress action=allow protocol=udp destination_port=53 description=dns",
-		"network acl rule add boxa-eg-box-e1 egress action=allow destination=151.101.0.223/32 protocol=tcp destination_port=443",
-		"network acl rule add boxa-eg-box-e1 egress action=allow destination=10.0.0.0/8",
-		"config device set boxa-box-e1 eth0 security.acls=boxa-eg-box-e1 security.acls.default.egress.action=drop",
+		"network acl create boxaz-eg-box-e1",
+		"network acl rule add boxaz-eg-box-e1 egress action=allow protocol=udp destination_port=53 description=dns",
+		"network acl rule add boxaz-eg-box-e1 egress action=allow destination=151.101.0.223/32 protocol=tcp destination_port=443",
+		"network acl rule add boxaz-eg-box-e1 egress action=allow destination=10.0.0.0/8",
+		"config device set boxaz-box-e1 eth0 security.acls=boxaz-eg-box-e1 security.acls.default.egress.action=drop",
 	} {
 		if !strings.Contains(all, w) {
 			t.Errorf("missing %q in\n%s", w, all)
@@ -61,7 +61,7 @@ func TestIncusEgressACL(t *testing.T) {
 	if err != nil || res.Enforced {
 		t.Fatalf("clear %+v %v", res, err)
 	}
-	if calls[len(calls)-1] != "network acl delete boxa-eg-box-e1" {
+	if calls[len(calls)-1] != "network acl delete boxaz-eg-box-e1" {
 		t.Fatalf("clear calls %v", calls)
 	}
 }
@@ -106,7 +106,7 @@ func TestLocalEgressBestEffort(t *testing.T) {
 		t.Fatalf("local egress %+v %v", res, err)
 	}
 	var out strings.Builder
-	d.Run(ctx, "box_l1", proto.ExecParams{Command: "echo $BOXA_EGRESS_ALLOW/$BOXA_EGRESS_ENFORCED", TimeoutS: 5}, &out, io.Discard)
+	d.Run(ctx, "box_l1", proto.ExecParams{Command: "echo $BOXAZ_EGRESS_ALLOW/$BOXAZ_EGRESS_ENFORCED", TimeoutS: 5}, &out, io.Discard)
 	if strings.TrimSpace(out.String()) != "pypi.org/0" {
 		t.Fatalf("env %q", out.String())
 	}

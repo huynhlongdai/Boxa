@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"boxa/core/internal/client"
-	"boxa/core/internal/manager"
-	"boxa/core/internal/model"
-	"boxa/core/internal/objstore"
-	"boxa/core/internal/store"
+	"boxaz/core/internal/client"
+	"boxaz/core/internal/manager"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/objstore"
+	"boxaz/core/internal/store"
 )
 
 func mustBox(t *testing.T, e *env, c *client.Client, body map[string]any) model.Box {
@@ -53,7 +53,7 @@ func TestSnapshotsInObjectStorage(t *testing.T) {
 	if st, _, _ := e.admin.Do(e.ctx, "PUT", "/storage", map[string]any{"provider": "r2", "endpoint": s3.URL, "bucket": "snaps", "access_key_id": "AKID"}); st != 400 {
 		t.Fatalf("missing secret should be rejected: %d", st)
 	}
-	e.must(e.admin, "PUT", "/storage", map[string]any{"provider": "r2", "endpoint": s3.URL, "bucket": "snaps", "prefix": "boxa", "access_key_id": "AKID", "secret_access_key": "SECRET"}, &sv)
+	e.must(e.admin, "PUT", "/storage", map[string]any{"provider": "r2", "endpoint": s3.URL, "bucket": "snaps", "prefix": "team", "access_key_id": "AKID", "secret_access_key": "SECRET"}, &sv)
 	if !sv.Configured || sv.Source != "settings" || !sv.HasSecret || sv.Region != "auto" {
 		t.Fatalf("storage view %+v", sv)
 	}
@@ -69,11 +69,11 @@ func TestSnapshotsInObjectStorage(t *testing.T) {
 	var secs model.List[model.Secret]
 	e.must(ag, "GET", "/secrets", nil, &secs)
 	for _, s := range secs.Items {
-		if strings.HasPrefix(s.Name, "BOXA_SYS_") {
+		if strings.HasPrefix(s.Name, "BOXAZ_SYS_") {
 			t.Fatal("agent sees system secret")
 		}
 	}
-	if st, _, _ := e.admin.Do(e.ctx, "POST", "/secrets", map[string]any{"name": "BOXA_SYS_X", "value": "v"}); st != 400 {
+	if st, _, _ := e.admin.Do(e.ctx, "POST", "/secrets", map[string]any{"name": "BOXAZ_SYS_X", "value": "v"}); st != 400 {
 		t.Fatalf("reserved secret name accepted: %d", st)
 	}
 
@@ -81,7 +81,7 @@ func TestSnapshotsInObjectStorage(t *testing.T) {
 	e.must(ag, "PUT", "/boxes/"+a.ID+"/files", map[string]any{"path": "/work/hello.txt", "content": "từ snapshot"}, nil)
 	var sn model.Snapshot
 	e.must(ag, "POST", "/boxes/"+a.ID+"/snapshot", nil, &sn)
-	if sn.Storage != "s3" || !strings.HasPrefix(sn.RemoteURL, "s3://snaps/boxa/snapshots/"+a.ID+"/") || sn.UploadError != "" {
+	if sn.Storage != "s3" || !strings.HasPrefix(sn.RemoteURL, "s3://snaps/team/snapshots/"+a.ID+"/") || sn.UploadError != "" {
 		t.Fatalf("snapshot %+v", sn)
 	}
 	key := strings.TrimPrefix(sn.RemoteURL, "s3://")
@@ -143,7 +143,7 @@ func TestEgressPolicy(t *testing.T) {
 		t.Fatalf("egress %+v", b.Egress)
 	}
 	var res model.ExecResult
-	e.must(ag, "POST", "/boxes/"+b.ID+"/exec", map[string]any{"command": "echo $BOXA_EGRESS_ALLOW"}, &res)
+	e.must(ag, "POST", "/boxes/"+b.ID+"/exec", map[string]any{"command": "echo $BOXAZ_EGRESS_ALLOW"}, &res)
 	if !strings.Contains(res.StdoutTail, "pypi.org") {
 		t.Fatalf("env not exported: %q", res.StdoutTail)
 	}

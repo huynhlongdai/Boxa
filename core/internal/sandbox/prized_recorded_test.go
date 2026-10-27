@@ -72,7 +72,7 @@ func TestPrizedRecorded(t *testing.T) {
 	d := NewPrized(nil, srv.URL+"/api/v1")
 	c := Cred{"token": "dcp_test"}
 
-	a, err := d.Create(bg, c, Spec{Name: "boxa-h1", Template: "prized-base-v1"})
+	a, err := d.Create(bg, c, Spec{Name: "mgr-h1", Template: "prized-base-v1"})
 	if err != nil || a.ID != "sbx_aaaa" || a.State != StateRunning || a.Meta["raw_state"] != "running" {
 		t.Fatalf("create: %+v %v", a, err)
 	}
@@ -82,7 +82,7 @@ func TestPrizedRecorded(t *testing.T) {
 	if err := d.Delete(bg, c, a.ID); err != nil {
 		t.Fatal(err)
 	}
-	b, err := d.Create(bg, c, Spec{Name: "boxa-h1", CPU: 1, RAMMB: 2048, DiskGB: 20})
+	b, err := d.Create(bg, c, Spec{Name: "mgr-h1", CPU: 1, RAMMB: 2048, DiskGB: 20})
 	if err != nil || b.State != StateRunning {
 		t.Fatalf("name reuse after delete: %+v %v (paths %v)", b, err, paths)
 	}

@@ -72,7 +72,7 @@ let checked = 0;
 for (const locale of locales) {
   for (const vp of viewports) {
     const ctx = await browser.newContext({ viewport: vp, locale });
-    await ctx.addCookies([{ name: "boxa_locale", value: locale, url: base }]);
+    await ctx.addCookies([{ name: "boxaz_locale", value: locale, url: base }]);
     const page = await ctx.newPage();
     page.setDefaultTimeout(8000);
     const t0 = Date.now();

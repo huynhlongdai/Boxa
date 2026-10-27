@@ -11,13 +11,13 @@ import (
 	"sort"
 	"strings"
 
-	"boxa/core/internal/agentkit"
-	"boxa/core/internal/i18n"
-	"boxa/core/internal/manager"
-	"boxa/core/internal/mcp"
-	"boxa/core/internal/model"
-	"boxa/core/internal/sandbox"
-	"boxa/core/internal/selector"
+	"boxaz/core/internal/agentkit"
+	"boxaz/core/internal/i18n"
+	"boxaz/core/internal/manager"
+	"boxaz/core/internal/mcp"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/sandbox"
+	"boxaz/core/internal/selector"
 )
 
 func (s *Server) llmsHeader(r *http.Request) (string, string, *strings.Builder) {
@@ -25,10 +25,10 @@ func (s *Server) llmsHeader(r *http.Request) (string, string, *strings.Builder) 
 	base := s.publicBase(r)
 	t := func(k string, a ...any) string { return i18n.T(loc, k, a...) }
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Boxa\n\n> %s\n\n%s\n\n", t("llms.summary"), t("llms.details"))
+	fmt.Fprintf(&b, "# Boxaz\n\n> %s\n\n%s\n\n", t("llms.summary"), t("llms.details"))
 	fmt.Fprintf(&b, "## %s\n\n", t("llms.h_quickstart"))
 	fmt.Fprintf(&b, "1. %s\n", t("llms.qs1"))
-	fmt.Fprintf(&b, "2. %s `%s/mcp` (Streamable HTTP, header `Authorization: Bearer $BOXA_API_KEY`) — %s `box mcp`.\n", t("llms.qs2"), base, t("llms.or_stdio"))
+	fmt.Fprintf(&b, "2. %s `%s/mcp` (Streamable HTTP, header `Authorization: Bearer $BOXAZ_API_KEY`) — %s `box mcp`.\n", t("llms.qs2"), base, t("llms.or_stdio"))
 	fmt.Fprintf(&b, "3. %s\n", t("llms.qs3"))
 	fmt.Fprintf(&b, "4. %s\n\n", t("llms.qs4"))
 	// v1.3: how to choose a box
@@ -153,22 +153,22 @@ func (s *Server) mcpCard(w http.ResponseWriter, r *http.Request) {
 	loc := reqLocale(r)
 	prompts := []string{"debug-failing-command", "start-project", "cost-review"}
 	writeJSON(w, 200, map[string]any{
-		"name":            "dev.boxa/boxa",
-		"title":           "Boxa",
+		"name":            "dev.boxaz/boxaz",
+		"title":           "Boxaz",
 		"description":     i18n.T(loc, "llms.summary"),
 		"version":         manager.Version,
 		"protocolVersion": mcp.ProtocolVersion,
-		"serverInfo":      map[string]any{"name": "boxa", "title": "Boxa", "version": manager.Version},
+		"serverInfo":      map[string]any{"name": "boxaz", "title": "Boxaz", "version": manager.Version},
 		"transport":       map[string]any{"type": "streamable-http", "url": base + "/mcp"},
 		"remotes": []any{map[string]any{"type": "streamable-http", "url": base + "/mcp", "headers": []any{
-			map[string]any{"name": "Authorization", "description": "Bearer <BOXA_API_KEY>", "isRequired": true, "isSecret": true},
+			map[string]any{"name": "Authorization", "description": "Bearer <BOXAZ_API_KEY>", "isRequired": true, "isSecret": true},
 			map[string]any{"name": "Accept-Language", "description": "vi | en | zh | ja", "isRequired": false},
 		}}},
 		"packages": []any{map[string]any{"registryType": "binary", "identifier": "box", "transport": map[string]any{"type": "stdio"},
 			"runtimeArguments": []string{"mcp"}, "environmentVariables": []any{
-				map[string]any{"name": "BOXA_URL", "isRequired": true, "default": base},
-				map[string]any{"name": "BOXA_API_KEY", "isRequired": true, "isSecret": true},
-				map[string]any{"name": "BOXA_LANG", "isRequired": false, "description": "vi | en | zh | ja"},
+				map[string]any{"name": "BOXAZ_URL", "isRequired": true, "default": base},
+				map[string]any{"name": "BOXAZ_API_KEY", "isRequired": true, "isSecret": true},
+				map[string]any{"name": "BOXAZ_LANG", "isRequired": false, "description": "vi | en | zh | ja"},
 			}}},
 		"authentication": map[string]any{"required": true, "schemes": []string{"bearer"}},
 		"capabilities":   map[string]any{"tools": map[string]any{"listChanged": false}, "resources": map[string]any{"subscribe": false, "listChanged": false}, "prompts": map[string]any{"listChanged": false}},
@@ -184,7 +184,7 @@ func (s *Server) mcpCard(w http.ResponseWriter, r *http.Request) {
 // agentCard serves /.well-known/agent.json (A2A AgentCard, protocol 0.3).
 // The JSON-RPC task API lives at POST /a2a (message/send, message/stream,
 // tasks/get, tasks/cancel, tasks/resubscribe + the ≤0.2 aliases tasks/send
-// and tasks/sendSubscribe). Every Boxa tool is a skill: send a data part
+// and tasks/sendSubscribe). Every Boxaz tool is a skill: send a data part
 // {"tool": "<name>", "arguments": {...}}; commands run as async jobs.
 func (s *Server) agentCard(w http.ResponseWriter, r *http.Request) {
 	base := s.publicBase(r)
@@ -205,7 +205,7 @@ func (s *Server) agentCard(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, map[string]any{
 		"protocolVersion":    "0.3.0",
-		"name":               "Boxa",
+		"name":               "Boxaz",
 		"description":        i18n.T(loc, "llms.summary"),
 		"url":                base + "/a2a",
 		"preferredTransport": "JSONRPC",
@@ -213,18 +213,18 @@ func (s *Server) agentCard(w http.ResponseWriter, r *http.Request) {
 			map[string]any{"url": base + "/a2a", "transport": "JSONRPC"},
 			map[string]any{"url": base + "/v1", "transport": "HTTP+JSON"},
 		},
-		"provider":                          map[string]any{"organization": "Boxa", "url": base},
+		"provider":                          map[string]any{"organization": "Boxaz", "url": base},
 		"version":                           manager.Version,
 		"documentationUrl":                  base + "/llms-full.txt",
 		"iconUrl":                           nil,
 		"capabilities":                      map[string]any{"streaming": true, "pushNotifications": false, "stateTransitionHistory": false},
-		"securitySchemes":                   map[string]any{"bearer": map[string]any{"type": "http", "scheme": "bearer", "description": "Boxa API key"}},
+		"securitySchemes":                   map[string]any{"bearer": map[string]any{"type": "http", "scheme": "bearer", "description": "Boxaz API key"}},
 		"security":                          []any{map[string]any{"bearer": []string{}}},
 		"defaultInputModes":                 []string{"application/json", "text/plain"},
 		"defaultOutputModes":                []string{"application/json", "text/plain"},
 		"skills":                            skills,
 		"supportsAuthenticatedExtendedCard": false,
-		"x-boxa": map[string]any{"mcp": base + "/mcp", "openapi": base + "/v1/openapi.json", "tools": base + "/v1/tools?format=openai",
+		"x-boxaz": map[string]any{"mcp": base + "/mcp", "openapi": base + "/v1/openapi.json", "tools": base + "/v1/tools?format=openai",
 			"a2a_methods": []string{"message/send", "message/stream", "tasks/get", "tasks/cancel", "tasks/resubscribe", "tasks/send", "tasks/sendSubscribe"}},
 	})
 }

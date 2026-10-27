@@ -10,13 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MoneyBudget, BudgetBar } from "@/components/boxa/budget";
-import { ErrorBox, PageHeader } from "@/components/boxa/page";
+import { MoneyBudget, BudgetBar } from "@/components/boxaz/budget";
+import { ErrorBox, PageHeader } from "@/components/boxaz/page";
 import { cn } from "@/lib/utils";
 import { LocaleGrid } from "@/components/locale-switcher";
 import { LOCALES, LOCALE_NATIVE } from "@/i18n/config";
-import { NotifySettingsCard } from "@/components/boxa/notify-settings";
-import { StorageSettingsCard } from "@/components/boxa/storage-settings";
+import { NotifySettingsCard } from "@/components/boxaz/notify-settings";
+import { StorageSettingsCard } from "@/components/boxaz/storage-settings";
 
 function Form({ initial }: { initial: Settings }) {
   const [s, setS] = React.useState<Settings>(initial);

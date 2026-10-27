@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"boxa/core/internal/model"
-	"boxa/core/internal/store"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/store"
 )
 
 // SpeedHost summarises one host's speed features.

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Live "deploy an app" test on a real sandbox provider, through boxa-core as
+# Live "deploy an app" test on a real sandbox provider, through boxaz-core as
 # an agent would use it (REST + CLI + MCP):
 #   box up (T3 shim, port 8000) → git clone heroku/node-js-sample, npm install,
-#   start it on :8000 → public URL from Boxa (box url / ports / MCP box_url)
+#   start it on :8000 → public URL from Boxaz (box url / ports / MCP box_url)
 #   → curl from outside (200 + "Hello World!") → box sleep (= provider pause)
 #   and wake (= resume): files/process/URL checked → idle sleep (idle_minutes=1,
 #   fast reaper) → snapshot (gateway tarball) → break a file → restore →
@@ -23,7 +23,7 @@ ADMIN=bx_admin_live_$(date +%s)
 PROV=${SANDBOX_PROVIDER:-e2b}
 REPO=${DEPLOY_REPO:-https://github.com/heroku/node-js-sample}
 RESULTS=${RESULTS:-$WORK/results.json}
-export BOXA_URL=http://127.0.0.1:$PORT
+export BOXAZ_URL=http://127.0.0.1:$PORT
 case $PROV in
   e2b)    : "${E2B_API_KEY:?set E2B_API_KEY}"; PKEY=$E2B_API_KEY; PAPI=https://api.e2b.app; PHDR=X-API-Key ;;
   novita) : "${NOVITA_API_KEY:?set NOVITA_API_KEY}"; PKEY=$NOVITA_API_KEY; PAPI=https://api.us-phx-1.sandbox.novita.ai; PHDR=X-API-KEY ;;
@@ -33,7 +33,7 @@ esac
 pass() { printf '  PASS %s\n' "$*"; }
 note() { printf '  NOTE %s\n' "$*"; }
 fail() { printf '  FAIL %s\n' "$*"; echo "--- core.log"; tail -40 "$WORK/core.log"; exit 1; }
-api() { local m=$1 p=$2; shift 2; curl -sS -X "$m" "$BOXA_URL/v1$p" -H "Authorization: Bearer ${KEY:-$ADMIN}" -H 'Content-Type: application/json' "$@"; }
+api() { local m=$1 p=$2; shift 2; curl -sS -X "$m" "$BOXAZ_URL/v1$p" -H "Authorization: Bearer ${KEY:-$ADMIN}" -H 'Content-Type: application/json' "$@"; }
 papi() { curl -sS -H "$PHDR: $PKEY" "$@"; }
 live() { papi "$PAPI/v2/sandboxes" | jq -c '[.[]|select(.state!="killed")]'; }
 pstate() { papi "$PAPI/sandboxes/$1" | jq -r '.state // "gone"'; }
@@ -66,14 +66,14 @@ trap cleanup EXIT
 [ "$(live | jq length)" = 0 ] || fail "provider already has live sandboxes: $(live)"
 
 OTHER=E2B_API_KEY; [ "$PROV" = e2b ] && OTHER=NOVITA_API_KEY
-env -u $OTHER -u PRIZED_API_KEY BOXA_DATA_DIR=$WORK/data BOXA_ADMIN_KEY=$ADMIN BOXA_ADDR=127.0.0.1:$PORT \
-BOXA_AUTO_SANDBOX=1 BOXA_PRICE_FEED=off BOXA_CLIENT_LOCATION=VN BOXA_REAPER_INTERVAL=${REAPER:-10s} \
-  "$BIN/boxa-core" >"$WORK/core.log" 2>&1 & CORE_PID=$!
-for i in $(seq 50); do curl -sf "$BOXA_URL/v1/health" >/dev/null && break; sleep 0.1; done
-curl -sf "$BOXA_URL/v1/health" >/dev/null || fail "core did not start"
+env -u $OTHER -u PRIZED_API_KEY BOXAZ_DATA_DIR=$WORK/data BOXAZ_ADMIN_KEY=$ADMIN BOXAZ_ADDR=127.0.0.1:$PORT \
+BOXAZ_AUTO_SANDBOX=1 BOXAZ_PRICE_FEED=off BOXAZ_CLIENT_LOCATION=VN BOXAZ_REAPER_INTERVAL=${REAPER:-10s} \
+  "$BIN/boxaz-core" >"$WORK/core.log" 2>&1 & CORE_PID=$!
+for i in $(seq 50); do curl -sf "$BOXAZ_URL/v1/health" >/dev/null && break; sleep 0.1; done
+curl -sf "$BOXAZ_URL/v1/health" >/dev/null || fail "core did not start"
 AGENT=$(api POST /agents -d '{"name":"deploy","kind":"claude-code","budget_day_usd":1}' | jq -r .id)
-export BOXA_API_KEY=$(api POST /keys -d "{\"agent_id\":\"$AGENT\",\"name\":\"deploy\"}" | jq -r .key)
-AKEY=$BOXA_API_KEY
+export BOXAZ_API_KEY=$(api POST /keys -d "{\"agent_id\":\"$AGENT\",\"name\":\"deploy\"}" | jq -r .key)
+AKEY=$BOXAZ_API_KEY
 api PUT /providers/$PROV/token -d "{\"token\":\"$PKEY\"}" | jq -e .connected >/dev/null && pass "$PROV connected" || fail connect
 api PUT /providers/$PROV/prefs -d '{"sandbox_mode":"shim"}' | jq -e '.sandbox_mode=="shim"' >/dev/null || fail prefs
 
@@ -97,11 +97,11 @@ START='cd app && (PORT=8000 nohup setsid node index.js > /tmp/app.log 2>&1 < /de
 T0=$(ms); J=$(x $BOX "$START" 60); rec start $(($(ms)-T0))
 echo "$J" | jq -e '.stdout_tail|contains("Hello World")' >/dev/null && pass "app answers inside the box" || { echo "$J" | jq -c .; fail "app start"; }
 
-# 3. public URL from Boxa (box record, REST /ports, CLI, MCP) + curl from outside
+# 3. public URL from Boxaz (box record, REST /ports, CLI, MCP) + curl from outside
 URL=$(KEY=$AKEY api GET /boxes/$BOX | jq -r .url)
 PR=$(KEY=$AKEY api GET /boxes/$BOX/ports); echo "    ports: $(echo "$PR" | jq -c '.ports')"
 CLI=$("$BIN/box" url $BOX 8000)
-MCPU=$(curl -s -X POST "$BOXA_URL/mcp" -H "Authorization: Bearer $AKEY" -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"box_url\",\"arguments\":{\"box_id\":\"$BOX\",\"port\":8000}}}" | jq -r '.result.structuredContent.ports[0].url')
+MCPU=$(curl -s -X POST "$BOXAZ_URL/mcp" -H "Authorization: Bearer $AKEY" -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"box_url\",\"arguments\":{\"box_id\":\"$BOX\",\"port\":8000}}}" | jq -r '.result.structuredContent.ports[0].url')
 echo "    box.url=$URL  cli: $CLI  mcp: $MCPU"
 [[ $URL == https://8000-$REF.* ]] && [ "$URL" = "$MCPU" ] && [[ $CLI == *"$URL"* ]] && pass "public URL wired into box url, /ports, CLI and MCP" || fail "url mismatch"
 T0=$(ms); C=""; for i in $(seq 20); do C=$(get "$URL"); [ "$C" = 200 ] && break; sleep 0.5; done; rec url_first_200 $(($(ms)-T0))

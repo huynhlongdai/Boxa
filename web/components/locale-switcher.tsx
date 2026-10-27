@@ -1,5 +1,5 @@
 "use client";
-// Bộ chuyển ngôn ngữ: ghi cookie `boxa_locale` rồi render lại phía server (không đổi URL).
+// Bộ chuyển ngôn ngữ: ghi cookie `boxaz_locale` rồi render lại phía server (không đổi URL).
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";

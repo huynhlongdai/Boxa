@@ -2,7 +2,9 @@
 export const LOCALES = ["vi", "en", "zh", "ja"] as const;
 export type Locale = (typeof LOCALES)[number];
 export const DEFAULT_LOCALE: Locale = "vi";
-export const LOCALE_COOKIE = "boxa_locale";
+export const LOCALE_COOKIE = "boxaz_locale";
+/** Tên cookie trước khi đổi tên Boxa → Boxaz; vẫn đọc để không mất lựa chọn ngôn ngữ cũ. */
+export const LEGACY_LOCALE_COOKIE = "boxa_locale";
 export const TIME_ZONE = "Asia/Ho_Chi_Minh";
 
 /** Thẻ BCP 47 đầy đủ cho Intl (số, tiền, ngày). */
@@ -41,7 +43,7 @@ export function pickFromAcceptLanguage(header: string | null | undefined): Local
   return null;
 }
 
-/** Cookie `boxa_locale` > Accept-Language > mặc định (vi). */
+/** Cookie `boxaz_locale` > Accept-Language > mặc định (vi). */
 export function resolveLocale(cookie: string | null | undefined, acceptLanguage: string | null | undefined): Locale {
   return normalizeLocale(cookie) ?? pickFromAcceptLanguage(acceptLanguage) ?? DEFAULT_LOCALE;
 }

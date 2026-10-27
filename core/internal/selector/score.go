@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"boxa/core/internal/model"
+	"boxaz/core/internal/model"
 )
 
 // Option kinds.

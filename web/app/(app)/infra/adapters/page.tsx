@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { PageHeader } from "@/components/boxa/page";
-import { AdapterLinter } from "@/components/boxa/sandbox";
+import { PageHeader } from "@/components/boxaz/page";
+import { AdapterLinter } from "@/components/boxaz/sandbox";
 import { SAMPLE_ADAPTER } from "@/lib/adapter-sample";
 
 export default function AdaptersPage() {

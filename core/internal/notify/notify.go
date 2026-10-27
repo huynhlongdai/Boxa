@@ -1,4 +1,4 @@
-// Package notify delivers Boxa reports and alerts over Telegram (Bot API
+// Package notify delivers Boxaz reports and alerts over Telegram (Bot API
 // sendMessage) and email (SMTP with STARTTLS / implicit TLS).
 package notify
 
@@ -157,7 +157,7 @@ func (s SMTP) Send(ctx context.Context, to []string, subject, body string) error
 		return err
 	}
 	defer c.Close()
-	if err := c.Hello("boxa"); err != nil {
+	if err := c.Hello("boxaz"); err != nil {
 		return err
 	}
 	if mode == "starttls" {

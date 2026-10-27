@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"boxa/core/internal/model"
+	"boxaz/core/internal/model"
 )
 
 // Hetzner Cloud API v1 adapter (https://docs.hetzner.cloud).
@@ -220,7 +220,7 @@ func (h *Hetzner) List(ctx context.Context, token string) ([]Server, error) {
 			} `json:"public_net"`
 		} `json:"servers"`
 	}
-	if err := doJSON(ctx, h.c, "GET", h.BaseURL+"/servers?per_page=50&label_selector=boxa", token, nil, &out); err != nil {
+	if err := doJSON(ctx, h.c, "GET", h.BaseURL+"/servers?per_page=50&label_selector=managed", token, nil, &out); err != nil {
 		return nil, authErr(err, "Hetzner")
 	}
 	var ss []Server

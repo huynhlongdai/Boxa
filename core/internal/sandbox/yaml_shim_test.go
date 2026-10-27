@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"boxa/core/internal/boxd"
-	"boxa/core/internal/proto"
+	"boxaz/core/internal/boxd"
+	"boxaz/core/internal/proto"
 )
 
 func TestJSONPathAndTemplates(t *testing.T) {
@@ -107,12 +107,12 @@ func TestYAMLRunloop(t *testing.T) {
 	if err := d.Validate(bg, c); err != nil {
 		t.Fatal(err)
 	}
-	sb, err := d.Create(bg, c, Spec{Name: "boxa-h1", SKU: "MEDIUM", Env: map[string]string{"K": "v"}})
+	sb, err := d.Create(bg, c, Spec{Name: "mgr-h1", SKU: "MEDIUM", Env: map[string]string{"K": "v"}})
 	if err != nil || sb.ID != "dbx_1" || sb.State != StateStarting {
 		t.Fatalf("create %+v %v", sb, err)
 	}
 	lp := created["launch_parameters"].(map[string]any)
-	if lp["resource_size_request"] != "MEDIUM" || created["name"] != "boxa-h1" || created["environment_variables"].(map[string]any)["K"] != "v" {
+	if lp["resource_size_request"] != "MEDIUM" || created["name"] != "mgr-h1" || created["environment_variables"].(map[string]any)["K"] != "v" {
 		t.Fatalf("create body %+v", created)
 	}
 	if _, has := created["metadata"]; !has { // labels {} rendered as JSON object
@@ -159,9 +159,9 @@ func TestYAMLVercelSessionsAndNDJSON(t *testing.T) {
 				w.WriteHeader(400)
 				return
 			}
-			w.Write([]byte(`{"sandbox":{"name":"boxa-x","status":"running"},"session":{"id":"sess_9","status":"pending"},"routes":[]}`))
-		case "GET /v2/sandboxes/boxa-x":
-			w.Write([]byte(`{"sandbox":{"name":"boxa-x"},"session":{"id":"sess_9","status":"running"}}`))
+			w.Write([]byte(`{"sandbox":{"name":"mgr-x","status":"running"},"session":{"id":"sess_9","status":"pending"},"routes":[]}`))
+		case "GET /v2/sandboxes/mgr-x":
+			w.Write([]byte(`{"sandbox":{"name":"mgr-x"},"session":{"id":"sess_9","status":"running"}}`))
 		case "POST /v2/sandboxes/sessions/sess_9/cmd":
 			var b map[string]any
 			json.NewDecoder(r.Body).Decode(&b)
@@ -180,7 +180,7 @@ func TestYAMLVercelSessionsAndNDJSON(t *testing.T) {
 				return
 			}
 			w.Write([]byte(`{"command":{"id":"cmd_1","exitCode":0}}`))
-		case "DELETE /v2/sandboxes/boxa-x":
+		case "DELETE /v2/sandboxes/mgr-x":
 			w.WriteHeader(200)
 		default:
 			w.WriteHeader(404)
@@ -189,8 +189,8 @@ func TestYAMLVercelSessionsAndNDJSON(t *testing.T) {
 	defer srv.Close()
 	y := driverByID(t, "vercel", srv.URL)
 	c := Cred{"token": "vtok", "project_id": "prj_1", "team_id": "team_1"}
-	sb, err := y.Create(bg, c, Spec{Name: "boxa-x", CPU: 2, RAMMB: 4096})
-	if err != nil || sb.ID != "boxa-x#session=sess_9" || sb.State != StateStarting {
+	sb, err := y.Create(bg, c, Spec{Name: "mgr-x", CPU: 2, RAMMB: 4096})
+	if err != nil || sb.ID != "mgr-x#session=sess_9" || sb.State != StateStarting {
 		t.Fatalf("create %+v %v", sb, err)
 	}
 	// a fresh driver (core restart) still finds the session through the ref

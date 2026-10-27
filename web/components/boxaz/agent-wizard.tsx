@@ -210,7 +210,7 @@ export function AgentWizard({ onDone, defaultName = "", compact }: { onDone?: (r
           </div>
           <div className="flex flex-col gap-2">
             <span className="text-[13px] font-medium">{t("envStep")}</span>
-            <CodeBlock code={`export BOXA_API_KEY=${result.key.key ?? "<key>"}\nexport BOXA_URL=${(process.env.NEXT_PUBLIC_BOXA_API || "http://localhost:8080/v1").replace(/\/v1\/?$/, "")}`} language="bash" maxHeight={120} />
+            <CodeBlock code={`export BOXAZ_API_KEY=${result.key.key ?? "<key>"}\nexport BOXAZ_URL=${(process.env.NEXT_PUBLIC_BOXAZ_API || "http://localhost:8080/v1").replace(/\/v1\/?$/, "")}`} language="bash" maxHeight={120} />
           </div>
           <div className="flex min-w-0 flex-col gap-2">
             <span className="text-[13px] font-medium">{t("snippetStep")}</span>

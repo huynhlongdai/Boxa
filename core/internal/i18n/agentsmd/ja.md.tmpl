@@ -1,6 +1,6 @@
-# AGENTS.md — Boxa ボックス `{{.Slug}}`
+# AGENTS.md — Boxaz ボックス `{{.Slug}}`
 
-あなたは **Boxa ボックス** の中で作業しています。AI エージェント用に借りた使い捨ての Linux サンドボックスです。
+あなたは **Boxaz ボックス** の中で作業しています。AI エージェント用に借りた使い捨ての Linux サンドボックスです。
 
 ## アイデンティティ
 - ボックス: `{{.BoxID}}`（slug `{{.Slug}}`）、テンプレート `{{.Template}}`、ライフサイクル `{{.Lifecycle}}`
@@ -19,12 +19,12 @@
 - `/memory` — このエージェントの全ボックスで共有する長期メモ。次回の実行が知るべきことをここに書いてください。
 - シークレットは exec のたびに環境変数として注入されます: {{.Secrets}}
 
-## ツール（MCP サーバー `boxa`）
+## ツール（MCP サーバー `boxaz`）
 {{range .Tools}}- `{{.}}`
 {{end}}
-## Boxa の呼び出し方
-- MCP: `{{.Base}}/mcp`（Streamable HTTP）または `box mcp`（stdio）、ヘッダー `Authorization: Bearer $BOXA_API_KEY`。
-- REST: `{{.Base}}/v1` — 例: `curl -X POST {{.Base}}/v1/boxes/{{.BoxID}}/exec -H "Authorization: Bearer $BOXA_API_KEY" -d '{"command":"ls"}'`。
+## Boxaz の呼び出し方
+- MCP: `{{.Base}}/mcp`（Streamable HTTP）または `box mcp`（stdio）、ヘッダー `Authorization: Bearer $BOXAZ_API_KEY`。
+- REST: `{{.Base}}/v1` — 例: `curl -X POST {{.Base}}/v1/boxes/{{.BoxID}}/exec -H "Authorization: Bearer $BOXAZ_API_KEY" -d '{"command":"ls"}'`。
 - ディスカバリー: `{{.Base}}/llms.txt`、`{{.Base}}/v1/openapi.json`、`{{.Base}}/v1/tools?format=openai`。
 - `Accept-Language: ja|en|vi|zh` を送るとエラーメッセージがその言語になります。
 

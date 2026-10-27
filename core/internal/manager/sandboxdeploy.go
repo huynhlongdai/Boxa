@@ -14,11 +14,11 @@ import (
 	"strconv"
 	"time"
 
-	"boxa/core/internal/model"
-	"boxa/core/internal/proto"
-	"boxa/core/internal/sandbox"
-	"boxa/core/internal/secret"
-	"boxa/core/internal/store"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/proto"
+	"boxaz/core/internal/sandbox"
+	"boxaz/core/internal/secret"
+	"boxaz/core/internal/store"
 )
 
 // newShim builds a T3 shim whose snapshots land in core's snapshot dir.
@@ -67,7 +67,7 @@ type PortView struct {
 	Port   int    `json:"port"`
 	URL    string `json:"url"`
 	Kind   string `json:"kind"`   // provider-preview | ingress | none
-	Public bool   `json:"public"` // reachable without a Boxa token
+	Public bool   `json:"public"` // reachable without a Boxaz token
 	Note   string `json:"note,omitempty"`
 }
 
@@ -84,8 +84,7 @@ func (m *Manager) portView(ctx context.Context, b *model.Box, h *model.Host, por
 		if u := m.sandboxPreview(ctx, h, port); u != "" {
 			v.URL, v.Kind, v.Public = u+"/", "provider-preview", true
 			v.Note = h.Provider + " preview URL: serve on 0.0.0.0:" + strconv.Itoa(port) + "; works while the box runs (sleeping boxes answer 502 until woken)"
-		} else {
-			v.Note = h.Provider + " has no public preview URLs; pick a sandbox provider with ports (E2B, Novita, Daytona) or a pool host"
+			return v
 		}
 		return v
 	}
@@ -93,7 +92,7 @@ func (m *Manager) portView(ctx context.Context, b *model.Box, h *model.Host, por
 		v.URL, v.Kind, v.Public = b.URL, "ingress", !m.Settings(ctx).URLTokenProtect
 		return v
 	}
-	v.Note = "Boxa ingress serves the first declared port; create the box with this port first in ports"
+	v.Note = "Boxaz ingress serves the first declared port; create the box with this port first in ports"
 	return v
 }
 

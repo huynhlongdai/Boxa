@@ -1,6 +1,6 @@
-# Boxa spec v0.4 — Lớp kết nối mọi box + Growth/Invite
+# Boxaz spec v0.4 — Lớp kết nối mọi box + Growth/Invite
 
-Ngày: 2026-10-27 (v0.4 thêm mục 10 Growth/Invite; mục 1–9 giữ nguyên từ v0.3, ngày 2026-10-26). Kế thừa v0.2 (kiến trúc Gateway/Core/Host Agent/Adapter, 15 module). v0.3 đổi mục tiêu: Boxa trở thành **lớp điều phối trung lập** nối được mọi loại box (VPS, sandbox API, PaaS, GPU, browser, macOS) với một API duy nhất cho agent, chọn nơi rẻ nhất đạt yêu cầu.
+Ngày: 2026-10-27 (v0.4 thêm mục 10 Growth/Invite; mục 1–9 giữ nguyên từ v0.3, ngày 2026-10-26). Kế thừa v0.2 (kiến trúc Gateway/Core/Host Agent/Adapter, 15 module). v0.3 đổi mục tiêu: Boxaz trở thành **lớp điều phối trung lập** nối được mọi loại box (VPS, sandbox API, PaaS, GPU, browser, macOS) với một API duy nhất cho agent, chọn nơi rẻ nhất đạt yêu cầu.
 
 ## 1. Bức tranh thị trường (battleships.dev, 369 provider, dữ liệu 2026-10)
 - agent-sandbox 129 · hyperscaler 44 · PaaS 42 · GPU 41 · browser 37 · dev-env 33 · macOS 26 · Windows 13.
@@ -14,7 +14,7 @@ Ngày: 2026-10-27 (v0.4 thêm mục 10 Growth/Invite; mục 1–9 giữ nguyên 
 2. **`boxd` gọi ra ngoài (outbound), không cần mở cổng.** Kết nối ngược về Gateway qua QUIC/WebSocket (TLS, mTLS bằng token bootstrap một lần). Không phụ thuộc IP public, NAT, firewall, UDP → chạy được cả trong sandbox chặn inbound.
 3. **Adapter mỏng, khai báo.** Chỉ cần ánh xạ ~6 động từ vòng đời; phần còn lại là `boxd`.
 4. **Năng lực là dữ liệu, không phải code.** Scheduler đọc capability vector (lấy từ battleships, ghi đè bằng kết quả tự kiểm thử).
-5. **Giá là dữ liệu mở.** Price feed = battleships JSON + `engine.js`, cập nhật hằng ngày; Boxa đối chiếu với hoá đơn thật để hiệu chỉnh.
+5. **Giá là dữ liệu mở.** Price feed = battleships JSON + `engine.js`, cập nhật hằng ngày; Boxaz đối chiếu với hoá đơn thật để hiệu chỉnh.
 
 ## 3. Ba tầng adapter (Box Provider Interface — BPI)
 
@@ -49,14 +49,14 @@ status:  { GET: /v1/sandboxes/{{id}}, map: { running: $.state=="running" } }
 
 ## 4. Mạng nối các box
 - **Control:** boxd ⇄ Gateway qua QUIC (fallback WebSocket/443). Một kết nối mang exec, file, PTY, metrics (multiplex).
-- **Box ⇄ box (khi agent cần cụm):** overlay WireGuard qua headscale; box không có UDP thì đi relay DERP. Tên nội bộ `<slug>.boxa.internal`.
+- **Box ⇄ box (khi agent cần cụm):** overlay WireGuard qua headscale; box không có UDP thì đi relay DERP. Tên nội bộ `<slug>.boxaz.internal`.
 - **Ingress ra Internet:** Gateway/Caddy reverse-tunnel tới boxd → URL `<slug>-<ip>.sslip.io` dù box nằm sau NAT ở provider nào.
 
 ## 5. Scheduler đa thị trường
 Đầu vào: spec (cpu/ram/disk/gpu/browser), lifecycle (task/session/service), yêu cầu (cap flags), vùng, ngân sách, chính sách agent.
 1. **Lọc** provider có đủ cap flags + được agent cho phép + còn quota.
 2. **Định giá** bằng `engine.js` theo đúng cách tính của từng nơi (per-second, phí tối thiểu, idle, plan); pool đang có chỗ trống → chi phí biên ≈ 0.
-3. **Chấm điểm** = giá dự kiến + phạt độ trễ boot + phạt độ tin cậy (lịch sử lỗi của Boxa) + phạt vùng xa.
+3. **Chấm điểm** = giá dự kiến + phạt độ trễ boot + phạt độ tin cậy (lịch sử lỗi của Boxaz) + phạt vùng xa.
 4. **Quy tắc mặc định:**
    - `service`/24/7 → T1 pool (Contabo/netcup/Hetzner).
    - `session` → T1 pool, ngủ bằng Incus stop/snapshot.
@@ -84,24 +84,24 @@ status:  { GET: /v1/sandboxes/{{id}}, map: { running: $.state=="running" } }
 ## 9. Rủi ro
 - Điều khoản provider (một số cấm chạy agent nền/tunnel) → cờ chính sách mỗi provider.
 - Dữ liệu battleships có mục "unverified" → luôn self-test trước khi dùng thật.
-- Tài khoản/KYC từng provider vẫn do anh tạo; Boxa chỉ giữ token trong Secrets.
+- Tài khoản/KYC từng provider vẫn do anh tạo; Boxaz chỉ giữ token trong Secrets.
 
 ## 10. Module Growth / Invite (mới ở v0.4)
 
 Mục đích kép: mã mời vừa là **cổng dùng thử** (kiểm soát chi phí box free), vừa là **công cụ marketing/referral** để lan truyền sản phẩm. Mọi mã đều đo được nguồn (kênh, người giới thiệu, chiến dịch).
 
 ### 10.1 Khái niệm
-- **Invite code**: chuỗi ngắn dễ gõ (vd `BOXA-7F2K-Q9`), có `channel`, `campaign`, `referrer_id` (nếu là mã giới thiệu), `max_uses`, `expires_at`, `trial_policy` (số box, giờ tối đa), trạng thái `active/paused/exhausted/expired`.
-- **Referral code**: mã cá nhân mỗi user (và mỗi người trong waitlist) được cấp, dạng `boxa.sslip.io/r/<handle>`; ai dùng mã → ghi `referrer_id` để tính thưởng và xếp hạng.
+- **Invite code**: chuỗi ngắn dễ gõ (vd `BOXAZ-7F2K-Q9`), có `channel`, `campaign`, `referrer_id` (nếu là mã giới thiệu), `max_uses`, `expires_at`, `trial_policy` (số box, giờ tối đa), trạng thái `active/paused/exhausted/expired`.
+- **Referral code**: mã cá nhân mỗi user (và mỗi người trong waitlist) được cấp, dạng `boxaz.sslip.io/r/<handle>`; ai dùng mã → ghi `referrer_id` để tính thưởng và xếp hạng.
 - **Waitlist entry**: email, nguồn, `referral_code` riêng, `referred_by`, điểm ưu tiên, vị trí hàng đợi, trạng thái `waiting/invited/redeemed`.
 - **Trial grant**: quyền dùng thử gắn với tài khoản sau khi redeem: số box đồng thời, thời gian sống mỗi box, tổng giờ, ngày hết hạn.
 
 ### 10.2 Kênh phát mã
 | Kênh | Cách nhận | Ghi nhận |
 |---|---|---|
-| Inbox / reply mạng xã hội | User nhắn tin hoặc reply tên dự án ("Boxa") dưới bài post → bot/admin trả mã (bán tự động: webhook hoặc admin bấm "Phát mã" trong hàng chờ yêu cầu) | `channel=social:<x/fb/threads>`, `campaign=<post id>` |
+| Inbox / reply mạng xã hội | User nhắn tin hoặc reply tên dự án ("Boxaz") dưới bài post → bot/admin trả mã (bán tự động: webhook hoặc admin bấm "Phát mã" trong hàng chờ yêu cầu) | `channel=social:<x/fb/threads>`, `campaign=<post id>` |
 | Email đăng ký | Điền email ở trang đăng ký/waitlist → mã gửi vào inbox khi tới lượt (xác thực email luôn) | `channel=email` |
-| Discord | Lệnh `/boxa invite` trong server Discord hoặc role sự kiện → bot DM mã (giới hạn 1 mã/tài khoản Discord) | `channel=discord`, `campaign=<event>` |
+| Discord | Lệnh `/boxaz invite` trong server Discord hoặc role sự kiện → bot DM mã (giới hạn 1 mã/tài khoản Discord) | `channel=discord`, `campaign=<event>` |
 | Waitlist + referral | Đăng ký waitlist nhận mã giới thiệu riêng; mỗi người đăng ký qua mã đó đẩy người giới thiệu lên hàng trên | `channel=waitlist`, `referrer_id` |
 | Admin thủ công | Admin tạo lô mã cho đối tác, KOL, cộng đồng | `channel=manual`, `campaign` tự đặt |
 

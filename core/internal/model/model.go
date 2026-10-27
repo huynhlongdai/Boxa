@@ -282,14 +282,26 @@ type Secret struct {
 	CreatedAt time.Time  `json:"created_at"`
 	RotatedAt *time.Time `json:"rotated_at"`
 	ValueEnc  string     `json:"-"`
-	// System secrets (BOXA_SYS_*) hold Boxa's own credentials (Telegram bot
+	// System secrets (BOXAZ_SYS_*) hold Boxaz's own credentials (Telegram bot
 	// token, SMTP password, S3 secret key). They are never injected into boxes
 	// and only admins see them listed.
 	System bool `json:"system,omitempty"`
 }
 
-// SystemSecretPrefix marks secrets reserved for Boxa itself.
-const SystemSecretPrefix = "BOXA_SYS_"
+// SystemSecretPrefix marks secrets reserved for Boxaz itself.
+const SystemSecretPrefix = "BOXAZ_SYS_"
+
+// LegacySystemSecretPrefix is the pre-rename prefix; secrets stored under it
+// are still read (and stay reserved) for backward compatibility.
+const LegacySystemSecretPrefix = "BOXA_SYS_"
+
+// LegacySystemSecretName maps a BOXAZ_SYS_* name to its pre-rename name.
+func LegacySystemSecretName(name string) string {
+	if len(name) > len(SystemSecretPrefix) && name[:len(SystemSecretPrefix)] == SystemSecretPrefix {
+		return LegacySystemSecretPrefix + name[len(SystemSecretPrefix):]
+	}
+	return ""
+}
 
 type Snapshot struct {
 	ID        string    `json:"id"`

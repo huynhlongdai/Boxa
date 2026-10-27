@@ -1,7 +1,7 @@
-// Package agentkit knows every agent kind Boxa supports (GET /agent-kinds) and
+// Package agentkit knows every agent kind Boxaz supports (GET /agent-kinds) and
 // generates a ready-to-paste connection snippet for each one
 // (GET /agents/:id/snippet?kind=&lang=). All snippets read the key from the
-// BOXA_API_KEY environment variable where the target tool allows it.
+// BOXAZ_API_KEY environment variable where the target tool allows it.
 package agentkit
 
 // Kind is one supported agent/framework/platform.

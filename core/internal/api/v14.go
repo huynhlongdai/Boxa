@@ -8,8 +8,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"boxa/core/internal/model"
-	"boxa/core/internal/sandbox"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/sandbox"
 )
 
 func (s *Server) routesV14(r chi.Router) {

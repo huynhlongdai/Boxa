@@ -11,7 +11,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"boxa/core/internal/proto"
+	"boxaz/core/internal/proto"
 )
 
 // Registrar is implemented by the box manager: it authenticates host tokens

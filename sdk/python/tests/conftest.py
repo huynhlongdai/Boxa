@@ -1,7 +1,7 @@
-"""Spins up a real local Boxa core + boxd (local driver) for the SDK tests.
+"""Spins up a real local Boxaz core + boxd (local driver) for the SDK tests.
 
-Uses BOXA_TEST_URL + BOXA_TEST_ADMIN_KEY when set; otherwise starts
-../../core/bin/{boxa-core,boxd} (build them with `go build -o bin/ ./cmd/...`).
+Uses BOXAZ_TEST_URL + BOXAZ_TEST_ADMIN_KEY when set; otherwise starts
+../../core/bin/{boxaz-core,boxd} (build them with `go build -o bin/ ./cmd/...`).
 Tests are skipped when neither is available.
 """
 
@@ -42,7 +42,7 @@ os.environ["no_proxy"] = os.environ["NO_PROXY"]
 
 @pytest.fixture(scope="session")
 def core():
-    url, admin = os.environ.get("BOXA_TEST_URL"), os.environ.get("BOXA_TEST_ADMIN_KEY")
+    url, admin = os.environ.get("BOXAZ_TEST_URL"), os.environ.get("BOXAZ_TEST_ADMIN_KEY")
     procs, work = [], None
     try:
         yield from _core(url, admin, procs, work)
@@ -54,14 +54,14 @@ def core():
 
 def _core(url, admin, procs, work):
     if not url:
-        if not (CORE_BIN / "boxa-core").exists() or not (CORE_BIN / "boxd").exists():
-            pytest.skip("no local core: build core/bin or set BOXA_TEST_URL")
-        work = tempfile.mkdtemp(prefix="boxa-sdk-py-")
+        if not (CORE_BIN / "boxaz-core").exists() or not (CORE_BIN / "boxd").exists():
+            pytest.skip("no local core: build core/bin or set BOXAZ_TEST_URL")
+        work = tempfile.mkdtemp(prefix="boxaz-sdk-py-")
         port, admin = _free_port(), "bx_admin_sdk_py"
         url = f"http://127.0.0.1:{port}"
-        env = dict(os.environ, BOXA_DATA_DIR=f"{work}/data", BOXA_ADMIN_KEY=admin, BOXA_BOOTSTRAP_TOKEN="boot-sdk",
-                   BOXA_ADDR=f"127.0.0.1:{port}", BOXA_PRICE_FEED="off", BOXA_LOCAL_PRICE_MONTH="73")
-        procs.append(subprocess.Popen([str(CORE_BIN / "boxa-core")], env=env, stdout=open(f"{work}/core.log", "w"), stderr=subprocess.STDOUT))
+        env = dict(os.environ, BOXAZ_DATA_DIR=f"{work}/data", BOXAZ_ADMIN_KEY=admin, BOXAZ_BOOTSTRAP_TOKEN="boot-sdk",
+                   BOXAZ_ADDR=f"127.0.0.1:{port}", BOXAZ_PRICE_FEED="off", BOXAZ_LOCAL_PRICE_MONTH="73")
+        procs.append(subprocess.Popen([str(CORE_BIN / "boxaz-core")], env=env, stdout=open(f"{work}/core.log", "w"), stderr=subprocess.STDOUT))
         for _ in range(100):
             try:
                 urllib.request.urlopen(url + "/v1/health", timeout=1)

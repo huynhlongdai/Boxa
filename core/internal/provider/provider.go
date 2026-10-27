@@ -16,7 +16,7 @@ import (
 	"text/template"
 	"time"
 
-	"boxa/core/internal/model"
+	"boxaz/core/internal/model"
 )
 
 // CreateRequest asks a provider for a new host.
@@ -154,7 +154,7 @@ func (*Local) Status(ctx context.Context, token, ref string) (string, error) { r
 
 // Stub is a provider known to the price feed but without an adapter yet.
 // (DigitalOcean, Contabo and netcup have real adapters since v1.2; Stub stays
-// for feed-only providers added through BOXA_PRICE_FEED_PROVIDERS.)
+// for feed-only providers added through BOXAZ_PRICE_FEED_PROVIDERS.)
 type Stub struct{ id, name string }
 
 func (s *Stub) ID() string        { return s.id }
@@ -206,7 +206,7 @@ func doJSONH(ctx context.Context, c *http.Client, method, url string, headers ma
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
-	req.Header.Set("User-Agent", "boxa-core/0.1")
+	req.Header.Set("User-Agent", "sandbox-client/1")
 	resp, err := c.Do(req)
 	if err != nil {
 		return err

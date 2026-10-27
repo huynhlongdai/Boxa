@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"boxa/core/internal/model"
-	"boxa/core/internal/objstore"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/objstore"
 )
 
 const sysSecretS3 = model.SystemSecretPrefix + "S3_SECRET_KEY"
@@ -110,7 +110,7 @@ func (m *Manager) PutStorage(ctx context.Context, p *Principal, in StorageInput)
 		return nil, err
 	}
 	if m.Cfg.ObjectStore != nil && m.Cfg.ObjectStore.Enabled() {
-		return nil, model.EH(model.ErrInvalid, "Unset the BOXA_S3_* environment variables to manage storage from the dashboard.", "storage is configured by environment variables")
+		return nil, model.EH(model.ErrInvalid, "Unset the BOXAZ_S3_* environment variables to manage storage from the dashboard.", "storage is configured by environment variables")
 	}
 	s := in.StorageSettings
 	s.Provider = strings.ToLower(strings.TrimSpace(s.Provider))
@@ -250,6 +250,9 @@ func (m *Manager) putSystemSecret(ctx context.Context, name, value string) error
 
 func (m *Manager) systemSecret(ctx context.Context, name string) (string, bool) {
 	s, err := m.Store.GetSecret(ctx, name)
+	if (err != nil || s.ValueEnc == "") && model.LegacySystemSecretName(name) != "" {
+		s, err = m.Store.GetSecret(ctx, model.LegacySystemSecretName(name)) // compat: stored before the rename
+	}
 	if err != nil || s.ValueEnc == "" {
 		return "", false
 	}
@@ -261,7 +264,12 @@ func (m *Manager) systemSecret(ctx context.Context, name string) (string, bool) 
 }
 
 func (m *Manager) deleteSystemSecret(ctx context.Context, name string) {
-	if _, err := m.Store.GetSecret(ctx, name); err == nil {
-		m.Store.DeleteSecret(ctx, name)
+	for _, n := range []string{name, model.LegacySystemSecretName(name)} {
+		if n == "" {
+			continue
+		}
+		if _, err := m.Store.GetSecret(ctx, n); err == nil {
+			m.Store.DeleteSecret(ctx, n)
+		}
 	}
 }

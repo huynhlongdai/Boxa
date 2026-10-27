@@ -353,8 +353,8 @@ func (c *Client) List(ctx context.Context, prefix string) ([]Object, error) {
 
 // Test writes, reads back and deletes a probe object.
 func (c *Client) Test(ctx context.Context) error {
-	key := c.Key(".boxa-probe-" + strconv.FormatInt(c.Now().UnixNano(), 36))
-	data := []byte("boxa storage probe")
+	key := c.Key(".probe-" + strconv.FormatInt(c.Now().UnixNano(), 36))
+	data := []byte("storage probe")
 	if err := c.Put(ctx, key, data); err != nil {
 		return fmt.Errorf("put: %w", err)
 	}

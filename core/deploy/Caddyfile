@@ -1,5 +1,5 @@
-# Boxa ingress + API TLS.
-#   - Core API/dashboard at {$BOXA_CORE_HOST} (e.g. core-1-2-3-4.sslip.io or core.example.com)
+# Boxaz ingress + API TLS.
+#   - Core API/dashboard at {$BOXAZ_CORE_HOST} (e.g. core-1-2-3-4.sslip.io or core.example.com)
 #   - Box URLs <slug>-<ip>.sslip.io or <slug>.box.{$BASE_DOMAIN}: certificates are issued
 #     on demand, only for hosts that core confirms (ask endpoint).
 {
@@ -9,9 +9,9 @@
 	}
 }
 
-{$BOXA_CORE_HOST} {
+{$BOXAZ_CORE_HOST} {
 	encode gzip
-	# Next.js dashboard (boxa/web) when deployed on the same host; API stays on core.
+	# Next.js dashboard (boxaz/web) when deployed on the same host; API stays on core.
 	@api path /v1/* /mcp /dl/*
 	handle @api {
 		reverse_proxy 127.0.0.1:8080 {
@@ -19,7 +19,7 @@
 		}
 	}
 	handle {
-		reverse_proxy 127.0.0.1:{$BOXA_WEB_PORT:3000}
+		reverse_proxy 127.0.0.1:{$BOXAZ_WEB_PORT:3000}
 	}
 }
 

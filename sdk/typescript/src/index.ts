@@ -1,9 +1,9 @@
 /**
- * @boxa/sdk — TypeScript client for Boxa (cheap disposable Linux boxes for AI agents).
+ * @boxaz/sdk — TypeScript client for Boxaz (cheap disposable Linux boxes for AI agents).
  * Zero dependencies: uses the global fetch (Node ≥ 18, Deno, Bun, browsers, edge runtimes).
  *
- *   import { Boxa } from "@boxa/sdk";
- *   const bx = new Boxa();                // BOXA_URL / BOXA_API_KEY / BOXA_LANG from env
+ *   import { Boxaz } from "@boxaz/sdk";
+ *   const bx = new Boxaz();                // BOXAZ_URL / BOXAZ_API_KEY / BOXAZ_LANG from env
  *   const box = await bx.createBox({ template: "python", lifecycle: "task", ttl_seconds: 600 });
  *   const r = await bx.exec(box.id, "python3 -c 'print(42)'");
  */
@@ -61,7 +61,7 @@ export interface AgentKind {
   transports: string[]; doc_url: string | null; language: string;
 }
 export interface Snippet { kind: string; language: string; snippet: string; file?: string; notes: string[]; locale: string }
-export interface BoxaEvent {
+export interface BoxazEvent {
   id: string; ts: string; actor: string; box_id: string | null; agent_id: string | null; type: string;
   message: string; cost_usd: number | null; data?: Record<string, unknown>;
 }
@@ -133,7 +133,7 @@ export interface CreateBoxInput {
   budget_usd?: number; ports?: number[]; secrets?: string[]; setup?: string[]; region?: string; agent_id?: string;
   /** v1.3: workload profile (auto-picks template, size and placement) */
   profile?: string;
-  /** v1.3: declarative needs; Boxa scores options and auto-picks */
+  /** v1.3: declarative needs; Boxaz scores options and auto-picks */
   requirements?: Requirements;
   /** full box.yaml instead of the fields above */
   yaml?: string;
@@ -141,7 +141,7 @@ export interface CreateBoxInput {
 
 export type BatchCommand = string | { command: string; cwd?: string; timeout_s?: number };
 
-export interface BoxaOptions {
+export interface BoxazOptions {
   apiKey?: string;
   baseUrl?: string;
   /** Accept-Language for localized error message/hint: vi | en | zh | ja */
@@ -157,7 +157,7 @@ const RETRYABLE = new Set(["NO_CAPACITY", "PROVIDER_FAILED", "RATE_LIMITED", "IN
 const ROOT_PATHS = new Set(["/llms.txt", "/llms-full.txt", "/.well-known/mcp.json", "/.well-known/agent.json", "/mcp"]);
 
 /** Error envelope from the API. `code` is stable; `message`/`hint` follow `lang`. */
-export class BoxaError extends Error {
+export class BoxazError extends Error {
   readonly status: number;
   readonly code: string;
   /** localized message without the code prefix */
@@ -168,7 +168,7 @@ export class BoxaError extends Error {
   readonly body?: unknown;
   constructor(status: number, e: Partial<ApiErrorBody>, body?: unknown) {
     super(`${e.code ?? status}: ${e.message ?? ""}${e.hint ? ` (hint: ${e.hint})` : ""}`);
-    this.name = "BoxaError";
+    this.name = "BoxazError";
     this.status = status;
     this.code = e.code ?? String(status);
     this.apiMessage = e.message ?? "";
@@ -182,15 +182,25 @@ export class BoxaError extends Error {
 
 function env(name: string): string | undefined {
   const p = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
-  return p?.env?.[name];
+  const v = p?.env?.[name];
+  if (v || !name.startsWith("BOXAZ_")) return v;
+  // Compat: pre-rename BOXA_* variables still work (deprecated).
+  const legacy = "BOXA_" + name.slice("BOXAZ_".length);
+  const old = p?.env?.[legacy];
+  if (old && !warnedLegacy.has(legacy)) {
+    warnedLegacy.add(legacy);
+    console.warn(`[boxaz] ${legacy} is deprecated; rename it to ${name}`);
+  }
+  return old;
 }
+const warnedLegacy = new Set<string>();
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const enc = encodeURIComponent;
 
 type Query = Record<string, string | number | boolean | undefined | null>;
 
-export class Boxa {
+export class Boxaz {
   readonly baseUrl: string;
   apiKey: string;
   lang?: string;
@@ -198,16 +208,16 @@ export class Boxa {
   timeoutMs: number;
   private readonly fetchImpl: typeof fetch;
 
-  constructor(opts: BoxaOptions = {}) {
-    this.apiKey = opts.apiKey ?? env("BOXA_API_KEY") ?? "";
-    let url = (opts.baseUrl ?? env("BOXA_URL") ?? "http://localhost:8080").replace(/\/+$/, "");
+  constructor(opts: BoxazOptions = {}) {
+    this.apiKey = opts.apiKey ?? env("BOXAZ_API_KEY") ?? "";
+    let url = (opts.baseUrl ?? env("BOXAZ_URL") ?? "http://localhost:8080").replace(/\/+$/, "");
     if (url.endsWith("/v1")) url = url.slice(0, -3);
     this.baseUrl = url;
-    this.lang = opts.lang ?? env("BOXA_LANG") ?? undefined;
+    this.lang = opts.lang ?? env("BOXAZ_LANG") ?? undefined;
     this.maxRetries = opts.maxRetries ?? 2;
     this.timeoutMs = opts.timeoutMs ?? 600_000;
     const f = opts.fetch ?? globalThis.fetch;
-    if (!f) throw new Error("@boxa/sdk needs a global fetch (Node >= 18) or opts.fetch");
+    if (!f) throw new Error("@boxaz/sdk needs a global fetch (Node >= 18) or opts.fetch");
     this.fetchImpl = f.bind(globalThis);
   }
 
@@ -255,7 +265,7 @@ export class Boxa {
       let env: Partial<ApiErrorBody> = {};
       let parsed: unknown;
       try { parsed = JSON.parse(text); env = (parsed as { error?: ApiErrorBody }).error ?? {}; } catch { env = { message: text.slice(0, 500) }; }
-      const err = new BoxaError(res.status, env, parsed);
+      const err = new BoxazError(res.status, env, parsed);
       if (!err.retryable || attempt >= this.maxRetries) throw err;
       await sleep(Math.min((err.retryAfterS ?? 0.5 * 2 ** attempt) * 1000, 30_000));
     }
@@ -291,7 +301,7 @@ export class Boxa {
   sleep(id: string) { return this.request<Box>("POST", `/boxes/${enc(id)}/sleep`, { body: {} }); }
   wake(id: string) { return this.request<Box>("POST", `/boxes/${enc(id)}/wake`, { body: {} }); }
   boxYaml(id: string) { return this.request<{ box_id: string; yaml: string; source: string }>("GET", `/boxes/${enc(id)}/yaml`); }
-  events(id: string) { return this.request<List<BoxaEvent>>("GET", `/boxes/${enc(id)}/events`); }
+  events(id: string) { return this.request<List<BoxazEvent>>("GET", `/boxes/${enc(id)}/events`); }
 
   // ---- exec ----
   exec(id: string, command: string, opts?: { cwd?: string; timeout_s?: number; tail_lines?: number; async?: false; session?: boolean }): Promise<ExecResult>;
@@ -370,11 +380,11 @@ export class Boxa {
   }
 
   // ---- tool bridge ----
-  /** Execute a Boxa tool by name through the MCP endpoint (same argument mapping as MCP). */
+  /** Execute a Boxaz tool by name through the MCP endpoint (same argument mapping as MCP). */
   async callTool<T = unknown>(name: string, args: Record<string, unknown> = {}): Promise<T> {
     const resp = await this.request<{ result?: { structuredContent?: unknown; content?: { text?: string }[]; isError?: boolean }; error?: { message: string } }>(
       "POST", "/mcp", { body: { jsonrpc: "2.0", id: Date.now(), method: "tools/call", params: { name, arguments: args } } });
-    if (resp.error) throw new BoxaError(400, { code: "INVALID", message: resp.error.message });
+    if (resp.error) throw new BoxazError(400, { code: "INVALID", message: resp.error.message });
     const r = resp.result ?? {};
     let out: unknown = r.structuredContent;
     if (out === undefined) {
@@ -383,7 +393,7 @@ export class Boxa {
     }
     if (r.isError && out && typeof out === "object" && "error" in out) {
       const e = (out as { error: ApiErrorBody }).error;
-      throw new BoxaError(400, e, out);
+      throw new BoxazError(400, e, out);
     }
     return out as T;
   }
@@ -393,20 +403,20 @@ export class Boxa {
 
 export interface OpenAITool { type: "function"; function: { name: string; description: string; parameters: Record<string, unknown>; strict?: boolean } }
 
-/** Boxa tools in OpenAI Chat Completions format (fetched from the server). */
-export async function asOpenAITools(client: Boxa = new Boxa()): Promise<OpenAITool[]> {
+/** Boxaz tools in OpenAI Chat Completions format (fetched from the server). */
+export async function asOpenAITools(client: Boxaz = new Boxaz()): Promise<OpenAITool[]> {
   return (await client.tools("openai")) as OpenAITool[];
 }
-/** Boxa tools in Anthropic Messages format. */
-export async function asAnthropicTools(client: Boxa = new Boxa()) {
+/** Boxaz tools in Anthropic Messages format. */
+export async function asAnthropicTools(client: Boxaz = new Boxaz()) {
   return (await client.tools("anthropic")) as { name: string; description: string; input_schema: Record<string, unknown> }[];
 }
-/** Boxa tools as Gemini Tool objects. */
-export async function asGeminiTools(client: Boxa = new Boxa()) {
+/** Boxaz tools as Gemini Tool objects. */
+export async function asGeminiTools(client: Boxaz = new Boxaz()) {
   return (await client.tools("gemini")) as { functionDeclarations: { name: string; description: string; parameters: Record<string, unknown> }[] }[];
 }
 /** Vercel AI SDK-style tool map: { box_exec: { description, parameters(JSON Schema), execute } }. */
-export async function asToolMap(client: Boxa = new Boxa()) {
+export async function asToolMap(client: Boxaz = new Boxaz()) {
   const tools = await asOpenAITools(client);
   const map: Record<string, { description: string; parameters: Record<string, unknown>; execute: (args: Record<string, unknown>) => Promise<unknown> }> = {};
   for (const t of tools) {
@@ -416,15 +426,28 @@ export async function asToolMap(client: Boxa = new Boxa()) {
 }
 
 /** Execute one tool call and return a JSON string for the tool-result message (errors are returned, not thrown). */
-export async function handleToolCall(name: string, args: string | Record<string, unknown> | undefined, client: Boxa = new Boxa()): Promise<string> {
+export async function handleToolCall(name: string, args: string | Record<string, unknown> | undefined, client: Boxaz = new Boxaz()): Promise<string> {
   const parsed = typeof args === "string" ? (args ? JSON.parse(args) : {}) : args ?? {};
   try {
     const out = await client.callTool(name, parsed);
     return typeof out === "string" ? out : JSON.stringify(out);
   } catch (e) {
-    if (e instanceof BoxaError) return JSON.stringify({ error: { code: e.code, message: e.apiMessage, hint: e.hint, retry_after_s: e.retryAfterS } });
+    if (e instanceof BoxazError) return JSON.stringify({ error: { code: e.code, message: e.apiMessage, hint: e.hint, retry_after_s: e.retryAfterS } });
     throw e;
   }
 }
 
-export default Boxa;
+/** @deprecated Renamed to {@link Boxaz} (Boxa → Boxaz). */
+export const Boxa = Boxaz;
+/** @deprecated Renamed to {@link Boxaz}. */
+export type Boxa = Boxaz;
+/** @deprecated Renamed to {@link BoxazError}. */
+export const BoxaError = BoxazError;
+/** @deprecated Renamed to {@link BoxazError}. */
+export type BoxaError = BoxazError;
+/** @deprecated Renamed to {@link BoxazOptions}. */
+export type BoxaOptions = BoxazOptions;
+/** @deprecated Renamed to {@link BoxazEvent}. */
+export type BoxaEvent = BoxazEvent;
+
+export default Boxaz;

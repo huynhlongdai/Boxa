@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"boxa/core/internal/model"
-	"boxa/core/internal/provhealth"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/provhealth"
 )
 
 func (m *Manager) ListProviders(ctx context.Context) ([]*model.Provider, error) {

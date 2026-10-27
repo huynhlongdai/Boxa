@@ -6,10 +6,10 @@ package proto
 import (
 	"encoding/json"
 
-	"boxa/core/internal/model"
+	"boxaz/core/internal/model"
 )
 
-const Version = "boxa-wire/1"
+const Version = "boxaz-wire/1"
 
 // Frame types.
 const (

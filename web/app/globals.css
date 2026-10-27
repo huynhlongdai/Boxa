@@ -5,7 +5,7 @@
 @layer base {
   :root,
   .dark {
-    /* Dark mode mặc định — bảng màu theo mockup Boxa */
+    /* Dark mode mặc định — bảng màu theo mockup Boxaz */
     --background: 220 13% 4%;      /* #0a0b0d */
     --foreground: 220 14% 92%;     /* #e8eaee */
     --surface: 216 16% 9%;         /* #13161b */

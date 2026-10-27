@@ -12,7 +12,7 @@ import (
 	"regexp"
 	"strings"
 
-	"boxa/core/internal/model"
+	"boxaz/core/internal/model"
 )
 
 // Region is a provider location.
@@ -37,12 +37,12 @@ type Regioner interface {
 	Regions(ctx context.Context, token string) ([]Region, error)
 }
 
-// Lister lists the servers Boxa created at the provider.
+// Lister lists the servers Boxaz created at the provider.
 type Lister interface {
 	List(ctx context.Context, token string) ([]Server, error)
 }
 
-// EnvTokens maps provider id → env variables read by boxa-core at startup.
+// EnvTokens maps provider id → env variables read by boxaz-core at startup.
 // Multi-part credentials (Contabo) are joined into the provider's token format.
 var EnvTokens = map[string][]string{
 	"hetzner":      {"HETZNER_TOKEN"},
@@ -87,7 +87,7 @@ func postForm(ctx context.Context, c *http.Client, u string, form url.Values, ou
 		return err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", "boxa-core/0.1")
+	req.Header.Set("User-Agent", "sandbox-client/1")
 	resp, err := c.Do(req)
 	if err != nil {
 		return err

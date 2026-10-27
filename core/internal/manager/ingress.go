@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"boxa/core/internal/model"
-	"boxa/core/internal/proto"
-	"boxa/core/internal/store"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/proto"
+	"boxaz/core/internal/store"
 )
 
 // Ingress (spec M9 / v0.3 §4): Caddy terminates TLS for <slug>-<ip>.sslip.io
@@ -21,6 +21,7 @@ import (
 // URLToken is a stable per-box token derived from the URL key (HMAC).
 func (m *Manager) URLToken(boxID string) string {
 	h := hmac.New(sha256.New, []byte(m.Cfg.URLKey))
+	// HMAC domain kept from before the rename so existing box URL tokens stay valid.
 	h.Write([]byte("boxa-url:" + boxID))
 	return hex.EncodeToString(h.Sum(nil))[:24]
 }
@@ -67,12 +68,6 @@ func (m *Manager) TLSAllowed(ctx context.Context, host string) bool {
 
 // Proxy forwards one HTTP request to the box's first exposed port.
 func (m *Manager) Proxy(ctx context.Context, b *model.Box, method, path string, hdr map[string][]string, body []byte) (*proto.HTTPResult, error) {
-	if b.Status == model.StatusSleeping {
-		sys := &Principal{Key: &model.APIKey{Scopes: []string{model.ScopeAdmin}}, Admin: true}
-		if _, err := m.Wake(ctx, sys, b.ID); err != nil {
-			return nil, err
-		}
-	}
 	if len(b.Ports) == 0 {
 		return nil, model.E(model.ErrNotFound, "box exposes no ports")
 	}

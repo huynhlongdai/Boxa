@@ -12,28 +12,28 @@ import (
 
 // TestE2BLiveLifecycle creates ONE real E2B sandbox (template base, short
 // timeout), exercises exec/files/pause/resume/fork, then deletes everything.
-// Spends well under a cent of credit. Opt-in: BOXA_LIVE_E2B_CREATE=1 and
-// E2B_API_KEY. BOXA_LIVE_E2B_PAUSE=0 / BOXA_LIVE_E2B_FORK=0 skip those steps.
+// Spends well under a cent of credit. Opt-in: BOXAZ_LIVE_E2B_CREATE=1 and
+// E2B_API_KEY. BOXAZ_LIVE_E2B_PAUSE=0 / BOXAZ_LIVE_E2B_FORK=0 skip those steps.
 func TestE2BLiveLifecycle(t *testing.T) {
-	if os.Getenv("BOXA_LIVE_E2B_CREATE") != "1" {
-		t.Skip("set BOXA_LIVE_E2B_CREATE=1 and E2B_API_KEY to run (creates a sandbox)")
+	if os.Getenv("BOXAZ_LIVE_E2B_CREATE") != "1" {
+		t.Skip("set BOXAZ_LIVE_E2B_CREATE=1 and E2B_API_KEY to run (creates a sandbox)")
 	}
 	liveE2BLike(t, func(c *http.Client) *E2B { return NewE2B(c, "") }, Cred{"token": os.Getenv("E2B_API_KEY")}, "")
 }
 
 // TestNovitaLiveLifecycle is the same for Novita Sandbox (E2B-compatible).
-// Opt-in: BOXA_LIVE_NOVITA_CREATE=1 and NOVITA_API_KEY (NOVITA_REGION picks
+// Opt-in: BOXAZ_LIVE_NOVITA_CREATE=1 and NOVITA_API_KEY (NOVITA_REGION picks
 // the region, default us-phx-1).
 func TestNovitaLiveLifecycle(t *testing.T) {
-	if os.Getenv("BOXA_LIVE_NOVITA_CREATE") != "1" {
-		t.Skip("set BOXA_LIVE_NOVITA_CREATE=1 and NOVITA_API_KEY to run (creates a sandbox)")
+	if os.Getenv("BOXAZ_LIVE_NOVITA_CREATE") != "1" {
+		t.Skip("set BOXAZ_LIVE_NOVITA_CREATE=1 and NOVITA_API_KEY to run (creates a sandbox)")
 	}
 	liveE2BLike(t, func(c *http.Client) *E2B { return NewNovita(c, "") }, Cred{"token": os.Getenv("NOVITA_API_KEY")}, os.Getenv("NOVITA_REGION"))
 }
 
 func liveE2BLike(t *testing.T, mk func(*http.Client) *E2B, c Cred, region string) {
 	var w io.Writer = io.Discard
-	if p := os.Getenv("BOXA_LIVE_LOG"); p != "" {
+	if p := os.Getenv("BOXAZ_LIVE_LOG"); p != "" {
 		f, err := os.Create(p)
 		if err != nil {
 			t.Fatal(err)
@@ -109,7 +109,7 @@ func liveE2BLike(t *testing.T, mk func(*http.Client) *E2B, c Cred, region string
 		t.Fatalf("get state: %+v %v", g, err)
 	}
 
-	if os.Getenv("BOXA_LIVE_E2B_PAUSE") != "0" {
+	if os.Getenv("BOXAZ_LIVE_E2B_PAUSE") != "0" {
 		t0 = time.Now()
 		if err := d.Pause(ctx, c, sb.ID); err != nil {
 			t.Logf("pause: %v (skipping resume)", err)
@@ -129,7 +129,7 @@ func liveE2BLike(t *testing.T, mk func(*http.Client) *E2B, c Cred, region string
 			tm("resume→exec", t0)
 		}
 	}
-	if os.Getenv("BOXA_LIVE_E2B_FORK") != "0" && d.Info().Caps.Fork {
+	if os.Getenv("BOXAZ_LIVE_E2B_FORK") != "0" && d.Info().Caps.Fork {
 		t0 = time.Now()
 		ch, err := d.Fork(ctx, c, sb.ID)
 		if err != nil {

@@ -1,5 +1,5 @@
 // API client có kiểu, bám theo docs/api-contract-v1.md.
-// Trình duyệt luôn gọi qua proxy Next (/api/boxa/...), proxy gắn API key từ cookie httpOnly,
+// Trình duyệt luôn gọi qua proxy Next (/api/boxaz/...), proxy gắn API key từ cookie httpOnly,
 // nên key không bao giờ nằm trong JS phía client.
 import type {
   AdapterLintResult,
@@ -12,7 +12,7 @@ import type {
   ApiKey,
   Approval,
   Box,
-  BoxaEvent,
+  BoxazEvent,
   CostsResponse,
   CreateBoxBody,
   ExecResult,
@@ -65,7 +65,7 @@ import type {
   WarmView,
 } from "./types";
 
-export const PROXY_BASE = "/api/boxa";
+export const PROXY_BASE = "/api/boxaz";
 
 export class ApiError extends Error {
   code: string;
@@ -206,7 +206,7 @@ export const paths = {
   adminAudit: (f?: { actor?: string; type?: string }) => `/admin/audit${qs(f)}`,
   adminQuotas: "/admin/quotas",
   adminUsers: "/admin/users",
-  // v1.1 discovery (không cần auth). Proxy: /api/boxa/<x> → <BOXA_API>/<x>; tiền tố "_root/" → gốc Core (bỏ /v1).
+  // v1.1 discovery (không cần auth). Proxy: /api/boxaz/<x> → <BOXAZ_API>/<x>; tiền tố "_root/" → gốc Core (bỏ /v1).
   openapi: "/openapi.json",
   tools: (format: ToolFormat) => `/tools${qs({ format })}`,
   llmsTxt: "/_root/llms.txt",
@@ -234,7 +234,7 @@ export const api = {
   writeFile: (id: string, path: string, content: string) => http.put<{ ok: boolean }>(`/boxes/${id}/files`, { path, content }),
   grep: (id: string, pattern: string, path: string) => http.post<unknown>(`/boxes/${id}/grep`, { pattern, path }),
   observe: (id: string) => http.get<Observe>(paths.boxObserve(id)),
-  boxEvents: (id: string) => http.get<List<BoxaEvent>>(paths.boxEvents(id)),
+  boxEvents: (id: string) => http.get<List<BoxazEvent>>(paths.boxEvents(id)),
   snapshots: (id: string) => http.get<List<Snapshot>>(paths.boxSnapshots(id)),
   takeover: (id: string) => http.post<Box>(`/boxes/${id}/takeover`),
   release: (id: string) => http.post<Box>(`/boxes/${id}/release`),
@@ -341,7 +341,7 @@ export const api = {
   // Admin
   adminSystem: () => http.get<AdminSystem>(paths.adminSystem),
   adminJobs: () => http.get<List<SchedJob>>(paths.adminJobs),
-  adminAudit: (f?: { actor?: string; type?: string }) => http.get<List<BoxaEvent>>(paths.adminAudit(f)),
+  adminAudit: (f?: { actor?: string; type?: string }) => http.get<List<BoxazEvent>>(paths.adminAudit(f)),
   adminQuotas: () => http.get<Quotas>(paths.adminQuotas),
   saveQuotas: (q: Quotas) => http.put<Quotas>(paths.adminQuotas, q),
   adminUsers: () => http.get<List<AdminUser>>(paths.adminUsers),

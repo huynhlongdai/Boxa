@@ -1,6 +1,6 @@
-# AGENTS.md — box Boxa `{{.Slug}}`
+# AGENTS.md — box Boxaz `{{.Slug}}`
 
-Bạn đang làm việc trong một **box Boxa**: sandbox Linux dùng xong bỏ, được thuê cho AI agent.
+Bạn đang làm việc trong một **box Boxaz**: sandbox Linux dùng xong bỏ, được thuê cho AI agent.
 
 ## Danh tính
 - Box: `{{.BoxID}}` (slug `{{.Slug}}`), template `{{.Template}}`, lifecycle `{{.Lifecycle}}`
@@ -19,12 +19,12 @@ Bạn đang làm việc trong một **box Boxa**: sandbox Linux dùng xong bỏ,
 - `/memory` — ghi chú dài hạn dùng chung cho mọi box của agent này. Ghi vào đây những gì lần chạy sau cần biết.
 - Secret được đưa vào biến môi trường ở mỗi lần exec: {{.Secrets}}
 
-## Công cụ (MCP server `boxa`)
+## Công cụ (MCP server `boxaz`)
 {{range .Tools}}- `{{.}}`
 {{end}}
-## Cách gọi Boxa
-- MCP: `{{.Base}}/mcp` (Streamable HTTP) hoặc `box mcp` (stdio), header `Authorization: Bearer $BOXA_API_KEY`.
-- REST: `{{.Base}}/v1` — ví dụ `curl -X POST {{.Base}}/v1/boxes/{{.BoxID}}/exec -H "Authorization: Bearer $BOXA_API_KEY" -d '{"command":"ls"}'`.
+## Cách gọi Boxaz
+- MCP: `{{.Base}}/mcp` (Streamable HTTP) hoặc `box mcp` (stdio), header `Authorization: Bearer $BOXAZ_API_KEY`.
+- REST: `{{.Base}}/v1` — ví dụ `curl -X POST {{.Base}}/v1/boxes/{{.BoxID}}/exec -H "Authorization: Bearer $BOXAZ_API_KEY" -d '{"command":"ls"}'`.
 - Khám phá: `{{.Base}}/llms.txt`, `{{.Base}}/v1/openapi.json`, `{{.Base}}/v1/tools?format=openai`.
 - Gửi `Accept-Language: vi|en|zh|ja` để nhận thông báo lỗi bằng ngôn ngữ của bạn.
 

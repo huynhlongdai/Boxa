@@ -1,7 +1,7 @@
 {
-  "name": "@boxa/sdk",
+  "name": "@boxaz/sdk",
   "version": "1.1.0",
-  "description": "TypeScript SDK for Boxa: cheap disposable Linux boxes for AI agents (fetch-based, zero dependencies)",
+  "description": "TypeScript SDK for Boxaz: cheap disposable Linux boxes for AI agents (fetch-based, zero dependencies)",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

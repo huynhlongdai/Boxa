@@ -59,7 +59,7 @@ type ProviderPrefs struct {
 	Regions       []string `json:"regions"`         // allowed regions (empty = all)
 	DefaultRegion string   `json:"default_region"`
 	// v1.4 (sandbox providers): auto (T2 dial-in when the sandbox can keep a
-	// background process and BOXA_PUBLIC_URL is set, else T3 shim) | dial | shim.
+	// background process and BOXAZ_PUBLIC_URL is set, else T3 shim) | dial | shim.
 	SandboxMode string    `json:"sandbox_mode,omitempty"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }

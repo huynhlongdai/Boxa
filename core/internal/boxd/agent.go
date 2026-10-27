@@ -21,9 +21,9 @@ import (
 	"github.com/creack/pty"
 	"github.com/gorilla/websocket"
 
-	"boxa/core/internal/hostlink"
-	"boxa/core/internal/proto"
-	"boxa/core/internal/secret"
+	"boxaz/core/internal/hostlink"
+	"boxaz/core/internal/proto"
+	"boxaz/core/internal/secret"
 )
 
 // Config for the host agent.
@@ -483,7 +483,7 @@ func (a *Agent) exec(ctx context.Context, p proto.ExecParams) (*ExecOut, error) 
 		if res.StderrTail != "" {
 			res.StderrTail += "\n"
 		}
-		res.StderrTail += "[boxa] " + runErr.Error()
+		res.StderrTail += "[boxaz] " + runErr.Error()
 	}
 	if res.Truncated || total > KeepLogBytes {
 		if err := combineLog(filepath.Join(a.logsDir, logID+".log"), p.Command, outPath, errPath); err == nil {
@@ -681,7 +681,7 @@ func (a *Agent) httpDo(ctx context.Context, p proto.HTTPParams) (*proto.HTTPResu
 	}
 	resp, err := ingressClient.Do(req)
 	if err != nil {
-		return &proto.HTTPResult{Status: 502, Headers: map[string][]string{"Content-Type": {"text/plain"}}, Body: []byte("boxa: upstream error: " + err.Error())}, nil
+		return &proto.HTTPResult{Status: 502, Headers: map[string][]string{"Content-Type": {"text/plain"}}, Body: []byte("boxaz: upstream error: " + err.Error())}, nil
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 32<<20))

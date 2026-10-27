@@ -285,7 +285,7 @@ func Resolve(ctx context.Context, p Policy, res Resolver) (targets []Target, has
 
 // ACLName is the Incus network ACL name for a container.
 func ACLName(container string) string {
-	n := "boxa-eg-" + strings.TrimPrefix(container, "boxa-")
+	n := "boxaz-eg-" + trimCPrefix(container)
 	if len(n) > 63 {
 		n = n[:63]
 	}
@@ -309,7 +309,7 @@ func IncusCommands(container, nic string, p Policy, targets []Target, allowDNS b
 	}
 	cmds := [][]string{
 		{"network", "acl", "delete", acl}, // may fail when absent (ignored)
-		{"network", "acl", "create", acl, "description=Boxa egress allowlist for " + container},
+		{"network", "acl", "create", acl, "description=Boxaz egress allowlist for " + container},
 	}
 	if allowDNS {
 		cmds = append(cmds,
@@ -345,7 +345,7 @@ func desc(s string) string {
 
 // NftTable is the nftables table name for a container.
 func NftTable(container string) string {
-	return "boxa_eg_" + strings.NewReplacer("-", "_").Replace(strings.TrimPrefix(container, "boxa-"))
+	return "boxaz_eg_" + strings.NewReplacer("-", "_").Replace(trimCPrefix(container))
 }
 
 // NftScript renders an `nft -f -` script that filters forwarded traffic from
@@ -397,4 +397,12 @@ func NftScript(container string, srcIPs []string, p Policy, targets []Target, al
 	}
 	b.WriteString("  }\n}\n")
 	return b.String()
+}
+
+// trimCPrefix strips the container prefix (current or pre-rename legacy).
+func trimCPrefix(c string) string {
+	if strings.HasPrefix(c, "boxaz-") {
+		return strings.TrimPrefix(c, "boxaz-")
+	}
+	return strings.TrimPrefix(c, "boxa-") // compat: pre-rename containers
 }

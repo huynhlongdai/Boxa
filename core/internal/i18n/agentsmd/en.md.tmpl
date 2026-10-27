@@ -1,6 +1,6 @@
-# AGENTS.md — Boxa box `{{.Slug}}`
+# AGENTS.md — Boxaz box `{{.Slug}}`
 
-You are working inside a **Boxa box**: a disposable Linux sandbox rented for an AI agent.
+You are working inside a **Boxaz box**: a disposable Linux sandbox rented for an AI agent.
 
 ## Identity
 - Box: `{{.BoxID}}` (slug `{{.Slug}}`), template `{{.Template}}`, lifecycle `{{.Lifecycle}}`
@@ -19,12 +19,12 @@ You are working inside a **Boxa box**: a disposable Linux sandbox rented for an 
 - `/memory` — long-term notes shared by all boxes of this agent. Write what future runs should know here.
 - Secrets are injected as environment variables on each exec: {{.Secrets}}
 
-## Tools (MCP server `boxa`)
+## Tools (MCP server `boxaz`)
 {{range .Tools}}- `{{.}}`
 {{end}}
-## Calling Boxa
-- MCP: `{{.Base}}/mcp` (Streamable HTTP) or `box mcp` (stdio), header `Authorization: Bearer $BOXA_API_KEY`.
-- REST: `{{.Base}}/v1` — e.g. `curl -X POST {{.Base}}/v1/boxes/{{.BoxID}}/exec -H "Authorization: Bearer $BOXA_API_KEY" -d '{"command":"ls"}'`.
+## Calling Boxaz
+- MCP: `{{.Base}}/mcp` (Streamable HTTP) or `box mcp` (stdio), header `Authorization: Bearer $BOXAZ_API_KEY`.
+- REST: `{{.Base}}/v1` — e.g. `curl -X POST {{.Base}}/v1/boxes/{{.BoxID}}/exec -H "Authorization: Bearer $BOXAZ_API_KEY" -d '{"command":"ls"}'`.
 - Discovery: `{{.Base}}/llms.txt`, `{{.Base}}/v1/openapi.json`, `{{.Base}}/v1/tools?format=openai`.
 - Send `Accept-Language: en|vi|zh|ja` to get error messages in your language.
 

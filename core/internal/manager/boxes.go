@@ -8,15 +8,15 @@ import (
 	"strings"
 	"time"
 
-	"boxa/core/internal/boxd"
-	"boxa/core/internal/boxyaml"
-	"boxa/core/internal/hostlink"
-	"boxa/core/internal/i18n"
-	"boxa/core/internal/model"
-	"boxa/core/internal/proto"
-	"boxa/core/internal/provider"
-	"boxa/core/internal/secret"
-	"boxa/core/internal/store"
+	"boxaz/core/internal/boxd"
+	"boxaz/core/internal/boxyaml"
+	"boxaz/core/internal/hostlink"
+	"boxaz/core/internal/i18n"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/proto"
+	"boxaz/core/internal/provider"
+	"boxaz/core/internal/secret"
+	"boxaz/core/internal/store"
 )
 
 const maxProvisionAttempts = 3 // first try + 2 retries (spec M3)
@@ -33,7 +33,7 @@ func (m *Manager) CreateBox(ctx context.Context, p *Principal, req boxyaml.Reque
 		if msg == "" {
 			msg = "maintenance mode"
 		}
-		return nil, false, model.EH(model.ErrPolicyDenied, "Boxa is in maintenance; retry later.", "%s", msg)
+		return nil, false, model.EH(model.ErrPolicyDenied, "Boxaz is in maintenance; retry later.", "%s", msg)
 	}
 	origYAML := req.YAML
 	if req.YAML != "" {
@@ -446,7 +446,7 @@ func (m *Manager) boxURL(ctx context.Context, b *model.Box, h *model.Host) strin
 		u = "https://" + b.Slug + ".box." + s.BaseDomain + "/"
 	}
 	if s.URLTokenProtect {
-		u += "?boxa_token=" + m.URLToken(b.ID)
+		u += "?boxaz_token=" + m.URLToken(b.ID)
 	}
 	return u
 }
@@ -597,10 +597,10 @@ type ExecInput struct {
 // shell: restore the previous cwd + exports, run, save them again. The exit
 // code of the user command is preserved.
 func sessionWrap(cmd string) string {
-	const st = "${BOX_WORK:-/work}/.boxa"
+	const st = "${BOX_WORK:-/work}/.box"
 	return `mkdir -p "` + st + `" 2>/dev/null; if [ -f "` + st + `/env" ]; then . "` + st + `/env" 2>/dev/null; fi; ` +
 		`if [ -f "` + st + `/cwd" ]; then cd "$(cat "` + st + `/cwd")" 2>/dev/null; fi; ` +
-		"{ " + cmd + "\n}; __boxa_rc=$?; pwd > \"" + st + "/cwd\"; export -p | grep -v -E ' (PWD|OLDPWD|SHLVL|_|__boxa_rc)=' > \"" + st + "/env\"; exit $__boxa_rc"
+		"{ " + cmd + "\n}; __box_rc=$?; pwd > \"" + st + "/cwd\"; export -p | grep -v -E ' (PWD|OLDPWD|SHLVL|_|__box_rc)=' > \"" + st + "/env\"; exit $__box_rc"
 }
 
 func (m *Manager) secretEnv(ctx context.Context, b *model.Box) (map[string]string, error) {
@@ -686,7 +686,7 @@ func (m *Manager) execSync(ctx context.Context, actor string, b *model.Box, in E
 	if in.Session {
 		kept := res.FilesChanged[:0]
 		for _, f := range res.FilesChanged {
-			if !strings.Contains(f, "/.boxa/") {
+			if !strings.Contains(f, "/.box/") {
 				kept = append(kept, f)
 			}
 		}

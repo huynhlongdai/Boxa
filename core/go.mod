@@ -1,4 +1,4 @@
-module boxa/core
+module boxaz/core
 
 go 1.27.3
 

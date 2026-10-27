@@ -8,7 +8,7 @@ import { api, paths } from "@/lib/api";
 import { startsWith, useAction, useApi } from "@/lib/hooks";
 import { useFmt } from "@/lib/format";
 import { boxToTemplateYaml, boxToYaml } from "@/lib/box-yaml";
-import type { Box, BoxaEvent, FilesResponse, List, Observe, Snapshot } from "@/lib/types";
+import type { Box, BoxazEvent, FilesResponse, List, Observe, Snapshot } from "@/lib/types";
 import { parseExecEvent } from "@/lib/exec-event";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,14 +18,14 @@ import { Progress } from "@/components/ui/progress";
 import { Field, Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { BudgetBar, MoneyBudget } from "@/components/boxa/budget";
-import { CodeBlock } from "@/components/boxa/code-block";
-import { ConfirmButton } from "@/components/boxa/confirm";
-import { Empty, ErrorBox, LoadingRows } from "@/components/boxa/page";
-import { Mono } from "@/components/boxa/status";
-import { EgressCard } from "@/components/boxa/egress";
-import { EstimateCard, ResumeCard } from "@/components/boxa/box-v13";
-import { RightsizeCard } from "@/components/boxa/speed";
+import { BudgetBar, MoneyBudget } from "@/components/boxaz/budget";
+import { CodeBlock } from "@/components/boxaz/code-block";
+import { ConfirmButton } from "@/components/boxaz/confirm";
+import { Empty, ErrorBox, LoadingRows } from "@/components/boxaz/page";
+import { Mono } from "@/components/boxaz/status";
+import { EgressCard } from "@/components/boxaz/egress";
+import { EstimateCard, ResumeCard } from "@/components/boxaz/box-v13";
+import { RightsizeCard } from "@/components/boxaz/speed";
 
 function Row({ k, children }: { k: string; children: React.ReactNode }) {
   return (
@@ -140,7 +140,7 @@ export function OverviewTab({ box }: { box: Box }) {
 export function TimelineTab({ box }: { box: Box }) {
   const t = useTranslations("boxDetail.timeline");
   const f = useFmt();
-  const { data: ev, error } = useApi<List<BoxaEvent>>(paths.boxEvents(box.id));
+  const { data: ev, error } = useApi<List<BoxazEvent>>(paths.boxEvents(box.id));
   if (error) return <ErrorBox error={error} />;
   if (!ev) return <LoadingRows />;
   const items = [...ev.items].sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts)).map((e) => ({ e, x: parseExecEvent(e) }));
@@ -277,7 +277,7 @@ export function LogsTab({ box }: { box: Box }) {
   const f = useFmt();
   const sp = useSearchParams();
   const router = useRouter();
-  const { data: ev, error } = useApi<List<BoxaEvent>>(paths.boxEvents(box.id));
+  const { data: ev, error } = useApi<List<BoxazEvent>>(paths.boxEvents(box.id));
   const known = (ev?.items ?? []).map(parseExecEvent).filter((x): x is NonNullable<typeof x> => Boolean(x?.log_id));
   const urlLog = sp.get("log");
   const [input, setInput] = React.useState(urlLog ?? "");

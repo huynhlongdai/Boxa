@@ -89,18 +89,18 @@ func TestResolveAndRules(t *testing.T) {
 		t.Fatalf("targets %v", got)
 	}
 
-	cmds := IncusCommands("boxa-box-abc", "", p, targets, hasDomain)
+	cmds := IncusCommands("boxaz-box-abc", "", p, targets, hasDomain)
 	joined := []string{}
 	for _, c := range cmds {
 		joined = append(joined, strings.Join(c, " "))
 	}
 	all := strings.Join(joined, "\n")
 	for _, w := range []string{
-		"network acl create boxa-eg-box-abc",
-		"network acl rule add boxa-eg-box-abc egress action=allow protocol=udp destination_port=53",
-		"network acl rule add boxa-eg-box-abc egress action=allow destination=10.0.0.0/8 description=10.0.0.0/8",
-		"network acl rule add boxa-eg-box-abc egress action=allow destination=151.101.0.223/32 protocol=tcp destination_port=443",
-		"config device override boxa-box-abc eth0 security.acls=boxa-eg-box-abc security.acls.default.egress.action=drop",
+		"network acl create boxaz-eg-box-abc",
+		"network acl rule add boxaz-eg-box-abc egress action=allow protocol=udp destination_port=53",
+		"network acl rule add boxaz-eg-box-abc egress action=allow destination=10.0.0.0/8 description=10.0.0.0/8",
+		"network acl rule add boxaz-eg-box-abc egress action=allow destination=151.101.0.223/32 protocol=tcp destination_port=443",
+		"config device override boxaz-box-abc eth0 security.acls=boxaz-eg-box-abc security.acls.default.egress.action=drop",
 	} {
 		if !strings.Contains(all, w) {
 			t.Errorf("incus commands lack %q:\n%s", w, all)
@@ -109,14 +109,14 @@ func TestResolveAndRules(t *testing.T) {
 	if strings.Contains(all, "gone.example") {
 		t.Error("unresolved domain must not appear")
 	}
-	off := IncusCommands("boxa-box-abc", "eth0", Policy{}, nil, false)
-	if strings.Join(off[len(off)-1], " ") != "network acl delete boxa-eg-box-abc" {
+	off := IncusCommands("boxaz-box-abc", "eth0", Policy{}, nil, false)
+	if strings.Join(off[len(off)-1], " ") != "network acl delete boxaz-eg-box-abc" {
 		t.Fatalf("detach %v", off)
 	}
 
-	nft := NftScript("boxa-box-abc", []string{"10.99.0.5", "fd42::5"}, p, targets, hasDomain)
+	nft := NftScript("boxaz-box-abc", []string{"10.99.0.5", "fd42::5"}, p, targets, hasDomain)
 	for _, w := range []string{
-		"add table inet boxa_eg_box_abc\ndelete table inet boxa_eg_box_abc\n",
+		"add table inet boxaz_eg_box_abc\ndelete table inet boxaz_eg_box_abc\n",
 		"type filter hook forward priority -10; policy accept;",
 		"ip saddr { 10.99.0.5 } ct state established,related accept",
 		"ip saddr { 10.99.0.5 } udp dport 53 accept",
@@ -134,11 +134,11 @@ func TestResolveAndRules(t *testing.T) {
 		t.Error("address family mixed")
 	}
 	// deny-by-default with empty allowlist: no DNS, only drop.
-	offline := NftScript("boxa-x", []string{"10.0.0.2"}, Policy{DenyByDefault: true}, nil, false)
+	offline := NftScript("boxaz-x", []string{"10.0.0.2"}, Policy{DenyByDefault: true}, nil, false)
 	if strings.Contains(offline, "dport 53") || !strings.Contains(offline, "ip saddr { 10.0.0.2 } counter drop") {
 		t.Fatalf("offline script:\n%s", offline)
 	}
-	if s := NftScript("boxa-x", nil, Policy{}, nil, false); strings.Contains(s, "chain") {
+	if s := NftScript("boxaz-x", nil, Policy{}, nil, false); strings.Contains(s, "chain") {
 		t.Fatalf("inactive policy must only delete: %s", s)
 	}
 }

@@ -5,8 +5,8 @@ import (
 	"log"
 	"time"
 
-	"boxa/core/internal/model"
-	"boxa/core/internal/provider"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/provider"
 )
 
 // ConfigureProvidersFromEnv connects providers whose tokens are given by

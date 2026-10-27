@@ -10,18 +10,18 @@ import (
 	"strings"
 	"time"
 
-	"boxa/core/internal/mesh"
-	"boxa/core/internal/model"
-	"boxa/core/internal/store"
+	"boxaz/core/internal/mesh"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/store"
 )
 
-// MeshConfig configures the optional headscale mesh (env BOXA_MESH_*).
+// MeshConfig configures the optional headscale mesh (env BOXAZ_MESH_*).
 type MeshConfig struct {
 	Enabled      bool
 	HeadscaleURL string // control server URL boxd/tailscale log in to, e.g. https://mesh.example.com
 	APIKey       string // headscale API key (headscale apikeys create)
-	User         string // headscale user that owns Boxa nodes (default "boxa")
-	BaseDomain   string // MagicDNS domain (default boxa.mesh)
+	User         string // headscale user that owns Boxaz nodes (default "boxaz")
+	BaseDomain   string // MagicDNS domain (default boxaz.mesh)
 	DERPHost     string // optional extra self-hosted DERP relay hostname
 	HTTP         *http.Client
 }
@@ -43,7 +43,7 @@ func (m *Manager) meshUser() string {
 	if m.Cfg.Mesh.User != "" {
 		return m.Cfg.Mesh.User
 	}
-	return "boxa"
+	return "boxaz"
 }
 
 // MeshView is GET /mesh.
@@ -75,7 +75,7 @@ func (m *Manager) MeshStatus(ctx context.Context, p *Principal) (*MeshView, erro
 		}
 	}
 	if !m.meshEnabled() {
-		v.Hint = "Mesh is off. Set BOXA_MESH_ENABLED=true, BOXA_MESH_URL (headscale server_url) and BOXA_MESH_API_KEY, then restart core; hosts join at their next connect."
+		v.Hint = "Mesh is off. Set BOXAZ_MESH_ENABLED=true, BOXAZ_MESH_URL (headscale server_url) and BOXAZ_MESH_API_KEY, then restart core; hosts join at their next connect."
 		return v, nil
 	}
 	v.Enabled, v.URL, v.User = true, m.Cfg.Mesh.HeadscaleURL, m.meshUser()
@@ -167,18 +167,18 @@ type MeshKeyResult struct {
 	Command     string    `json:"command"`
 }
 
-// MeshKey creates a pre-auth key for a host (tag:boxa-host) or a box
+// MeshKey creates a pre-auth key for a host (tag:boxaz-host) or a box
 // (tag:agent-<agent>, tag:box-<id>, ephemeral).
 func (m *Manager) MeshKey(ctx context.Context, p *Principal, in MeshKeyInput) (*MeshKeyResult, error) {
 	if err := p.Require(model.ScopeAdmin); err != nil {
 		return nil, err
 	}
 	if !m.meshEnabled() {
-		return nil, model.EH(model.ErrInvalid, "Set BOXA_MESH_ENABLED, BOXA_MESH_URL and BOXA_MESH_API_KEY first.", "mesh is disabled")
+		return nil, model.EH(model.ErrInvalid, "Set BOXAZ_MESH_ENABLED, BOXAZ_MESH_URL and BOXAZ_MESH_API_KEY first.", "mesh is disabled")
 	}
 	tags := []string{mesh.TagHost}
 	ephemeral := false
-	host := "boxa-node"
+	host := "boxaz-node"
 	switch {
 	case in.BoxID != "":
 		b, err := m.GetBox(ctx, p, in.BoxID)
@@ -208,11 +208,11 @@ func (m *Manager) meshKeyFor(ctx context.Context, tags []string, reusable, ephem
 	defer cancel()
 	cl := m.meshClient()
 	if err := cl.EnsureUser(c, m.meshUser()); err != nil {
-		return nil, model.EH(model.ErrProviderFailed, "Check BOXA_MESH_URL / BOXA_MESH_API_KEY and that headscale is running.", "headscale: %v", err)
+		return nil, model.EH(model.ErrProviderFailed, "Check BOXAZ_MESH_URL / BOXAZ_MESH_API_KEY and that headscale is running.", "headscale: %v", err)
 	}
 	k, err := cl.CreatePreAuthKey(c, m.meshUser(), tags, reusable, ephemeral, ttl)
 	if err != nil {
-		return nil, model.EH(model.ErrProviderFailed, "Check BOXA_MESH_URL / BOXA_MESH_API_KEY and that headscale is running.", "headscale: %v", err)
+		return nil, model.EH(model.ErrProviderFailed, "Check BOXAZ_MESH_URL / BOXAZ_MESH_API_KEY and that headscale is running.", "headscale: %v", err)
 	}
 	return k, nil
 }

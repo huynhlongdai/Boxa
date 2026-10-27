@@ -12,14 +12,14 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"boxa/core/internal/agentkit"
-	"boxa/core/internal/boxyaml"
-	"boxa/core/internal/i18n"
-	"boxa/core/internal/model"
-	"boxa/core/internal/proto"
-	"boxa/core/internal/provider"
-	"boxa/core/internal/secret"
-	"boxa/core/internal/store"
+	"boxaz/core/internal/agentkit"
+	"boxaz/core/internal/boxyaml"
+	"boxaz/core/internal/i18n"
+	"boxaz/core/internal/model"
+	"boxaz/core/internal/proto"
+	"boxaz/core/internal/provider"
+	"boxaz/core/internal/secret"
+	"boxaz/core/internal/store"
 )
 
 // ToolNames is the MCP tool list advertised in AGENTS.md (kept in sync with

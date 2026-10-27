@@ -33,10 +33,10 @@ func TestDigitalOceanAdapter(t *testing.T) {
 			w.WriteHeader(202)
 			w.Write([]byte(`{"droplet":{"id":77,"status":"new","networks":{"v4":[{"ip_address":"10.0.0.2","type":"private"},{"ip_address":"5.6.7.8","type":"public"}]}}}`))
 		case r.URL.Path == "/droplets" && r.Method == "GET":
-			if r.URL.Query().Get("tag_name") != "boxa" {
-				t.Errorf("list must filter tag boxa")
+			if r.URL.Query().Get("tag_name") != "managed" {
+				t.Errorf("list must filter tag managed")
 			}
-			w.Write([]byte(`{"droplets":[{"id":77,"name":"boxa-1","status":"active","size_slug":"s-1vcpu-1gb","region":{"slug":"sgp1"},"networks":{"v4":[{"ip_address":"5.6.7.8","type":"public"}]}}]}`))
+			w.Write([]byte(`{"droplets":[{"id":77,"name":"mgr-1","status":"active","size_slug":"s-1vcpu-1gb","region":{"slug":"sgp1"},"networks":{"v4":[{"ip_address":"5.6.7.8","type":"public"}]}}]}`))
 		case r.URL.Path == "/droplets/77/actions":
 			var b map[string]any
 			json.NewDecoder(r.Body).Decode(&b)
@@ -72,7 +72,7 @@ func TestDigitalOceanAdapter(t *testing.T) {
 	if len(rs) != 1 || rs[0].ID != "sgp1" {
 		t.Fatalf("regions %+v", rs)
 	}
-	hd, err := d.Create(ctx, "good", CreateRequest{Name: "boxa-1", SKU: "s-1vcpu-1gb", Region: "sgp1", CloudInit: "#cloud-config\n", Labels: map[string]string{"boxa-host": "abc"}})
+	hd, err := d.Create(ctx, "good", CreateRequest{Name: "mgr-1", SKU: "s-1vcpu-1gb", Region: "sgp1", CloudInit: "#cloud-config\n", Labels: map[string]string{"mgr-host": "abc"}})
 	if err != nil || hd.Ref != "77" || hd.IP != "5.6.7.8" {
 		t.Fatalf("create %+v %v", hd, err)
 	}
@@ -123,7 +123,7 @@ func TestContaboAdapter(t *testing.T) {
 		}
 		switch {
 		case r.URL.Path == "/compute/instances" && r.Method == "GET":
-			w.Write([]byte(`{"data":[{"instanceId":101,"displayName":"boxa-x","status":"running","productId":"V91","region":"EU","ipConfig":{"v4":{"ip":"9.9.9.9"}}}]}`))
+			w.Write([]byte(`{"data":[{"instanceId":101,"displayName":"mgr-x","status":"running","productId":"V91","region":"EU","ipConfig":{"v4":{"ip":"9.9.9.9"}}}]}`))
 		case r.URL.Path == "/compute/images":
 			w.Write([]byte(`{"data":[{"imageId":"img-u24","name":"ubuntu-24.04"}]}`))
 		case r.URL.Path == "/compute/instances" && r.Method == "POST":
@@ -162,7 +162,7 @@ func TestContaboAdapter(t *testing.T) {
 	if len(offers) == 0 || offers[0].Confidence != "unverified" || offers[0].MinBillingMinutes != 730*60 {
 		t.Fatalf("offers %+v", offers[:1])
 	}
-	hd, err := k.Create(ctx, tok, CreateRequest{Name: "boxa-1", SKU: "V91", Region: "EU", CloudInit: "#cloud-config\n"})
+	hd, err := k.Create(ctx, tok, CreateRequest{Name: "mgr-1", SKU: "V91", Region: "EU", CloudInit: "#cloud-config\n"})
 	if err != nil || hd.Ref != "101" {
 		t.Fatalf("create %+v %v", hd, err)
 	}
@@ -209,7 +209,7 @@ func TestNetcupAdapter(t *testing.T) {
 		}
 		switch {
 		case r.URL.Path == "/servers" && r.Method == "GET":
-			w.Write([]byte(`[{"id":1,"nickname":"prod-db","template":{"name":"RS 1000 G12"}},{"id":2,"nickname":"boxa-spare-1","template":{"name":"VPS 1000 G11"},"site":{"city":"nue"},"serverLiveInfo":{"state":"SHUTOFF"},"ipv4Addresses":[{"ip":"3.3.3.3"}]}]`))
+			w.Write([]byte(`[{"id":1,"nickname":"prod-db","template":{"name":"RS 1000 G12"}},{"id":2,"nickname":"mgr-spare-1","template":{"name":"VPS 1000 G11"},"site":{"city":"nue"},"serverLiveInfo":{"state":"SHUTOFF"},"ipv4Addresses":[{"ip":"3.3.3.3"}]}]`))
 		case r.URL.Path == "/servers/2/imageflavours":
 			w.Write([]byte(`[{"id":11,"name":"Debian 12"},{"id":12,"name":"Ubuntu 24.04 LTS"}]`))
 		case r.URL.Path == "/servers/2" && r.Method == "PATCH":
@@ -240,14 +240,14 @@ func TestNetcupAdapter(t *testing.T) {
 	if err := n.Validate(ctx, "RT"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := n.Create(ctx, "RT", CreateRequest{Name: "boxa-9", SKU: "RS 2000 G12", CloudInit: "x"}); err == nil || !strings.Contains(err.Error(), "NO_CAPACITY") {
+	if _, err := n.Create(ctx, "RT", CreateRequest{Name: "mgr-9", SKU: "RS 2000 G12", CloudInit: "x"}); err == nil || !strings.Contains(err.Error(), "NO_CAPACITY") {
 		t.Fatalf("no spare for sku: %v", err)
 	}
-	hd, err := n.Create(ctx, "RT", CreateRequest{Name: "boxa-9", SKU: "VPS 1000 G11", CloudInit: "#cloud-config\n"})
+	hd, err := n.Create(ctx, "RT", CreateRequest{Name: "mgr-9", SKU: "VPS 1000 G11", CloudInit: "#cloud-config\n"})
 	if err != nil || hd.Ref != "2" || hd.IP != "3.3.3.3" {
 		t.Fatalf("create %+v %v", hd, err)
 	}
-	if image["imageFlavourId"].(float64) != 12 || image["customScript"] != "#cloud-config\n" || patches[0]["nickname"] != "boxa-9" {
+	if image["imageFlavourId"].(float64) != 12 || image["customScript"] != "#cloud-config\n" || patches[0]["nickname"] != "mgr-9" {
 		t.Fatalf("image %+v patches %+v", image, patches)
 	}
 	if st, _ := n.Status(ctx, "RT", "2"); st != "ready" {
@@ -257,11 +257,11 @@ func TestNetcupAdapter(t *testing.T) {
 		t.Fatal(err)
 	}
 	last := patches[len(patches)-1]
-	if last["nickname"] != "boxa-spare-2" || patches[len(patches)-2]["state"] != "OFF" {
+	if last["nickname"] != "mgr-spare-2" || patches[len(patches)-2]["state"] != "OFF" {
 		t.Fatalf("destroy patches %+v", patches)
 	}
 	ls, _ := n.List(ctx, "RT")
-	if len(ls) != 2 || ls[1].Name != "boxa-spare-1" {
+	if len(ls) != 2 || ls[1].Name != "mgr-spare-1" {
 		t.Fatalf("list %+v", ls)
 	}
 }

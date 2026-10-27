@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"boxa/core/internal/model"
+	"boxaz/core/internal/model"
 )
 
 // Vultr API v2 adapter (https://www.vultr.com/api/).
@@ -134,7 +134,7 @@ func (v *Vultr) Create(ctx context.Context, token string, req CreateRequest) (Ha
 	if err != nil {
 		return Handle{}, err
 	}
-	tags := []string{"boxa"}
+	tags := []string{"managed"}
 	for k, val := range req.Labels {
 		tags = append(tags, fmt.Sprintf("%s=%s", k, val))
 	}
@@ -237,7 +237,7 @@ func (v *Vultr) List(ctx context.Context, token string) ([]Server, error) {
 			PowerStatus string `json:"power_status"`
 		} `json:"instances"`
 	}
-	if err := doJSON(ctx, v.c, "GET", v.BaseURL+"/instances?per_page=500&tag=boxa", token, nil, &out); err != nil {
+	if err := doJSON(ctx, v.c, "GET", v.BaseURL+"/instances?per_page=500&tag=managed", token, nil, &out); err != nil {
 		return nil, authErr(err, "Vultr")
 	}
 	var ss []Server
