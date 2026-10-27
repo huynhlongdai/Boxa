@@ -125,7 +125,7 @@ func (m *Manager) createSandboxHost(ctx context.Context, p *Principal, sp sandbo
 	if err := m.capsAllow(ctx, info.ID, region, h.PriceHour, h.PriceMonth); err != nil {
 		return nil, err
 	}
-	req := provider.CreateRequest{Name: "boxa-" + h.ID[5:], SKU: sku, Region: region, Labels: map[string]string{"boxa": "1", "boxa-host": h.ID[5:]}}
+	req := provider.CreateRequest{Name: sandbox.NamePrefix + h.ID[5:], SKU: sku, Region: region, Labels: sandbox.ManagedLabels(h.ID[5:])}
 	if mode == "dial" {
 		boot := "bxb_" + secret.RandHex(24)
 		h.BootstrapHash = secret.Hash(boot)
@@ -143,6 +143,12 @@ func (m *Manager) createSandboxHost(ctx context.Context, p *Principal, sp sandbo
 		m.Store.PutHost(ctx, h)
 		m.Emit(ctx, p.Actor(), "", "", "host.create_failed", fmt.Sprintf("%s %s %s: %v", info.ID, sku, region, err), nil)
 		return nil, err
+	}
+	// In dial mode boxd runs the bootstrap inside Create and may already have
+	// dialled in (hello sets status/driver/connected) before Create returns
+	// on a fast provider: re-read the record so that update is not lost.
+	if cur, err := m.Store.GetHost(ctx, h.ID); err == nil && cur != nil {
+		h = cur
 	}
 	h.ProviderRef = hd.Ref
 	how := "T2: boxd dials in from the sandbox"

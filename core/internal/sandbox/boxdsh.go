@@ -209,7 +209,7 @@ func boxdState(s string) string {
 }
 
 func (d *BoxdSh) Create(ctx context.Context, c Cred, s Spec) (*Sandbox, error) {
-	name := strings.ToLower(orStr(s.Name, "boxa-"+strconv.FormatInt(time.Now().UnixNano()%1e9, 36)))
+	name := strings.ToLower(orStr(s.Name, NamePrefix+strconv.FormatInt(time.Now().UnixNano()%1e9, 36)))
 	req := pbMsg{}.str(1, name)
 	if s.Template != "" {
 		req = req.str(2, s.Template)

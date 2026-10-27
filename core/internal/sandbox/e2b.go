@@ -41,7 +41,8 @@ type E2B struct {
 
 type e2bSandbox struct {
 	SandboxID       string `json:"sandboxID"`
-	TemplateID      string `json:"templateID"`
+	TemplateID      string `json:"templateID"` // build id (e.g. rki5dems9wqfm4r03t7g)
+	Alias           string `json:"alias"`      // template name as created ("base")
 	EnvdAccessToken string `json:"envdAccessToken"`
 	Domain          string `json:"domain"`
 	State           string `json:"state"`
@@ -49,23 +50,52 @@ type e2bSandbox struct {
 	MemoryMB        int    `json:"memoryMB"`
 	EnvdVersion     string `json:"envdVersion"`
 	apiBase         string
+	known           bool // full record seen (Novita's envd has no access token)
+}
+
+// template is the name the sandbox was created from: the alias, not the
+// build id the API also reports.
+func (s e2bSandbox) template() string { return orStr(s.Alias, s.TemplateID) }
+
+// apiFor is the control-plane base a sandbox was created on (region-aware:
+// a Novita us-virginia-1 sandbox must be paused/resumed/deleted there).
+func (d *E2B) apiFor(c Cred, id string) string {
+	d.mu.Lock()
+	m := d.meta[id]
+	d.mu.Unlock()
+	return orStr(m.apiBase, d.api(c, ""))
+}
+
+// remember stores a sandbox record answered by create/connect/fork.
+func (d *E2B) remember(sb e2bSandbox, api, domain string) {
+	if sb.Domain == "" {
+		sb.Domain = domain
+	}
+	sb.apiBase, sb.known = api, true
+	d.mu.Lock()
+	if old, ok := d.meta[sb.SandboxID]; ok && sb.EnvdAccessToken == "" {
+		sb.EnvdAccessToken = old.EnvdAccessToken
+	}
+	d.meta[sb.SandboxID] = sb
+	d.mu.Unlock()
 }
 
 // NewE2B returns the E2B driver (apiBase "" = https://api.e2b.app).
 func NewE2B(c *http.Client, apiBase string) *E2B {
 	d := &E2B{h: newHTTP(c), apiBase: orStr(apiBase, "https://api.e2b.app"), domain: "e2b.app", keyHeader: "X-API-Key",
 		idHeader: "E2b-Sandbox-Id", portHeader: "E2b-Sandbox-Port", fork: true, meta: map[string]e2bSandbox{}}
-	d.info = Info{ID: "e2b", Name: "E2B", Tier: "T2", Adapter: "native", Verification: VerifiedDocs,
-		VerifiedNote: "Control plane from E2B's OpenAPI spec (e2b-dev/infra spec/openapi.yml); envd files from envd.yaml; exec via Connect RPC process.Process/Start (process.proto).",
+	d.info = Info{ID: "e2b", Name: "E2B", Tier: "T2", Adapter: "native", Verification: VerifiedLive,
+		VerifiedNote: "Full lifecycle verified live on the Hobby plan on 2026-10-27 (template base = 2 vCPU / 512 MB / 22 GB root fs, 20 GB free, envd 0.10.0): create ~0.2 s, create→first exec ~0.35 s, exec ~30-90 ms, 200k-line exec ~0.14 s, file put/get ~25-45 ms, pause ~0.15 s, resume ~0.18 s, fork ~0.5-0.7 s, delete ~55 ms; also boxa-core box up/exec/down end to end. Control plane per e2b-dev/infra spec/openapi.yml, exec via envd Connect RPC process.Process/Start.",
 		Docs:         "https://e2b.dev/docs", Website: "https://e2b.dev", Initials: "E2", Color: "#ff8800",
-		Caps:    Capabilities{Background: true, Pause: true, Fork: true, Ports: true, PTY: true, Files: true, BootMS: 500, MaxLifetimeS: 24 * 3600, MaxCPU: 8, MaxRAMMB: 8192, Isolation: "microvm"},
+		Caps:    Capabilities{Background: true, Pause: true, Fork: true, Ports: true, PTY: true, Files: true, BootMS: 400, MaxLifetimeS: 24 * 3600, MaxCPU: 8, MaxRAMMB: 8192, Isolation: "microvm"},
 		Pricing: Pricing{CPUSecond: 0.000014, GBSecond: 0.0000045, Source: "https://e2b.dev/pricing", Confidence: "docs", Note: "per second while running; Hobby/Pro plans; sandbox resources come from the template"},
-		Sizes:   []Size{{SKU: "base", CPU: 2, RAMMB: 512, DiskGB: 10}},
+		Sizes:   []Size{{SKU: "base", CPU: 2, RAMMB: 512, DiskGB: 22}}, // measured: df / = 22G (20G free), API diskSizeMB 23668
 		Regions: []Region{{ID: "global", Name: "E2B Cloud"}}, Templates: []string{"base"}, DefaultTemplate: "base", WorkDir: "/home/user",
 		Credentials: []CredField{{Name: "token", Label: "API key", Secret: true, Hint: "e2b_…"},
 			{Name: "templates", Label: "Templates (id=CPUxMB, comma separated)", Optional: true, Hint: "base=2x512,my-agent=4x4096"}},
 		EnvVars: []string{"E2B_API_KEY", "E2B_TEMPLATES"},
-		Notes:   []string{"CPU/RAM are fixed per template: build bigger templates in E2B and list them in the Templates field."}}
+		Notes: []string{"CPU/RAM are fixed per template: build bigger templates in E2B and list them in the Templates field.",
+			"Hobby (free credit) caps a sandbox at 1 h and 20 running at once; Pro allows 24 h."}}
 	return d
 }
 
@@ -74,12 +104,12 @@ func NewNovita(c *http.Client, apiBase string) *E2B {
 	d := NewE2B(c, "")
 	d.apiBase, d.domain, d.keyHeader, d.idHeader, d.portHeader, d.fork = apiBase, "us-phx-1.sandbox.novita.ai", "X-API-KEY", "Novita-Sandbox-Id", "Novita-Sandbox-Port", false
 	d.regionDom = map[string]string{"us-phx-1": "us-phx-1.sandbox.novita.ai", "us-virginia-1": "sandbox.novita.ai"}
-	d.info = Info{ID: "novita", Name: "Novita Sandbox", Tier: "T2", Adapter: "native", Verification: VerifiedSDK,
-		VerifiedNote: "E2B-compatible. Regions/domains and per-second prices from docs.novita.ai; REST paths and headers (X-API-KEY, api.<domain>, envd 49983) from the official novita-sandbox SDK 2.1.1 — Novita publishes no REST reference.",
+	d.info = Info{ID: "novita", Name: "Novita Sandbox", Tier: "T2", Adapter: "native", Verification: VerifiedLive,
+		VerifiedNote: "E2B-compatible. Verified live in us-phx-1 on 2026-10-27 (template base = 2 vCPU / 512 MB / 22 GB root fs, 20 GB free, envd 0.5.12, no envd access token): create ~0.3 s, create→first exec ~0.27 s, exec ~150-170 ms, 200k-line exec ~0.47 s, file put/get ~150 ms, delete ~0.1 s. Pause/resume and the boxa-core box flow were not run live (account balance ran out: 402 BALANCE_NOT_ENOUGH). Paths/headers (X-API-KEY, api.<domain>, envd 49983) from the novita-sandbox SDK 2.1.1.",
 		Docs:         "https://docs.novita.ai/guides/sandbox-overview", Website: "https://novita.ai", Initials: "NV", Color: "#23d57c",
-		Caps:    Capabilities{Background: true, Pause: true, Ports: true, PTY: true, Files: true, BootMS: 1000, MaxLifetimeS: 4 * 3600, MaxCPU: 8, MaxRAMMB: 8192, Isolation: "microvm"},
+		Caps:    Capabilities{Background: true, Pause: true, Ports: true, PTY: true, Files: true, BootMS: 600, MaxLifetimeS: 4 * 3600, MaxCPU: 8, MaxRAMMB: 8192, Isolation: "microvm"},
 		Pricing: Pricing{CPUSecond: 0.0000098, GBSecond: 0.0000032, Source: "https://docs.novita.ai/guides/sandbox-pricing", Confidence: "docs", Note: "per second for CPU and RAM while running; 20 GB ephemeral disk included"},
-		Sizes:   []Size{{SKU: "base", CPU: 2, RAMMB: 512, DiskGB: 20}},
+		Sizes:   []Size{{SKU: "base", CPU: 2, RAMMB: 512, DiskGB: 22}}, // measured: API diskSizeMB 23709 (docs: 20 GB included)
 		Regions: []Region{{ID: "us-phx-1", Name: "US Phoenix (v2, default)"}, {ID: "us-virginia-1", Name: "US Virginia (v1)"}}, Templates: []string{"base"}, DefaultTemplate: "base", WorkDir: "/home/user",
 		Credentials: []CredField{{Name: "token", Label: "API key", Secret: true, Hint: "sk_…"},
 			{Name: "templates", Label: "Templates (id=CPUxMB, comma separated)", Optional: true, Hint: "base=2x512"}},
@@ -167,21 +197,15 @@ func (d *E2B) Create(ctx context.Context, c Cred, s Spec) (*Sandbox, error) {
 	if sb.SandboxID == "" {
 		return nil, fmt.Errorf("create answered without sandboxID")
 	}
-	if sb.Domain == "" {
-		sb.Domain = d.domainFor(c, s.Region)
-	}
-	sb.apiBase = api
-	d.mu.Lock()
-	d.meta[sb.SandboxID] = sb
-	d.mu.Unlock()
-	return &Sandbox{ID: sb.SandboxID, State: StateRunning, Region: s.Region, Template: tpl, Meta: map[string]string{"domain": sb.Domain}}, nil
+	d.remember(sb, api, d.domainFor(c, s.Region))
+	return &Sandbox{ID: sb.SandboxID, State: StateRunning, Region: s.Region, Template: tpl, Meta: map[string]string{"domain": orStr(sb.Domain, d.domainFor(c, s.Region))}}, nil
 }
 
 func (d *E2B) lookup(ctx context.Context, c Cred, id string) (e2bSandbox, error) {
 	d.mu.Lock()
 	m, ok := d.meta[id]
 	d.mu.Unlock()
-	if ok && m.EnvdAccessToken != "" {
+	if ok && (m.known || m.EnvdAccessToken != "") {
 		return m, nil
 	}
 	var sb e2bSandbox
@@ -195,7 +219,7 @@ func (d *E2B) lookup(ctx context.Context, c Cred, id string) (e2bSandbox, error)
 	if sb.Domain == "" {
 		sb.Domain = orStr(m.Domain, d.domainFor(c, ""))
 	}
-	sb.apiBase = api
+	sb.apiBase, sb.known = api, true
 	d.mu.Lock()
 	d.meta[id] = sb
 	d.mu.Unlock()
@@ -218,7 +242,7 @@ func (d *E2B) Get(ctx context.Context, c Cred, id string) (*Sandbox, error) {
 	if st == "" {
 		st = StateUnknown
 	}
-	return &Sandbox{ID: id, State: st, Template: sb.TemplateID, Meta: map[string]string{"domain": sb.Domain}}, nil
+	return &Sandbox{ID: id, State: st, Template: sb.template(), Meta: map[string]string{"domain": orStr(sb.Domain, orStr(m.Domain, d.domainFor(c, "")))}}, nil
 }
 
 func (d *E2B) Delete(ctx context.Context, c Cred, id string) error {
@@ -230,11 +254,33 @@ func (d *E2B) Delete(ctx context.Context, c Cred, id string) error {
 }
 
 func (d *E2B) Pause(ctx context.Context, c Cred, id string) error {
-	return d.h.do(ctx, "POST", d.api(c, "")+"/sandboxes/"+url.PathEscape(id)+"/pause", d.hdr(c), map[string]any{}, nil)
+	return d.h.do(ctx, "POST", d.apiFor(c, id)+"/sandboxes/"+url.PathEscape(id)+"/pause", d.hdr(c), map[string]any{}, nil)
 }
 
+// Resume reconnects a paused sandbox (POST /sandboxes/{id}/connect, which
+// answers the sandbox record incl. its envd token) with a fresh timeout.
 func (d *E2B) Resume(ctx context.Context, c Cred, id string) error {
-	return d.h.do(ctx, "POST", d.api(c, "")+"/sandboxes/"+url.PathEscape(id)+"/connect", d.hdr(c), map[string]any{"timeout": 3600}, nil)
+	api := d.apiFor(c, id)
+	var sb e2bSandbox
+	if err := d.h.do(ctx, "POST", api+"/sandboxes/"+url.PathEscape(id)+"/connect", d.hdr(c), map[string]any{"timeout": d.resumeTimeout()}, &sb); err != nil {
+		return err
+	}
+	if sb.SandboxID == id {
+		d.mu.Lock()
+		dom := d.meta[id].Domain
+		d.mu.Unlock()
+		d.remember(sb, api, orStr(dom, d.domainFor(c, "")))
+	}
+	return nil
+}
+
+// resumeTimeout is the lifetime given on resume/fork: an hour, capped by the
+// provider's max lifetime (the box's own TTL reaper deletes it earlier).
+func (d *E2B) resumeTimeout() int {
+	if m := d.info.Caps.MaxLifetimeS; m > 0 && m < 3600 {
+		return m
+	}
+	return 3600
 }
 
 // Fork is E2B's checkpoint-and-fork (POST /sandboxes/{id}/fork).
@@ -248,7 +294,8 @@ func (d *E2B) Fork(ctx context.Context, c Cred, id string) (*Sandbox, error) {
 			Message string `json:"message"`
 		} `json:"error"`
 	}
-	if err := d.h.do(ctx, "POST", d.api(c, "")+"/sandboxes/"+url.PathEscape(id)+"/fork", d.hdr(c), map[string]any{"count": 1, "timeout": 3600}, &res); err != nil {
+	api := d.apiFor(c, id)
+	if err := d.h.do(ctx, "POST", api+"/sandboxes/"+url.PathEscape(id)+"/fork", d.hdr(c), map[string]any{"count": 1, "timeout": d.resumeTimeout()}, &res); err != nil {
 		return nil, err
 	}
 	if len(res) == 0 || res[0].Sandbox == nil {
@@ -258,7 +305,15 @@ func (d *E2B) Fork(ctx context.Context, c Cred, id string) (*Sandbox, error) {
 		}
 		return nil, fmt.Errorf("fork failed: %s", msg)
 	}
-	return &Sandbox{ID: res[0].Sandbox.SandboxID, State: StateRunning}, nil
+	ch := *res[0].Sandbox
+	if ch.SandboxID == "" {
+		return nil, fmt.Errorf("fork answered without sandboxID")
+	}
+	d.mu.Lock()
+	dom := d.meta[id].Domain
+	d.mu.Unlock()
+	d.remember(ch, api, orStr(dom, d.domainFor(c, "")))
+	return &Sandbox{ID: ch.SandboxID, State: StateRunning, Template: ch.template(), Meta: map[string]string{"domain": orStr(ch.Domain, orStr(dom, d.domain))}}, nil
 }
 
 func (d *E2B) PreviewURL(ctx context.Context, c Cred, id string, port int) (string, error) {
@@ -277,7 +332,7 @@ func (d *E2B) List(ctx context.Context, c Cred) ([]Sandbox, error) {
 	out := []Sandbox{}
 	for _, s := range l {
 		st := map[string]string{"running": StateRunning, "paused": StatePaused}[s.State]
-		out = append(out, Sandbox{ID: s.SandboxID, State: orStr(st, StateUnknown), Template: s.TemplateID})
+		out = append(out, Sandbox{ID: s.SandboxID, State: orStr(st, StateUnknown), Template: s.template()})
 	}
 	return out, nil
 }

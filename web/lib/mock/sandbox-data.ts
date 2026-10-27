@@ -105,7 +105,7 @@ export const SANDBOX_INFO: SandboxInfo[] = [
   "tier": "T2",
   "adapter": "native",
   "verification": "live-verified",
-  "verified_note": "Routes from prized.dev/docs/sandboxes-api; read-only calls (GET /me, /sandbox-templates, /sandboxes) succeeded with a real key on 2026-10-27. Create/exec not exercised (no spend).",
+  "verified_note": "Full lifecycle verified live on the free tier on 2026-10-27: create (wait=running) ~3.8 s, exec ~50-200 ms, file put/get, pause/resume, fork, delete; also boxa-core box up/exec/down end to end.",
   "docs": "https://prized.dev/docs/sandboxes-api",
   "website": "https://prized.dev/sandboxes",
   "initials": "PZ",
@@ -119,7 +119,7 @@ export const SANDBOX_INFO: SandboxInfo[] = [
    "pty": false,
    "files": true,
    "gpu": false,
-   "boot_ms": 3000,
+   "boot_ms": 4000,
    "max_lifetime_s": 604800,
    "max_cpu": 32,
    "max_ram_mb": 131072,
@@ -139,25 +139,25 @@ export const SANDBOX_INFO: SandboxInfo[] = [
     "sku": "1x2",
     "cpu": 1,
     "ram_mb": 2048,
-    "disk_gb": 10
+    "disk_gb": 20
    },
    {
     "sku": "2x4",
     "cpu": 2,
     "ram_mb": 4096,
-    "disk_gb": 10
+    "disk_gb": 20
    },
    {
     "sku": "4x8",
     "cpu": 4,
     "ram_mb": 8192,
-    "disk_gb": 10
+    "disk_gb": 20
    },
    {
     "sku": "8x16",
     "cpu": 8,
     "ram_mb": 16384,
-    "disk_gb": 10
+    "disk_gb": 20
    },
    {
     "sku": "16x32",
@@ -192,9 +192,10 @@ export const SANDBOX_INFO: SandboxInfo[] = [
   ],
   "notes": [
    "No inbound ports: boxd dials out, so this is fine for Boxa.",
-   "Free tier: 2 vCPU / 4 GB and 60 min of running per sandbox."
+   "Free tier: up to 10 sandboxes, each 2 vCPU / 4 GB and 60 min of running in all; it draws on the free credit at sandbox rates.",
+   "No preview URLs or inbound ports for sandboxes yet; exec output keeps the first 4 MiB per stream."
   ],
-  "from_usd_h": 0.066
+  "from_usd_h": 0.067
  },
  {
   "id": "daytona",
@@ -299,8 +300,8 @@ export const SANDBOX_INFO: SandboxInfo[] = [
   "name": "Novita Sandbox",
   "tier": "T2",
   "adapter": "native",
-  "verification": "sdk-source",
-  "verified_note": "E2B-compatible. Regions/domains and per-second prices from docs.novita.ai; REST paths and headers (X-API-KEY, api.<domain>, envd 49983) from the official novita-sandbox SDK 2.1.1 — Novita publishes no REST reference.",
+  "verification": "live-verified",
+  "verified_note": "E2B-compatible. Verified live in us-phx-1 on 2026-10-27 (template base = 2 vCPU / 512 MB / 22 GB root fs, 20 GB free, envd 0.5.12, no envd access token): create ~0.3 s, create→first exec ~0.27 s, exec ~150-170 ms, 200k-line exec ~0.47 s, file put/get ~150 ms, delete ~0.1 s. Pause/resume and the boxa-core box flow were not run live (account balance ran out: 402 BALANCE_NOT_ENOUGH). Paths/headers (X-API-KEY, api.<domain>, envd 49983) from the novita-sandbox SDK 2.1.1.",
   "docs": "https://docs.novita.ai/guides/sandbox-overview",
   "website": "https://novita.ai",
   "initials": "NV",
@@ -314,7 +315,7 @@ export const SANDBOX_INFO: SandboxInfo[] = [
    "pty": true,
    "files": true,
    "gpu": false,
-   "boot_ms": 1000,
+   "boot_ms": 600,
    "max_lifetime_s": 14400,
    "max_cpu": 8,
    "max_ram_mb": 8192,
@@ -334,7 +335,7 @@ export const SANDBOX_INFO: SandboxInfo[] = [
     "sku": "base",
     "cpu": 2,
     "ram_mb": 512,
-    "disk_gb": 20
+    "disk_gb": 22
    }
   ],
   "regions": [
@@ -382,8 +383,8 @@ export const SANDBOX_INFO: SandboxInfo[] = [
   "name": "E2B",
   "tier": "T2",
   "adapter": "native",
-  "verification": "docs-verified",
-  "verified_note": "Control plane from E2B's OpenAPI spec (e2b-dev/infra spec/openapi.yml); envd files from envd.yaml; exec via Connect RPC process.Process/Start (process.proto).",
+  "verification": "live-verified",
+  "verified_note": "Full lifecycle verified live on the Hobby plan on 2026-10-27 (template base = 2 vCPU / 512 MB / 22 GB root fs, 20 GB free, envd 0.10.0): create ~0.2 s, create→first exec ~0.35 s, exec ~30-90 ms, 200k-line exec ~0.14 s, file put/get ~25-45 ms, pause ~0.15 s, resume ~0.18 s, fork ~0.5-0.7 s, delete ~55 ms; also boxa-core box up/exec/down end to end. Control plane per e2b-dev/infra spec/openapi.yml, exec via envd Connect RPC process.Process/Start.",
   "docs": "https://e2b.dev/docs",
   "website": "https://e2b.dev",
   "initials": "E2",
@@ -397,7 +398,7 @@ export const SANDBOX_INFO: SandboxInfo[] = [
    "pty": true,
    "files": true,
    "gpu": false,
-   "boot_ms": 500,
+   "boot_ms": 400,
    "max_lifetime_s": 86400,
    "max_cpu": 8,
    "max_ram_mb": 8192,
@@ -417,7 +418,7 @@ export const SANDBOX_INFO: SandboxInfo[] = [
     "sku": "base",
     "cpu": 2,
     "ram_mb": 512,
-    "disk_gb": 10
+    "disk_gb": 22
    }
   ],
   "regions": [
@@ -452,7 +453,8 @@ export const SANDBOX_INFO: SandboxInfo[] = [
    "E2B_TEMPLATES"
   ],
   "notes": [
-   "CPU/RAM are fixed per template: build bigger templates in E2B and list them in the Templates field."
+   "CPU/RAM are fixed per template: build bigger templates in E2B and list them in the Templates field.",
+   "Hobby (free credit) caps a sandbox at 1 h and 20 running at once; Pro allows 24 h."
   ],
   "from_usd_h": 0.1089
  },

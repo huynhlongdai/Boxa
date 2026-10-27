@@ -57,10 +57,10 @@ func TestPrizedLiveLifecycle(t *testing.T) {
 	ctx := context.Background()
 	tm := func(name string, t0 time.Time) { t.Logf("TIMING %-18s %6d ms", name, time.Since(t0).Milliseconds()) }
 
-	name := fmt.Sprintf("boxa-live-%d", time.Now().Unix())
+	name := fmt.Sprintf("mgr-live-%d", time.Now().Unix())
 	t0 := time.Now()
 	sb, err := d.Create(ctx, c, Spec{Name: name, Template: "prized-base-v1", CPU: 1, RAMMB: 2048,
-		Labels: map[string]string{"boxa": "live-test"}, TimeoutS: 15 * 60})
+		Labels: map[string]string{LabelManaged: "live-test"}, TimeoutS: 15 * 60})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -187,7 +187,7 @@ func TestPrizedLiveNameReuse(t *testing.T) {
 	d := NewPrized(nil, "")
 	c := Cred{"token": os.Getenv("PRIZED_API_KEY")}
 	ctx := context.Background()
-	spec := Spec{Name: fmt.Sprintf("boxa-reuse-%d", time.Now().Unix()), CPU: 1, RAMMB: 2048, TimeoutS: 600, Labels: map[string]string{"boxa": "live-test"}}
+	spec := Spec{Name: fmt.Sprintf("mgr-reuse-%d", time.Now().Unix()), CPU: 1, RAMMB: 2048, TimeoutS: 600, Labels: map[string]string{LabelManaged: "live-test"}}
 	a, err := d.Create(ctx, c, spec)
 	if err != nil {
 		t.Fatalf("create 1: %v", err)

@@ -294,6 +294,21 @@ func trim(s string, n int) string {
 
 // ---- HTTP helper ----
 
+// Provider-visible identifiers. Everything a provider stores or logs about
+// our sandboxes (names, labels/metadata, user agent) stays neutral: the
+// product name never goes to a third party.
+const (
+	NamePrefix   = "mgr-"             // sandbox / VM names
+	LabelManaged = "managed"          // label/metadata key on every sandbox we create ("1")
+	LabelHost    = "mgr-host"         // label/metadata key: host id
+	UserAgent    = "sandbox-client/1" // HTTP User-Agent toward providers
+)
+
+// ManagedLabels are the labels/metadata put on a sandbox for host hostID.
+func ManagedLabels(hostID string) map[string]string {
+	return map[string]string{LabelManaged: "1", LabelHost: hostID}
+}
+
 // httpClient is shared by the native drivers.
 type httpClient struct {
 	c  *http.Client
@@ -304,7 +319,7 @@ func newHTTP(c *http.Client) *httpClient {
 	if c == nil {
 		c = &http.Client{Timeout: 60 * time.Second}
 	}
-	return &httpClient{c: c, ua: "boxa-core/1.4"}
+	return &httpClient{c: c, ua: UserAgent}
 }
 
 // do sends a request. body may be nil, []byte (raw) or any (JSON). out may be

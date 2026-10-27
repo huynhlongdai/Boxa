@@ -6,7 +6,7 @@
 # Starts boxa-core + a local boxd, connects prized, asks /recommend for
 # untrusted short-lived work, creates a box on prized, runs exec (incl. a
 # long-output command to see compaction), files, then box down and checks
-# that no boxa sandbox is left at Prized.
+# that no managed sandbox is left at Prized.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
@@ -26,8 +26,8 @@ papi() { curl -sS -H "Authorization: Bearer $PRIZED_API_KEY" "$@"; }
 ms() { date +%s%3N; }
 
 cleanup() {
-  # safety net: delete any sandbox this run left behind (label boxa=1)
-  papi -G -X DELETE "$PAPI/sandboxes" --data-urlencode "label=boxa=1" >/dev/null 2>&1 || true
+  # safety net: delete any sandbox this run left behind (label managed=1)
+  papi -G -X DELETE "$PAPI/sandboxes" --data-urlencode "label=managed=1" >/dev/null 2>&1 || true
   kill ${CORE_PID:-} ${BOXD_PID:-} 2>/dev/null || true; wait 2>/dev/null || true
   [ -n "${KEEP:-}" ] || rm -rf "$WORK"
 }

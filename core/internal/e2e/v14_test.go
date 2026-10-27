@@ -253,7 +253,15 @@ func TestV14SandboxProviders(t *testing.T) {
 	var b2 model.Box
 	json.Unmarshal(raw, &b2)
 	got2 := waitStatus(t, e.m, b2.ID, model.StatusRunning, 30*time.Second)
-	h2, _ := e.m.Store.GetHost(e.ctx, got2.HostID)
+	// the host record (driver/status) is updated by the boxd hello, which can
+	// land a moment after the box itself reports running
+	var h2 *model.Host
+	for i := 0; i < 100; i++ {
+		if h2, _ = e.m.Store.GetHost(e.ctx, got2.HostID); h2 != nil && h2.Driver == "local" {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 	if got2.Provider != "fakesbx" || h2.Billing != "sandbox" || h2.Driver != "local" || !e.m.Hub.Connected(h2.ID) || e.m.Hub.IsVirtual(h2.ID) {
 		t.Fatalf("T2 placed %+v host %+v", got2, h2)
 	}

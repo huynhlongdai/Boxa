@@ -68,7 +68,7 @@ EOF
 
 ## v1.4 additions (2026-10-27) — sandbox API providers (T2/T3)
 - Tiers: T1 VPS, T2 sandbox that runs `boxd --dial` inside, T3 exec-only via gateway-side shim. One sandbox hosts one box and is destroyed with it.
-- Native adapters: Prized (live read-only verified), E2B, Novita (E2B-compatible), Daytona, boxd.sh. YAML adapters: Runloop, Blaxel, Vercel Sandbox, boat, Agent 37, Upstash Box (T3). Skipped: Modal (gRPC only), Cloudflare Sandbox (needs a user-deployed Worker), Koyeb (WebSocket exec), zipbox (not verified this release).
+- Native adapters: Prized (live-verified), E2B (live-verified, Hobby), Novita (E2B-compatible; live-verified create/exec/files/delete), Daytona, boxd.sh. YAML adapters: Runloop, Blaxel, Vercel Sandbox, boat, Agent 37, Upstash Box (T3). Skipped: Modal (gRPC only), Cloudflare Sandbox (needs a user-deployed Worker), Koyeb (WebSocket exec), zipbox (not verified this release).
 - `GET /v1/sandbox/providers` (tier, adapter, verification, capabilities, per-second prices, regions, docs), `POST /v1/sandbox/adapters/lint` (validate a custom YAML adapter). `PUT /v1/providers/{id}/token` returns `group`, `adapter`, `verification`, `docs`.
 - `POST /v1/recommend` accepts `untrusted` and `fork`; container-based sandboxes are rejected for untrusted code. Catalog rows carry `tier` and per-second price.
 - Env: `BOXA_SANDBOX_ADAPTERS_DIR`, `BOXA_SANDBOX_MODE=auto|dial|shim`, `BOXA_AUTO_SANDBOX`, `BOXA_PROVIDER_CHAIN` (T1 chain then sandbox chain), `BOXA_PUBLIC_URL` must be internet-reachable for T2 dial mode.
