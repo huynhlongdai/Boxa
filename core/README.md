@@ -514,3 +514,51 @@ Kết quả live 2026-10-27 (`scripts/live-access.sh`, E2B / Prized, qua `boxs.t
 | `ssh -L` forward | 683 ms | 612 ms |
 
 Chạy lại: `ENV_FILE=…/gateway.env PROVIDERS="e2b prized" scripts/live-access.sh`. Test không cần mạng: `e2e/v110_test.go` (ticket bắt buộc / dùng lại / hết hạn / sai mục đích, origin, `?token=` bị từ chối, terminal gắn lại + replay + viewer/controller, forward echo, ssh exec + mã thoát + `-L`), `scripts/e2e.sh` (bước v1.10, OpenSSH nếu có), web `scripts/smoke.sh` (mock: ticket, terminals, access, forward-ports, SSH keys, chuỗi 4 ngôn ngữ, bundle).
+
+## 17. v1.11 — truy cập P1: SFTP, chứng chỉ SSH, trình duyệt (CDP), desktop (VNC), link chia sẻ
+
+Mục tiêu: ngoài terminal / forward / SSH của v1.10, con người và agent **chép file**, **SSH không cần API key**, **điều khiển Chromium trong box** (Playwright, puppeteer, browser-use) và **xem / điều khiển màn hình** của box — vẫn không API key nào trong URL, mọi thứ đi qua WSS của gateway (không mở port 22 / 9222 / 5900).
+
+**Lệnh.**
+
+| Việc | Lệnh |
+|---|---|
+| Chép file (luôn chạy được) | `box sftp <box> put ./a.txt /tmp/a.txt` · `get /tmp/a.txt ./a.txt` · `ls [dir]` · `rm <path>` · `mkdir <dir>` |
+| SFTP / scp của OpenSSH | `sftp -o ProxyCommand='box ssh-proxy %h' -o HostKeyAlias=boxaz-ssh boxaz@<tên>.<domain>` · `scp -o ProxyCommand='box ssh-proxy %h' -o HostKeyAlias=boxaz-ssh ./a.txt boxaz@<tên>.<domain>:/tmp/` |
+| Chứng chỉ SSH ngắn hạn | `box ssh-cert <box> [--key ~/.ssh/id_ed25519.pub] [--ttl 12h] [--out file] [--json]` |
+| ssh-config dùng chứng chỉ (VS Code / Cursor) | `box ssh-config --cert --ttl 12h --write [box…]` |
+| SSH bằng chứng chỉ, không API key | `ssh -o CertificateFile=~/.ssh/id_ed25519-cert.pub -o ProxyCommand='box ssh-proxy --anon %h' -o HostKeyAlias=boxaz-ssh <tên>@<tên>.<domain>` |
+| Trình duyệt (CDP) | `box browser <box> [--ttl 1h] [--json]` · `--status` · `--stop` |
+| Desktop (VNC) | `box desktop <box>` (mở trang noVNC) · `--share [--ttl 1h] [--interactive]` · `--shares` · `--revoke-shares` · `--status` · `--stop` |
+
+**URL và API.**
+- **SFTP.** Subsystem `sftp` trên gateway SSH của core: box có `sftp-server` thì dùng nó; không có (`BOXAZ_SFTP=core` ép luôn) thì core tự phục vụ SFTP (`pkg/sftp` request server) bằng các lệnh shell của box — nên chạy được cả trên sandbox chỉ có exec. `box sftp` dùng client Go dựng sẵn, không cần `sftp` cài trên máy.
+- **Chứng chỉ SSH.** `POST /v1/ssh/certs {box, public_key, ttl_s? (60…43200, mặc định 3600)}` → `{id, box_id, certificate, serial, principals: [box id, tên, slug], valid_after, valid_before, fingerprint, host, user, proxy_command: "box ssh-proxy --anon %h", known_hosts, command, direct_command?, config, user_ca}`. Core giữ một SSH user CA ed25519 (sealed trong DB, `GET /v1/ssh` trả `user_ca`, `cert_max_ttl_s`). Chứng chỉ được nhận trên WebSocket `…/.boxaz/ssh` **không ticket** (`box ssh-proxy --anon`) và trên listener trực tiếp `BOXAZ_SSH_ADDR`; mỗi chứng chỉ là một bản ghi ticket `ssh_cert` → `DELETE /v1/boxes/{id}/tickets/{id}` (hoặc `all`) thu hồi và ngắt phiên đang mở.
+- **Trình duyệt.** `POST /v1/boxes/{id}/browser {ttl_s? (mặc định 3600, ≤ 86400), headless?}` → `{running, headless, source: found|installed|existing, binary, version, started, start_ms, clients, idle_stop_s, port: 9222, cdp_url, http_url, core_url, ticket_id, expires_at, live_view?}`. `cdp_url = wss://<tên>.<domain>/.boxaz/cdp?ticket=…` (ticket `cdp` **dùng lại được** tới `expires_at`), `http_url` cho `connectOverCDP("https://…")` (core viết lại `/json/version` để `webSocketDebuggerUrl` trỏ về gateway). Không có domain gateway: `…/v1/boxes/{id}/cdp?ticket=…`. Core tìm Chromium / Chrome / Playwright có sẵn hoặc cài (apt trên Debian, `npx playwright`, Chrome for Testing x86_64; `BOXAZ_BROWSER_INSTALL=off` tắt), chạy trên `127.0.0.1:9222` với profile bền `~/.local/share/bx-browser`; headless trừ khi desktop đang chạy (khi đó hiện trên desktop). Box không có user namespace → `--no-sandbox`; RAM < 1,5 GB → cờ tiết kiệm bộ nhớ (< 900 MB thêm `--js-flags=--jitless --no-zygote`); không root / không sudo → tải thư viện Chromium bằng `apt-get download` + `dpkg-deb -x` vào thư mục người dùng (ưu tiên headless shell). `GET` chỉ báo trạng thái (không đánh thức box), `DELETE` tắt; tự tắt sau `BOXAZ_BROWSER_IDLE` (10 phút) không có client.
+- **Desktop.** `POST /v1/boxes/{id}/desktop {view_only?, width?, height?, ttl_s? (mặc định 60)}` → `{running, display, width, height, vnc_server, wm, started, start_ms, viewers, shares, idle_stop_s, port: 5900, browser_on_desktop, vnc_url, viewer_url, core_url, ticket_id, view_only, expires_at}`. Core cài Xvfb + x11vnc + openbox khi thiếu (apt/apk/dnf, cần root hoặc sudo), VNC chỉ nghe `127.0.0.1:5900`. `viewer_url = https://<tên>.<domain>/.boxaz/desktop?ticket=…[&view_only=1]` là trang noVNC vendored do core phục vụ (`/.boxaz/novnc/…`, CSP chặt, `frame-ancestors` = origin dashboard), `vnc_url = wss://…/.boxaz/vnc?ticket=…` (RFB qua frame nhị phân). Ticket `vnc` dùng **một lần** trong 60 giây. `view_only`: core lọc bỏ phím / chuột / clipboard của người xem ngay trong luồng RFB (không tin client). Tự tắt sau `BOXAZ_DESKTOP_IDLE` (15 phút) không người xem.
+- **Link chia sẻ.** `POST /v1/boxes/{id}/desktop/shares {ttl_s (60…86400, mặc định 3600), view_only (mặc định true)}` → `{id: "shr_…", url: "https://<tên>.<domain>/.boxaz/desktop?share=bxs_…", prefix, view_only, expires_at, …}` (URL chỉ trả một lần). Dùng lại được tới hạn, nhúng iframe ở bất kỳ đâu (`frame-ancestors *`). `GET …/desktop/shares` → `{items: [{id, prefix, view_only, expires_at, created_at, revoked_at?, viewers, uses}]}`; `DELETE …/desktop/shares/{id|all}` → `{revoked, viewers_closed}`: người đang xem bị ngắt ngay, link trả **410**.
+- **Tóm tắt.** `GET /v1/boxes/{id}/access` thêm `cdp {url, core_url, start, running, clients}`, `desktop {url, core_url, page, start, running, clients}` và lệnh `ssh_cert`, `sftp`, `scp`, `browser`, `desktop`, `desktop_share`.
+- **MCP / SDK.** 32 tool: thêm `box_browser` (start / status / stop, trả `cdp_url`) và `box_desktop` (start / share / shares / revoke / stop); `box_ssh_info` ký chứng chỉ khi có `public_key`. SDK Python (sync/async) + TypeScript: `ssh_cert`, `browser`, `cdp_url`, `connect_playwright`, `browser_status`, `stop_browser`, `desktop`, `desktop_status`, `stop_desktop`, `share_desktop`, `desktop_shares`, `revoke_desktop_shares` (TS camelCase). `llms.txt` có mục "Box access P1" (vi/en/zh/ja), A2A `x-boxaz.access` + `access_detail`.
+- **Dashboard.** Tab **Màn hình**: lấy ticket viewer mới qua proxy Next (`POST /api/boxaz/boxes/{id}/desktop`, API key chỉ ở server) rồi nhúng trang noVNC của core bằng iframe; bật / tắt desktop, chế độ **Điều khiển / Chỉ xem**, kết nối lại (ticket mới), toàn màn hình, mở tab riêng; thẻ **Link chia sẻ** (tạo với TTL 15 phút / 1 / 4 / 24 giờ, chỉ xem hoặc cho điều khiển, copy URL một lần, danh sách, thu hồi từng link / tất cả). Tab **Trình duyệt**: trạng thái, bật / lấy URL CDP (TTL, luôn headless), copy URL ws / http / core, snippet Playwright (Node / Python), puppeteer, SDK, curl, CLI; tắt. Tab **Truy cập** thêm thẻ **Chứng chỉ SSH ngắn hạn** (dán key hoặc chọn key đã lưu, 1 / 4 / 12 giờ) và **SFTP / scp**. Mock `BOXAZ_MOCK=1` có đủ route mới (không có VNC / CDP thật: màn hình mô phỏng + ghi chú); 4 ngôn ngữ. Iframe cần `BOXAZ_DASHBOARD_URL` đúng origin dashboard để `frame-ancestors` cho phép.
+
+**Bảo mật.**
+- Không API key trong URL: CDP / VNC / trang desktop chỉ nhận ticket (`cdp` dùng lại tới hạn, `vnc` một lần 60 s) hoặc header; link chia sẻ là token `bxs_` riêng, chỉ lưu tiền tố + hash, thu hồi được, mặc định chỉ xem.
+- Origin của control plane được siết: domain gateway trần không phải core, `Set-Cookie` có `Domain` từ box bị bỏ, origin là host của box không bao giờ mở được socket truy cập (một app trong box không thể dùng trình duyệt người xem để mở terminal / CDP của box khác).
+- Chặn metadata cloud: egress của box chặn `169.254.169.254` (và metadata GCP / Azure / Alibaba…) theo mặc định (`BOXAZ_EGRESS_ALLOW_METADATA=1` để mở); Chromium chạy với `--host-resolver-rules` map các host metadata về NOTFOUND và core viết lại `Page.navigate` / `Target.createTarget` tới địa chỉ metadata.
+- Chứng chỉ SSH: ≤ 12 giờ, principals chỉ là box đó, extension chỉ `permit-pty` + `permit-port-forwarding`, thu hồi như ticket; private key của CA được lưu dạng sealed trong DB.
+- View-only được thực thi ở core (lọc message RFB client → server), không phụ thuộc noVNC.
+
+**Kết quả live** (2026-10-27/28, `scripts/live-access-p1.sh`, qua `boxs.tech` + Cloudflare Tunnel):
+
+| | E2B | Prized |
+|---|---|---|
+| `box sftp put` / `get` 1 MB | 2.9 s / 0.84 s | 2.7 s / 0.99 s |
+| OpenSSH `sftp` / `scp` | ~0.9 s | ~0.9 s |
+| SSH bằng chứng chỉ (`--anon`, không API key) | 335 ms | 320 ms |
+| Trình duyệt: lần đầu (gồm cài) / warm | 17.4 s / 215–464 ms | — |
+| CDP connect / `Browser.getVersion` | 222 ms / 35 ms | — |
+| Desktop: lần đầu / warm | 6.6 s / 324 ms | — |
+| VNC handshake / framebuffer update đầu | 316–452 ms / 83–101 ms | — |
+| Thu hồi link chia sẻ → 410 | 470 ms | — |
+
+Chạy lại: `ENV_FILE=…/gateway.env PROVIDERS="e2b prized" scripts/live-access-p1.sh`. Test không cần mạng: `internal/e2e/v111_test.go` (sftp qua core, cert trên WS + listener trực tiếp + thu hồi, CDP `/json` rewrite + `Browser.getVersion` + viết lại metadata + thu hồi, RFB view-only + shared flag, share link 200 → 410 + ngắt viewer), `scripts/e2e.sh` (bước v1.11, `scripts/accessprobe.py`), web `scripts/smoke.sh` (mock: browser, desktop, shares, ssh certs, access, chuỗi 4 ngôn ngữ, bundle).

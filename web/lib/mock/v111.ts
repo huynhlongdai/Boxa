@@ -17,8 +17,8 @@ export interface V111Ctx {
 
 const CDP_PORT = 9222;
 const VNC_PORT = 5900;
-const BROWSER_IDLE_S = 900;
-const DESKTOP_IDLE_S = 1800;
+const BROWSER_IDLE_S = 600;
+const DESKTOP_IDLE_S = 900;
 const MAX_CERT_TTL_S = 43200;
 const CORE = "api.boxaz.dev";
 const USER_CA = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMockBoxazUserCertificateAuthorityForDashboardOnly boxaz-user-ca";

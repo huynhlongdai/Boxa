@@ -50,6 +50,8 @@ func (s *Server) llmsHeader(r *http.Request) (string, string, *strings.Builder) 
 	fmt.Fprintf(&b, "## %s\n\n%s\n\n", t("llms.h_apps"), t("llms.apps"))
 	// v1.10: box access (tickets, durable terminal, port forward, SSH)
 	fmt.Fprintf(&b, "## %s\n\n%s\n\n", t("llms.h_access"), t("llms.access"))
+	// v1.11: SFTP, SSH certificates, browser (CDP), desktop (VNC) + share links
+	fmt.Fprintf(&b, "## %s\n\n%s\n\n", t("llms.h_access_p1"), t("llms.access_p1"))
 	return loc, base, &b
 }
 
@@ -232,8 +234,8 @@ func (s *Server) agentCard(w http.ResponseWriter, r *http.Request) {
 			"capabilities": base + "/v1/capabilities",
 			"gateway_urls": "readable: https://<name>.<domain>/ → the box's primary port (app port, else first port); https://<name>-<label>.<domain>/ → other ports (label web, api, db, …; never a number); legacy <key>-<port> stays as alias_url; name URLs are guessable, use box_url_token for private apps",
 			"url_tokens":   "box_url_token protects only the Boxaz gateway URL of a port; with a gateway domain / internet-facing public URL, E2B and Novita sandboxes are created private (preview host 403 without the sandbox traffic token, which only the gateway adds; ports report provider_preview=private); where provider_preview=public (Daytona, or BOXAZ_PROVIDER_PREVIEW=public) the provider preview URL stays reachable by anyone who knows the sandbox id",
-			"access":       "v1.10: box_forward (box forward <box> <port>: TCP over wss://<name>.<domain>/.boxaz/tcp), box_ssh_info (SSH gateway in core: box ssh / ssh-config / ProxyCommand box ssh-proxy %h, no sshd in the box), box_ticket (single-use, 60 s, per box + purpose; the terminal / tcp / ssh WebSockets never take an API key in the URL), box_terminal_sessions (durable terminal: reattach + replay)",
-			"access_detail": i18n.T(loc, "llms.access"),
+			"access":       "v1.10: box_forward (box forward <box> <port>: TCP over wss://<name>.<domain>/.boxaz/tcp), box_ssh_info (SSH gateway in core: box ssh / ssh-config / ProxyCommand box ssh-proxy %h, no sshd in the box; v1.11: also signs a short-lived SSH user certificate, POST /v1/ssh/certs, ≤ 12 h, revocable), box_ticket (single-use, 60 s, per box + purpose; the terminal / tcp / ssh / cdp / vnc WebSockets never take an API key in the URL), box_terminal_sessions (durable terminal: reattach + replay). v1.11: SFTP always (box sftp, OpenSSH sftp / scp; core serves it when the box has no sftp-server), box_browser (Chromium over CDP: cdp_url wss://<name>.<domain>/.boxaz/cdp?ticket=… for connectOverCDP / puppeteer.connect, metadata addresses blocked), box_desktop (Xvfb + VNC: single-use noVNC viewer_url /.boxaz/desktop?ticket=…, view-only or interactive; share links /.boxaz/desktop?share=bxs_… view-only by default, revoked → 410)",
+			"access_detail": i18n.T(loc, "llms.access") + "\n" + i18n.T(loc, "llms.access_p1"),
 			"a2a_methods":  []string{"message/send", "message/stream", "tasks/get", "tasks/cancel", "tasks/resubscribe", "tasks/send", "tasks/sendSubscribe"}},
 	})
 }
