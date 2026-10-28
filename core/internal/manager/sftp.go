@@ -108,7 +108,10 @@ func (m *Manager) serveSFTP(ctx context.Context, boxID string, peer *hostlink.Pe
 		start = "/"
 	}
 	fs := &boxFS{ctx: ctx, peer: peer, boxID: boxID}
-	srv := sftp.NewRequestServer(ch, sftp.Handlers{FileGet: fs, FilePut: fs, FileCmd: fs, FileList: fs}, sftp.WithStartDirectory(start))
+	// RequestServer.Close closes its connection; keep the channel open so the
+	// caller can still send exit-status (OpenSSH 9+ scp, which runs over SFTP,
+	// fails without it).
+	srv := sftp.NewRequestServer(keepOpen{ch}, sftp.Handlers{FileGet: fs, FilePut: fs, FileCmd: fs, FileList: fs}, sftp.WithStartDirectory(start))
 	err = srv.Serve()
 	srv.Close()
 	if err != nil && !errors.Is(err, io.EOF) {
@@ -140,6 +143,11 @@ func (m *Manager) sftpViaBox(ctx context.Context, boxID string, peer *hostlink.P
 	}
 	return code
 }
+
+// keepOpen hides Close from the SFTP request server (see serveSFTP).
+type keepOpen struct{ io.ReadWriter }
+
+func (keepOpen) Close() error { return nil }
 
 func shQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
