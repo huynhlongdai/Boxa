@@ -52,9 +52,18 @@ fix_libs() { # rootless: fetch the missing shared libraries as .debs (apt-get do
   ldd "$B" 2>/dev/null | grep -q "not found" || return 0
   command -v apt-get >/dev/null 2>&1 && command -v dpkg-deb >/dev/null 2>&1 || return 1
   mkdir -p "$D/debs" "$D/libs"
-  (cd "$D/debs" && for p in libnspr4 libnss3 libatk1.0-0t64 libatk1.0-0 libatk-bridge2.0-0t64 libatk-bridge2.0-0 libcups2t64 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2t64 libasound2 libatspi2.0-0t64 libatspi2.0-0 libxshmfence1 libwayland-server0 libavahi-common3 libavahi-client3; do apt-get download "$p" >>"$D/install.log" 2>&1 || true; done
-    for f in *.deb; do [ -f "$f" ] && dpkg-deb -x "$f" "$D/libs"; done) 2>>"$D/install.log"
   L="$D/libs/usr/lib/$(uname -m)-linux-gnu:$D/libs/lib/$(uname -m)-linux-gnu"
+  PKGS="libnspr4 libnss3 libatk1.0-0t64 libatk1.0-0 libatk-bridge2.0-0t64 libatk-bridge2.0-0 libcups2t64 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2t64 libasound2 libatspi2.0-0t64 libatspi2.0-0 libxshmfence1 libwayland-server0 libavahi-common3 libavahi-client3"
+  fetch() { (cd "$D/debs" && for p in $PKGS; do apt-get "$@" download "$p" >>"$D/install.log" 2>&1 || true; done
+    for f in *.deb; do [ -f "$f" ] && dpkg-deb -x "$f" "$D/libs"; done) 2>>"$D/install.log"; }
+  fetch
+  if LD_LIBRARY_PATH="$L" ldd "$B" 2>/dev/null | grep -q "not found"; then
+    # images often ship without apt lists (/var/lib/apt/lists emptied): fetch a private index without root
+    mkdir -p "$D/apt/lists/partial" "$D/apt/cache/archives/partial"
+    set -- -o "Dir::State::Lists=$D/apt/lists" -o "Dir::Cache=$D/apt/cache" -o "Dir::Cache::archives=$D/apt/cache/archives" -o Debug::NoLocking=1 -o "APT::Sandbox::User=$(id -un)"
+    timeout 180 apt-get "$@" -qq update >>"$D/install.log" 2>&1
+    fetch "$@"
+  fi
   LD_LIBRARY_PATH="$L" ldd "$B" 2>/dev/null | grep -q "not found" && return 1
   echo "$L" > "$D/browser.libs"
 }
@@ -78,7 +87,7 @@ if [ -z "$B" ]; then
     fi
   fi
   if [ -n "$B" ] && [ "$SUDO" = NO ]; then # no root: system libraries Chromium needs may be missing
-    fix_libs || { echo "error=Chromium installed but system libraries are missing ($(ldd "$B" 2>/dev/null | awk '/not found/ {print $1}' | head -4 | tr '\n' ' ')) and there is no root/sudo to install them"; exit 3; }
+    fix_libs || { echo "error=Chromium installed but system libraries are missing ($(LD_LIBRARY_PATH="${L:-}" ldd "$B" 2>/dev/null | awk '/not found/ {print $1}' | head -4 | tr '\n' ' ')) and there is no root/sudo to install them"; tail -2 "$D/install.log" 2>/dev/null | tr "\n" " " | sed "s/^/detail=/"; echo; exit 3; }
   fi
   [ -z "$B" ] && { echo "error=could not install Chromium (see $D/install.log: needs apt with root/sudo, npx, or x86_64 + internet)"; tail -3 "$D/install.log" 2>/dev/null | tr '\n' ' ' | sed 's/^/detail=/'; echo; exit 3; }
 fi

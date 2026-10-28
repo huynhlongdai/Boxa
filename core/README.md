@@ -555,10 +555,12 @@ Mục tiêu: ngoài terminal / forward / SSH của v1.10, con người và agent
 | `box sftp put` / `get` 1 MB | 2.9 s / 0.84 s | 2.7 s / 0.99 s |
 | OpenSSH `sftp` / `scp` | ~0.9 s | ~0.9 s |
 | SSH bằng chứng chỉ (`--anon`, không API key) | 335 ms | 320 ms |
-| Trình duyệt: lần đầu (gồm cài) / warm | 17.4 s / 215–464 ms | — |
+| Trình duyệt: lần đầu (gồm cài) / warm | 17.4 s / 215–464 ms | chưa chạy (thiếu thư viện, không root) |
 | CDP connect / `Browser.getVersion` | 222 ms / 35 ms | — |
-| Desktop: lần đầu / warm | 6.6 s / 324 ms | — |
+| Desktop: lần đầu / warm | 6.6 s / 324 ms | không khả thi (cần root để cài Xvfb) |
 | VNC handshake / framebuffer update đầu | 316–452 ms / 83–101 ms | — |
 | Thu hồi link chia sẻ → 410 | 470 ms | — |
+
+Retest 2026-10-28 (bản sửa): E2B 512 MB với cờ tiết kiệm bộ nhớ — Chromium 156 cài trong 18.4 s, `Browser.getVersion` 59 ms, navigate example.com → title "Example Domain" 408 ms, metadata bị chặn (`ERR_NAME_NOT_RESOLVED`), warm 256 ms. Prized (Ubuntu 24.04, không root / sudo, image không có apt lists): tải `.deb` thư viện vào chỗ của user giờ chạy được (index apt riêng, không cần root) nhưng Chromium vẫn thiếu thư viện → trình duyệt **chưa chạy được trên Prized**; desktop cũng không (Xvfb / x11vnc cần root để cài). Cách tiếp theo: tải đệ quy dependency (`apt-cache depends --recurse`) hoặc dùng image có sẵn chromium / xvfb.
 
 Chạy lại: `ENV_FILE=…/gateway.env PROVIDERS="e2b prized" scripts/live-access-p1.sh`. Test không cần mạng: `internal/e2e/v111_test.go` (sftp qua core, cert trên WS + listener trực tiếp + thu hồi, CDP `/json` rewrite + `Browser.getVersion` + viết lại metadata + thu hồi, RFB view-only + shared flag, share link 200 → 410 + ngắt viewer), `scripts/e2e.sh` (bước v1.11, `scripts/accessprobe.py`), web `scripts/smoke.sh` (mock: browser, desktop, shares, ssh certs, access, chuỗi 4 ngôn ngữ, bundle).
