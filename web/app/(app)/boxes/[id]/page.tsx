@@ -17,9 +17,11 @@ import { ErrorBox } from "@/components/boxaz/page";
 import { BoxTerminal } from "@/components/boxaz/terminal";
 import { PortsTab } from "@/components/boxaz/ports";
 import { AccessTab } from "@/components/boxaz/access";
+import { DesktopTab } from "@/components/boxaz/desktop";
+import { BrowserTab } from "@/components/boxaz/browser";
 import { OverviewTab, TimelineTab, FilesTab, LogsTab, SnapshotsTab, ConfigTab } from "./tabs";
 
-const TABS = ["overview", "ports", "access", "terminal", "timeline", "files", "logs", "snapshots", "config"] as const;
+const TABS = ["overview", "ports", "access", "terminal", "desktop", "browser", "timeline", "files", "logs", "snapshots", "config"] as const;
 
 function Inner() {
   const { id } = useParams<{ id: string }>();
@@ -73,6 +75,8 @@ function Inner() {
         <TabsContent value="ports"><PortsTab box={box} /></TabsContent>
         <TabsContent value="access"><AccessTab box={box} /></TabsContent>
         <TabsContent value="terminal"><BoxTerminal box={box} /></TabsContent>
+        <TabsContent value="desktop"><DesktopTab box={box} /></TabsContent>
+        <TabsContent value="browser"><BrowserTab box={box} /></TabsContent>
         <TabsContent value="timeline"><TimelineTab box={box} /></TabsContent>
         <TabsContent value="files"><FilesTab box={box} /></TabsContent>
         <TabsContent value="logs"><LogsTab box={box} /></TabsContent>

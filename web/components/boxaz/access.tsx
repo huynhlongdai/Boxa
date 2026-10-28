@@ -1,18 +1,19 @@
 "use client";
 // v1.10 tab "Truy cập" của box: lệnh copy được (box forward / box ssh / ssh-config) từ GET /boxes/{id}/access,
 // quản lý danh sách port forward (POST forward-ports, PATCH forward_ports), ticket đang có + thu hồi tất cả.
+// v1.11: chứng chỉ SSH ngắn hạn (POST /ssh/certs, ≤ 12 h, thu hồi như ticket) + snippet SFTP / scp.
 // Thẻ SSH keys (Settings): GET/POST/DELETE /ssh/keys + host key của gateway (GET /ssh).
 import * as React from "react";
 import { useTranslations } from "next-intl";
-import { KeyRound, Link2, Network, Plus, ShieldOff, TerminalSquare, Ticket, Trash2, X } from "lucide-react";
+import { BadgeCheck, FolderSync, KeyRound, Link2, Network, Plus, ShieldOff, TerminalSquare, Ticket, Trash2, X } from "lucide-react";
 import { api, paths } from "@/lib/api";
 import { useAction, useApi } from "@/lib/hooks";
 import { useFmt } from "@/lib/format";
-import type { AccessInfo, AccessTicket, Box, List, SshInfo, SshKey } from "@/lib/types";
+import type { AccessInfo, AccessTicket, Box, List, SshCert, SshInfo, SshKey } from "@/lib/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Textarea } from "@/components/ui/input";
+import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { CodeBlock, CopyButton } from "@/components/boxaz/code-block";
@@ -216,6 +217,94 @@ function TicketsCard({ box, info }: { box: Box; info: AccessInfo }) {
   );
 }
 
+
+// ---------------- v1.11: chứng chỉ SSH ngắn hạn ----------------
+const CERT_TTLS = [3600, 4 * 3600, 12 * 3600] as const;
+const PUBKEY_RE = /^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp\d+|sk-[a-z0-9-]+@openssh\.com)\s+[A-Za-z0-9+/=]{20,}/;
+
+function SshCertCard({ box, info }: { box: Box; info: AccessInfo }) {
+  const t = useTranslations("access");
+  const f = useFmt();
+  const { run, pending } = useAction();
+  const { data: keys } = useApi<List<SshKey>>(paths.sshKeys, { revalidateOnFocus: false });
+  const [pub, setPub] = React.useState("");
+  const [ttl, setTtl] = React.useState<number>(3600);
+  const [cert, setCert] = React.useState<SshCert | null>(null);
+  const name = info.name || box.slug;
+  const keyFile = `~/.ssh/boxaz-${name}-cert.pub`;
+  const ok = PUBKEY_RE.test(pub.trim());
+  const cmd = cert ? cert.command.replace("<key>-cert.pub", keyFile).replace("-i <key>", "-i ~/.ssh/id_ed25519") : "";
+  return (
+    <Card data-testid="access-ssh-cert">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><BadgeCheck className="size-4 text-primary" /> {t("cert")}</CardTitle>
+        <CardDescription>{t("certDesc")}</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <Cmd label={t("certCli")} cmd={info.commands.ssh_cert || `box ssh-cert ${name} --ttl 12h`} testid="access-cmd-ssh-cert" />
+        <Cmd label={t("certConfig")} cmd={`box ssh-config --cert --ttl 12h --write ${name}`} />
+        <Field label={t("publicKey")} hint={keys?.items.length ? t("certPickHint") : t("publicKeyHint")}>
+          <Textarea value={pub} onChange={(e) => setPub(e.target.value)} rows={3} className="font-mono text-[12px]" placeholder="ssh-ed25519 AAAAC3Nza… anh@laptop" data-testid="access-cert-key" />
+        </Field>
+        {!!keys?.items.length && (
+          <div className="flex flex-wrap gap-1.5">
+            {keys.items.map((k) => <Button key={k.id} size="xs" variant="outline" onClick={() => setPub(k.public_key)}>{k.name}</Button>)}
+          </div>
+        )}
+        <div className="flex flex-wrap items-end gap-2">
+          <Field label={t("certTtl")} className="w-32">
+            <Select value={String(ttl)} onChange={(e) => setTtl(Number(e.target.value))}>
+              {CERT_TTLS.map((s) => <option key={s} value={s}>{t("hours", { n: s / 3600 })}</option>)}
+            </Select>
+          </Field>
+          <Button size="sm" disabled={!ok || !!pending} data-testid="access-cert-issue"
+            onClick={() => run("cert", () => api.sshCert({ box: box.id, public_key: pub.trim(), ttl_s: ttl }), { success: t("certIssued"), revalidate: [paths.boxTickets(box.id)] }).then((r) => r && setCert(r))}>
+            <BadgeCheck /> {t("certIssue")}
+          </Button>
+        </div>
+        {cert && (
+          <div className="flex flex-col gap-2 rounded-md border border-primary/30 bg-primary/5 p-2.5" data-testid="access-cert-result">
+            <p className="text-xs text-muted-foreground">{t("certValid", { when: f.relTime(cert.valid_before), principals: cert.principals.join(", ") })}</p>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground">{t("certSave", { file: keyFile })}</span>
+              <CopyButton text={cert.certificate} />
+            </div>
+            <CodeBlock code={cert.certificate} language={keyFile} maxHeight={90} />
+            <Cmd label={t("certSsh")} cmd={cmd} />
+            {cert.direct_command && <Cmd label={t("cmdDirect")} cmd={cert.direct_command.replace("<key>-cert.pub", keyFile).replace("-i <key>", "-i ~/.ssh/id_ed25519")} />}
+            <p className="text-xs text-muted-foreground">{t("certRevoke", { id: cert.id })}</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------- v1.11: SFTP / scp ----------------
+function SftpCard({ box, info }: { box: Box; info: AccessInfo }) {
+  const t = useTranslations("access");
+  const name = info.name || box.slug;
+  const host = info.host || `${name}.boxaz`;
+  const proxy = `-o ProxyCommand='box ssh-proxy %h' -o HostKeyAlias=boxaz-ssh`;
+  return (
+    <Card data-testid="access-sftp">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><FolderSync className="size-4 text-primary" /> {t("sftp")}</CardTitle>
+        <CardDescription>{t("sftpDesc")}</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <Cmd label={t("sftpPut")} cmd={`box sftp ${name} put ./file.txt /tmp/file.txt`} testid="access-cmd-sftp" />
+        <Cmd label={t("sftpGet")} cmd={`box sftp ${name} get /tmp/file.txt ./file.txt`} />
+        <Cmd label={t("sftpLs")} cmd={`box sftp ${name} ls /tmp`} />
+        <Cmd label={t("sftpOpenSsh")} cmd={`sftp ${proxy} boxaz@${host}`} />
+        <Cmd label={t("scp")} cmd={info.commands.scp || `scp ${proxy} ./file.txt boxaz@${host}:/tmp/`} />
+        <Cmd label={t("scpCert")} cmd={`scp -o CertificateFile=~/.ssh/boxaz-${name}-cert.pub -o ProxyCommand='box ssh-proxy --anon %h' -o HostKeyAlias=boxaz-ssh ./file.txt ${name}@${host}:/tmp/`} />
+        <p className="text-xs text-muted-foreground">{t("sftpHint")}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function AccessTab({ box }: { box: Box }) {
   const t = useTranslations("access");
   const { data: info, error, mutate } = useApi<AccessInfo>(paths.boxAccess(box.id), { refreshInterval: 20000 });
@@ -236,10 +325,12 @@ export function AccessTab({ box }: { box: Box }) {
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <div className="flex min-w-0 flex-col gap-4">
           <CommandsCard box={box} info={info} />
+          <SftpCard box={box} info={info} />
           <ForwardPortsCard box={box} info={info} />
         </div>
         <div className="flex min-w-0 flex-col gap-4">
           <SshConfigCard info={info} />
+          <SshCertCard box={box} info={info} />
           <TicketsCard box={box} info={info} />
         </div>
       </div>

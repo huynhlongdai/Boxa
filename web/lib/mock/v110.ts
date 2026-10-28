@@ -286,3 +286,16 @@ export function handleV110(ms: MockState, ctx: V110Ctx, M: string, segs: string[
 /** Mock: thả viewer khi trang terminal đóng — không có route; session tự detach trong UI mock. */
 export const MOCK_DETACH_TTL_S = DETACH_TTL_S;
 export const MOCK_TERMINAL_BUFFER = BUFFER;
+
+/** v1.11: ghi thêm bản ghi ticket (cdp / vnc / vnc_share / ssh_cert) để bảng ticket ở tab Truy cập thấy được. */
+export function mockRecordTicket(t: AccessTicket) {
+  const s = st();
+  const list = (s.tickets[t.box_id] ??= []);
+  list.push(t);
+  if (list.length > 200) list.splice(0, list.length - 200);
+}
+/** v1.11: thu hồi bản ghi ticket theo id (share link). */
+export function mockRevokeTicketRecord(boxId: string, ids: string[]) {
+  const now = new Date().toISOString();
+  for (const t of st().tickets[boxId] ?? []) if (ids.includes(t.id) && !t.revoked_at) { t.revoked_at = now; t.live = 0; }
+}

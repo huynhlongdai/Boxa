@@ -1189,7 +1189,7 @@ export interface CapabilityRow {
 }
 
 // ---------------- v1.10: truy cập box (ticket một lần, terminal bền, TCP forward, SSH) ----------------
-export type TicketPurpose = "terminal" | "tcp" | "ssh";
+export type TicketPurpose = "terminal" | "tcp" | "ssh" | "ssh_cert" | "cdp" | "vnc" | "vnc_share";
 
 export interface Box {
   /** v1.10: port thêm mà TCP forward / ssh -L được phép tới (ngoài port đã mở). */
@@ -1286,4 +1286,112 @@ export interface SshInfo {
   direct: string;
   proxy_command: string;
   domain: string;
+}
+
+// ---------------- v1.11: truy cập P1 (CDP browser, desktop VNC, share link, SSH cert, SFTP) ----------------
+/** Mục cdp / desktop trong GET /boxes/{id}/access. */
+export interface AccessAddon {
+  url: string;
+  core_url: string;
+  page?: string;
+  start: string;
+  running: boolean;
+  clients: number;
+}
+
+export interface AccessInfo {
+  /** v1.11 */
+  cdp?: AccessAddon;
+  /** v1.11 */
+  desktop?: AccessAddon;
+}
+
+/** GET /boxes/{id}/browser — không đánh thức box, không khởi động gì. */
+export interface BrowserState {
+  box_id: string;
+  running: boolean;
+  headless: boolean;
+  source?: string;
+  binary?: string;
+  version?: Record<string, unknown>;
+  started: boolean;
+  start_ms?: number;
+  clients: number;
+  idle_stop_s: number;
+  port: number;
+  note?: string;
+}
+
+/** POST /boxes/{id}/browser — endpoint CDP có ticket (dùng lại được tới expires_at). */
+export interface BrowserSession extends BrowserState {
+  cdp_url: string;
+  http_url?: string;
+  core_url: string;
+  ticket_id: string;
+  expires_at: string;
+  live_view?: string;
+}
+
+/** GET /boxes/{id}/desktop */
+export interface DesktopState {
+  box_id: string;
+  running: boolean;
+  display?: string;
+  width?: number;
+  height?: number;
+  vnc_server?: string;
+  wm?: string;
+  started: boolean;
+  start_ms?: number;
+  viewers: number;
+  shares: number;
+  idle_stop_s: number;
+  port: number;
+  browser_on_desktop: boolean;
+  note?: string;
+}
+
+/** POST /boxes/{id}/desktop — ticket viewer một lần (60 s để mở). */
+export interface DesktopSession extends DesktopState {
+  vnc_url: string;
+  viewer_url: string;
+  core_url: string;
+  ticket_id: string;
+  view_only: boolean;
+  expires_at: string;
+}
+
+/** GET/POST /boxes/{id}/desktop/shares — `url` chỉ có lúc tạo. */
+export interface DesktopShare {
+  id: string;
+  box_id: string;
+  url?: string;
+  prefix: string;
+  view_only: boolean;
+  expires_at: string;
+  created_at: string;
+  revoked_at?: string | null;
+  viewers: number;
+  uses: number;
+  actor?: string;
+}
+
+/** POST /ssh/certs */
+export interface SshCert {
+  id: string;
+  box_id: string;
+  certificate: string;
+  serial: number;
+  principals: string[];
+  valid_after: string;
+  valid_before: string;
+  fingerprint: string;
+  host: string;
+  user: string;
+  proxy_command: string;
+  known_hosts: string;
+  command: string;
+  direct_command?: string;
+  config: string;
+  user_ca: string;
 }

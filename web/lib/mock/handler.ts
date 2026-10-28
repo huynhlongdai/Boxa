@@ -11,6 +11,7 @@ import { makeSnippet } from "../snippets";
 import { estimateFor, handleV13, recommend, resolveNeeds } from "./v13";
 import { handleV18 } from "./v18";
 import { handleV110 } from "./v110";
+import { accessP1, handleV111 } from "./v111";
 import { handleV17, hydrateV17 } from "./v17";
 
 type G = typeof globalThis & { __boxazMock?: MockState };
@@ -451,12 +452,26 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
   const v18 = handleV18(s, M, segs, q);
   if (v18) return v18;
 
+  // ---- v1.11: browser (CDP), desktop (VNC) + share link, SSH certificate ----
+  const v111ctx = {
+    ok, err: (st: number, code: ErrorCode, key: string, params?: Record<string, string | number>) => err(st, code, key, params),
+    hydrateBox: (b: MockState["boxes"][number]) => hydrateBox(s, b), pushEvent: (e: Partial<BoxazEvent>) => pushEvent(s, e as Omit<BoxazEvent, "id" | "ts">),
+  };
+  const v111 = handleV111(s, v111ctx, M, segs, body);
+  if (v111) return v111;
+
   // ---- v1.10: ticket truy cập, terminal bền, access, forward-ports, SSH keys ----
   const v110 = handleV110(s, {
     ok, err: (st, code, key, params) => err(st, code, key, params),
     hydrateBox: (b) => hydrateBox(s, b), pushEvent: (e) => pushEvent(s, e as Omit<BoxazEvent, "id" | "ts">),
   }, M, segs, body);
-  if (v110) return v110;
+  if (v110) {
+    if (r2 === "access" && M === "GET" && v110.status === 200) {
+      const b = s.boxes.find((x) => x.id === r1 || x.slug === r1);
+      if (b) accessP1(v111ctx, b, v110.body as Record<string, unknown>);
+    }
+    return v110;
+  }
 
   // ---- v1.7: ports/gateway, URL token, wake_on_request, app supervisor, capabilities ----
   const v17 = handleV17(s, {

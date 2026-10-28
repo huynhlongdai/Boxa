@@ -299,6 +299,48 @@ done
 grep -rqs "terminal-session-picker" .next/static/chunks && grep -rqs "proto" .next/static/chunks && grep -rqs "access-revoke-all" .next/static/chunks && grep -rqs "ssh-key-add" .next/static/chunks && ok "bundle có UI terminal v1.10 + Truy cập + SSH keys" || bad "bundle thiếu UI v1.10"
 if grep -rqs 'terminal?cols=' .next/static/chunks; then bad "bundle còn URL terminal cũ (không ticket)"; else ok "bundle không còn URL terminal không ticket"; fi
 
+echo "== v1.11: truy cập P1 (browser CDP, desktop VNC + share link, SSH cert, SFTP)"
+expect "GET /boxes/:id/access có cdp + desktop + lệnh v1.11" "$(jx GET boxes/box_a9d054/access - 'j.cdp.start+"|"+j.desktop.start+"|"+j.cdp.url.includes("/.boxaz/cdp")+"|"+j.desktop.page.includes("/.boxaz/desktop")+"|"+(j.commands.sftp||"").startsWith("box sftp ")+"|"+(j.commands.ssh_cert||"").startsWith("box ssh-cert ")+"|"+(j.commands.desktop_share||"").includes("--share")')" "POST /v1/boxes/box_a9d054/browser|POST /v1/boxes/box_a9d054/desktop|true|true|true|true|true"
+expect "GET browser (box ngủ → note, không khởi động)" "$(jx GET boxes/box_2c81e4/browser - 'j.running+"|"+/POST \/v1\/boxes\/\{id\}\/browser/.test(j.note||"")')" "false|true"
+BJ=$(curl -s -X POST "$BASE/api/boxaz/boxes/box_7f3a91/browser" -H 'content-type: application/json' -d '{"ttl_s":900}')
+expect "POST browser → 201 cdp_url wss + ?ticket=bxa_ + http_url + 900 s" "$(echo "$BJ" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);const ttl=Math.round((Date.parse(j.expires_at)-Date.now())/1000);console.log(j.running+"|"+/^wss:\/\/[^/]+\/\.boxaz\/cdp\?ticket=bxa_/.test(j.cdp_url)+"|"+j.http_url.startsWith("https://")+"|"+j.core_url.includes("/v1/boxes/box_7f3a91/cdp")+"|"+(ttl>880&&ttl<=900)+"|"+j.started+"|"+(j.start_ms>0)+"|"+j.ticket_id.startsWith("tkt_"))})')" "true|true|true|true|true|true|true|true"
+expect "GET browser sau POST → running + version" "$(jx GET boxes/box_7f3a91/browser - 'j.running+"|"+!!j.version.Browser+"|"+j.port')" "true|true|9222"
+expect "POST browser lần 2 → không khởi động lại" "$(jx POST boxes/box_7f3a91/browser '{}' 'j.started')" "false"
+expect "POST browser ttl_s=5 → 400" "$(jx POST boxes/box_7f3a91/browser '{"ttl_s":5}' 'j.error.code')" "INVALID"
+expect "tickets có bản ghi cdp (không có giá trị ticket)" "$(jx GET boxes/box_7f3a91/tickets - 'j.items.some(t=>t.purpose==="cdp")+"|"+j.items.every(t=>!("ticket" in t))')" "true|true"
+expect "DELETE browser → stopped" "$(jx DELETE boxes/box_7f3a91/browser - 'j.stopped')" "true"
+expect "GET browser sau DELETE" "$(jx GET boxes/box_7f3a91/browser - 'j.running')" "false"
+DJ=$(curl -s -X POST "$BASE/api/boxaz/boxes/box_7f3a91/desktop" -H 'content-type: application/json' -d '{"view_only":true}')
+expect "POST desktop view_only → viewer_url /.boxaz/desktop?ticket= &view_only=1 + vnc_url wss" "$(echo "$DJ" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);const ttl=Math.round((Date.parse(j.expires_at)-Date.now())/1000);console.log(j.running+"|"+/\/\.boxaz\/desktop\?ticket=bxa_[^&]+&view_only=1$/.test(j.viewer_url)+"|"+/^wss:.*\/\.boxaz\/vnc\?ticket=bxa_/.test(j.vnc_url)+"|"+j.view_only+"|"+(ttl>50&&ttl<=60)+"|"+j.width+"x"+j.height)})')" "true|true|true|true|true|1280x800"
+expect "GET desktop → running + display" "$(jx GET boxes/box_7f3a91/desktop - 'j.running+"|"+j.display+"|"+j.vnc_server')" "true|:99|x11vnc"
+SJ=$(curl -s -X POST "$BASE/api/boxaz/boxes/box_7f3a91/desktop/shares" -H 'content-type: application/json' -d '{"ttl_s":3600}')
+SHID=$(echo "$SJ" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).id))')
+expect "POST desktop/shares → 201 bxs_ URL, mặc định chỉ xem" "$(echo "$SJ" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log(j.id.startsWith("shr_")+"|"+/\/\.boxaz\/desktop\?share=bxs_box_7f3a91_/.test(j.url)+"|"+j.view_only+"|"+j.prefix.startsWith("bxs_"))})')" "true|true|true|true"
+expect "POST desktop/shares view_only=false" "$(jx POST boxes/box_7f3a91/desktop/shares '{"ttl_s":900,"view_only":false}' 'j.view_only')" "false"
+expect "POST desktop/shares ttl_s=10 → 400" "$(jx POST boxes/box_7f3a91/desktop/shares '{"ttl_s":10}' 'j.error.code')" "INVALID"
+expect "GET desktop/shares: không có URL" "$(jx GET boxes/box_7f3a91/desktop/shares - 'j.items.length+"|"+j.items.every(s=>!("url" in s))')" "2|true"
+expect "DELETE desktop/shares/:id → revoked 1" "$(jx DELETE "boxes/box_7f3a91/desktop/shares/$SHID" - 'j.revoked')" "1"
+expect "DELETE desktop/shares/all → revoked 1 (còn lại)" "$(jx DELETE boxes/box_7f3a91/desktop/shares/all - 'j.revoked')" "1"
+expect "DELETE desktop/shares/không-có → 404" "$(jx DELETE boxes/box_7f3a91/desktop/shares/shr_nope - 'j.error.code')" "NOT_FOUND"
+expect "DELETE desktop → stopped" "$(jx DELETE boxes/box_7f3a91/desktop - 'j.stopped')" "true"
+expect "POST desktop box đã hỏng → 404" "$(jx POST boxes/box_b18f6e/desktop '{}' 'j.error.code')" "NOT_FOUND"
+expect "POST /ssh/certs → 201 cert-v01 + principals + command --anon" "$(jx POST ssh/certs '{"box":"box_a9d054","public_key":"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAISmokeTestKeyOnly0123456789abcdef smoke@ci","ttl_s":43200}' '/-cert-v01@openssh\.com /.test(j.certificate)+"|"+j.principals.includes("box_a9d054")+"|"+j.command.includes("box ssh-proxy --anon %h")+"|"+j.user_ca.startsWith("ssh-ed25519 ")+"|"+Math.round((Date.parse(j.valid_before)-Date.now())/3600000)')" "true|true|true|true|12"
+expect "POST /ssh/certs ttl_s > 12 h → 400" "$(jx POST ssh/certs '{"box":"box_a9d054","public_key":"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAISmokeTestKeyOnly0123456789abcdef smoke@ci","ttl_s":50000}' 'j.error.code')" "INVALID"
+expect "POST /ssh/certs key sai → 400" "$(jx POST ssh/certs '{"box":"box_a9d054","public_key":"nope"}' 'j.error.code')" "INVALID"
+expect "POST /ssh/certs thiếu box → 400" "$(jx POST ssh/certs '{"public_key":"nope"}' 'j.error.code')" "INVALID"
+r=$(curl -s -X POST -b boxaz_locale=zh "$BASE/api/boxaz/boxes/box_7f3a91/desktop/shares" -H 'content-type: application/json' -d '{"ttl_s":10}')
+grep -qF "分享链接 ttl_s 超出范围" <<<"$r" && ok "[zh] lỗi share link được dịch" || bad "[zh] lỗi share: $r"
+declare -A DESKWORD=([vi]="Màn hình" [en]="Desktop" [zh]="桌面" [ja]="デスクトップ")
+declare -A BRWORD=([vi]="Trình duyệt" [en]="Browser" [zh]="浏览器" [ja]="ブラウザ")
+for l in $LOCALES; do
+  for tab in desktop browser access; do
+    body=$(curl -s -b "boxaz_locale=$l" "$BASE/boxes/box_a9d054?tab=$tab")
+    grep -qF "${DESKWORD[$l]}" <<<"$body" && grep -qF "${BRWORD[$l]}" <<<"$body" && ok "[$l] ?tab=$tab có nhãn '${DESKWORD[$l]}' + '${BRWORD[$l]}'" || bad "[$l] ?tab=$tab thiếu nhãn tab v1.11"
+  done
+  node -e 'const m=require("./messages/'$l'.json");process.exit(m.boxDetail.tabs.desktop==="'"${DESKWORD[$l]}"'"&&m.boxDetail.tabs.browser==="'"${BRWORD[$l]}"'"&&m.desktop.createShare&&m.desktop.shareState.revoked&&m.desktop.mockNotice&&m.desktop.revokedN.includes("{viewers}")&&m.browser.lang.puppeteer&&m.browser.endpointDesc.includes("{when}")&&m.access.cert&&m.access.sftp&&m.access.certValid.includes("{principals}")?0:1)' && ok "[$l] chuỗi desktop.* / browser.* / access cert+sftp v1.11 đủ" || bad "[$l] thiếu chuỗi v1.11"
+done
+grep -rqs "desktop-connect" .next/static/chunks && grep -rqs "desktop-share-create" .next/static/chunks && grep -rqs "browser-snippets" .next/static/chunks && grep -rqs "connectOverCDP" .next/static/chunks && grep -rqs "access-cert-issue" .next/static/chunks && grep -rqs "access-sftp" .next/static/chunks && ok "bundle có UI Màn hình + share link + Trình duyệt + SSH cert + SFTP v1.11" || bad "bundle thiếu UI v1.11"
+
 echo "== Lỗi được dịch theo ngôn ngữ (code không đổi)"
 declare -A NF=([vi]="Không tìm thấy" [en]="not found" [zh]="未找到" [ja]="見つかりません")
 for l in $LOCALES; do

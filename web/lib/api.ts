@@ -79,6 +79,12 @@ import type {
   SshKey,
   TerminalList,
   TicketPurpose,
+  BrowserSession,
+  BrowserState,
+  DesktopSession,
+  DesktopShare,
+  DesktopState,
+  SshCert,
 } from "./types";
 
 export const PROXY_BASE = "/api/boxaz";
@@ -230,6 +236,10 @@ export const paths = {
   boxTerminals: (id: string) => `/boxes/${id}/terminals`,
   ssh: "/ssh",
   sshKeys: "/ssh/keys",
+  // v1.11
+  boxBrowser: (id: string) => `/boxes/${id}/browser`,
+  boxDesktop: (id: string) => `/boxes/${id}/desktop`,
+  boxDesktopShares: (id: string) => `/boxes/${id}/desktop/shares`,
   portTokens: (id: string, port: number) => `/boxes/${id}/ports/${port}/tokens`,
   boxApp: (id: string) => `/boxes/${id}/app`,
   boxAppLogs: (id: string, offset?: number) => `/boxes/${id}/app/logs${qs({ offset })}`,
@@ -409,6 +419,18 @@ export const api = {
   sshKeys: () => http.get<List<SshKey>>(paths.sshKeys),
   addSshKey: (body: { name: string; public_key: string }) => http.post<SshKey>(paths.sshKeys, body),
   deleteSshKey: (kid: string) => http.del<{ deleted: boolean }>(`${paths.sshKeys}/${encodeURIComponent(kid)}`),
+
+  // v1.11: browser (CDP), desktop (VNC) + share link, SSH certificate. URL có ticket chỉ trả về lúc tạo.
+  browserStatus: (id: string) => http.get<BrowserState>(paths.boxBrowser(id)),
+  openBrowser: (id: string, body: { ttl_s?: number; headless?: boolean } = {}) => http.post<BrowserSession>(paths.boxBrowser(id), body),
+  stopBrowser: (id: string) => http.del<{ box_id: string; stopped: boolean; note?: string }>(paths.boxBrowser(id)),
+  desktopStatus: (id: string) => http.get<DesktopState>(paths.boxDesktop(id)),
+  openDesktop: (id: string, body: { view_only?: boolean; width?: number; height?: number; ttl_s?: number } = {}) => http.post<DesktopSession>(paths.boxDesktop(id), body),
+  stopDesktop: (id: string) => http.del<{ box_id: string; stopped: boolean; note?: string }>(paths.boxDesktop(id)),
+  desktopShares: (id: string) => http.get<List<DesktopShare>>(paths.boxDesktopShares(id)),
+  createDesktopShare: (id: string, body: { ttl_s?: number; view_only?: boolean }) => http.post<DesktopShare>(paths.boxDesktopShares(id), body),
+  revokeDesktopShare: (id: string, sid: string | "all") => http.del<{ revoked: number; viewers_closed: number }>(`${paths.boxDesktopShares(id)}/${encodeURIComponent(sid)}`),
+  sshCert: (body: { box: string; public_key: string; ttl_s?: number }) => http.post<SshCert>("/ssh/certs", body),
 };
 
 export function errMsg(e: unknown): string {

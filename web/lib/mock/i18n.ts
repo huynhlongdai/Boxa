@@ -4,6 +4,12 @@ import type { Locale } from "@/i18n/config";
 type Dict = Record<string, string>;
 
 const vi: Dict = {
+  v111_box_required: "Thiếu box",
+  v111_box_required_hint: "Truyền id hoặc tên box: {\"box\":\"my-box\",\"public_key\":\"ssh-ed25519 …\"}.",
+  v111_cert_ttl: "ttl_s của chứng chỉ ngoài khoảng cho phép",
+  v111_cert_ttl_hint: "Dùng ttl_s từ 60 đến 43200 (12 giờ).",
+  v111_share_ttl: "ttl_s của link chia sẻ ngoài khoảng cho phép",
+  v111_share_ttl_hint: "Dùng ttl_s từ 60 đến 86400.",
   v110_purpose: "Mục đích ticket {purpose} không hợp lệ",
   v110_purpose_hint: "Dùng purpose terminal, tcp hoặc ssh.",
   v110_port: "purpose tcp cần port hợp lệ",
@@ -127,6 +133,12 @@ const vi: Dict = {
 };
 
 const en: Dict = {
+  v111_box_required: "box is required",
+  v111_box_required_hint: "Pass the box id or name: {\"box\":\"my-box\",\"public_key\":\"ssh-ed25519 …\"}.",
+  v111_cert_ttl: "certificate ttl_s out of range",
+  v111_cert_ttl_hint: "Use a ttl_s between 60 and 43200 (12 h).",
+  v111_share_ttl: "share link ttl_s out of range",
+  v111_share_ttl_hint: "Use a ttl_s between 60 and 86400.",
   v110_purpose: "unknown ticket purpose {purpose}",
   v110_purpose_hint: "Use purpose terminal, tcp or ssh.",
   v110_port: "purpose tcp needs a valid port",
@@ -247,6 +259,12 @@ const en: Dict = {
 };
 
 const zh: Dict = {
+  v111_box_required: "缺少 box",
+  v111_box_required_hint: "传入 box 的 id 或名称：{\"box\":\"my-box\",\"public_key\":\"ssh-ed25519 …\"}。",
+  v111_cert_ttl: "证书 ttl_s 超出范围",
+  v111_cert_ttl_hint: "ttl_s 请在 60 到 43200（12 小时）之间。",
+  v111_share_ttl: "分享链接 ttl_s 超出范围",
+  v111_share_ttl_hint: "ttl_s 请在 60 到 86400 之间。",
   v110_purpose: "未知的票据用途 {purpose}",
   v110_purpose_hint: "用途请使用 terminal、tcp 或 ssh。",
   v110_port: "用途 tcp 需要有效端口",
@@ -367,6 +385,12 @@ const zh: Dict = {
 };
 
 const ja: Dict = {
+  v111_box_required: "box が指定されていません",
+  v111_box_required_hint: "box の id または名前を渡してください：{\"box\":\"my-box\",\"public_key\":\"ssh-ed25519 …\"}。",
+  v111_cert_ttl: "証明書の ttl_s が範囲外です",
+  v111_cert_ttl_hint: "ttl_s は 60〜43200（12 時間）で指定してください。",
+  v111_share_ttl: "共有リンクの ttl_s が範囲外です",
+  v111_share_ttl_hint: "ttl_s は 60〜86400 で指定してください。",
   v110_purpose: "不明なチケット用途 {purpose}",
   v110_purpose_hint: "用途は terminal・tcp・ssh のいずれかです。",
   v110_port: "用途 tcp には有効なポートが必要です",
