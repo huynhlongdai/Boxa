@@ -596,3 +596,27 @@ Vùng: oregon (mặc định), ohio, virginia, frankfurt, singapore. Kích thư�
 
 **Kiểm thử.** `sandbox/render_test.go` (httptest API Render: owners, tạo service với body đầy đủ, trạng thái deploy, suspend/resume, list chỉ lấy `mgr-*`, xoá, 402; lệnh khởi động chạy thật bằng `/bin/sh -c eval "$MGR_BOOT"` với boxd giả), `boxd/portholder_test.go` (health, 502 khi chưa có app, forward, keepalive), `e2e/render_test.go` (driver Render thật + API giả chạy boxd trong tiến trình: box up, exec, URL onrender.com, restart filesystem mới → vào lại bằng cùng token và box bị `failed`, box down xoá service, không lộ tên sản phẩm), `scripts/e2e.sh` mục render (dial-only, blocked khi thiếu `BOXAZ_PUBLIC_URL`, giá gói, kiểm tra key qua `GET /owners`). Chưa chạy live (chưa có API key).
 
+
+## 19. Hosting core + web trên Render (gói free)
+
+Core (`mgr-gw`) và dashboard (`mgr-web`) chạy trên Render, workspace "Caca's workspace", vùng **singapore**, gói **free** ($0). Tên thấy được phía Render đều trung tính (`mgr-*`).
+
+| Service | Nguồn | URL |
+|---|---|---|
+| `mgr-gw` (core) | Docker, context `core/`, `core/deploy/render/Dockerfile`, health `/v1/health` | https://mgr-gw.onrender.com · qua tunnel: https://gw.boxs.tech, `https://<box>.boxs.tech` |
+| `mgr-web` (Next.js) | Docker, context `web/`, `web/Dockerfile`, health `/` | https://mgr-web-x2v1.onrender.com |
+
+**Core.** `start.sh` tạo thư mục dữ liệu (`BOXAZ_DATA_DIR`), chạy `cloudflared tunnel run` (tự khởi động lại) khi có `TUNNEL_TOKEN`, rồi chạy core bằng user `app` (core không thấy `TUNNEL_TOKEN`). Named tunnel `boxaz-gw` trỏ `gw.boxs.tech` và `*.boxs.tech` về `http://localhost:8091`; TLS wildcard vẫn ở Cloudflare. Chỉ một nơi được chạy connector của tunnel này: khi core chạy trên Render thì gateway trong workspace phải tắt.
+
+Biến môi trường chính (giá trị bí mật chỉ đặt trong Render, không commit): `BOXAZ_PUBLIC_URL=https://gw.boxs.tech`, `BOXAZ_GATEWAY_DOMAIN`, `BOXAZ_DATA_DIR=/tmp/data`, `BOXAZ_ADMIN_KEY`, `BOXAZ_MASTER_KEY`, `BOXAZ_DASHBOARD_URL` và `BOXAZ_ACCESS_ORIGINS` = URL của `mgr-web` (cho terminal/SSH WebSocket), `TUNNEL_TOKEN`, `KEEPALIVE_S=600`, và key thật của provider (`E2B_API_KEY`, `NOVITA_API_KEY`, `PRIZED_API_KEY`, …).
+
+**Web.** `BOXAZ_API` và `NEXT_PUBLIC_BOXAZ_API` = `https://gw.boxs.tech/v1` (Render truyền biến môi trường thành build arg của Docker nên `NEXT_PUBLIC_*` được nhúng lúc build), `BOXAZ_MOCK=0`. `pnpm-workspace.yaml` liệt kê rõ `allowBuilds` (cả các gói bị từ chối) vì pnpm 11+ báo `ERR_PNPM_IGNORED_BUILDS` khi `pnpm install --frozen-lockfile`.
+
+**Giới hạn của gói free.**
+- **Không có ổ đĩa.** Dữ liệu nằm ở `/tmp/data` (SQLite, agent, key, box, secret, sổ chi phí). **Mỗi lần deploy hoặc restart (kể cả spin down, Render bảo trì) là mất hết trạng thái**: chỉ còn admin key và master key vì chúng nằm trong biến môi trường. Box đang chạy ở provider sẽ không còn được core quản lý (phải xoá tay ở provider) và key agent phải tạo lại.
+- Spin down sau 15 phút không có request **vào** service; traffic qua tunnel không tính. `start.sh` tự gọi `$RENDER_EXTERNAL_URL/v1/health` mỗi `KEEPALIVE_S` giây (600 = 10 phút; `0` để tắt). Gói free có 750 giờ/tháng cho mỗi workspace, chia cho mọi service free (2 service chạy liên tục ≈ 1460 giờ, nên `mgr-web` sẽ ngủ khi không dùng, khởi động lạnh ~1 phút).
+- 512 MB RAM, 0.1 CPU.
+
+**Nâng cấp lên trạng thái bền.** Thêm thẻ ở dashboard.render.com/billing, chuyển `mgr-gw` sang gói `starter` (hoặc lớn hơn), gắn disk (vd `mgr-data`, mount `/data`, 1 GB), đặt `BOXAZ_DATA_DIR=/data` và `KEEPALIVE_S=0`, rồi deploy lại. `start.sh` tự `chown` disk cho user `app`.
+
+**Thời gian đo (2026-11-19).** `mgr-gw`: tạo service → live 146 s (build Docker lần đầu), `/v1/health` 200 trong 0.25 s; deploy lại sau khi thêm `TUNNEL_TOKEN` → live 31 s, `https://gw.boxs.tech/v1/health` 200 trong 0.62 s (tunnel healthy, 4 kết nối sin*). `mgr-web`: build + deploy → live 159 s, `/login` 200 0.29 s, đăng nhập bằng admin key và `/api/boxaz/{health,overview,boxes,providers}` qua `gw.boxs.tech` đều 200.
