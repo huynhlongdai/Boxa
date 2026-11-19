@@ -148,7 +148,11 @@
   "Ask the owner for a new link.": "Xin chủ box một link mới.",
   "Use a ttl_s between 60 and 43200 (12 h).": "Dùng ttl_s từ 60 đến 43200 (12 giờ).",
   "Paste one line of ~/.ssh/id_ed25519.pub (or id_rsa.pub / ecdsa).": "Dán một dòng của ~/.ssh/id_ed25519.pub (hoặc id_rsa.pub / ecdsa).",
-  "Pass the plain public key, not a certificate.": "Truyền public key thường, không phải chứng chỉ."
+  "Pass the plain public key, not a certificate.": "Truyền public key thường, không phải chứng chỉ.",
+  "The Render API key sees no workspace; create the key in the workspace that should run boxes.": "API key Render không thấy workspace nào; hãy tạo key trong workspace sẽ chạy box.",
+  "Use a workspace ID from Render → Workspace settings that this API key can access.": "Dùng workspace ID trong Render → Workspace settings mà API key này truy cập được.",
+  "This provider has no exec API: boxes run only in dial mode (set BOXAZ_PUBLIC_URL).": "Provider này không có API exec: box chỉ chạy ở chế độ dial (đặt BOXAZ_PUBLIC_URL).",
+  "Add a payment method to the Render workspace (paid instance types need one) or use the free plan.": "Thêm phương thức thanh toán vào workspace Render (gói trả phí cần có) hoặc dùng gói free."
  },
  "msg": {
   "%s bootstrap exit %d: %s": "%s: lệnh khởi động thoát với mã %d: %s",
@@ -360,7 +364,13 @@
   "box is required": "cần có box",
   "unknown share link": "link chia sẻ không tồn tại",
   "cannot hijack": "không chiếm được kết nối",
-  "origin %s may not open the desktop socket": "origin %s không được mở socket desktop"
+  "origin %s may not open the desktop socket": "origin %s không được mở socket desktop",
+  "render: GET /owners returned no workspace": "render: GET /owners không trả về workspace nào",
+  "render has no exec API (service %s)": "render không có API exec (service %s)",
+  "render: create needs the boxd start command": "render: tạo service cần lệnh khởi động boxd",
+  "%s is dial-only and got no bootstrap": "%s chỉ chạy dial nhưng không nhận được lệnh bootstrap",
+  "render: workspace %s is not visible to this key": "render: key này không thấy workspace %s",
+  "render: payment information required (402): %s": "render: cần thông tin thanh toán (402): %s"
  },
  "text": {
   "agentsmd.budget_box": "$%.2f cho box này",

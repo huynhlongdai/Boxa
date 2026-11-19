@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -126,8 +127,29 @@ func main() {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+	startPortHolder(ctx)
 	log.Printf("driver=%s core=%s state=%s", drv.Name(), coreWS(env("BOXD_CORE_URL", "http://localhost:8080")), stateDir)
 	a.Run(ctx)
+}
+
+// startPortHolder starts the provider port holder and keepalive when the
+// provider runs boxd as a web service (Render): BOXD_LISTEN_PORT (may be
+// "${PORT}"), BOXD_HEALTH_PATH, BOXD_PREVIEW_PORT (default 8000),
+// BOXD_KEEPALIVE_URL (may reference ${RENDER_EXTERNAL_URL}),
+// BOXD_KEEPALIVE_EVERY (default 5m). Values are expanded against the
+// environment because the provider does not interpolate them.
+func startPortHolder(ctx context.Context) {
+	if lp := strings.TrimSpace(os.ExpandEnv(os.Getenv("BOXD_LISTEN_PORT"))); lp != "" {
+		target, err := strconv.Atoi(env("BOXD_PREVIEW_PORT", "8000"))
+		if err != nil || target < 0 {
+			target = 8000 // 0 = publish nothing (health path only)
+		}
+		go boxd.RunPortHolder(ctx, boxd.PortHolderConfig{Listen: ":" + lp, HealthPath: os.Getenv("BOXD_HEALTH_PATH"), Target: target})
+	}
+	if ku := strings.TrimSpace(os.ExpandEnv(os.Getenv("BOXD_KEEPALIVE_URL"))); strings.HasPrefix(ku, "http") {
+		every, _ := time.ParseDuration(env("BOXD_KEEPALIVE_EVERY", "5m"))
+		go boxd.RunKeepAlive(ctx, ku, every)
+	}
 }
 
 // memoryRootDefault is /var/lib/boxd/memory, or the pre-rename

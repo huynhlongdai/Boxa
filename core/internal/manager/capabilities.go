@@ -22,6 +22,7 @@ var knownLifecycle = map[string]model.LifecycleCaps{
 	"runloop": {WakeOnHTTPNative: true, InboundHTTP: true, Note: "suspend keeps the disk only; service winding down (Nov 2026)"},
 	"blaxel":  {MemoryPause: true, WakeOnHTTPNative: true, InboundHTTP: true, Note: "standby wakes on connection"},
 	"vercel":  {Fork: true, InboundHTTP: true, MaxRuntimeS: 18000, Note: "sessions persist the filesystem only: the app restarts on wake"},
+	"render":  {InboundHTTP: true, Note: "web service running boxd (dial-in only): onrender.com serves one in-box port; sleep stops the box's processes, the service keeps running; free plan spins down after 15 min without inbound traffic and loses local files"},
 }
 
 // LifecycleFor returns the capability flags of a provider id.

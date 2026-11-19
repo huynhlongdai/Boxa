@@ -629,8 +629,8 @@ func TestBootstrapScript(t *testing.T) {
 
 func TestAllDriversMetadata(t *testing.T) {
 	ds := Drivers(nil)
-	if len(ds) != 11 {
-		t.Fatalf("want 5 native + 6 yaml drivers, have %d", len(ds))
+	if len(ds) != 12 {
+		t.Fatalf("want 6 native + 6 yaml drivers, have %d", len(ds))
 	}
 	seen := map[string]bool{}
 	for _, d := range ds {

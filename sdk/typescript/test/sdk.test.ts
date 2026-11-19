@@ -183,10 +183,10 @@ test("v1.4 sandbox providers / adapter lint / recommend untrusted+fork", { skip 
   const bx = new Boxaz({ apiKey: key, baseUrl: url });
   const sp = await bx.sandboxProviders();
   const ids = new Map(sp.items.map((p) => [p.id, p]));
-  for (const id of ["e2b", "novita", "daytona", "prized", "boxdsh", "runloop", "blaxel", "vercel", "boat", "agent37", "upstash-box"]) assert.ok(ids.has(id), id);
+  for (const id of ["e2b", "novita", "daytona", "prized", "boxdsh", "runloop", "blaxel", "vercel", "boat", "agent37", "upstash-box", "render"]) assert.ok(ids.has(id), id);
   assert.equal(ids.get("prized")?.verification, "live-verified");
   assert.equal(ids.get("upstash-box")?.mode, "shim");
-  assert.ok(sp.items.every((p) => p.docs && p.initials && p.from_usd_h > 0 && typeof p.capabilities.fork === "boolean"));
+  assert.ok(sp.items.every((p) => p.docs && p.initials && (p.from_usd_h > 0 || p.id === "render") && typeof p.capabilities.fork === "boolean"));
   await assert.rejects(bx.lintAdapter("id: x"), (e: unknown) => e instanceof BoxazError && ["UNAUTHORIZED", "POLICY_DENIED"].includes(e.code));
   const adm = new Boxaz({ apiKey: admin, baseUrl: url });
   const bad = await adm.lintAdapter("id: x\nname: X\n");

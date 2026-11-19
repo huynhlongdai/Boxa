@@ -72,7 +72,9 @@ func (m *Manager) RegisterHost(ctx context.Context, a any, hello proto.Hello) (p
 			return proto.Welcome{}, err
 		}
 		host = h
-		host.BootstrapHash = "" // one-time
+		if !m.rejoinable(host) {
+			host.BootstrapHash = "" // one-time
+		}
 		issue = true
 	default:
 		h, err := m.Store.GetHost(ctx, auth.hostID)
@@ -121,6 +123,19 @@ func (m *Manager) RegisterHost(ctx context.Context, a any, hello proto.Hello) (p
 	}
 	go m.reconcileHost(host.ID, hello.Boxes)
 	return w, nil
+}
+
+// rejoinable reports whether a host's bootstrap token stays valid after the
+// first registration: sandbox hosts of providers that restart instances with
+// a fresh filesystem (Render spin-down / restarts) lose host.json, so boxd
+// can only rejoin with the token in its start command. The token is bound to
+// this one host and dies with it (deleted hosts are refused).
+func (m *Manager) rejoinable(h *model.Host) bool {
+	if h == nil || h.Billing != "sandbox" {
+		return false
+	}
+	sp, ok := m.sandboxProv(h.Provider)
+	return ok && sp.Info().EphemeralRestart
 }
 
 // reconcileHost compares boxes reported by boxd with the DB.

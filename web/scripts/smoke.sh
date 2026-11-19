@@ -136,7 +136,7 @@ jx() {
     | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{let j;try{j=JSON.parse(s)}catch{console.log('NOJSON '+s.slice(0,80));return};try{console.log($e)}catch(x){console.log('ERR '+x.message)}})"
 }
 expect() { local name="$1" got="$2" want="$3"; if [[ "$got" == $want ]]; then ok "$name → $got"; else bad "$name → $got (muốn $want)"; fi; }
-expect "GET /providers/health" "$(jx GET providers/health - 'j.items.length+"|"+j.items.find(x=>x.provider.id==="contabo").stats.breaker.state+"|"+Object.keys(j.items.find(x=>x.provider.id==="hetzner").score.breakdown).length')" "17|open|6"
+expect "GET /providers/health" "$(jx GET providers/health - 'j.items.length+"|"+j.items.find(x=>x.provider.id==="contabo").stats.breaker.state+"|"+Object.keys(j.items.find(x=>x.provider.id==="hetzner").score.breakdown).length')" "18|open|6"
 expect "GET /providers/hetzner/health" "$(jx GET providers/hetzner/health - 'j.provider.id+"|"+(j.recent.length>0)+"|"+(j.stats.api_latency_p95_ms>=j.stats.api_latency_p50_ms)')" "hetzner|true|true"
 expect "POST validate (token sai)" "$(jx POST providers/digitalocean/validate '{"token":"sai"}' 'j.ok+"|"+j.error_class')" "false|auth"
 expect "POST validate (token đúng)" "$(jx POST providers/digitalocean/validate '{"token":"dop_v1_0123456789abcdef0123"}' 'j.ok+"|"+(j.regions.length>0)+"|"+(j.sizes.length>0)')" "true|true|true"
@@ -170,9 +170,12 @@ expect "POST /mesh/keys" "$(jx POST mesh/keys '{"box_id":"box_9a6d13","reusable"
 expect "error.next khi NOT_FOUND" "$(jx GET boxes/khong-co - 'j.error.code+"|"+(j.error.next.length>0)')" "NOT_FOUND|true"
 
 echo "== v1.4: Sandbox API providers (T2/T3), catalog theo tier, recommend sandbox, lint adapter YAML"
-expect "GET /sandbox/providers" "$(jx GET sandbox/providers - 'j.items.length+"|"+j.items.every(p=>p.initials&&p.docs&&p.capabilities&&p.pricing.source&&["live-verified","docs-verified","sdk-source"].includes(p.verification))+"|"+j.items.find(p=>p.id==="prized").verification+"|"+j.items.find(p=>p.id==="upstash-box").mode')" "11|true|live-verified|shim"
+expect "GET /sandbox/providers" "$(jx GET sandbox/providers - 'j.items.length+"|"+j.items.every(p=>p.initials&&p.docs&&p.capabilities&&p.pricing.source&&["live-verified","docs-verified","sdk-source"].includes(p.verification))+"|"+j.items.find(p=>p.id==="prized").verification+"|"+j.items.find(p=>p.id==="upstash-box").mode')" "12|true|live-verified|shim"
 expect "sandbox mode: E2B ép dial, T2 auto → dial" "$(jx GET sandbox/providers - 'j.items.find(p=>p.id==="e2b").mode+"|"+j.items.find(p=>p.id==="boat").mode+"|"+j.items.filter(p=>p.connected).length')" "dial|dial|4"
-expect "GET /providers có group sandbox" "$(jx GET providers - 'j.items.filter(p=>p.group==="sandbox").length+"|"+j.items.filter(p=>p.group==="vps").length+"|"+j.items.find(p=>p.id==="novita").verification')" "11|6|live-verified"
+expect "Render: chỉ dial-in, gói giá cố định, free \$0" "$(jx GET sandbox/providers - '(r=>r.mode+"|"+r.dial_only+"|"+r.from_usd_h+"|"+r.sizes.find(z=>z.sku==="1c-2g").price_hour+"|"+r.capabilities.pause)(j.items.find(p=>p.id==="render"))')" "dial|true|0|0.034247|false"
+expect "Render: prefs shim vẫn là dial" "$(jx PUT providers/render/prefs '{"sandbox_mode":"shim"}' 'j.sandbox_mode')|$(jx GET sandbox/providers - 'j.items.find(p=>p.id==="render").mode')" "shim|dial"
+jx PUT providers/render/prefs '{"sandbox_mode":"auto"}' 'j.sandbox_mode' >/dev/null
+expect "GET /providers có group sandbox" "$(jx GET providers - 'j.items.filter(p=>p.group==="sandbox").length+"|"+j.items.filter(p=>p.group==="vps").length+"|"+j.items.find(p=>p.id==="novita").verification')" "12|6|live-verified"
 expect "GET /catalog có tier T2/T3 theo giây" "$(jx GET catalog - 'j.items.some(i=>i.tier==="T2"&&i.group==="sandbox"&&i.min_billing_minutes===0)+"|"+j.items.some(i=>i.tier==="T3")+"|"+j.items.filter(i=>i.tier==="T1").every(i=>i.group==="vps")')" "true|true|true"
 expect "GET /catalog?tier=T3" "$(jx GET 'catalog?tier=T3' - 'j.items.length>0&&j.items.every(i=>i.tier==="T3")')" "true"
 expect "POST /recommend untrusted+fork → sandbox T2, loại theo capability" "$(jx POST recommend '{"requirements":{"untrusted":true,"fork":true,"lifetime":"ephemeral","cpu":2,"ram_mb":2048}}' 'j.options.some(o=>o.kind==="sandbox"&&o.tier&&o.fork&&o.strong_isolation)+"|"+j.rejected.some(r=>r.provider==="daytona"&&/kernel/i.test(r.reason))+"|"+j.rejected.some(r=>r.provider==="runloop"&&/fork/i.test(r.reason))')" "true|true|true"
@@ -191,7 +194,7 @@ expect "POST /sandbox/adapters/lint hợp lệ" "$(jx POST sandbox/adapters/lint
 expect "POST /sandbox/adapters/lint rỗng → 400" "$(jx POST sandbox/adapters/lint '{"yaml":""}' 'j.error.code')" "INVALID"
 
 echo "== v1.7: ports + Boxaz URL, access, URL token, wake_on_request, app supervisor + log SSE, capabilities"
-expect "GET /capabilities" "$(jx GET capabilities - 'j.items.length+"|"+j.items.every(c=>c.wake_via_gateway)+"|"+j.items.find(c=>c.provider==="e2b").wake_on_http_native+"|"+j.items.find(c=>c.provider==="prized").inbound_http')" "17|true|true|false"
+expect "GET /capabilities" "$(jx GET capabilities - 'j.items.length+"|"+j.items.every(c=>c.wake_via_gateway)+"|"+j.items.find(c=>c.provider==="e2b").wake_on_http_native+"|"+j.items.find(c=>c.provider==="prized").inbound_http')" "18|true|true|false"
 expect "GET /boxes/:id/ports (gateway_url + access)" "$(jx GET boxes/box_a9d054/ports - 'j.ports.length+"|"+j.ports[0].port+"|"+j.ports[0].gateway_url+"|"+j.ports[0].access')" "1|3000|https://kecon-story-gen.boxaz.dev/|public"
 expect "port token-only → kind gateway, không lộ URL provider" "$(jx GET boxes/box_5e2b70/ports - 'j.ports[0].kind+"|"+j.ports[0].public+"|"+(j.ports[0].url===j.ports[0].gateway_url)')" "gateway|false|true"
 expect "PUT ports/:port access=token" "$(jx PUT boxes/box_a9d054/ports/3000 '{"access":"token"}' 'j.access+"|"+j.kind')" "token|gateway"

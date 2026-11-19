@@ -166,9 +166,11 @@ def test_v14_sandbox_helpers(core):
     with Boxaz(akey, url) as bx:
         sp = bx.sandbox_providers()["items"]
         ids = {p["id"]: p for p in sp}
-        assert {"e2b", "novita", "daytona", "prized", "boxdsh", "runloop", "blaxel", "vercel", "boat", "agent37", "upstash-box"} <= set(ids)
+        assert {"e2b", "novita", "daytona", "prized", "boxdsh", "runloop", "blaxel", "vercel", "boat", "agent37", "upstash-box", "render"} <= set(ids)
         assert ids["prized"]["verification"] == "live-verified" and ids["upstash-box"]["tier"] == "T3" and ids["upstash-box"]["mode"] == "shim"
-        assert all(p["docs"] and p["initials"] and p["from_usd_h"] > 0 and "fork" in p["capabilities"] for p in sp)
+        assert all(p["docs"] and p["initials"] and (p["from_usd_h"] > 0 or p["id"] == "render") and "fork" in p["capabilities"] for p in sp)
+        # Render: dial-only (no exec API), free plan from $0/h
+        assert ids["render"]["dial_only"] and ids["render"]["mode"] == "dial" and ids["render"]["from_usd_h"] == 0
         # agents cannot lint adapters (admin scope)
         try:
             bx.lint_adapter("id: x")

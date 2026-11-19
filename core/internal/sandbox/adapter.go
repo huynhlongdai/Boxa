@@ -83,7 +83,7 @@ func StaticOffers(info Info, source string, now time.Time) []model.Offer {
 	var out []model.Offer
 	for _, r := range regions {
 		for _, z := range info.Sizes {
-			ph := info.Pricing.PerHour(z.CPU, z.RAMMB, z.DiskGB)
+			ph := info.SizePrice(z)
 			out = append(out, model.Offer{Provider: info.ID, SKU: z.SKU, Region: r.ID, CPU: z.CPU, RAMMB: z.RAMMB, DiskGB: z.DiskGB,
 				PriceHour: ph, PriceMonth: model.Round4(ph * 730), MinBillingMinutes: 0, Source: source, FetchedAt: now, Confidence: conf})
 		}
@@ -115,6 +115,12 @@ func (a *adapter) Create(ctx context.Context, token string, req provider.CreateR
 	if spec.Region == "global" {
 		spec.Region = ""
 	}
+	if info.DialOnly {
+		if req.Bootstrap == "" {
+			return provider.Handle{}, model.EH(model.ErrInvalid, "This provider has no exec API: boxes run only in dial mode (set BOXAZ_PUBLIC_URL).", "%s is dial-only and got no bootstrap", a.info.Name)
+		}
+		spec.Boot = req.Bootstrap
+	}
 	sb, err := a.d.Create(ctx, c, spec)
 	if err != nil {
 		return provider.Handle{}, wrapErr(a.info.Name, err)
@@ -125,12 +131,16 @@ func (a *adapter) Create(ctx context.Context, token string, req provider.CreateR
 		_ = a.d.Delete(dctx, c, sb.ID)
 	}
 	if sb.State != StateRunning {
-		if _, err := WaitRunning(ctx, a.d, c, sb.ID, a.WaitTimeout); err != nil {
+		wait := a.WaitTimeout
+		if info.DialOnly && wait == 3*time.Minute {
+			wait = 10 * time.Minute // image pull + deploy, not a microVM boot
+		}
+		if _, err := WaitRunning(ctx, a.d, c, sb.ID, wait); err != nil {
 			cleanup()
 			return provider.Handle{}, wrapErr(a.info.Name, err)
 		}
 	}
-	if req.Bootstrap != "" {
+	if req.Bootstrap != "" && !info.DialOnly {
 		res, err := a.d.Exec(ctx, c, sb.ID, ExecRequest{Command: req.Bootstrap, TimeoutS: 180})
 		if err == nil && res.ExitCode != 0 {
 			err = model.EH(model.ErrProviderFailed, "The sandbox could not download or start boxd; check BOXAZ_PUBLIC_URL / BOXAZ_BOXD_URL are reachable from the internet.", "%s bootstrap exit %d: %s", a.info.Name, res.ExitCode, trim(res.Stderr+res.Stdout, 300))
@@ -252,7 +262,7 @@ func orStr(s, d string) string {
 
 // Drivers returns every built-in sandbox driver (native + YAML).
 func Drivers(httpc *http.Client) []Driver {
-	ds := []Driver{NewE2B(httpc, ""), NewNovita(httpc, ""), NewDaytona(httpc, ""), NewPrized(httpc, ""), NewBoxdSh(httpc, "")}
+	ds := []Driver{NewE2B(httpc, ""), NewNovita(httpc, ""), NewDaytona(httpc, ""), NewPrized(httpc, ""), NewBoxdSh(httpc, ""), NewRender(httpc, "")}
 	ys, _ := BuiltinYAML(httpc)
 	for _, y := range ys {
 		ds = append(ds, y.Wrap())
@@ -281,4 +291,4 @@ func DefaultRegistry(httpc *http.Client) *provider.Registry {
 
 // DefaultChain is the sandbox part of the fallback chain (after the T1
 // chain): cheapest documented per-second compute first.
-var DefaultChain = []string{"e2b", "daytona", "novita", "prized", "boxdsh", "runloop", "blaxel", "boat", "agent37", "vercel", "upstash-box"}
+var DefaultChain = []string{"e2b", "daytona", "novita", "prized", "boxdsh", "runloop", "blaxel", "boat", "agent37", "vercel", "upstash-box", "render"}

@@ -25,6 +25,12 @@ class H(BaseHTTPRequestHandler):
 
     def route(self, method):
         log.write(f"{method} {self.path}\n")
+        # Render-shaped workspace lookup (GET /owners) so e2e.sh can connect
+        # the native render adapter (validate) through base_url
+        if method == "GET" and self.path.startswith("/owners"):
+            if self.headers.get("Authorization") != "Bearer rnd_e2e_key":
+                return self.reply(401, {"message": "unauthorized"})
+            return self.reply(200, [{"owner": {"id": "tea-e2e", "name": "e2e", "email": "e2e@example.test", "type": "team"}, "cursor": "c"}])
         if self.headers.get("Authorization") != "Bearer " + TOKEN:
             return self.reply(401, {"error": "bad key"})
         n = int(self.headers.get("Content-Length") or 0)

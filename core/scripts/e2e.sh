@@ -228,8 +228,16 @@ api PUT /warm-pool -d '{"enabled":false,"pools":[]}' >/dev/null
 echo "== v1.4 sandbox API providers (T2/T3) / YAML adapters / recommend"
 SP=$(api GET /sandbox/providers)
 echo "    sandbox providers: $(echo "$SP" | jq -c '[.items[]|"\(.id):\(.tier)/\(.mode)/\(.verification)"]')"
-echo "$SP" | jq -e '[.items[].id]|contains(["e2b","novita","daytona","prized","boxdsh","runloop","blaxel","vercel","boat","agent37","upstash-box","fakesbx"])' >/dev/null && pass "GET /sandbox/providers: 11 built-in adapters + custom YAML from BOXAZ_SANDBOX_ADAPTERS_DIR" || fail sbxlist
-echo "$SP" | jq -e '(.items[]|select(.id=="prized")|.verification=="live-verified") and (.items[]|select(.id=="upstash-box")|.tier=="T3" and .mode=="shim") and all(.items[]; .docs!="" and .initials!="" and .from_usd_h>0 and (.capabilities|has("boot_ms") and has("fork") and has("max_lifetime_s")))' >/dev/null && pass "adapter metadata: verification level, docs, initials, capabilities, per-second price" || fail sbxmeta
+echo "$SP" | jq -e '[.items[].id]|contains(["e2b","novita","daytona","prized","boxdsh","runloop","blaxel","vercel","boat","agent37","upstash-box","render","fakesbx"])' >/dev/null && pass "GET /sandbox/providers: 12 built-in adapters + custom YAML from BOXAZ_SANDBOX_ADAPTERS_DIR" || fail sbxlist
+echo "$SP" | jq -e '(.items[]|select(.id=="prized")|.verification=="live-verified") and (.items[]|select(.id=="upstash-box")|.tier=="T3" and .mode=="shim") and all(.items[]; .docs!="" and .initials!="" and (.from_usd_h>0 or .id=="render") and (.capabilities|has("boot_ms") and has("fork") and has("max_lifetime_s")))' >/dev/null && pass "adapter metadata: verification level, docs, initials, capabilities, per-second price" || fail sbxmeta
+# Render: dial-only (no exec API) web service running boxd; without BOXAZ_PUBLIC_URL it is blocked
+echo "$SP" | jq -e '.items[]|select(.id=="render")|.tier=="T2" and .mode=="dial" and .dial_only and (.blocked|test("BOXAZ_PUBLIC_URL")) and .from_usd_h==0 and (.capabilities.pause|not) and .capabilities.ports and ([.sizes[]|select(.sku=="0.5c-512mb")|.price_hour][0]==0.009589)' >/dev/null && pass "render: T2 dial-only, blocked without BOXAZ_PUBLIC_URL, flat plan prices (free \$0, 0.5c-512mb \$7/mo = \$0.009589/h)" || fail render
+RCT=$(api GET "/catalog?provider=render")
+echo "$RCT" | jq -e '(.items|length)>=40 and any(.items[]; .sku=="1c-2g" and .price_month>24.9 and .price_month<25.1) and all(.items[]; .tier=="T2" and .group=="sandbox")' >/dev/null && pass "render catalog: 9 plans × 5 regions (1c-2g = \$25/mo)" || fail rendercat
+RTOK() { jq -nc --arg k "$1" --arg u "http://127.0.0.1:$FSB_PORT" '{token: ({token: $k, base_url: $u}|tojson)}'; }
+[ "$(api PUT /providers/render/token -d "$(RTOK wrong)" | jq -r .error.code)" = UNAUTHORIZED ] && pass "render key validated with GET /owners (wrong key refused)" || fail renderbad
+api PUT /providers/render/token -d "$(RTOK rnd_e2e_key)" | jq -e '.connected and .group=="sandbox" and .adapter=="native"' >/dev/null && pass "render connected (native adapter, workspace lookup)" || fail rendertok
+api PUT /providers/render/token -d '{"token":""}' >/dev/null
 api GET /providers | jq -e '([.items[]|select(.group=="sandbox")]|length)>=12 and (.items[]|select(.id=="runloop")|.adapter=="yaml") and (.items[]|select(.id=="hetzner")|.group=="vps")' >/dev/null && pass "GET /providers groups vps / sandbox (native | yaml adapters)" || fail sbxgroups
 CT=$(api GET "/catalog?provider=e2b")
 echo "$CT" | jq -e '(.items|length)>0 and all(.items[]; .tier=="T2" and .group=="sandbox" and .min_billing_minutes==0)' >/dev/null && pass "catalog: E2B sizes as T2 per-second offers before connecting" || fail sbxcatalog

@@ -1016,7 +1016,8 @@ export interface SandboxPricing {
   confidence: string;
   note?: string;
 }
-export interface SandboxSize { sku: string; cpu: number; ram_mb: number; disk_gb: number }
+/** fixed_price: gói giá cố định (Render) — price_hour USD/giờ, tính theo giây; không dùng đơn giá CPU/GB. */
+export interface SandboxSize { sku: string; cpu: number; ram_mb: number; disk_gb: number; fixed_price?: boolean; price_hour?: number; note?: string }
 export interface SandboxCredField { name: string; label: string; secret: boolean; optional: boolean; default?: string; hint?: string }
 export interface SandboxInfo {
   id: string;
@@ -1040,6 +1041,10 @@ export interface SandboxInfo {
   env_vars: string[];
   notes: string[];
   from_usd_h: number;
+  /** Không có API exec (Render): luôn T2 dial-in, boxd là lệnh khởi động của service, core cần BOXAZ_PUBLIC_URL. */
+  dial_only?: boolean;
+  /** Provider có thể khởi động lại instance với filesystem mới; boxd vào lại bằng token của host. */
+  ephemeral_restart?: boolean;
 }
 /** GET /v1/sandbox/providers */
 export interface SandboxProvider extends SandboxInfo {

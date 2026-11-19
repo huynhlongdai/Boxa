@@ -1476,7 +1476,8 @@
       "auto": "自動",
       "dial": "ダイヤルイン (T2)",
       "shim": "Shim (T3)",
-      "noDial": "このプロバイダーはバックグラウンド処理を保持できないため shim (T3) のみ。"
+      "noDial": "このプロバイダーはバックグラウンド処理を保持できないため shim (T3) のみ。",
+      "dialOnly": "このプロバイダーには exec API がないため常に dial-in（T2）で動きます。shim（T3）は使えません。"
     },
     "modeHelp": {
       "auto": "バックグラウンド処理が保持でき BOXAZ_PUBLIC_URL があれば T2、なければ T3",
@@ -1540,7 +1541,10 @@
       "sizes": "サイズ",
       "regions": "リージョン",
       "creds": "認証情報"
-    }
+    },
+    "dialOnly": "dial-in のみ",
+    "dialOnlyHelp": "exec API がありません。各 box は boxd を動かすサービスで、boxd が core に接続します。インターネットから到達できる BOXAZ_PUBLIC_URL が必要です。",
+    "freePlan": "free プラン（$0）"
   },
   "ports": {
     "lifecycle": "起動とライフサイクル",

@@ -61,6 +61,10 @@ type Spec struct {
 	// (E2B network.allowPublicTraffic=false). Only drivers implementing
 	// TrafficGuard honour it.
 	PrivateTraffic bool `json:"private_traffic,omitempty"`
+	// Boot is the foreground start command of a dial-only provider (Info.DialOnly):
+	// the provider has no exec API, so the boxd bootstrap runs as the
+	// service's own start command instead of an exec after create.
+	Boot string `json:"-"`
 }
 
 // Sandbox is a created sandbox as seen by the provider.
@@ -129,6 +133,20 @@ type Size struct {
 	CPU    float64 `json:"cpu" yaml:"cpu"`
 	RAMMB  int     `json:"ram_mb" yaml:"ram_mb"`
 	DiskGB int     `json:"disk_gb" yaml:"disk_gb"`
+	// FixedPrice: the provider sells this shape at a flat rate (PriceHour, USD,
+	// prorated per second) instead of per vCPU / GiB rates (Render plans).
+	FixedPrice bool    `json:"fixed_price,omitempty" yaml:"fixed_price"`
+	PriceHour  float64 `json:"price_hour,omitempty" yaml:"price_hour"`
+	Note       string  `json:"note,omitempty" yaml:"note"`
+}
+
+// SizePrice is the hourly price of a running size: its flat rate when the
+// provider sells fixed plans, else the per-second rates.
+func (i Info) SizePrice(z Size) float64 {
+	if z.FixedPrice {
+		return model.Round6(z.PriceHour)
+	}
+	return i.Pricing.PerHour(z.CPU, z.RAMMB, z.DiskGB)
 }
 
 // Region is a provider region.
@@ -169,6 +187,16 @@ type Info struct {
 	Credentials     []CredField  `json:"credentials"`
 	EnvVars         []string     `json:"env_vars"` // env var(s) read at startup (joined like Credentials)
 	Notes           []string     `json:"notes,omitempty"`
+	// DialOnly: the provider has no exec/file API (it runs a long-lived
+	// service from an image), so the box is always T2 dial-in: the boxd
+	// bootstrap is the service's start command (Spec.Boot) and core needs
+	// an internet-reachable BOXAZ_PUBLIC_URL. Never a T3 shim.
+	DialOnly bool `json:"dial_only,omitempty"`
+	// EphemeralRestart: the provider may restart the instance with a fresh
+	// filesystem (idle spin-down, platform restarts). The host's one-time
+	// bootstrap token stays valid for that host so boxd can rejoin; boxes
+	// whose files were lost are failed by the reconnect reconcile.
+	EphemeralRestart bool `json:"ephemeral_restart,omitempty"`
 }
 
 // Driver is the T2/T3 driver interface. Optional verbs are separate interfaces.
@@ -439,6 +467,9 @@ type BootstrapParams struct {
 	Provider       string
 	Region         string
 	WorkDir        string // writable dir (default $HOME)
+	// Foreground: exec boxd in the foreground (the script is a service's
+	// start command and must not exit) instead of detaching it.
+	Foreground bool
 }
 
 // shq single-quotes s for sh.
@@ -458,6 +489,11 @@ func BootstrapScript(p BootstrapParams) string {
 	b.WriteString("U=" + shq(p.BoxdURL) + "-linux-$A; ")
 	b.WriteString(`if command -v curl >/dev/null 2>&1; then curl -fsSL "$U" -o "$D/boxd"; else wget -qO "$D/boxd" "$U"; fi; chmod +x "$D/boxd"; `)
 	b.WriteString("cd \"$D\"; ")
+	if p.Foreground {
+		b.WriteString("export BOXD_TOKEN=" + shq(p.BootstrapToken) + " BOXD_DRIVER=sandbox BOXD_PROVIDER=" + shq(p.Provider) + " BOXD_REGION=" + shq(p.Region) + ` BOXD_STATE_DIR="$D/state" BOXD_ROOT="$D/root"; `)
+		b.WriteString(`exec "$D/boxd" --dial ` + shq(p.CoreURL))
+		return b.String()
+	}
 	b.WriteString("BOXD_TOKEN=" + shq(p.BootstrapToken) + " BOXD_DRIVER=sandbox BOXD_PROVIDER=" + shq(p.Provider) + " BOXD_REGION=" + shq(p.Region) + ` BOXD_STATE_DIR="$D/state" BOXD_ROOT="$D/root" `)
 	b.WriteString(`nohup setsid "$D/boxd" --dial ` + shq(p.CoreURL) + ` >"$D/boxd.log" 2>&1 </dev/null & `)
 	b.WriteString("echo boxd-started")

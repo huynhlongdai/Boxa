@@ -148,7 +148,11 @@
   "Ask the owner for a new link.": "所有者に新しいリンクを依頼してください。",
   "Use a ttl_s between 60 and 43200 (12 h).": "ttl_s は 60〜43200 (12 時間) にしてください。",
   "Paste one line of ~/.ssh/id_ed25519.pub (or id_rsa.pub / ecdsa).": "~/.ssh/id_ed25519.pub (または id_rsa.pub / ecdsa) の 1 行を貼り付けてください。",
-  "Pass the plain public key, not a certificate.": "証明書ではなく通常の公開鍵を渡してください。"
+  "Pass the plain public key, not a certificate.": "証明書ではなく通常の公開鍵を渡してください。",
+  "The Render API key sees no workspace; create the key in the workspace that should run boxes.": "この Render API キーからはワークスペースが見えません。box を動かすワークスペースでキーを作成してください。",
+  "Use a workspace ID from Render → Workspace settings that this API key can access.": "Render → Workspace settings にある、この API キーでアクセスできるワークスペース ID を使ってください。",
+  "This provider has no exec API: boxes run only in dial mode (set BOXAZ_PUBLIC_URL).": "このプロバイダーには exec API がありません。box は dial モードでのみ動きます（BOXAZ_PUBLIC_URL を設定してください）。",
+  "Add a payment method to the Render workspace (paid instance types need one) or use the free plan.": "Render ワークスペースに支払い方法を追加するか（有料インスタンスでは必須）、free プランを使ってください。"
  },
  "msg": {
   "%s bootstrap exit %d: %s": "%s のブートストラップが終了コード %d で失敗: %s",
@@ -360,7 +364,13 @@
   "box is required": "box は必須です",
   "unknown share link": "不明な共有リンクです",
   "cannot hijack": "接続を引き継げません",
-  "origin %s may not open the desktop socket": "オリジン %s はデスクトップのソケットを開けません"
+  "origin %s may not open the desktop socket": "オリジン %s はデスクトップのソケットを開けません",
+  "render: GET /owners returned no workspace": "render: GET /owners がワークスペースを返しませんでした",
+  "render has no exec API (service %s)": "render には exec API がありません（サービス %s）",
+  "render: create needs the boxd start command": "render: 作成には boxd の起動コマンドが必要です",
+  "%s is dial-only and got no bootstrap": "%s は dial 専用ですがブートストラップがありません",
+  "render: workspace %s is not visible to this key": "render: このキーからワークスペース %s は見えません",
+  "render: payment information required (402): %s": "render: 支払い情報が必要です（402）: %s"
  },
  "text": {
   "agentsmd.budget_box": "このボックスに $%.2f",

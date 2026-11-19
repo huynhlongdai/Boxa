@@ -95,10 +95,15 @@ export interface SandboxInfo {
   id: string; name: string; tier: "T2" | "T3"; adapter: "native" | "yaml"; verification: "live-verified" | "docs-verified" | "sdk-source" | string;
   verified_note?: string; docs: string; website: string; initials: string; color: string; capabilities: SandboxCapabilities;
   pricing: { cpu_second: number; gb_second: number; disk_gb_second: number; flat_second: number; source: string; confidence: "docs" | "estimated" | string; note?: string };
-  sizes: { sku: string; cpu: number; ram_mb: number; disk_gb: number }[]; regions: { id: string; name: string }[];
+  /** fixed_price sizes (Render plans) cost price_hour USD/h flat, prorated per second, instead of the per-second rates. */
+  sizes: { sku: string; cpu: number; ram_mb: number; disk_gb: number; fixed_price?: boolean; price_hour?: number; note?: string }[]; regions: { id: string; name: string }[];
   templates: string[]; default_template: string; workdir: string;
   credentials: { name: string; label: string; secret: boolean; optional: boolean; default?: string; hint?: string }[];
   env_vars: string[]; notes?: string[] | null;
+  /** No exec API (Render): always T2 dial-in; boxd is the service's start command and core needs BOXAZ_PUBLIC_URL. */
+  dial_only?: boolean;
+  /** The provider may restart the instance with a fresh filesystem; boxd rejoins with the host's token. */
+  ephemeral_restart?: boolean;
 }
 export interface SandboxProvider extends SandboxInfo {
   /** dial = T2 (boxd dials in from the sandbox), shim = T3 (exec-only shim at the gateway). */

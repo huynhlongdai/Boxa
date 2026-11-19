@@ -45,6 +45,7 @@ const KNOWN: Record<string, Omit<CapabilityRow, "provider" | "group" | "wake_via
   e2b: { memory_pause: true, wake_on_http_native: true, fork: true, inbound_http: true, max_runtime: 86400, private_preview: true, note: "autoResume on the preview host (set at create); runtime cap 24 h Pro / 1 h Hobby, reset by a resume" },
   novita: { memory_pause: true, wake_on_http_native: true, fork: false, inbound_http: true, max_runtime: 14400, private_preview: true, note: "E2B-compatible autoResume; clone = snapshot → new sandbox" },
   prized: { memory_pause: true, wake_on_http_native: false, fork: true, inbound_http: false, max_runtime: 604800, private_preview: false, note: "no inbound HTTP: the gateway reaches the app through the in-box ingress agent (or a tunnel)" },
+  render: { memory_pause: false, wake_on_http_native: false, fork: false, inbound_http: true, max_runtime: 0, private_preview: false, note: "web service running boxd (dial-in only): onrender.com serves one in-box port; sleep stops the box's processes, the service keeps running; free plan spins down after 15 min without inbound traffic and loses local files" },
 };
 
 export function capabilities(s: MockState): CapabilityRow[] {

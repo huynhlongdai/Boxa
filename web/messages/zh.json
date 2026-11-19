@@ -1476,7 +1476,8 @@
       "auto": "自动",
       "dial": "回连 (T2)",
       "shim": "Shim (T3)",
-      "noDial": "该服务商无法保留后台进程，只能以 shim (T3) 运行。"
+      "noDial": "该服务商无法保留后台进程，只能以 shim (T3) 运行。",
+      "dialOnly": "该提供商没有 exec API，因此始终以 dial-in（T2）运行；无法使用 shim（T3）。"
     },
     "modeHelp": {
       "auto": "沙箱可保留后台进程且设置了 BOXAZ_PUBLIC_URL 时用 T2，否则 T3",
@@ -1540,7 +1541,10 @@
       "sizes": "规格",
       "regions": "区域",
       "creds": "凭据"
-    }
+    },
+    "dialOnly": "仅 dial-in",
+    "dialOnlyHelp": "没有 exec API：每个 box 是一个运行 boxd 的服务，boxd 主动连回 core。需要可从互联网访问的 BOXAZ_PUBLIC_URL。",
+    "freePlan": "免费套餐（$0）"
   },
   "ports": {
     "lifecycle": "唤醒与生命周期",

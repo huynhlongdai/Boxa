@@ -459,6 +459,210 @@ export const SANDBOX_INFO: SandboxInfo[] = [
   "from_usd_h": 0.1089
  },
  {
+  "id": "render",
+  "name": "Render",
+  "tier": "T2",
+  "adapter": "native",
+  "verification": "docs-verified",
+  "verified_note": "Routes and fields from the official OpenAPI spec (api-docs.render.com, render-public-api-1.json, 2026-11-19): GET /owners, POST/GET/DELETE /services, GET /services/{id}/deploys, POST /services/{id}/suspend|resume. Tested against a mock server only; no live run yet (no API key).",
+  "docs": "https://api-docs.render.com/reference/create-service",
+  "website": "https://render.com",
+  "initials": "RD",
+  "color": "#4351e8",
+  "capabilities": {
+   "background": true,
+   "pause": false,
+   "snapshot": false,
+   "fork": false,
+   "ports": true,
+   "pty": false,
+   "files": false,
+   "gpu": false,
+   "boot_ms": 90000,
+   "max_lifetime_s": 0,
+   "max_cpu": 8,
+   "max_ram_mb": 32768,
+   "isolation": "container"
+  },
+  "pricing": {
+   "cpu_second": 0,
+   "gb_second": 0,
+   "disk_gb_second": 0,
+   "flat_second": 0,
+   "source": "https://render.com/pricing",
+   "confidence": "docs",
+   "note": "flat monthly price per instance type, prorated by the second; free = 750 instance hours per workspace per month"
+  },
+  "sizes": [
+   {
+    "sku": "free",
+    "cpu": 0.1,
+    "ram_mb": 512,
+    "disk_gb": 20,
+    "fixed_price": true,
+    "note": "free: spins down after 15 min without inbound traffic (files lost), ~1 min cold start, 750 h/month per workspace"
+   },
+   {
+    "sku": "0.5c-512mb",
+    "cpu": 0.5,
+    "ram_mb": 512,
+    "disk_gb": 20,
+    "fixed_price": true,
+    "price_hour": 0.009589,
+    "note": "starter"
+   },
+   {
+    "sku": "1c-2g",
+    "cpu": 1,
+    "ram_mb": 2048,
+    "disk_gb": 20,
+    "fixed_price": true,
+    "price_hour": 0.034247,
+    "note": "standard"
+   },
+   {
+    "sku": "2c-4g",
+    "cpu": 2,
+    "ram_mb": 4096,
+    "disk_gb": 20,
+    "fixed_price": true,
+    "price_hour": 0.116438,
+    "note": "pro"
+   },
+   {
+    "sku": "2c-8g",
+    "cpu": 2,
+    "ram_mb": 8192,
+    "disk_gb": 20,
+    "fixed_price": true,
+    "price_hour": 0.184932
+   },
+   {
+    "sku": "4c-8g",
+    "cpu": 4,
+    "ram_mb": 8192,
+    "disk_gb": 20,
+    "fixed_price": true,
+    "price_hour": 0.239726,
+    "note": "pro_plus"
+   },
+   {
+    "sku": "4c-16g",
+    "cpu": 4,
+    "ram_mb": 16384,
+    "disk_gb": 20,
+    "fixed_price": true,
+    "price_hour": 0.308219,
+    "note": "pro_max"
+   },
+   {
+    "sku": "8c-16g",
+    "cpu": 8,
+    "ram_mb": 16384,
+    "disk_gb": 20,
+    "fixed_price": true,
+    "price_hour": 0.410959
+   },
+   {
+    "sku": "8c-32g",
+    "cpu": 8,
+    "ram_mb": 32768,
+    "disk_gb": 20,
+    "fixed_price": true,
+    "price_hour": 0.616438,
+    "note": "pro_ultra"
+   }
+  ],
+  "regions": [
+   {
+    "id": "oregon",
+    "name": "Oregon (US West)"
+   },
+   {
+    "id": "ohio",
+    "name": "Ohio (US East)"
+   },
+   {
+    "id": "virginia",
+    "name": "Virginia (US East)"
+   },
+   {
+    "id": "frankfurt",
+    "name": "Frankfurt (EU)"
+   },
+   {
+    "id": "singapore",
+    "name": "Singapore (Asia)"
+   }
+  ],
+  "templates": [
+   "docker.io/library/buildpack-deps:bookworm-scm"
+  ],
+  "default_template": "docker.io/library/buildpack-deps:bookworm-scm",
+  "workdir": "/srv/w",
+  "credentials": [
+   {
+    "name": "token",
+    "label": "API key",
+    "secret": true,
+    "optional": false,
+    "hint": "rnd_…"
+   },
+   {
+    "name": "owner_id",
+    "label": "Workspace ID (optional: first workspace of the key)",
+    "secret": false,
+    "optional": true,
+    "hint": "tea-… / usr-…"
+   },
+   {
+    "name": "image",
+    "label": "Agent image (optional)",
+    "secret": false,
+    "optional": true,
+    "hint": "docker.io/library/buildpack-deps:bookworm-scm"
+   },
+   {
+    "name": "disk_gb",
+    "label": "Persistent disk GB (optional, paid plans only)",
+    "secret": false,
+    "optional": true,
+    "hint": "0"
+   },
+   {
+    "name": "preview_port",
+    "label": "In-box port served at onrender.com (optional, 0 = none)",
+    "secret": false,
+    "optional": true,
+    "hint": "8000"
+   },
+   {
+    "name": "keep_awake",
+    "label": "Keep free services awake while the box exists (optional, 1 or 0)",
+    "secret": false,
+    "optional": true,
+    "hint": "1"
+   }
+  ],
+  "env_vars": [
+   "RENDER_API_KEY",
+   "RENDER_OWNER_ID",
+   "RENDER_AGENT_IMAGE",
+   "RENDER_DISK_GB"
+  ],
+  "notes": [
+   "No exec API: each box is a Render web service running boxd, which dials out to core (needs BOXAZ_PUBLIC_URL reachable from the internet).",
+   "Public preview: https://<service>.onrender.com serves in-box port 8000 (credential field preview_port); other ports go through the Boxaz gateway.",
+   "Free plan: 0.1 CPU / 512 MB, spins down after 15 min without inbound traffic (boxd pings its own URL to stay up while the box exists), ~1 min cold start, local files lost on spin-down or restart.",
+   "Paid instance types need a payment method on the Render workspace (API answers 402). A persistent disk (disk_gb, $0.25/GB-month) keeps the box's files across restarts.",
+   "The ephemeral disk size is not documented by Render; the catalog assumes 20 GB (estimate).",
+   "Sleep keeps the service running (boxd stops the box's processes); delete removes the service. No provider snapshot or fork; Boxaz snapshots are boxd tarballs."
+  ],
+  "dial_only": true,
+  "ephemeral_restart": true,
+  "from_usd_h": 0
+ },
+ {
   "id": "runloop",
   "name": "Runloop",
   "tier": "T2",

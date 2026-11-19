@@ -1476,7 +1476,8 @@
       "auto": "Auto",
       "dial": "Dial-in (T2)",
       "shim": "Shim (T3)",
-      "noDial": "This provider cannot keep a background process, so it runs as a shim (T3) only."
+      "noDial": "This provider cannot keep a background process, so it runs as a shim (T3) only.",
+      "dialOnly": "This provider has no exec API, so it always runs dial-in (T2); shim (T3) is not possible."
     },
     "modeHelp": {
       "auto": "T2 when the sandbox keeps background processes and BOXAZ_PUBLIC_URL is set, else T3",
@@ -1540,7 +1541,10 @@
       "sizes": "Sizes",
       "regions": "Regions",
       "creds": "Credentials"
-    }
+    },
+    "dialOnly": "Dial-in only",
+    "dialOnlyHelp": "No exec API: each box is a service running boxd, which dials out to core. Needs BOXAZ_PUBLIC_URL reachable from the internet.",
+    "freePlan": "Free plan ($0)"
   },
   "ports": {
     "lifecycle": "Wake & lifecycle",

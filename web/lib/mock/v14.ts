@@ -1,7 +1,7 @@
 // MOCK MODE v1.4: provider Sandbox API (T2 dial-in / T3 shim). Bám theo boxaz/core/internal/manager/sandbox14.go,
 // selector/score.go (loại theo capability) và api/v14.go (lint adapter YAML).
 import { parse as parseYaml } from "yaml";
-import type { AdapterLintResult, CatalogItem, Offer, Provider, ProviderPrefs, RecommendOption, Rejection, Requirements, SandboxInfo, SandboxProvider } from "../types";
+import type { AdapterLintResult, CatalogItem, Offer, Provider, ProviderPrefs, RecommendOption, Rejection, Requirements, SandboxInfo, SandboxProvider, SandboxSize } from "../types";
 import type { Locale } from "@/i18n/config";
 import { mt } from "./i18n";
 import { ago, iso, r4, MIN, type MockState } from "./seed";
@@ -18,8 +18,14 @@ export function perHour(info: Pick<SandboxInfo, "pricing">, cpu: number, ramMb: 
   return r4((p.cpu_second * cpu + p.gb_second * (ramMb / 1024) + p.disk_gb_second * diskGb + p.flat_second) * 3600);
 }
 
+/** Giá/giờ của một size: giá cố định của gói (Render) hoặc đơn giá theo giây (giống sandbox.Info.SizePrice). */
+export function sizePrice(info: Pick<SandboxInfo, "pricing">, z: SandboxSize): number {
+  return z.fixed_price ? r4(z.price_hour ?? 0) : perHour(info, z.cpu, z.ram_mb, z.disk_gb);
+}
+
 /** Chế độ hiệu lực: dial (T2, boxd dial-in) | shim (T3). Mock coi như BOXAZ_PUBLIC_URL đã đặt. */
 export function sandboxMode(info: SandboxInfo, prefs?: Partial<ProviderPrefs>): "dial" | "shim" {
+  if (info.dial_only) return "dial"; // không có API exec: không thể chạy shim T3
   const m = (prefs?.sandbox_mode ?? "auto").toLowerCase();
   if (m === "dial" || m === "shim") return m;
   return info.tier === "T2" && info.capabilities.background ? "dial" : "shim";
@@ -56,7 +62,7 @@ export function sandboxCatalog(s: MockState, prefsOf: PrefsOf, healthOf: HealthO
     const connected = !!s.providers.find((x) => x.id === info.id)?.connected;
     const pp = prefsOf(info.id);
     for (const z of info.sizes) for (const r of info.regions) {
-      const ph = perHour(info, z.cpu, z.ram_mb, z.disk_gb);
+      const ph = sizePrice(info, z);
       const blocked = pp && !pp.enabled ? mt(L, "j_disabled", { provider: info.id }) : pp?.max_hourly_usd && ph > pp.max_hourly_usd ? mt(L, "j_cap", { provider: info.id, price: ph, max: pp.max_hourly_usd }) : undefined;
       items.push({
         provider: info.id, sku: z.sku, region: r.id, arch: "amd64", cpu: z.cpu, ram_mb: z.ram_mb, disk_gb: z.disk_gb, price_hour: ph, price_month: r4(ph * 730), min_billing_minutes: 0,
@@ -77,7 +83,7 @@ export function sandboxOptions(s: MockState, L: Locale, req: Requirements, hours
     const c = info.capabilities;
     const pp = prefsOf(info.id);
     const connected = !!s.providers.find((x) => x.id === info.id)?.connected;
-    const z = [...info.sizes].sort((a, b) => perHour(info, a.cpu, a.ram_mb, a.disk_gb) - perHour(info, b.cpu, b.ram_mb, b.disk_gb)).find((x) => x.cpu >= cpu && x.ram_mb >= ram) ?? info.sizes[info.sizes.length - 1];
+    const z = [...info.sizes].sort((a, b) => sizePrice(info, a) - sizePrice(info, b)).find((x) => x.cpu >= cpu && x.ram_mb >= ram) ?? info.sizes[info.sizes.length - 1];
     const region = info.regions[0]?.id ?? "global";
     const r = { kind: "sandbox", provider: info.id, region, sku: z.sku };
     const strong = ["microvm", "vm", "gvisor"].includes(c.isolation);
@@ -90,7 +96,7 @@ export function sandboxOptions(s: MockState, L: Locale, req: Requirements, hours
       : req.untrusted && !strong ? mt(L, "j_sbx_shared")
       : req.isolation === "vm" ? mt(L, "j_isolation", { iso: "vm" })
       : req.isolation === "container" ? mt(L, "j_isolation", { iso: "container" })
-      : req.lifetime === "persistent" && !c.pause ? mt(L, "j_sbx_pause")
+      : req.lifetime === "persistent" && !c.pause && !(info.dial_only && !c.max_lifetime_s) ? mt(L, "j_sbx_pause")
       : maxH > 0 && (req.duration_hours ?? 0) > maxH ? mt(L, "j_sbx_life", { max: Math.round(maxH * 10) / 10, need: req.duration_hours ?? 0 })
       : req.public_url && !c.ports ? mt(L, "j_sbx_ports")
       : req.fork && !c.fork ? mt(L, "j_fork")
@@ -105,9 +111,9 @@ export function sandboxOptions(s: MockState, L: Locale, req: Requirements, hours
     if (info.pricing.confidence !== "docs") reasons.push(mt(L, "r_sbx_est"));
     opts.push({
       kind: "sandbox", provider: info.id, region, sku: z.sku, arch: "amd64", isolation: "sandbox", cpu: z.cpu, ram_mb: z.ram_mb, disk_gb: z.disk_gb,
-      cost_per_hour: perHour(info, z.cpu, z.ram_mb, z.disk_gb), expected_total_usd: 0, eta_seconds: eta, reliability: connected ? 0.97 : 0.9, health: healthOf(info.id),
+      cost_per_hour: sizePrice(info, z), expected_total_usd: 0, eta_seconds: eta, reliability: connected ? 0.97 : 0.9, health: healthOf(info.id),
       headroom: 1, latency_ms: 180, min_billing_h: 0, requires_approval: !connected, price_stale: false, reasons,
-      tier, fork: c.fork, pause: c.pause, ports: c.ports, gpu: c.gpu, max_lifetime_h: maxH || undefined, boot_ms: c.boot_ms, verification: info.verification, strong_isolation: strong,
+      tier, fork: c.fork, pause: c.pause || (!!info.dial_only && !c.max_lifetime_s), ports: c.ports, gpu: c.gpu, max_lifetime_h: maxH || undefined, boot_ms: c.boot_ms, verification: info.verification, strong_isolation: strong,
     });
   }
   return { opts, rej };
@@ -125,7 +131,7 @@ export function sandboxValidate(info: SandboxInfo, token: string, L: Locale) {
   if (key.length < 12 || /sai|invalid|wrong/i.test(key)) return { provider: info.id, ok: false, error: mt(L, "bad_token"), error_class: "auth", latency_ms: latency, regions: [], sizes: [], size_count: 0, hint: mt(L, "bad_token_hint") };
   const now = iso(Date.now());
   const sizes: Offer[] = info.sizes.flatMap((z) => info.regions.slice(0, 1).map((r) => {
-    const ph = perHour(info, z.cpu, z.ram_mb, z.disk_gb);
+    const ph = sizePrice(info, z);
     return { provider: info.id, sku: z.sku, region: r.id, cpu: z.cpu, ram_mb: z.ram_mb, disk_gb: z.disk_gb, price_hour: ph, price_month: r4(ph * 730), min_billing_minutes: 0, source: "sandbox-pricing", fetched_at: now, confidence: info.pricing.confidence === "docs" ? "verified" : "estimated" } as Offer;
   }));
   return { provider: info.id, ok: true, latency_ms: latency, regions: info.regions.map((r) => ({ id: r.id, name: r.name, available: true })), sizes, size_count: info.sizes.length * info.regions.length };
@@ -164,6 +170,6 @@ export function lintAdapter(src: string): AdapterLintResult {
     credentials: ((Array.isArray(d.credentials) ? d.credentials : [{ name: "token", label: "API key", secret: true }]) as SandboxInfo["credentials"]).map((c) => ({ ...c, optional: !!c.optional })),
     env_vars: (Array.isArray(d.env_vars) ? d.env_vars : []) as string[], notes: [], from_usd_h: 0,
   };
-  info.from_usd_h = sizes.length ? Math.min(...sizes.map((z) => perHour(info, z.cpu, z.ram_mb, z.disk_gb))) : 0;
+  info.from_usd_h = sizes.length ? Math.min(...sizes.map((z) => sizePrice(info, z))) : 0;
   return { ok: true, error: null, info };
 }

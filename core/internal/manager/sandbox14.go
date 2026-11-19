@@ -90,6 +90,9 @@ func (m *Manager) sandboxMode(ctx context.Context, info sandbox.Info) string {
 	if mode == "" || mode == "auto" {
 		mode = strings.ToLower(m.Cfg.SandboxMode)
 	}
+	if info.DialOnly {
+		return "dial" // no exec API: a T3 shim cannot work
+	}
 	switch mode {
 	case "dial", "shim":
 		return mode
@@ -117,7 +120,7 @@ func (m *Manager) createSandboxHost(ctx context.Context, p *Principal, sp sandbo
 		for _, z := range info.Sizes {
 			if z.SKU == sku {
 				h.CPU, h.RAMMB, h.DiskGB = z.CPU, z.RAMMB, z.DiskGB
-				h.PriceHour = info.Pricing.PerHour(z.CPU, z.RAMMB, z.DiskGB)
+				h.PriceHour = info.SizePrice(z)
 				h.PriceMonth = model.Round4(h.PriceHour * 730)
 			}
 		}
@@ -135,7 +138,7 @@ func (m *Manager) createSandboxHost(ctx context.Context, p *Principal, sp sandbo
 		boot := "bxb_" + secret.RandHex(24)
 		h.BootstrapHash = secret.Hash(boot)
 		req.Bootstrap = sandbox.BootstrapScript(sandbox.BootstrapParams{CoreURL: wsURL(m.Cfg.PublicURL), BootstrapToken: boot, BoxdURL: m.boxdURL(),
-			Provider: info.ID, Region: region, WorkDir: info.WorkDir})
+			Provider: info.ID, Region: region, WorkDir: info.WorkDir, Foreground: info.DialOnly})
 	} else {
 		h.Driver = "shim"
 	}
@@ -211,6 +214,13 @@ func (m *Manager) decorateSandboxOption(ctx context.Context, o *selector.Option,
 		o.Tier = "T3"
 	}
 	o.Fork, o.Pause, o.Ports, o.GPU = info.Caps.Fork, info.Caps.Pause, info.Caps.Ports, info.Caps.GPU
+	if info.DialOnly && info.Caps.MaxLifetimeS == 0 {
+		// a long-lived service running boxd: no lifetime cap, sleep works like
+		// on a pool host (boxd stops the box's processes, the service keeps
+		// running and billing), so persistent boxes fit
+		o.Pause = true
+		o.Notes = append(o.Notes, info.Name+": long-lived service; sleep stops the box's processes but the service keeps running (and billing on paid plans)")
+	}
 	o.Verification, o.BootMS = info.Verification, info.Caps.BootMS
 	switch info.Caps.Isolation {
 	case "microvm", "vm", "gvisor":
@@ -218,6 +228,9 @@ func (m *Manager) decorateSandboxOption(ctx context.Context, o *selector.Option,
 	}
 	if info.Caps.MaxLifetimeS > 0 {
 		o.MaxLifetimeH = model.Round4(float64(info.Caps.MaxLifetimeS) / 3600)
+	}
+	if info.DialOnly && m.Cfg.PublicURL == "" && o.Blocked == "" {
+		o.Blocked = "needs BOXAZ_PUBLIC_URL: this provider has no exec API, boxd must dial in"
 	}
 	note := fmt.Sprintf("%s sandbox (%s, %s): per-second billing", info.Name, info.Caps.Isolation, o.Tier)
 	if o.Tier == "T3" {
@@ -271,9 +284,12 @@ func (m *Manager) SandboxProviders(ctx context.Context, p *Principal) ([]Sandbox
 		case !okH:
 			v.Blocked = why
 		}
+		if info.DialOnly && m.Cfg.PublicURL == "" {
+			v.Blocked = "needs BOXAZ_PUBLIC_URL (no exec API: boxd must dial in)"
+		}
 		v.Usable = v.Blocked == ""
 		for i, z := range info.Sizes {
-			ph := info.Pricing.PerHour(z.CPU, z.RAMMB, z.DiskGB)
+			ph := info.SizePrice(z)
 			if i == 0 || ph < v.FromUSDH {
 				v.FromUSDH = ph
 			}

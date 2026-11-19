@@ -148,7 +148,11 @@
   "Ask the owner for a new link.": "请向所有者索取新链接。",
   "Use a ttl_s between 60 and 43200 (12 h).": "请使用 60 到 43200（12 小时）之间的 ttl_s。",
   "Paste one line of ~/.ssh/id_ed25519.pub (or id_rsa.pub / ecdsa).": "请粘贴 ~/.ssh/id_ed25519.pub（或 id_rsa.pub / ecdsa）中的一行。",
-  "Pass the plain public key, not a certificate.": "请传入普通公钥，而不是证书。"
+  "Pass the plain public key, not a certificate.": "请传入普通公钥，而不是证书。",
+  "The Render API key sees no workspace; create the key in the workspace that should run boxes.": "该 Render API 密钥看不到任何工作区；请在要运行 box 的工作区中创建密钥。",
+  "Use a workspace ID from Render → Workspace settings that this API key can access.": "请使用 Render → Workspace settings 中此 API 密钥可访问的工作区 ID。",
+  "This provider has no exec API: boxes run only in dial mode (set BOXAZ_PUBLIC_URL).": "该提供商没有 exec API：box 只能以 dial 模式运行（请设置 BOXAZ_PUBLIC_URL）。",
+  "Add a payment method to the Render workspace (paid instance types need one) or use the free plan.": "请为 Render 工作区添加付款方式（付费实例类型需要），或使用免费套餐。"
  },
  "msg": {
   "%s bootstrap exit %d: %s": "%s 引导命令退出码 %d：%s",
@@ -360,7 +364,13 @@
   "box is required": "必须提供 box",
   "unknown share link": "未知的分享链接",
   "cannot hijack": "无法接管连接",
-  "origin %s may not open the desktop socket": "来源 %s 不能打开桌面套接字"
+  "origin %s may not open the desktop socket": "来源 %s 不能打开桌面套接字",
+  "render: GET /owners returned no workspace": "render：GET /owners 未返回任何工作区",
+  "render has no exec API (service %s)": "render 没有 exec API（服务 %s）",
+  "render: create needs the boxd start command": "render：创建服务需要 boxd 启动命令",
+  "%s is dial-only and got no bootstrap": "%s 仅支持 dial，但未收到引导命令",
+  "render: workspace %s is not visible to this key": "render：此密钥看不到工作区 %s",
+  "render: payment information required (402): %s": "render：需要付款信息（402）：%s"
  },
  "text": {
   "agentsmd.budget_box": "本盒子 $%.2f",

@@ -1476,7 +1476,8 @@
       "auto": "Tự động",
       "dial": "Dial-in (T2)",
       "shim": "Shim (T3)",
-      "noDial": "Provider này không giữ được tiến trình nền nên chỉ chạy shim (T3)."
+      "noDial": "Provider này không giữ được tiến trình nền nên chỉ chạy shim (T3).",
+      "dialOnly": "Provider này không có API exec nên luôn chạy dial-in (T2); không chạy được shim (T3)."
     },
     "modeHelp": {
       "auto": "T2 khi sandbox giữ được tiến trình nền và có BOXAZ_PUBLIC_URL, không thì T3",
@@ -1540,7 +1541,10 @@
       "sizes": "Size",
       "regions": "Region",
       "creds": "Credential"
-    }
+    },
+    "dialOnly": "Chỉ dial-in",
+    "dialOnlyHelp": "Không có API exec: mỗi box là một service chạy boxd, boxd gọi ra core. Cần BOXAZ_PUBLIC_URL truy cập được từ Internet.",
+    "freePlan": "Gói free ($0)"
   },
   "ports": {
     "lifecycle": "Đánh thức & vòng đời",

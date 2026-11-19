@@ -318,6 +318,7 @@ Ngoài VPS/VM thô (T1), Boxaz thuê được sandbox của các dịch vụ "Sa
 | Agent 37 (`agent37`) | T2 | yaml | docs | gvisor | 5000 ms | fork, pause, cổng | không giới hạn | $0.0832/giờ (ước tính) | `AGENT37_API_KEY` |
 | boat (`boat`) | T2 | yaml | docs | vm | 3000 ms | fork, pause, cổng | không giới hạn | $0.1656/giờ (ước tính) | `BOAT_API_KEY` |
 | Vercel Sandbox (`vercel`) | T2 | yaml | docs | microvm | 1500 ms | fork, cổng | 5 giờ | $0.1706/giờ (ước tính) | `VERCEL_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID` |
+| Render (`render`) | T2 (chỉ dial) | native | docs | container | ~90 s (kéo image + deploy) | cổng (onrender.com, 1 cổng) | không giới hạn | $0 (free) / $0.0096/giờ (0.5c-512mb) | `RENDER_API_KEY`, `RENDER_OWNER_ID`, `RENDER_AGENT_IMAGE`, `RENDER_DISK_GB` |
 
 Mức xác minh: **live** = đã gọi API thật bằng key thật (chỉ các lệnh đọc, không tốn tiền); **docs** = route và trường lấy từ tài liệu/OpenAPI chính thức, chạy với server giả; **mã nguồn SDK** = provider không công bố REST, adapter đọc từ SDK chính thức. "Ước tính" nghĩa là provider không công bố đơn giá theo giây, nên Boxaz dùng giá ước tính. Daytona và Upstash Box chạy container chung kernel, nên bị loại khi `untrusted=true`.
 
@@ -345,7 +346,7 @@ Mức xác minh: **live** = đã gọi API thật bằng key thật (chỉ các 
 | `BOXAZ_SANDBOX_ADAPTERS_DIR` | — | thư mục chứa adapter YAML bổ sung (`*.yaml`) |
 | `BOXAZ_SANDBOX_MODE` | `auto` | `auto` / `dial` / `shim` cho mọi provider sandbox (prefs của từng provider được ưu tiên hơn) |
 | `BOXAZ_AUTO_SANDBOX` | tắt | cho `box_up` tự thuê sandbox mà không cần duyệt (tính theo giây, xoá cùng box) |
-| `BOXAZ_PROVIDER_CHAIN` | chuỗi T1 rồi tới chuỗi sandbox | thứ tự dự phòng (mặc định sandbox: e2b, daytona, novita, prized, boxdsh, runloop, blaxel, boat, agent37, vercel, upstash-box) |
+| `BOXAZ_PROVIDER_CHAIN` | chuỗi T1 rồi tới chuỗi sandbox | thứ tự dự phòng (mặc định sandbox: e2b, daytona, novita, prized, boxdsh, runloop, blaxel, boat, agent37, vercel, upstash-box, render) |
 | `E2B_API_KEY`, `DAYTONA_API_KEY`, `PRIZED_API_KEY`, … | — | kết nối provider sandbox lúc khởi động (xem cột "Biến môi trường") |
 
 **Kiểm thử v1.4.** `go test ./...` gồm `sandbox/native_test.go` (httptest cho từng adapter native), `yaml_shim_test.go` (engine YAML + shim), `selector/sandbox_test.go`, `e2e/v14_test.go` (failover sang shim T3, boxd dial-in T2, dọn dẹp). Test live cho Prized là tuỳ chọn: chỉ đọc `BOXAZ_LIVE_PRIZED=1 PRIZED_API_KEY=…`; tạo sandbox thật (vài giây, free tier) `BOXAZ_LIVE_PRIZED_CREATE=1 PRIZED_API_KEY=… go test ./internal/sandbox -run PrizedLive`; end to end qua boxaz-core `PRIZED_API_KEY=… scripts/live-prized.sh` (shim T3; thêm `PRIZED_MODE=dial BOXAZ_PUBLIC_URL=https://… BOXAZ_DIST_DIR=…` cho T2, ví dụ qua cloudflared quick tunnel). Script luôn xoá sandbox nhãn `managed=1` khi kết thúc. E2B / Novita tương tự: `BOXAZ_LIVE_E2B_CREATE=1 E2B_API_KEY=… go test ./internal/sandbox -run E2BLive` (hoặc `BOXAZ_LIVE_NOVITA_CREATE=1 NOVITA_API_KEY=… … -run NovitaLive`), end to end `E2B_API_KEY=… scripts/live-e2b.sh` / `NOVITA_API_KEY=… scripts/live-novita.sh`. Danh sách sandbox của E2B trễ vài giây sau khi tạo/xoá, nên script kiểm tra bằng `GET /sandboxes/{id}`. Mọi thứ gửi tới provider (tên, nhãn/metadata `managed`/`mgr-host`, User-Agent) đều trung tính, không chứa tên sản phẩm. `scripts/e2e.sh` có mục v1.4: một adapter YAML trỏ tới `scripts/fake-sandbox.py` (sandbox REST chỉ exec, chạy trên localhost). Mục này kiểm tra lint, kết nối, recommend, tạo box trên host sandbox (shim T3), exec, và sandbox bị xoá khi box kết thúc.
@@ -564,3 +565,34 @@ Mục tiêu: ngoài terminal / forward / SSH của v1.10, con người và agent
 Retest 2026-10-28 (bản sửa): E2B 512 MB với cờ tiết kiệm bộ nhớ — Chromium 156 cài trong 18.4 s, `Browser.getVersion` 59 ms, navigate example.com → title "Example Domain" 408 ms, metadata bị chặn (`ERR_NAME_NOT_RESOLVED`), warm 256 ms. Prized (Ubuntu 24.04, không root / sudo, image không có apt lists): tải `.deb` thư viện vào chỗ của user giờ chạy được (index apt riêng, không cần root) nhưng Chromium vẫn thiếu thư viện → trình duyệt **chưa chạy được trên Prized**; desktop cũng không (Xvfb / x11vnc cần root để cài). Cách tiếp theo: tải đệ quy dependency (`apt-cache depends --recurse`) hoặc dùng image có sẵn chromium / xvfb.
 
 Chạy lại: `ENV_FILE=…/gateway.env PROVIDERS="e2b prized" scripts/live-access-p1.sh`. Test không cần mạng: `internal/e2e/v111_test.go` (sftp qua core, cert trên WS + listener trực tiếp + thu hồi, CDP `/json` rewrite + `Browser.getVersion` + viết lại metadata + thu hồi, RFB view-only + shared flag, share link 200 → 410 + ngắt viewer), `scripts/e2e.sh` (bước v1.11, `scripts/accessprobe.py`), web `scripts/smoke.sh` (mock: browser, desktop, shares, ssh certs, access, chuỗi 4 ngôn ngữ, bundle).
+
+## 18. v1.12 — provider Render (chỉ dial-in)
+
+Render không có API exec/file cho service, nên **mỗi box là một web service Render** chạy image có sẵn (mặc định `docker.io/library/buildpack-deps:bookworm-scm`: bash, curl, git, ssh client). Lệnh khởi động của service tải boxd từ core (`<BOXAZ_PUBLIC_URL>/dl/boxd-linux-<arch>`, cần `BOXAZ_DIST_DIR`) rồi chạy `boxd --dial` ở foreground. Mọi thứ trong box (exec, file, terminal, forward TCP, SSH, snapshot tarball) đều đi qua boxd như host T2.
+
+**Vì sao T2 "chỉ dial".** Không có API exec nên không làm được shim T3; boxd tự gọi ra core như mọi host. Hệ quả: core **bắt buộc** có `BOXAZ_PUBLIC_URL` truy cập được từ Internet. Thiếu nó, provider hiện `blocked: needs BOXAZ_PUBLIC_URL` và `/recommend` không chọn Render. `sandbox_mode=shim` bị bỏ qua (`mode` luôn là `dial`).
+
+**Cách chạy trong service.**
+- Biến môi trường gửi lên Render (tên trung tính): `MGR_BOOT` (lệnh bootstrap, chứa token bootstrap một host), `BOXD_LISTEN_PORT=${PORT}`, `BOXD_HEALTH_PATH=/.well-known/mgr-health`, `BOXD_PREVIEW_PORT=8000`, và với gói free `BOXD_KEEPALIVE_URL=${RENDER_EXTERNAL_URL}/.well-known/mgr-health`. Docker command: `/bin/sh -c eval "$MGR_BOOT"` (theo tài liệu Render, phần sau `-c` là một đối số; **chưa kiểm chứng live**). Tên service `mgr-<host>`, User-Agent `sandbox-client/1`; không có chữ Boxa/Boxaz.
+- boxd giữ cổng `$PORT` (Render chỉ coi deploy là live khi có cổng mở): trả `ok` ở health path, các request khác (cả WebSocket) chuyển tới cổng 8000 trong box. Vì vậy `https://<service>.onrender.com/` là URL preview công khai của cổng 8000 (`kind: provider-preview`, `provider_preview: public` — ai biết URL cũng vào được, token Boxaz chỉ bảo vệ URL gateway). Cổng khác đi qua gateway Boxaz. Tắt hẳn bằng trường credential `preview_port=0`.
+- Gói free tự ngủ sau 15 phút không có traffic **vào**; WebSocket gọi ra của boxd không tính. boxd gọi URL công khai của chính nó mỗi 5 phút (`keep_awake=1` mặc định) để service không bị spin down khi box còn sống. Việc này tiêu giờ free (750 giờ/tháng mỗi workspace, ~1 box chạy 24/7).
+- Render có thể khởi động lại instance với filesystem mới (spin down, bảo trì, gói free "có thể restart bất kỳ lúc nào"). Token bootstrap của host Render vẫn hợp lệ cho đúng host đó (`ephemeral_restart`), nên boxd vào lại được; box mất file sẽ bị đánh `failed` ("box missing on host after reconnect"). Gói trả phí có thể gắn disk (`disk_gb`, $0.25/GB-tháng, mount ở `/srv/w`) để giữ file qua restart.
+
+**Capability.** `pause/snapshot/fork/files: false`, `ports: true`, isolation `container` (bị loại khi `untrusted=true`). Sleep = boxd dừng tiến trình của box, service vẫn chạy (gói trả phí vẫn tính tiền); box `persistent` vẫn được chọn vì service không giới hạn thời gian sống. Snapshot là tarball boxd (lên S3/R2 nếu có object storage). Không có fork/clone gốc. Log, custom domain, one-off job, SSH của Render chưa dùng (SSH/job cần gói trả phí; terminal/SSH của Boxaz đã đi qua boxd).
+
+**Giá** (render.com/pricing, tính theo giây, giá tháng ÷ 730):
+
+| SKU | CPU / RAM | Giá |
+|---|---|---|
+| `free` | 0.1 / 512 MB | $0 — 750 giờ/tháng/workspace, spin down sau 15 phút, khởi động lạnh ~1 phút, mất file khi spin down |
+| `0.5c-512mb` | 0.5 / 512 MB | $7/tháng ≈ $0.0096/giờ |
+| `1c-2g` | 1 / 2 GB | $25/tháng ≈ $0.0342/giờ |
+| `2c-4g` | 2 / 4 GB | $85/tháng ≈ $0.1164/giờ |
+| `2c-8g`, `4c-8g`, `4c-16g`, `8c-16g`, `8c-32g` | | $135 / $175 / $225 / $300 / $450 mỗi tháng |
+
+Vùng: oregon (mặc định), ohio, virginia, frankfurt, singapore. Kích thước ổ tạm (ephemeral) Render không công bố; catalog giả định 20 GB (ước tính). Create → box dùng được: kéo image + deploy, ước tính 1–3 phút (chưa đo live).
+
+**Kết nối.** `RENDER_API_KEY` (Account settings → API keys), tuỳ chọn `RENDER_OWNER_ID` (mặc định workspace đầu tiên của key, lấy qua `GET /owners`), `RENDER_AGENT_IMAGE` (image công khai có `/bin/sh` + curl/wget), `RENDER_DISK_GB`. Credential JSON thêm `preview_port`, `keep_awake`. Gói trả phí cần thẻ trong workspace (API trả 402 → gợi ý thêm phương thức thanh toán); gói free theo tài liệu không cần thẻ.
+
+**Kiểm thử.** `sandbox/render_test.go` (httptest API Render: owners, tạo service với body đầy đủ, trạng thái deploy, suspend/resume, list chỉ lấy `mgr-*`, xoá, 402; lệnh khởi động chạy thật bằng `/bin/sh -c eval "$MGR_BOOT"` với boxd giả), `boxd/portholder_test.go` (health, 502 khi chưa có app, forward, keepalive), `e2e/render_test.go` (driver Render thật + API giả chạy boxd trong tiến trình: box up, exec, URL onrender.com, restart filesystem mới → vào lại bằng cùng token và box bị `failed`, box down xoá service, không lộ tên sản phẩm), `scripts/e2e.sh` mục render (dial-only, blocked khi thiếu `BOXAZ_PUBLIC_URL`, giá gói, kiểm tra key qua `GET /owners`). Chưa chạy live (chưa có API key).
+

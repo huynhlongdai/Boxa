@@ -97,16 +97,17 @@ export function usePerSecond() {
 }
 
 // ---------------- sandbox_mode ----------------
-export function SandboxModeField({ value, onChange, info }: { value: string; onChange: (v: string) => void; info: Pick<SandboxInfo, "tier" | "capabilities"> }) {
+export function SandboxModeField({ value, onChange, info }: { value: string; onChange: (v: string) => void; info: Pick<SandboxInfo, "tier" | "capabilities" | "dial_only"> }) {
   const t = useTranslations("sbx");
   const canDial = info.tier === "T2" && info.capabilities.background;
+  const dialOnly = !!info.dial_only; // no exec API (Render): a T3 shim cannot work
   const v = ["auto", "dial", "shim"].includes(value) ? value : "auto";
   return (
     <div className="flex flex-col gap-1.5" data-sandbox-mode>
       <p className="text-[13px] font-medium">{t("mode.label")}</p>
       <div className="grid gap-1.5 sm:grid-cols-3" role="radiogroup" aria-label={t("mode.label")}>
         {(["auto", "dial", "shim"] as const).map((m) => {
-          const disabled = m === "dial" && !canDial;
+          const disabled = (m === "dial" && !canDial) || (m === "shim" && dialOnly);
           return (
             <button key={m} type="button" role="radio" aria-checked={v === m} disabled={disabled} onClick={() => onChange(m)}
               className={cn("min-w-0 rounded-md border p-2 text-left text-[12.5px] transition-colors disabled:cursor-not-allowed disabled:opacity-50", v === m ? "border-primary bg-primary/5" : "border-border hover:bg-surface-2")}>
@@ -117,6 +118,7 @@ export function SandboxModeField({ value, onChange, info }: { value: string; onC
         })}
       </div>
       {!canDial && <p className="text-xs text-muted-foreground">{t("mode.noDial")}</p>}
+      {dialOnly && <p className="text-xs text-muted-foreground" data-dial-only>{t("mode.dialOnly")}</p>}
     </div>
   );
 }
@@ -148,15 +150,16 @@ function SandboxCard({ p, onConnect }: { p: SandboxProvider; onConnect: (id: str
             <VerificationBadge v={p.verification} note={p.verified_note} />
             <EstimatedPriceBadge confidence={p.pricing.confidence} />
             <Badge variant="outline" title={t("adapterHelp")}>{p.adapter === "yaml" ? "YAML" : t("native")}</Badge>
+            {p.dial_only && <Badge variant="blue" title={t("dialOnlyHelp")} data-dial-only-badge>{t("dialOnly")}</Badge>}
           </div>
         </div>
       </div>
       <CapabilityBadges caps={p.capabilities} className="mt-3" />
       <div className="mt-3 grid grid-cols-2 gap-2 text-[12.5px]">
-        <div className="min-w-0"><p className="text-[11px] text-muted-foreground">{t("from")}</p><p className="font-mono">{usd(p.from_usd_h)}/h</p></div>
+        <div className="min-w-0"><p className="text-[11px] text-muted-foreground">{t("from")}</p><p className="font-mono">{p.from_usd_h === 0 && p.sizes.some((z) => z.fixed_price) ? t("freePlan") : `${usd(p.from_usd_h)}/h`}</p></div>
         <div className="min-w-0"><p className="text-[11px] text-muted-foreground">{t("perSecond")}</p><p className="truncate font-mono" title={perSec(p.from_usd_h)}>{perSec(p.from_usd_h)}</p></div>
       </div>
-      {p.blocked && p.connected && <p className="mt-2 break-words text-[12px] text-st-warning">{p.blocked}</p>}
+      {p.blocked && (p.connected || p.dial_only) && <p className="mt-2 break-words text-[12px] text-st-warning">{p.blocked}</p>}
       {(p.notes.length > 0 || p.verified_note) && (
         <div className="mt-2">
           <button type="button" className="text-[12px] text-primary hover:underline" aria-expanded={more} onClick={() => setMore((x) => !x)}>{more ? t("less") : t("more")}</button>
