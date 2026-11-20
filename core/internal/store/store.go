@@ -30,6 +30,8 @@ func FmtTime(t time.Time) string { return t.UTC().Format(TimeFormat) }
 
 // Store is the persistence interface used by the rest of core.
 type Store interface {
+	Tenancy
+
 	Close() error
 	Dialect() string
 	Ping(ctx context.Context) error
@@ -110,6 +112,7 @@ type Store interface {
 
 type BoxFilter struct {
 	AgentID, Status, Provider, Lifecycle, HostID string
+	WorkspaceID                                  string
 	Statuses                                     []string
 	IncludeTerminated                            bool
 }
@@ -169,6 +172,10 @@ func Open(dsn string) (*SQL, error) {
 		s.db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
+	if _, err := s.BackfillDefaultWorkspace(context.Background()); err != nil {
+		s.db.Close()
+		return nil, fmt.Errorf("backfill default workspace: %w", err)
+	}
 	return s, nil
 }
 
@@ -176,7 +183,10 @@ func (s *SQL) Close() error                   { return s.db.Close() }
 func (s *SQL) Dialect() string                { return s.dialect }
 func (s *SQL) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }
 
-func (s *SQL) migrate(ctx context.Context) error {
+func (s *SQL) migrate(ctx context.Context) error { return s.migrateUpTo(ctx, "") }
+
+// migrateUpTo applies pending migrations in order, stopping after `last` when set (tests).
+func (s *SQL) migrateUpTo(ctx context.Context, last string) error {
 	if _, err := s.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TEXT NOT NULL)`); err != nil {
 		return err
 	}
@@ -190,6 +200,9 @@ func (s *SQL) migrate(ctx context.Context) error {
 	}
 	sort.Strings(names)
 	for _, n := range names {
+		if last != "" && n > last {
+			break
+		}
 		var v string
 		err := s.db.QueryRowContext(ctx, s.rebind(`SELECT version FROM schema_migrations WHERE version=?`), n).Scan(&v)
 		if err == nil {
@@ -242,6 +255,14 @@ func (s *SQL) rebind(q string) string {
 		}
 	}
 	return b.String()
+}
+
+// nullStr maps "" to SQL NULL (columns added by ALTER TABLE are nullable).
+func nullStr(v string) any {
+	if v == "" {
+		return nil
+	}
+	return v
 }
 
 func (s *SQL) exec(ctx context.Context, q string, args ...any) error {
@@ -352,7 +373,7 @@ type approvalDoc struct {
 // ---- agents ----
 
 func (s *SQL) PutAgent(ctx context.Context, a *model.Agent) error {
-	return s.putDoc(ctx, "agents", a.ID, a.CreatedAt, map[string]any{"name": a.Name}, a)
+	return s.putDoc(ctx, "agents", a.ID, a.CreatedAt, map[string]any{"name": a.Name, "workspace_id": a.WorkspaceID}, a)
 }
 func (s *SQL) GetAgent(ctx context.Context, id string) (*model.Agent, error) {
 	return getDoc[model.Agent](ctx, s, "agents", "id=?", id)
@@ -374,7 +395,7 @@ func (s *SQL) PutKey(ctx context.Context, k *model.APIKey) error {
 	if k.AgentID != nil {
 		agent = *k.AgentID
 	}
-	return s.putDoc(ctx, "api_keys", k.ID, k.CreatedAt, map[string]any{"agent_id": agent, "hash": k.Hash}, keyDoc{*k, k.Hash})
+	return s.putDoc(ctx, "api_keys", k.ID, k.CreatedAt, map[string]any{"agent_id": agent, "hash": k.Hash, "workspace_id": nullStr(k.WorkspaceID)}, keyDoc{*k, k.Hash})
 }
 func unKey(d *keyDoc, err error) (*model.APIKey, error) {
 	if err != nil {
@@ -411,7 +432,7 @@ func (s *SQL) ListKeys(ctx context.Context, agentID string) ([]*model.APIKey, er
 
 func (s *SQL) PutBox(ctx context.Context, b *model.Box) error {
 	return s.putDoc(ctx, "boxes", b.ID, b.CreatedAt, map[string]any{
-		"agent_id": b.AgentID, "status": b.Status, "lifecycle": b.Lifecycle, "provider": b.Provider, "host_id": b.HostID,
+		"agent_id": b.AgentID, "workspace_id": nullStr(b.WorkspaceID), "status": b.Status, "lifecycle": b.Lifecycle, "provider": b.Provider, "host_id": b.HostID,
 	}, b)
 }
 func (s *SQL) GetBox(ctx context.Context, id string) (*model.Box, error) {
@@ -428,6 +449,9 @@ func (s *SQL) ListBoxes(ctx context.Context, f BoxFilter) ([]*model.Box, error) 
 	add := func(c string, v any) { conds = append(conds, c); args = append(args, v) }
 	if f.AgentID != "" {
 		add("agent_id=?", f.AgentID)
+	}
+	if f.WorkspaceID != "" {
+		add("workspace_id=?", f.WorkspaceID)
 	}
 	if f.Status != "" {
 		add("status=?", f.Status)
@@ -831,7 +855,7 @@ func (s *SQL) DeleteTemplate(ctx context.Context, name string) error {
 // ---- secrets ----
 
 func (s *SQL) PutSecret(ctx context.Context, sec *model.Secret) error {
-	return s.putDoc(ctx, "secrets", sec.Name, sec.CreatedAt, nil, secretDoc{*sec, sec.ValueEnc})
+	return s.putDoc(ctx, "secrets", sec.Name, sec.CreatedAt, map[string]any{"workspace_id": nullStr(sec.WorkspaceID)}, secretDoc{*sec, sec.ValueEnc})
 }
 func (s *SQL) GetSecret(ctx context.Context, name string) (*model.Secret, error) {
 	d, err := getDoc[secretDoc](ctx, s, "secrets", "id=?", name)

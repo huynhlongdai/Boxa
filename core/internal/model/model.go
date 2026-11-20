@@ -47,6 +47,7 @@ type Spec struct {
 
 type Box struct {
 	ID              string    `json:"id"`
+	WorkspaceID     string    `json:"workspace_id,omitempty"`
 	Slug            string    `json:"slug"`
 	AgentID         string    `json:"agent_id"`
 	AgentName       string    `json:"agent_name"`
@@ -151,6 +152,7 @@ type Policy struct {
 
 type Agent struct {
 	ID             string     `json:"id"`
+	WorkspaceID    string     `json:"workspace_id,omitempty"`
 	Name           string     `json:"name"`
 	Kind           string     `json:"kind"`
 	BudgetDayUSD   float64    `json:"budget_day_usd"`
@@ -166,16 +168,17 @@ type Agent struct {
 }
 
 type APIKey struct {
-	ID         string     `json:"id"`
-	AgentID    *string    `json:"agent_id"`
-	Name       string     `json:"name"`
-	Prefix     string     `json:"prefix"`
-	Scopes     []string   `json:"scopes"`
-	CreatedAt  time.Time  `json:"created_at"`
-	LastUsedAt *time.Time `json:"last_used_at"`
-	RevokedAt  *time.Time `json:"revoked_at"`
-	Hash       string     `json:"-"`
-	Key        string     `json:"key,omitempty"` // only on create
+	ID          string     `json:"id"`
+	WorkspaceID string     `json:"workspace_id,omitempty"`
+	AgentID     *string    `json:"agent_id"`
+	Name        string     `json:"name"`
+	Prefix      string     `json:"prefix"`
+	Scopes      []string   `json:"scopes"`
+	CreatedAt   time.Time  `json:"created_at"`
+	LastUsedAt  *time.Time `json:"last_used_at"`
+	RevokedAt   *time.Time `json:"revoked_at"`
+	Hash        string     `json:"-"`
+	Key         string     `json:"key,omitempty"` // only on create
 }
 
 func (k *APIKey) HasScope(s string) bool {
@@ -331,11 +334,12 @@ type Template struct {
 }
 
 type Secret struct {
-	Name      string     `json:"name"`
-	Agents    []string   `json:"agents"`
-	CreatedAt time.Time  `json:"created_at"`
-	RotatedAt *time.Time `json:"rotated_at"`
-	ValueEnc  string     `json:"-"`
+	Name        string     `json:"name"`
+	WorkspaceID string     `json:"workspace_id,omitempty"`
+	Agents      []string   `json:"agents"`
+	CreatedAt   time.Time  `json:"created_at"`
+	RotatedAt   *time.Time `json:"rotated_at"`
+	ValueEnc    string     `json:"-"`
 	// System secrets (BOXAZ_SYS_*) hold Boxaz's own credentials (Telegram bot
 	// token, SMTP password, S3 secret key). They are never injected into boxes
 	// and only admins see them listed.
