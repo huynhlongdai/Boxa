@@ -1,5 +1,7 @@
 # Boxaz spec v0.4 — Lớp kết nối mọi box + Growth/Invite
 
+> Bản mới nhất: `boxaz-spec-v1.0.md` (2026-11-26).
+
 Ngày: 2026-10-27 (v0.4 thêm mục 10 Growth/Invite; mục 1–9 giữ nguyên từ v0.3, ngày 2026-10-26). Kế thừa v0.2 (kiến trúc Gateway/Core/Host Agent/Adapter, 15 module). v0.3 đổi mục tiêu: Boxaz trở thành **lớp điều phối trung lập** nối được mọi loại box (VPS, sandbox API, PaaS, GPU, browser, macOS) với một API duy nhất cho agent, chọn nơi rẻ nhất đạt yêu cầu.
 
 ## 1. Bức tranh thị trường (battleships.dev, 369 provider, dữ liệu 2026-10)
