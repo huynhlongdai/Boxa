@@ -474,13 +474,22 @@ export interface SchedJob {
 /** GET/PUT /admin/quotas: map số; nhãn tiếng Việt cho các khoá đã biết. */
 export type Quotas = Record<string, number>;
 
-export interface AdminUser {
+/** v2 tenancy: GET /admin/users = user + workspaces (role per workspace). */
+export interface UserWorkspace {
   id: string;
   name: string;
-  role: string;
-  email?: string;
-  admin_keys?: number;
-  note?: string;
+  role: string; // owner | member
+  max_boxes?: number;
+  max_ttl_hours?: number;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  name?: string;
+  email_verified?: boolean;
+  platform_admin?: boolean;
+  workspaces?: UserWorkspace[];
   created_at?: string;
   last_login_at?: string | null;
 }

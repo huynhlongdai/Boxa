@@ -84,14 +84,17 @@
     "colUser": "User",
     "colRole": "Role",
     "colAdminKeys": "Admin keys",
+    "colWorkspaces": "Workspaces",
+    "emailUnverified": "Email not verified",
     "colNote": "Note",
     "role": {
       "owner": "Owner",
+      "member": "Member",
       "admin": "Admin",
       "viewer": "Viewer"
     },
     "lastLogin": "Signed in {time}",
-    "usersNote": "Boxaz v1 is for a single operator. Dashboard access = an admin key (managed in the API keys tab)."
+    "usersNote": "Each sign-up gets its own workspace; the first account is the platform admin. Agents and scripts still use API keys (API keys tab)."
   },
   "agentDetail": {
     "back": "Agents",

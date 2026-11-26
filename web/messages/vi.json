@@ -84,14 +84,17 @@
     "colUser": "Người dùng",
     "colRole": "Vai trò",
     "colAdminKeys": "Key admin",
+    "colWorkspaces": "Workspace",
+    "emailUnverified": "Chưa xác thực email",
     "colNote": "Ghi chú",
     "role": {
       "owner": "Chủ sở hữu",
+      "member": "Thành viên",
       "admin": "Admin",
       "viewer": "Chỉ xem"
     },
     "lastLogin": "Đăng nhập {time}",
-    "usersNote": "Boxaz v1 dành cho một người vận hành. Quyền truy cập dashboard = key admin (quản lý ở tab API keys)."
+    "usersNote": "Mỗi người đăng ký có workspace riêng; người đầu tiên là quản trị nền tảng. Agent và script vẫn dùng API key (tab API keys)."
   },
   "agentDetail": {
     "back": "Agents",

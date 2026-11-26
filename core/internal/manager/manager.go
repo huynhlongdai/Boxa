@@ -93,6 +93,10 @@ type Config struct {
 	BrowserInstall string        // BOXAZ_BROWSER_INSTALL: auto (default) | off — install Chromium in the box when none is found
 	BrowserPort    int           // in-box CDP port (default 9222; tests)
 	VNCPort        int           // in-box RFB port (default 5900; tests)
+	// v2 tenancy
+	SignupMode string        // BOXAZ_SIGNUP_MODE: invite (default) | open | closed
+	SessionTTL time.Duration // BOXAZ_SESSION_TTL: dashboard session lifetime (default 720h)
+	Mailer     Mailer        // tests; nil = SMTP from settings.notify
 }
 
 func (c *Config) defaults() {

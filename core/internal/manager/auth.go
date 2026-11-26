@@ -19,11 +19,21 @@ type Principal struct {
 	Key     *model.APIKey
 	AgentID string // "" for admin keys without agent binding
 	Admin   bool
+	// v2 tenancy: set when the caller signed in with a session (bxs_ token).
+	User        *model.User
+	UserID      string
+	WorkspaceID string
+	Role        string // owner|member in WorkspaceID
+	SessionID   string
+	session     *model.Session
 }
 
 func (p *Principal) Actor() string {
 	if p == nil || p.Key == nil {
 		return "system"
+	}
+	if p.UserID != "" {
+		return "user:" + p.UserID
 	}
 	if p.Admin {
 		return "admin"
@@ -46,6 +56,9 @@ func (p *Principal) Require(scope string) error {
 func (m *Manager) Authenticate(ctx context.Context, token string) (*Principal, error) {
 	if token == "" {
 		return nil, model.E(model.ErrUnauthorized, "missing API key")
+	}
+	if strings.HasPrefix(token, SessionPrefix) {
+		return m.authenticateSession(ctx, token)
 	}
 	k, err := m.Store.GetKeyByHash(ctx, secret.Hash(token))
 	if err != nil {

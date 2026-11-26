@@ -467,7 +467,8 @@ export function makeSeed(): MockState {
   const quotas: Quotas = { max_boxes_per_agent: 5, max_cpu_per_box: 8, max_ram_mb_per_box: 16384, max_disk_gb_per_box: 100, rate_limit_per_minute: 600 };
 
   const users: AdminUser[] = [
-    { id: "owner", name: "owner", role: "admin", admin_keys: 1, note: "Boxaz v1 chỉ có một người vận hành; agent xác thực bằng key riêng." },
+    { id: "usr_owner", email: "owner@boxaz.dev", name: "Owner", email_verified: true, platform_admin: true, created_at: ago(0), workspaces: [{ id: "ws_default", name: "default", role: "owner", max_boxes: 5, max_ttl_hours: 12 }] },
+    { id: "usr_bob", email: "bob@example.com", email_verified: false, platform_admin: false, created_at: ago(0), workspaces: [{ id: "ws_bob", name: "Bob Labs", role: "owner", max_boxes: 5, max_ttl_hours: 12 }] },
   ];
 
   return {

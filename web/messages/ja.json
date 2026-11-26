@@ -84,14 +84,17 @@
     "colUser": "ユーザー",
     "colRole": "ロール",
     "colAdminKeys": "管理者キー",
+    "colWorkspaces": "ワークスペース",
+    "emailUnverified": "メール未確認",
     "colNote": "メモ",
     "role": {
       "owner": "オーナー",
+      "member": "メンバー",
       "admin": "管理者",
       "viewer": "閲覧者"
     },
     "lastLogin": "{time} にログイン",
-    "usersNote": "Boxaz v1 は運用者 1 人向けです。ダッシュボードへのアクセス = 管理者キー（API キータブで管理）。"
+    "usersNote": "登録ユーザーごとに専用ワークスペースがあり、最初のアカウントがプラットフォーム管理者です。エージェントとスクリプトは引き続き API キーを使います（API キータブ）。"
   },
   "agentDetail": {
     "back": "エージェント",

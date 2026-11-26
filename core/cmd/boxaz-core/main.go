@@ -120,6 +120,8 @@ func main() {
 	}
 	cfg := manager.Config{
 		PublicURL:          os.Getenv("BOXAZ_PUBLIC_URL"),
+		SignupMode:         os.Getenv("BOXAZ_SIGNUP_MODE"),
+		SessionTTL:         envDur("BOXAZ_SESSION_TTL", 0),
 		DisableTunnel:      envBool("BOXAZ_DISABLE_TUNNEL"),
 		AssumePublicURL:    envBool("BOXAZ_INGRESS_ASSUME_PUBLIC"),
 		BaseDomain:         os.Getenv("BASE_DOMAIN"),

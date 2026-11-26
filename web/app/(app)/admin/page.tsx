@@ -279,19 +279,19 @@ function UsersTab() {
   const { relTime } = useFmt();
   if (error) return <ErrorBox error={error} />;
   if (!data) return <LoadingRows />;
-  const roleTone: Record<string, "yellow" | "blue" | "gray"> = { owner: "yellow", admin: "blue", viewer: "gray" };
+  const roleTone: Record<string, "yellow" | "blue" | "gray"> = { owner: "yellow", admin: "blue", member: "gray", viewer: "gray" };
   return (
     <div className="flex flex-col gap-3">
       <Card>
         <Table>
-          <THead><TR className="hover:bg-transparent"><TH>{t("colUser")}</TH><TH>{t("colRole")}</TH><TH>{t("colAdminKeys")}</TH><TH>{t("colNote")}</TH></TR></THead>
+          <THead><TR className="hover:bg-transparent"><TH>{t("colUser")}</TH><TH>{t("colRole")}</TH><TH>{t("colWorkspaces")}</TH><TH>{t("colNote")}</TH></TR></THead>
           <TBody>
             {data.items.map((u) => (
               <TR key={u.id}>
-                <TD><p className="text-[13px] font-medium">{u.name}</p>{u.email && <Mono className="text-muted-foreground">{u.email}</Mono>}</TD>
-                <TD><Badge variant={roleTone[u.role] ?? "gray"}>{roleTone[u.role] ? t(`role.${u.role}`) : u.role}</Badge></TD>
-                <TD className="font-mono text-[13px]">{u.admin_keys ?? "—"}</TD>
-                <TD className="text-[13px] text-muted-foreground">{u.note ?? (u.last_login_at ? t("lastLogin", { time: relTime(u.last_login_at) }) : "—")}</TD>
+                <TD><p className="text-[13px] font-medium">{u.name || u.email}</p>{u.name && <Mono className="text-muted-foreground">{u.email}</Mono>}</TD>
+                <TD>{(() => { const role = u.platform_admin ? "admin" : (u.workspaces?.[0]?.role ?? "member"); return <Badge variant={roleTone[role] ?? "gray"}>{roleTone[role] ? t(`role.${role}`) : role}</Badge>; })()}</TD>
+                <TD className="text-[13px]">{u.workspaces?.length ? u.workspaces.map((w) => `${w.name} (${w.role})`).join(", ") : "—"}</TD>
+                <TD className="text-[13px] text-muted-foreground">{u.email_verified === false ? t("emailUnverified") : u.last_login_at ? t("lastLogin", { time: relTime(u.last_login_at) }) : "—"}</TD>
               </TR>
             ))}
           </TBody>

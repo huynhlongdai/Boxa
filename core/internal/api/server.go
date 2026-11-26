@@ -60,8 +60,8 @@ func (s *Server) routes() http.Handler {
 			return &inProcCaller{h: s, auth: req.Header.Get("Authorization"), lang: reqLocale(req)}
 		},
 	}
-	r.With(s.authMW).Handle("/mcp", mcpHandler)
-	r.With(s.authMW).Post("/a2a", s.a2a) // A2A JSON-RPC (message/send, tasks/get, tasks/cancel, message/stream)
+	r.With(s.authMW, s.sessionGuard).Handle("/mcp", mcpHandler)
+	r.With(s.authMW, s.sessionGuard).Post("/a2a", s.a2a) // A2A JSON-RPC (message/send, tasks/get, tasks/cancel, message/stream)
 	// Discovery (no auth).
 	r.Get("/llms.txt", s.llmsTxt)
 	r.Get("/llms-full.txt", s.llmsFull)
@@ -78,8 +78,10 @@ func (s *Server) routes() http.Handler {
 		r.Get("/hosts/connect", s.M.Hub.ServeHTTP)       // boxd dial-out (own token auth)
 		r.Get("/ingress/connect", s.M.ServeIngressAgent) // in-box public-URL agent (own token auth)
 		s.routesAccessWS(r)                              // v1.10 terminal / tcp / ssh WebSockets (ticket or Authorization header)
+		s.routesTenancyPublic(r)                         // v2: sign-up, login, verify, reset, waitlist
 		r.Group(func(r chi.Router) {
-			r.Use(s.authMW)
+			r.Use(s.authMW, s.sessionGuard)
+			s.routesTenancy(r)
 			r.Get("/overview", s.overview)
 			r.Get("/stream", s.stream)
 
@@ -171,7 +173,7 @@ func (s *Server) routes() http.Handler {
 				r.Get("/audit", s.adminAudit)
 				r.Get("/quotas", s.getQuotas)
 				r.Put("/quotas", s.putQuotas)
-				r.Get("/users", s.adminUsers)
+				s.routesTenancyAdmin(r)
 				r.Post("/price-feed/refresh", s.refreshPrices)
 			})
 		})
@@ -1114,7 +1116,6 @@ func (s *Server) putQuotas(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, out)
 }
 
-func (s *Server) adminUsers(w http.ResponseWriter, r *http.Request) { list(w, s.M.Users(r.Context())) }
 
 func (s *Server) refreshPrices(w http.ResponseWriter, r *http.Request) {
 	err := s.M.RefreshPricesNow(r.Context())

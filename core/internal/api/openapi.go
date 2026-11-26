@@ -39,6 +39,7 @@ type op struct {
 	Desc                       string
 }
 
+var userIDP = param{"id", "path", "string", "User id (usr_…)", true}
 var idP = param{"id", "path", "string", "Box id (box_…) or slug", true}
 
 var portP = param{"port", "path", "integer", "port number", true}
@@ -222,7 +223,31 @@ var ops = []op{
 		Params: []param{qp("actor", "string", ""), qp("type", "string", ""), qp("box", "string", ""), qp("agent", "string", ""), qp("limit", "integer", "")}},
 	{Method: "GET", Path: "/v1/admin/quotas", Summary: "Quotas", Tag: "admin", Resp: model.Quotas{}},
 	{Method: "PUT", Path: "/v1/admin/quotas", Summary: "Update quotas", Tag: "admin", Req: model.Quotas{}, Resp: model.Quotas{}},
-	{Method: "GET", Path: "/v1/admin/users", Summary: "Users", Tag: "admin"},
+	{Method: "GET", Path: "/v1/admin/users", Summary: "Users with their workspaces (platform admin)", Tag: "admin", Resp: manager.UserView{}, List: true},
+	{Method: "PATCH", Path: "/v1/admin/users/{id}", Summary: "Grant/revoke platform admin, mark email verified", Tag: "admin", Req: manager.AdminUserInput{}, Resp: model.User{}, Params: []param{userIDP}},
+	{Method: "DELETE", Path: "/v1/admin/users/{id}", Summary: "Delete a user (sessions, tokens, memberships)", Tag: "admin", Params: []param{userIDP}},
+	{Method: "GET", Path: "/v1/admin/invites", Summary: "Invite codes with redemption counts", Tag: "admin", Resp: manager.InviteView{}, List: true},
+	{Method: "POST", Path: "/v1/admin/invites", Summary: "Create an invite code (optionally mailed)", Tag: "admin", Req: manager.InviteInput{}, Resp: model.InviteCode{}, Status: 201},
+	{Method: "DELETE", Path: "/v1/admin/invites/{id}", Summary: "Delete an invite code (id or code)", Tag: "admin", Params: []param{{"id", "path", "string", "Invite id (inv_…) or code", true}}},
+	{Method: "GET", Path: "/v1/admin/waitlist", Summary: "Waitlist (oldest first)", Tag: "admin", Resp: model.WaitlistEntry{}, List: true},
+	{Method: "POST", Path: "/v1/admin/waitlist/invite", Summary: "Mail single-use invite codes to waitlist emails or the first N", Tag: "admin", Req: manager.WaitlistInviteInput{}},
+	{Method: "DELETE", Path: "/v1/admin/waitlist/{email}", Summary: "Remove an email from the waitlist", Tag: "admin", Params: []param{{"email", "path", "string", "Email address", true}}},
+	// v2 tenancy: accounts and sessions
+	{Method: "GET", Path: "/v1/auth/config", Summary: "Sign-up mode and auth options", Tag: "auth", NoAuth: true},
+	{Method: "POST", Path: "/v1/auth/signup", Summary: "Create an account (+ personal workspace) and a session", Tag: "auth", NoAuth: true, Req: manager.SignupInput{}, Resp: manager.AuthResult{}, Status: 201,
+		Desc: "The first account becomes platform admin and owns the default workspace. BOXAZ_SIGNUP_MODE=invite (default) needs invite_code; closed sends everyone to the waitlist."},
+	{Method: "POST", Path: "/v1/auth/login", Summary: "Email + password login; returns a bxs_ session token", Tag: "auth", NoAuth: true, Req: manager.LoginInput{}, Resp: manager.AuthResult{}},
+	{Method: "POST", Path: "/v1/auth/verify-email", Summary: "Confirm an email with the token from the link", Tag: "auth", NoAuth: true, Req: verifyTokenReq{}},
+	{Method: "POST", Path: "/v1/auth/password/forgot", Summary: "Mail a password reset link (always 202)", Tag: "auth", NoAuth: true, Req: emailReq{}, Status: 202},
+	{Method: "POST", Path: "/v1/auth/password/reset", Summary: "Set a new password with a reset token (signs out every session)", Tag: "auth", NoAuth: true, Req: manager.ResetPasswordInput{}},
+	{Method: "POST", Path: "/v1/waitlist", Summary: "Join the waitlist", Tag: "auth", NoAuth: true, Req: manager.WaitlistInput{}, Status: 201},
+	{Method: "POST", Path: "/v1/auth/logout", Summary: "End this session (?all=1: every session of the user)", Tag: "auth", Params: []param{qp("all", "boolean", "")}},
+	{Method: "GET", Path: "/v1/auth/me", Summary: "Signed-in user, current workspace and memberships", Tag: "auth", Resp: manager.MeView{}},
+	{Method: "PATCH", Path: "/v1/auth/me", Summary: "Update profile (name)", Tag: "auth", Req: manager.ProfileInput{}, Resp: model.User{}},
+	{Method: "POST", Path: "/v1/auth/password", Summary: "Change password (other sessions are signed out)", Tag: "auth", Req: manager.ChangePasswordInput{}},
+	{Method: "POST", Path: "/v1/auth/verify-email/resend", Summary: "Send the verification email again", Tag: "auth", Status: 202},
+	{Method: "POST", Path: "/v1/auth/workspace", Summary: "Switch the session's current workspace", Tag: "auth", Req: workspaceReq{}, Resp: manager.MeView{}},
+	{Method: "GET", Path: "/v1/workspaces", Summary: "Workspaces the user belongs to, with role", Tag: "auth", Resp: manager.WorkspaceView{}, List: true},
 	{Method: "POST", Path: "/v1/admin/price-feed/refresh", Summary: "Refresh price feed now", Tag: "admin"},
 	// v1.2: storage, notifications, egress, providers, jobs, A2A
 	{Method: "GET", Path: "/v1/storage", Summary: "Snapshot object storage (R2/B2/S3) config (admin)", Tag: "storage", Resp: manager.StorageView{}},

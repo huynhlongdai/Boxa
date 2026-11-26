@@ -119,7 +119,7 @@ lib/mock/              seed + handler + SSE giả lập
 
 - `GET /admin/jobs` = job nền định kỳ `{name, interval_s, last_run_at, last_status, last_error, duration_ms, runs}` (không phải exec Job).
 - `GET /admin/quotas` = map số (`max_boxes_per_agent`, `max_cpu_per_box`, `max_ram_mb_per_box`, `max_disk_gb_per_box`, `rate_limit_per_minute`); form tự hiện mọi khoá, có nhãn tiếng Việt cho khoá đã biết.
-- `GET /admin/users` = `{id, name, role, admin_keys, note}`; `GET /admin/system` có `detail` cho từng thành phần, `db`, `auto_burst`.
+- `GET /admin/users` = `{id, email, name?, email_verified, platform_admin, workspaces:[{id,name,role}]}` (v2); `GET /admin/system` có `detail` cho từng thành phần, `db`, `auto_burst`.
 - `GET /costs/suggestions` = `{kind, title, detail, saving_usd, box_id?, agent_id?}`; `GET /boxes/:id/observe` = `{files_changed, processes:[{pid,cmd}], ports, since}`.
 - Timeline đọc event `box.exec` có message dạng `exit=<code> <ms>ms: <lệnh>` (tiền tố `TIMEOUT ` nếu quá giờ).
 - Snippet của Core tham chiếu biến môi trường `BOXAZ_API_KEY`; wizard hiện thêm khối `export BOXAZ_API_KEY=…` với key vừa tạo.

@@ -84,14 +84,17 @@
     "colUser": "用户",
     "colRole": "角色",
     "colAdminKeys": "管理员密钥",
+    "colWorkspaces": "工作区",
+    "emailUnverified": "邮箱未验证",
     "colNote": "备注",
     "role": {
       "owner": "所有者",
+      "member": "成员",
       "admin": "管理员",
       "viewer": "只读"
     },
     "lastLogin": "登录于 {time}",
-    "usersNote": "Boxaz v1 面向单一运维者。仪表盘访问权限 = 管理员密钥（在 API 密钥页管理）。"
+    "usersNote": "每个注册用户拥有自己的工作区；第一个账号是平台管理员。Agent 和脚本仍使用 API 密钥（API 密钥页）。"
   },
   "agentDetail": {
     "back": "智能体",

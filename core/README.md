@@ -620,3 +620,20 @@ Biến môi trường chính (giá trị bí mật chỉ đặt trong Render, kh
 **Nâng cấp lên trạng thái bền.** Thêm thẻ ở dashboard.render.com/billing, chuyển `mgr-gw` sang gói `starter` (hoặc lớn hơn), gắn disk (vd `mgr-data`, mount `/data`, 1 GB), đặt `BOXAZ_DATA_DIR=/data` và `KEEPALIVE_S=0`, rồi deploy lại. `start.sh` tự `chown` disk cho user `app`.
 
 **Thời gian đo (2026-11-19).** `mgr-gw`: tạo service → live 146 s (build Docker lần đầu), `/v1/health` 200 trong 0.25 s; deploy lại sau khi thêm `TUNNEL_TOKEN` → live 31 s, `https://gw.boxs.tech/v1/health` 200 trong 0.62 s (tunnel healthy, 4 kết nối sin*). `mgr-web`: build + deploy → live 159 s, `/login` 200 0.29 s, đăng nhập bằng admin key và `/api/boxaz/{health,overview,boxes,providers}` qua `gw.boxs.tech` đều 200.
+
+## 20. v2 tenancy — tài khoản, phiên đăng nhập, mã mời, danh sách chờ
+
+Lớp store (bảng `users`, `workspaces`, `memberships`, `sessions`, `invite_codes`, `waitlist`, `password_tokens`; cột `workspace_id` trên agents/boxes/api_keys/secrets, dữ liệu cũ dồn vào workspace `ws_default`) đã có từ commit trước. Bước này thêm lớp xác thực:
+
+- **Đăng ký** `POST /v1/auth/signup {email, password, name?, invite_code?, workspace?}`. Tài khoản **đầu tiên** không cần mã, thành quản trị nền tảng (`platform_admin`) và làm owner `ws_default`. Người sau được một workspace riêng (5 box, TTL ≤ 12 h) với vai trò owner.
+  - `BOXAZ_SIGNUP_MODE=invite` (mặc định): cần mã mời; `open`: ai cũng đăng ký được; `closed`: chỉ người đầu tiên, còn lại `POLICY_DENIED` + `next: POST /v1/waitlist`.
+  - Mã mời dùng nguyên tử (`uses < max_uses`, chưa hết hạn, mỗi user một lần); email được xoá khỏi danh sách chờ khi đăng ký.
+- **Đăng nhập** `POST /v1/auth/login` → token phiên `bxs_…` (hash SHA-256 trong DB, mặc định 30 ngày, `BOXAZ_SESSION_TTL`). Mật khẩu bcrypt, 8–72 byte; sai 10 lần / 15 phút cho một email → `RATE_LIMITED`. Token dùng như API key: `Authorization: Bearer`, `?token=` hoặc cookie `boxaz_key` của dashboard.
+- `POST /v1/auth/logout[?all=1]`, `GET|PATCH /v1/auth/me`, `POST /v1/auth/password` (đổi mật khẩu, đăng xuất các phiên khác), `POST /v1/auth/workspace {workspace_id}` (đổi workspace hiện tại), `GET /v1/workspaces`.
+- **Email**: `POST /v1/auth/verify-email {token}`, `POST /v1/auth/verify-email/resend`, `POST /v1/auth/password/forgot {email}` (luôn 202), `POST /v1/auth/password/reset {token, password}` (đăng xuất mọi phiên, coi email là đã xác thực). Link dùng `BOXAZ_DASHBOARD_URL` (hoặc `BOXAZ_PUBLIC_URL`): `/verify-email?token=`, `/reset-password?token=`, `/signup?invite=`. Gửi qua SMTP trong `settings.notify`; chưa cấu hình SMTP thì nội dung thư được ghi vào log để người vận hành tự copy link.
+- **Danh sách chờ** `POST /v1/waitlist {email, note?}` → vị trí.
+- **Admin nền tảng** (admin key hoặc phiên của `platform_admin`): `GET /v1/admin/users` (kèm workspace + vai trò — thay cho dạng v1 `{admin_keys, note}`), `PATCH|DELETE /v1/admin/users/{id}` (không bỏ được admin cuối cùng), `GET|POST /v1/admin/invites`, `DELETE /v1/admin/invites/{id|code}`, `GET /v1/admin/waitlist`, `POST /v1/admin/waitlist/invite {emails[] | count, expires_in_hours?}` (gửi mã dùng 1 lần, mặc định hạn 14 ngày), `DELETE /v1/admin/waitlist/{email}`.
+- **Giới hạn tạm thời**: phiên của thành viên không phải admin nền tảng chỉ gọi được `/v1/auth/*` và `/v1/workspaces` (kể cả `/mcp`, `/a2a` đều bị chặn với `UNAUTHORIZED`) cho tới khi boxes/agents/keys/secrets được lọc theo workspace — bước kế tiếp.
+- Test: `internal/e2e/tenancy_test.go` (luồng đầy đủ + 3 chế độ đăng ký).
+
+Còn lại của v2: lọc mọi handler theo `workspace_id` + áp `max_boxes`/`max_ttl_hours` của workspace; mời thành viên vào workspace (owner/member); trang đăng ký/đăng nhập/quên mật khẩu/danh sách chờ trên web và chuyển dashboard từ "dán admin key" sang phiên; trang admin quản lý mã mời và danh sách chờ.
