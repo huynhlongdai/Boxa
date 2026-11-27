@@ -211,6 +211,9 @@ func main() {
 	if ids := m.ConfigureProvidersFromEnv(ctx, os.Getenv); len(ids) > 0 {
 		log.Printf("providers connected from env: %s", strings.Join(ids, ", "))
 	}
+	if ids := m.ConfigureProviderAccountsFromEnv(ctx, os.Environ()); len(ids) > 0 { // v2.2: <VAR>__<LABEL>
+		log.Printf("provider accounts from env: %s", strings.Join(ids, ", "))
+	}
 	m.Start(ctx)
 	if err := m.StartSSH(ctx); err != nil {
 		log.Printf("ssh gateway (BOXMES_SSH_ADDR=%s): %v", cfg.SSHAddr, err)

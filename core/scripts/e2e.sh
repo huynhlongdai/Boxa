@@ -189,7 +189,7 @@ curl -s -X POST "$BOXMES_URL/a2a" -H "Authorization: Bearer $AKEY" -d "{\"jsonrp
 S=$(curl -sN -X POST "$BOXMES_URL/a2a" -H "Authorization: Bearer $AKEY" -d "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tasks/sendSubscribe\",\"params\":{\"message\":{\"role\":\"user\",\"parts\":[{\"type\":\"text\",\"text\":\"echo sse\"}]},\"metadata\":{\"box_id\":\"$BOX\"}}}")
 echo "$S" | grep '^data: ' | tail -1 | sed 's/^data: //' | jq -e '.result.final==true and .result.status.state=="completed"' >/dev/null && pass "A2A tasks/sendSubscribe (SSE, $(echo "$S" | grep -c '^data: ') events)" || { echo "$S"; fail a2asse; }
 curl -sf "$BOXMES_URL/.well-known/agent.json" | jq -e '.capabilities.streaming and (.url|endswith("/a2a"))' >/dev/null && pass "agent card advertises /a2a + streaming" || fail card
-api GET /notify | jq -e '(.events_available|length)==6 and .telegram_configured==false' >/dev/null && pass "GET /notify" || fail notify
+api GET /notify | jq -e '(.events_available|length)==8 and .telegram_configured==false' >/dev/null && pass "GET /notify" || fail notify
 api POST /notify/test -d '{"channel":"telegram"}' | jq -e '.results[0].ok==false' >/dev/null && pass "notify test reports unconfigured channel" || fail notifytest
 api GET /storage | jq -e '.configured==false and .provider=="local"' >/dev/null && pass "storage: local fallback when unconfigured" || fail storage
 
@@ -264,6 +264,11 @@ echo "    sandbox box: $(KEY=$AKEY api GET /boxes/$SBID | jq -c '{id,status,prov
 SHID=$(echo "$SB" | jq -r .host_id)
 SH=$(api GET /hosts | jq -c --arg h "$SHID" '[.items[]|select(.id==$h)][0]|{billing,driver,provider}')
 [ "$SH" = '{"billing":"sandbox","driver":"shim","provider":"fakesbx"}' ] && pass "box placed on a single-box sandbox host (T3 shim): $SH" || fail "sbxhost $SH"
+# v2.2 provider accounts: the legacy token is the default account, the sandbox host remembers it
+[ "$(api GET /hosts | jq -r --arg h "$SHID" '[.items[]|select(.id==$h)][0].account_id')" = pa_fakesbx_default ] && pass "v2.2: sandbox host keeps its provider account (account_id)" || fail "host account_id"
+api GET /admin/providers/fakesbx/accounts | jq -e '.items[0].id=="pa_fakesbx_default" and .items[0].is_default and (.items[0].key_fingerprint|length)>4 and (tostring|test("fsb_e2e")|not)' >/dev/null && pass "v2.2: GET /admin/providers/fakesbx/accounts (default account, fingerprint only)" || fail "accounts list"
+api GET /admin/providers/fakesbx/strategy | jq -e '.effective_strategy=="drain_first" and .failover_across_accounts' >/dev/null && pass "v2.2: sandbox providers default to drain_first" || fail "strategy"
+api GET /admin/providers | jq -e '(.summary|has("balance_usd")) and ([.items[]|select(.id=="fakesbx")][0].accounts_total==1)' >/dev/null && pass "v2.2: GET /admin/providers (KPI summary + rows)" || fail "admin providers"
 J=$(KEY=$AKEY api POST /boxes/$SBID/exec -d '{"command":"echo sbx-ok > f.txt && cat f.txt && pwd"}')
 echo "$J" | jq -e '.exit_code==0 and (.stdout_tail|test("sbx-ok")) and (.stdout_tail|test("sbxhome/work"))' >/dev/null && pass "exec through the YAML adapter + T3 shim (/work mapped into the sandbox)" || { echo "$J"; fail sbxexec; }
 SN=$(KEY=$AKEY api POST /boxes/$SBID/snapshot -d '{}')
