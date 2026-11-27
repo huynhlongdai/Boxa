@@ -33,6 +33,8 @@ func (s *Server) routesInfraAdmin(r chi.Router) {
 	for _, act := range []string{"enable", "disable", "drain", "undrain", "reset"} {
 		r.Post("/providers/{p}/accounts/{a}/"+act, s.accountState(act))
 	}
+	r.Get("/providers/{p}/sandbox", s.sandboxAccounts)
+	r.Post("/providers/{p}/accounts/{a}/templates/sync", s.syncTemplates)
 	r.Get("/infra/alerts", s.infraAlerts)
 	r.Post("/infra/alerts/{id}/ack", s.ackInfraAlert)
 }
@@ -170,6 +172,19 @@ func (s *Server) accountState(action string) http.HandlerFunc {
 	}
 }
 
+// M29-S: sandbox accounts (concurrency gauges, template availability).
+func (s *Server) sandboxAccounts(w http.ResponseWriter, r *http.Request) {
+	p, _ := pa(r)
+	v, err := s.M.SandboxAccounts(r.Context(), pr(r), p)
+	reply(w, r, 200, v, err)
+}
+
+func (s *Server) syncTemplates(w http.ResponseWriter, r *http.Request) {
+	p, a := pa(r)
+	v, err := s.M.SyncAccountTemplates(r.Context(), pr(r), p, a)
+	reply(w, r, 200, v, err)
+}
+
 func (s *Server) infraAlerts(w http.ResponseWriter, r *http.Request) {
 	v, err := s.M.ListInfraAlerts(r.Context(), pr(r), r.URL.Query().Get("status"))
 	if err != nil {
@@ -227,6 +242,12 @@ func init() {
 		op{Method: "POST", Path: "/v1/admin/providers/{p}/accounts/{a}/drain", Summary: "Drain: keep hosts, take no new ones", Tag: "admin-infra", Resp: manager.AccountView{}, Params: []param{provP, acctP}},
 		op{Method: "POST", Path: "/v1/admin/providers/{p}/accounts/{a}/undrain", Summary: "Lift a drain", Tag: "admin-infra", Resp: manager.AccountView{}, Params: []param{provP, acctP}},
 		op{Method: "POST", Path: "/v1/admin/providers/{p}/accounts/{a}/reset", Summary: "Reset breaker, cooldown, error status and learned limits", Tag: "admin-infra", Resp: manager.AccountView{}, Params: []param{provP, acctP}},
+		op{Method: "GET", Path: "/v1/admin/providers/{p}/sandbox", Summary: "Sandbox API tab: accounts with concurrency gauges (running / in flight / limit, create rate) and the template availability matrix", Tag: "admin-infra",
+			Resp: manager.SandboxAccountsView{}, Params: []param{provP},
+			Desc: "Sandbox providers only (M29-S). running counts live sandboxes that hold a concurrency slot (paused ones do not); limits are the tightest over the account's limit_group. templates[t] is available | missing (learned from a \"template not found\" answer) | not_listed (the account lists its templates and t is not one) | unknown (no list: Boxmes tries and learns)."},
+		op{Method: "POST", Path: "/v1/admin/providers/{p}/accounts/{a}/templates/sync", Summary: "Read the account's templates / snapshots from the provider with its own key and store them", Tag: "admin-infra",
+			Resp: manager.TemplateSyncResult{}, Params: []param{provP, acctP},
+			Desc: "E2B / Novita: GET /templates; Daytona: GET /snapshots (ready ones). Clears learned \"missing\" entries the provider now lists. Providers without a template API answer 400: set templates with PATCH."},
 		op{Method: "GET", Path: "/v1/admin/infra/alerts", Summary: "Infra alerts (low balance, expiring token/credit/contract, limits, spend caps, failover, orphan hosts)", Tag: "admin-infra", Resp: manager.InfraAlert{}, List: true,
 			Params: []param{qp("status", "string", "open+acked (default) | open | acked | closed | all")}},
 		op{Method: "POST", Path: "/v1/admin/infra/alerts/{id}/ack", Summary: "Acknowledge an alert (no repeats until it escalates or clears)", Tag: "admin-infra", Resp: manager.InfraAlert{}, Params: []param{alertP}},

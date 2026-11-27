@@ -19,7 +19,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -305,9 +307,49 @@ func (c Cred) String() string {
 type HTTPError struct {
 	Status int
 	Body   string
+	// RetryAfter is the Retry-After header in seconds (0 = none). E2B and
+	// Daytona send it on 429; the account cooldown follows it (M29-S).
+	RetryAfter int
 }
 
 func (e *HTTPError) Error() string { return fmt.Sprintf("HTTP %d: %s", e.Status, e.Body) }
+
+// httpErr builds an HTTPError from a failed response (body already read).
+func httpErr(resp *http.Response, body string) *HTTPError {
+	e := &HTTPError{Status: resp.StatusCode, Body: body}
+	if v := strings.TrimSpace(resp.Header.Get("Retry-After")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			e.RetryAfter = n
+		} else if t, err := http.ParseTime(v); err == nil {
+			if d := int(time.Until(t).Seconds() + 0.999); d > 0 {
+				e.RetryAfter = d
+			}
+		}
+	}
+	return e
+}
+
+// concurrencyRe matches provider answers that mean "the account's
+// concurrent-sandbox (or build) limit is full" rather than "slow down":
+// E2B "maximum number of concurrent …", Daytona code LIMIT_EXCEEDED
+// (max_concurrent_vms), Novita "concurrent instances". Both come as 429.
+var concurrencyRe = regexp.MustCompile(`(?i)(maximum number of concurrent|concurrent (e2b )?sandboxes|concurrent ?instances|limit_exceeded|max_concurrent|concurrency limit)`)
+
+// templateMissingRe matches "template / snapshot not found" answers
+// (E2B `template 'x' not found`, Daytona `snapshot x not found`).
+var templateMissingRe = regexp.MustCompile(`(?i)(template|snapshot|blueprint)[^\n]{0,80}(not found|does not exist|doesn't exist|unknown)|(not found|unknown)[^\n]{0,20}(template|snapshot|blueprint)`)
+
+// IsTemplateMissing reports whether a create failed because the template
+// (snapshot) does not exist in the account whose key was used: templates
+// are account-scoped, so another account of the same provider may have it.
+func IsTemplateMissing(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), templateMissingMark)
+}
+
+const templateMissingMark = "template not found in this account"
 
 // wrapErr turns provider errors into Boxmes API errors (classified by provhealth).
 func wrapErr(name string, err error) error {
@@ -321,8 +363,21 @@ func wrapErr(name string, err error) error {
 		switch {
 		case he.Status == 401 || he.Status == 403:
 			return model.EH(model.ErrUnauthorized, "Create an API key in the "+name+" console and paste it again.", "%s rejected the key (%d): %s", name, he.Status, trim(he.Body, 200))
+		case he.Status == 429 && concurrencyRe.MatchString(he.Body):
+			// quota class (provhealth): learned concurrent_sandboxes limit on the account
+			e := model.EH(model.ErrProviderFailed, "Stop or sleep a sandbox on this account, raise its concurrency, or add another account; Boxmes fails over to the next account.", "%s concurrency limit reached (429): %s", name, trim(he.Body, 200))
+			if he.RetryAfter > 0 {
+				e = e.WithRetry(he.RetryAfter)
+			}
+			return e
 		case he.Status == 429:
-			return model.EH(model.ErrProviderFailed, "The provider is rate limiting or a quota is full; Boxmes backs off and fails over.", "%s rate limited (429): %s", name, trim(he.Body, 200))
+			e := model.EH(model.ErrProviderFailed, "The provider is rate limiting or a quota is full; Boxmes backs off and fails over.", "%s rate limited (429): %s", name, trim(he.Body, 200))
+			if he.RetryAfter > 0 {
+				e = e.WithRetry(he.RetryAfter)
+			}
+			return e
+		case (he.Status == 404 || he.Status == 400 || he.Status == 422) && templateMissingRe.MatchString(he.Body):
+			return model.EH(model.ErrProviderFailed, "Templates and snapshots belong to one provider account: build or publish it in this account, or list it on the account that has it; Boxmes tries the next account.", "%s: template not found in this account (%d): %s", name, he.Status, trim(he.Body, 200))
 		case he.Status == 402 || strings.Contains(he.Body, "balance") || strings.Contains(he.Body, "quota"):
 			return model.EH(model.ErrProviderFailed, "Top up or raise the quota in the provider console.", "%s quota/balance (%d): %s", name, he.Status, trim(he.Body, 200))
 		}
@@ -406,7 +461,7 @@ func (h *httpClient) do(ctx context.Context, method, url string, headers map[str
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
 	if resp.StatusCode >= 300 {
-		return &HTTPError{Status: resp.StatusCode, Body: trim(string(b), 600)}
+		return httpErr(resp, trim(string(b), 600))
 	}
 	switch o := out.(type) {
 	case nil:

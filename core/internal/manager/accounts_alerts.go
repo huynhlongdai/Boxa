@@ -260,6 +260,9 @@ func (m *Manager) evaluateAlerts(ctx context.Context, a *model.ProviderAccount, 
 		switch n {
 		case "servers", "concurrent_sandboxes":
 			used = float64(st.HostsLive)
+			if n == "concurrent_sandboxes" && st.SandboxStats {
+				used = float64(st.GroupRunning + st.InFlight) // M29-S: paused sandboxes do not count
+			}
 		case "vcpu":
 			used = st.VCPULive
 		}

@@ -478,7 +478,7 @@ func (y *YAMLDriver) run(ctx context.Context, call *YCall, v map[string]string) 
 	}
 	if resp.StatusCode >= 300 && !okExtra {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return nil, &HTTPError{Status: resp.StatusCode, Body: trim(string(b), 600)}
+		return nil, httpErr(resp, trim(string(b), 600))
 	}
 	if call.NDJSON != nil {
 		var so, se strings.Builder

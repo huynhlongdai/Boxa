@@ -195,7 +195,14 @@
   "Boxmes fails over to the next account or provider automatically; check Infra → Accounts.": "Boxmes は次のアカウントまたはプロバイダーへ自動で切り替えます。インフラ → アカウント を確認してください。",
   "Recreate the provider account or delete the server by hand in the provider console.": "プロバイダーアカウントを作り直すか、プロバイダーのコンソールでサーバーを手動で削除してください。",
   "Give the account a label such as \"Hetzner EU #2\".": "アカウントに \"Hetzner EU #2\" のようなラベルを付けてください。",
-  "Create a read+write API token in the provider console and paste it again.": "プロバイダーのコンソールで読み書き可能な API トークンを作成し、もう一度貼り付けてください。"
+  "Create a read+write API token in the provider console and paste it again.": "プロバイダーのコンソールで読み書き可能な API トークンを作成し、もう一度貼り付けてください。",
+  "A paused sandbox resumes only in its own account: sleep or stop another box on that account, raise its concurrent_sandboxes limit, or clone this box onto another account (POST /boxes/{id}/clone).": "一時停止したサンドボックスは自分のアカウントでしか再開できません。そのアカウントの別の box をスリープまたは停止するか、concurrent_sandboxes の上限を上げるか、この box を別のアカウントへクローンしてください（POST /boxes/{id}/clone）。",
+  "Build or publish the template in one of the accounts, then list it on that account (PATCH /v1/admin/providers/{p}/accounts/{a} templates, or POST …/accounts/{a}/templates/sync); Boxmes fails over to the next provider.": "いずれかのアカウントでテンプレートをビルドまたは公開し、そのアカウントに登録してください（PATCH /v1/admin/providers/{p}/accounts/{a} templates、または POST …/accounts/{a}/templates/sync）。Boxmes は次のプロバイダーへフェイルオーバーします。",
+  "Every account is at its concurrency or create-rate limit: wait for sandboxes to end, raise the limits (PATCH …/accounts/{a} limits) or add an account; Boxmes fails over to the next provider.": "すべてのアカウントが同時実行数または作成レートの上限に達しています。サンドボックスの終了を待つか、上限を上げる（PATCH …/accounts/{a} limits）か、アカウントを追加してください。Boxmes は次のプロバイダーへフェイルオーバーします。",
+  "Set the account's templates by hand: PATCH /v1/admin/providers/{p}/accounts/{a} with {\"templates\": [...]}.": "アカウントのテンプレートを手動で設定してください: PATCH /v1/admin/providers/{p}/accounts/{a} に {\"templates\": [...]} を送信します。",
+  "Stop or sleep a sandbox on this account, raise its concurrency, or add another account; Boxmes fails over to the next account.": "このアカウントのサンドボックスを停止またはスリープするか、同時実行数を上げるか、アカウントを追加してください。Boxmes は次のアカウントへフェイルオーバーします。",
+  "Templates and snapshots belong to one provider account: build or publish it in this account, or list it on the account that has it; Boxmes tries the next account.": "テンプレートとスナップショットは 1 つのプロバイダーアカウントに属します。このアカウントでビルドまたは公開するか、それを持つアカウントに登録してください。Boxmes は次のアカウントを試します。",
+  "Use a sandbox provider id (GET /v1/sandbox/providers).": "サンドボックスプロバイダーの id を使ってください（GET /v1/sandbox/providers）。"
  },
  "msg": {
   "%s bootstrap exit %d: %s": "%s のブートストラップが終了コード %d で失敗: %s",
@@ -484,7 +491,15 @@
   "currency must be a 3-letter ISO code such as USD or EUR": "currency は USD や EUR のような 3 文字の ISO コードです",
   "%s must be >= 0": "%s は 0 以上にしてください",
   "invoice_day must be 1..31 (0 = unknown)": "invoice_day は 1..31 で指定してください（0 = 不明）",
-  "limit %s must be >= 0": "上限 %s は 0 以上にしてください"
+  "limit %s must be >= 0": "上限 %s は 0 以上にしてください",
+  "%s account %s cannot resume this box: %s": "%s のアカウント %s ではこの box を再開できません: %s",
+  "%s concurrency limit reached (429): %s": "%s の同時実行数の上限に達しました（429）: %s",
+  "%s: every account is full (%s)": "%s: すべてのアカウントが満杯です（%s）",
+  "%s: template %s is not available in any account (%s)": "%s: テンプレート %s はどのアカウントにもありません（%s）",
+  "%s: template not found in this account (%d): %s": "%s: このアカウントにテンプレートがありません（%d）: %s",
+  "provider %s cannot list templates": "プロバイダー %s はテンプレートを一覧できません",
+  "%s must be up to 64 characters without spaces, | or /": "%s は 64 文字以内で、空白・|・/ を含めないでください",
+  "%s; last provider error: %v": "%s; 直近のプロバイダーエラー: %v"
  },
  "text": {
   "agentsmd.budget_box": "このボックスに $%.2f",

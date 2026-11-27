@@ -193,6 +193,7 @@ type Manager struct {
 	names nameState   // v1.9 readable gateway names
 	acc   accessState // v1.10 tickets, live sessions, terminals, ssh
 	accts acctState   // v2.2 provider accounts
+	sbx   sbxState    // M29-S sandbox account slots (in-flight creates, create rate)
 }
 
 // SetObjectStoreHTTP overrides the HTTP client used for object storage (tests).

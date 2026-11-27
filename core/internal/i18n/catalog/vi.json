@@ -195,7 +195,14 @@
   "Boxmes fails over to the next account or provider automatically; check Infra → Accounts.": "Boxmes tự chuyển sang tài khoản hoặc provider kế tiếp; xem Hạ tầng → Tài khoản.",
   "Recreate the provider account or delete the server by hand in the provider console.": "Tạo lại tài khoản provider hoặc xoá server bằng tay trong console của provider.",
   "Give the account a label such as \"Hetzner EU #2\".": "Đặt nhãn cho tài khoản, ví dụ \"Hetzner EU #2\".",
-  "Create a read+write API token in the provider console and paste it again.": "Tạo API token đọc+ghi trong console của provider rồi dán lại."
+  "Create a read+write API token in the provider console and paste it again.": "Tạo API token đọc+ghi trong console của provider rồi dán lại.",
+  "A paused sandbox resumes only in its own account: sleep or stop another box on that account, raise its concurrent_sandboxes limit, or clone this box onto another account (POST /boxes/{id}/clone).": "Sandbox đang tạm dừng chỉ chạy tiếp được trong chính tài khoản của nó: cho ngủ hoặc dừng một box khác trên tài khoản đó, tăng hạn mức concurrent_sandboxes, hoặc nhân bản box này sang tài khoản khác (POST /boxes/{id}/clone).",
+  "Build or publish the template in one of the accounts, then list it on that account (PATCH /v1/admin/providers/{p}/accounts/{a} templates, or POST …/accounts/{a}/templates/sync); Boxmes fails over to the next provider.": "Build hoặc publish template trong một tài khoản, rồi khai báo nó trên tài khoản đó (PATCH /v1/admin/providers/{p}/accounts/{a} templates, hoặc POST …/accounts/{a}/templates/sync); Boxmes chuyển sang provider kế tiếp.",
+  "Every account is at its concurrency or create-rate limit: wait for sandboxes to end, raise the limits (PATCH …/accounts/{a} limits) or add an account; Boxmes fails over to the next provider.": "Mọi tài khoản đều đã chạm hạn mức đồng thời hoặc tốc độ tạo: chờ sandbox kết thúc, nâng hạn mức (PATCH …/accounts/{a} limits) hoặc thêm tài khoản; Boxmes chuyển sang provider kế tiếp.",
+  "Set the account's templates by hand: PATCH /v1/admin/providers/{p}/accounts/{a} with {\"templates\": [...]}.": "Khai báo template của tài khoản bằng tay: PATCH /v1/admin/providers/{p}/accounts/{a} với {\"templates\": [...]}.",
+  "Stop or sleep a sandbox on this account, raise its concurrency, or add another account; Boxmes fails over to the next account.": "Dừng hoặc cho ngủ một sandbox trên tài khoản này, nâng mức đồng thời, hoặc thêm tài khoản; Boxmes chuyển sang tài khoản kế tiếp.",
+  "Templates and snapshots belong to one provider account: build or publish it in this account, or list it on the account that has it; Boxmes tries the next account.": "Template và snapshot thuộc về một tài khoản provider: build hoặc publish nó trong tài khoản này, hoặc khai báo nó trên tài khoản đang có nó; Boxmes thử tài khoản kế tiếp.",
+  "Use a sandbox provider id (GET /v1/sandbox/providers).": "Dùng id của một provider sandbox (GET /v1/sandbox/providers)."
  },
  "msg": {
   "%s bootstrap exit %d: %s": "%s: lệnh khởi động thoát với mã %d: %s",
@@ -484,7 +491,15 @@
   "currency must be a 3-letter ISO code such as USD or EUR": "currency phải là mã ISO 3 chữ cái như USD hoặc EUR",
   "%s must be >= 0": "%s phải >= 0",
   "invoice_day must be 1..31 (0 = unknown)": "invoice_day phải trong khoảng 1..31 (0 = không rõ)",
-  "limit %s must be >= 0": "hạn mức %s phải >= 0"
+  "limit %s must be >= 0": "hạn mức %s phải >= 0",
+  "%s account %s cannot resume this box: %s": "tài khoản %s %s không thể chạy tiếp box này: %s",
+  "%s concurrency limit reached (429): %s": "%s đã chạm hạn mức đồng thời (429): %s",
+  "%s: every account is full (%s)": "%s: mọi tài khoản đều đã đầy (%s)",
+  "%s: template %s is not available in any account (%s)": "%s: không tài khoản nào có template %s (%s)",
+  "%s: template not found in this account (%d): %s": "%s: không tìm thấy template trong tài khoản này (%d): %s",
+  "provider %s cannot list templates": "provider %s không liệt kê được template",
+  "%s must be up to 64 characters without spaces, | or /": "%s tối đa 64 ký tự, không có dấu cách, | hoặc /",
+  "%s; last provider error: %v": "%s; lỗi provider gần nhất: %v"
  },
  "text": {
   "agentsmd.budget_box": "$%.2f cho box này",

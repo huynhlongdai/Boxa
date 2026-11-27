@@ -65,6 +65,13 @@ func (h *Hub) RegisterVirtual(hostID string, v Virtual) {
 	h.virt[hostID] = v
 }
 
+// VirtualHost returns the shim serving a host (nil when none).
+func (h *Hub) VirtualHost(hostID string) Virtual {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.virt[hostID]
+}
+
 // IsVirtual reports whether a host is served by a shim.
 func (h *Hub) IsVirtual(hostID string) bool {
 	h.mu.RLock()

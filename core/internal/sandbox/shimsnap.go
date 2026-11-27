@@ -95,7 +95,7 @@ func (s *Shim) snapshot(ctx context.Context, p proto.SnapshotParams) (*proto.Sna
 // pull reads a (binary) file from the sandbox.
 func (s *Shim) pull(ctx context.Context, box, path string) ([]byte, error) {
 	if f, ok := s.D.(Filer); ok {
-		if b, err := f.GetFile(ctx, s.C, s.Ref, path); err == nil {
+		if b, err := f.GetFile(ctx, s.cred(), s.Ref, path); err == nil {
 			return b, nil
 		}
 	}
@@ -112,7 +112,7 @@ func (s *Shim) pull(ctx context.Context, box, path string) ([]byte, error) {
 // push writes a (binary) file into the sandbox.
 func (s *Shim) push(ctx context.Context, box, path string, data []byte) error {
 	if f, ok := s.D.(Filer); ok {
-		if err := f.PutFile(ctx, s.C, s.Ref, path, data); err == nil {
+		if err := f.PutFile(ctx, s.cred(), s.Ref, path, data); err == nil {
 			return nil
 		}
 	}

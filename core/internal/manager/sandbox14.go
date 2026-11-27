@@ -149,7 +149,10 @@ func (m *Manager) createSandboxHost(ctx context.Context, p *Principal, sp sandbo
 	}
 	var hd provider.Handle
 	var token string
-	_, err := m.acrossAccounts(ctx, info.ID, region, h.PriceHour, prefer, sku+" "+region, func(a *model.ProviderAccount, tok string) error {
+	// M29-S: template availability, key scopes, live concurrency and
+	// create-rate slots per account; a missing template moves to the next account
+	_, err := m.acrossSandboxAccounts(ctx, pickReq{prov: info.ID, region: region, priceHour: h.PriceHour, prefer: prefer, what: sku + " " + region,
+		sp: sp, template: sandboxTemplate(sp, sku), slot: h.ID}, func(a *model.ProviderAccount, tok string) error {
 		h.AccountID, token = a.ID, tok
 		m.Store.PutHost(ctx, h)
 		var e error

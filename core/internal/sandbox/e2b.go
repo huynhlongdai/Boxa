@@ -476,7 +476,7 @@ func (d *E2B) Exec(ctx context.Context, c Cred, id string, r ExecRequest) (*Exec
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return nil, &HTTPError{Status: resp.StatusCode, Body: string(b)}
+		return nil, httpErr(resp, string(b))
 	}
 	res := &ExecResult{ExitCode: -1}
 	var so, se bytes.Buffer
@@ -586,7 +586,7 @@ func (d *E2B) PutFile(ctx context.Context, c Cred, id, path string, data []byte)
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return &HTTPError{Status: resp.StatusCode, Body: string(b)}
+		return httpErr(resp, string(b))
 	}
 	return nil
 }

@@ -195,7 +195,14 @@
   "Boxmes fails over to the next account or provider automatically; check Infra → Accounts.": "Boxmes 会自动切换到下一个账户或提供商；请查看 基础设施 → 账户。",
   "Recreate the provider account or delete the server by hand in the provider console.": "请重新创建提供商账户，或在提供商控制台中手动删除服务器。",
   "Give the account a label such as \"Hetzner EU #2\".": "请为账户设置名称，例如 \"Hetzner EU #2\"。",
-  "Create a read+write API token in the provider console and paste it again.": "请在提供商控制台创建读写 API 令牌并重新粘贴。"
+  "Create a read+write API token in the provider console and paste it again.": "请在提供商控制台创建读写 API 令牌并重新粘贴。",
+  "A paused sandbox resumes only in its own account: sleep or stop another box on that account, raise its concurrent_sandboxes limit, or clone this box onto another account (POST /boxes/{id}/clone).": "已暂停的沙箱只能在其所属账号中恢复：请让该账号上的另一个 box 休眠或停止、提高其 concurrent_sandboxes 限额，或将此 box 克隆到其他账号（POST /boxes/{id}/clone）。",
+  "Build or publish the template in one of the accounts, then list it on that account (PATCH /v1/admin/providers/{p}/accounts/{a} templates, or POST …/accounts/{a}/templates/sync); Boxmes fails over to the next provider.": "请在某个账号中构建或发布该模板，并在该账号上登记（PATCH /v1/admin/providers/{p}/accounts/{a} templates，或 POST …/accounts/{a}/templates/sync）；Boxmes 会切换到下一个提供商。",
+  "Every account is at its concurrency or create-rate limit: wait for sandboxes to end, raise the limits (PATCH …/accounts/{a} limits) or add an account; Boxmes fails over to the next provider.": "所有账号都已达到并发或创建速率上限：请等待沙箱结束、提高限额（PATCH …/accounts/{a} limits）或添加账号；Boxmes 会切换到下一个提供商。",
+  "Set the account's templates by hand: PATCH /v1/admin/providers/{p}/accounts/{a} with {\"templates\": [...]}.": "请手动设置账号的模板：PATCH /v1/admin/providers/{p}/accounts/{a}，内容为 {\"templates\": [...]}。",
+  "Stop or sleep a sandbox on this account, raise its concurrency, or add another account; Boxmes fails over to the next account.": "请停止或休眠该账号上的一个沙箱、提高其并发数，或添加账号；Boxmes 会切换到下一个账号。",
+  "Templates and snapshots belong to one provider account: build or publish it in this account, or list it on the account that has it; Boxmes tries the next account.": "模板和快照属于单个提供商账号：请在此账号中构建或发布，或在拥有它的账号上登记；Boxmes 会尝试下一个账号。",
+  "Use a sandbox provider id (GET /v1/sandbox/providers).": "请使用沙箱提供商的 id（GET /v1/sandbox/providers）。"
  },
  "msg": {
   "%s bootstrap exit %d: %s": "%s 引导命令退出码 %d：%s",
@@ -484,7 +491,15 @@
   "currency must be a 3-letter ISO code such as USD or EUR": "currency 必须是 3 位 ISO 代码，如 USD 或 EUR",
   "%s must be >= 0": "%s 必须 >= 0",
   "invoice_day must be 1..31 (0 = unknown)": "invoice_day 必须在 1..31 之间（0 = 未知）",
-  "limit %s must be >= 0": "限额 %s 必须 >= 0"
+  "limit %s must be >= 0": "限额 %s 必须 >= 0",
+  "%s account %s cannot resume this box: %s": "%s 账号 %s 无法恢复此 box：%s",
+  "%s concurrency limit reached (429): %s": "%s 已达到并发上限（429）：%s",
+  "%s: every account is full (%s)": "%s：所有账号均已满（%s）",
+  "%s: template %s is not available in any account (%s)": "%s：没有任何账号提供模板 %s（%s）",
+  "%s: template not found in this account (%d): %s": "%s：此账号中未找到模板（%d）：%s",
+  "provider %s cannot list templates": "提供商 %s 无法列出模板",
+  "%s must be up to 64 characters without spaces, | or /": "%s 最多 64 个字符，且不能包含空格、| 或 /",
+  "%s; last provider error: %v": "%s；最近一次提供商错误：%v"
  },
  "text": {
   "agentsmd.budget_box": "本盒子 $%.2f",

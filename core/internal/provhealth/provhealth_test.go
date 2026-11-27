@@ -8,7 +8,9 @@ import (
 
 func TestClassify(t *testing.T) {
 	cases := map[string]string{
-		"hetzner API error: HTTP 429: rate limit exceeded": ClassRateLimit,
+		"hetzner API error: HTTP 429: rate limit exceeded":                                                          ClassRateLimit,
+		"E2B concurrency limit reached (429): You have reached the maximum number of concurrent E2B sandboxes (20)": ClassQuota, // M29-S
+		"HTTP 429: maximum number of concurrent template builds (20)":                                               ClassQuota,
 		"HTTP 401: unauthorized":                           ClassAuth,
 		"vultr rejected the token (403)":                   ClassAuth,
 		"HTTP 403: server_limit_exceeded quota":            ClassAuth, // auth wins on 403

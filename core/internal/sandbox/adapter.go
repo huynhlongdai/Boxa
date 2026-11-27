@@ -108,6 +108,13 @@ func (a *adapter) Create(ctx context.Context, token string, req provider.CreateR
 		info.Sizes = s.SizesFor(c)
 	}
 	z := pickSize(info, Spec{SKU: req.SKU})
+	if _, ok := a.d.(Sizer); ok && req.SKU != "" && z.SKU != req.SKU {
+		// M29-S: the SKU is a template of another account (the catalog has
+		// every account's templates): keep it, never fall back silently to
+		// another template — the provider answers "template not found" and
+		// core tries the next account
+		z.SKU = req.SKU
+	}
 	spec := Spec{Name: req.Name, SKU: z.SKU, CPU: z.CPU, RAMMB: z.RAMMB, DiskGB: z.DiskGB, Region: req.Region, Labels: req.Labels, Template: a.info.DefaultTemplate}
 	if g, ok := a.d.(TrafficGuard); ok && req.PrivateTraffic && g.PrivateTrafficSupported() {
 		spec.PrivateTraffic = true

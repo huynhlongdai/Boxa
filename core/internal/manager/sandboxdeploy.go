@@ -346,7 +346,23 @@ func (m *Manager) cloneSandbox(ctx context.Context, p *Principal, src *model.Box
 	}
 	method := ""
 	var h *model.Host
-	if fk, ok := sp.Driver().(sandbox.Forker); ok && sp.Info().Caps.Fork {
+	fk, canFork := sp.Driver().(sandbox.Forker)
+	canFork = canFork && sp.Info().Caps.Fork
+	forkSkipped := ""
+	release := func() {}
+	if canFork && src.Status != model.StatusSleeping {
+		// M29-S: a native fork lives in the source's account; when that
+		// account cannot take one more sandbox (full, draining, out of
+		// credit, cooling) clone through snapshot → new sandbox on an
+		// eligible account instead
+		if why, rel := m.reserveFork(ctx, srcHost, nb.ID); why != "" {
+			canFork, forkSkipped = false, why
+		} else {
+			release = rel
+		}
+	}
+	if canFork {
+		defer release()
 		if src.Status == model.StatusSleeping {
 			return fail(model.EH(model.ErrInvalid, "Wake the box first (box_sleep wake=true).", "native fork needs a running sandbox"))
 		}
@@ -363,6 +379,7 @@ func (m *Manager) cloneSandbox(ctx context.Context, p *Principal, src *model.Box
 		if h, err = m.adoptSandbox(ctx, p, srcHost, child.ID); err != nil {
 			return fail(err)
 		}
+		release() // the adopted host now counts as running
 		if child.Meta[sandbox.MetaPrivateTraffic] == "1" || srcHost.PrivateTraffic {
 			h.PrivateTraffic = true // a fork keeps the source's network config
 			m.Store.PutHost(ctx, h)
@@ -398,6 +415,9 @@ func (m *Manager) cloneSandbox(ctx context.Context, p *Principal, src *model.Box
 			return fail(mapHostErr(err))
 		}
 		method = "snapshot " + sn.ID + " → new " + h.Provider + " sandbox"
+		if forkSkipped != "" {
+			method += " (native fork skipped: " + forkSkipped + ")"
+		}
 	}
 	nb.Provider, nb.Region, nb.CostPerHour = h.Provider, h.Region, model.Round6(h.PriceHour)
 	nb.URL = m.boxURL(ctx, nb, h)

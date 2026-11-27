@@ -69,10 +69,17 @@ type AccountInput struct {
 	ContractEndsAt   *string `json:"contract_ends_at,omitempty"`
 	NextInvoiceAt    *string `json:"next_invoice_at,omitempty"`
 
-	// Limits: manual provider-side limits, e.g. {"servers": 25, "vcpu": 100}
+	// Limits: manual provider-side limits, e.g. {"servers": 25, "vcpu": 100,
+	// "concurrent_sandboxes": 20, "create_per_sec": 1, "create_per_min": 300}
 	// (0 removes one).
-	Limits     map[string]float64       `json:"limits,omitempty"`
-	Thresholds *model.AccountThresholds `json:"thresholds,omitempty"`
+	Limits map[string]float64 `json:"limits,omitempty"`
+
+	// M29-S sandbox accounts
+	Templates             *[]string                `json:"templates,omitempty"`               // templates / snapshots that exist in this account (replaces the list)
+	ClearTemplatesMissing bool                     `json:"clear_templates_missing,omitempty"` // forget the learned "template not found" entries
+	BillingGroup          *string                  `json:"billing_group,omitempty"`           // accounts paying from one wallet ("" clears)
+	LimitGroup            *string                  `json:"limit_group,omitempty"`             // accounts sharing provider-side limits ("" clears)
+	Thresholds            *model.AccountThresholds `json:"thresholds,omitempty"`
 }
 
 // RotateInput is POST …/accounts/{a}/rotate.
@@ -391,6 +398,39 @@ func (m *Manager) applyInput(ctx context.Context, a *model.ProviderAccount, in A
 	}
 	optF(in.CreditTotal, &a.CreditTotal, "credit_total")
 	optF(in.CreditRemaining, &a.CreditRemaining, "credit_remaining")
+	if in.CreditRemaining != nil {
+		at := time.Now().UTC()
+		a.CreditAt = &at // effective credit = credit − ledger spend since now
+		if a.Status == model.AccountOutOfCredit && a.Balance == nil && *in.CreditRemaining > a.MinBalance {
+			a.Status, a.StatusReason = model.AccountActive, ""
+		}
+	}
+	if in.Templates != nil {
+		a.Templates = dedupeStrs(*in.Templates)
+		set("templates")
+	}
+	if in.ClearTemplatesMissing {
+		a.TemplatesMissing = []string{}
+		set("templates_missing")
+	}
+	group := func(v *string, dst *string, name string) error {
+		if v == nil {
+			return nil
+		}
+		g := strings.TrimSpace(*v)
+		if len(g) > 64 || strings.ContainsAny(g, " |/") {
+			return bad("%s must be up to 64 characters without spaces, | or /", name)
+		}
+		*dst = g
+		set(name)
+		return nil
+	}
+	if err := group(in.BillingGroup, &a.BillingGroup, "billing_group"); err != nil {
+		return nil, err
+	}
+	if err := group(in.LimitGroup, &a.LimitGroup, "limit_group"); err != nil {
+		return nil, err
+	}
 	optF(in.PendingCharges, &a.PendingCharges, "pending_charges")
 	optF(in.MonthToDate, &a.MonthToDate, "month_to_date")
 	now := time.Now().UTC()
@@ -590,7 +630,7 @@ func (m *Manager) CreateProviderAccount(ctx context.Context, p *Principal, prov 
 	m.EmitData(ctx, p.Actor(), "", "", "provider_account.created", fmt.Sprintf("%s: account %s added (key %s)", prov, a.Label, a.KeyFingerprint), nil,
 		map[string]any{"provider": prov, "account_id": a.ID, "key_fingerprint": a.KeyFingerprint, "credential_source": "api", "label": a.Label})
 	v := m.viewAccount(ctx, a, nil)
-	v.Warnings = dupWarning(dups)
+	v.Warnings = append(dupWarning(dups), m.sandboxAccountWarnings(ctx, a)...)
 	return v, nil
 }
 
@@ -619,7 +659,7 @@ func (m *Manager) PatchProviderAccount(ctx context.Context, p *Principal, prov, 
 	if a.Status == model.AccountArchived {
 		a.Status = model.AccountActive
 	}
-	oldEnabled, oldDrain := a.Enabled, a.Drain
+	oldEnabled, oldDrain, oldStatus := a.Enabled, a.Drain, a.Status
 	changed, err := m.applyInput(ctx, a, in, p.Actor())
 	if err != nil {
 		l.Unlock()
@@ -647,9 +687,24 @@ func (m *Manager) PatchProviderAccount(ctx context.Context, p *Principal, prov, 
 		}
 		m.EmitData(ctx, p.Actor(), "", "", typ, prov+" "+a.Label, nil, map[string]any{"provider": prov, "account_id": id})
 	}
+	if oldStatus == model.AccountOutOfCredit && a.Status != model.AccountOutOfCredit {
+		m.syncBillingGroup(ctx, a, false) // the shared wallet was topped up
+	}
 	v := m.viewAccount(ctx, a, nil)
-	v.Warnings = dupWarning(m.duplicates(ctx, prov, id, a.ExternalID, ""))
+	v.Warnings = append(dupWarning(m.duplicates(ctx, prov, id, a.ExternalID, "")), m.sandboxAccountWarnings(ctx, a)...)
 	return v, nil
+}
+
+func dedupeStrs(l []string) []string {
+	seen := map[string]bool{}
+	out := []string{}
+	for _, x := range l {
+		if x = strings.TrimSpace(x); x != "" && !seen[x] {
+			seen[x] = true
+			out = append(out, x)
+		}
+	}
+	return out
 }
 
 // SetAccountState is POST …/accounts/{a}/{enable|disable|drain|undrain|reset}.
@@ -766,6 +821,7 @@ func (m *Manager) RotateProviderAccount(ctx context.Context, p *Principal, prov,
 	}
 	m.EmitData(ctx, p.Actor(), "", "", "provider_account.key_rotated", fmt.Sprintf("%s %s: key %s → %s; revoke the old key in the provider console", prov, a.Label, oldFP, a.KeyFingerprint), nil,
 		map[string]any{"provider": prov, "account_id": id, "old_fingerprint": oldFP, "key_fingerprint": a.KeyFingerprint})
+	m.refreshShimCreds(ctx, prov, id) // live T3 shims of the account use the new key at once
 	v := m.viewAccount(ctx, a, nil)
 	if a.ExternalID == "" {
 		v.Warnings = []string{"external_id unknown: make sure the new key belongs to the same provider account, or its hosts cannot be deleted"}
@@ -1001,6 +1057,9 @@ func (m *Manager) providerRow(ctx context.Context, pid string, hosts []*model.Ho
 			u := l.Used
 			if k == "servers" || k == "concurrent_sandboxes" {
 				u = used
+				if k == "concurrent_sandboxes" && st.SandboxStats {
+					u = float64(st.GroupRunning + st.InFlight)
+				}
 			} else if k == "vcpu" {
 				u = st.VCPULive
 			}

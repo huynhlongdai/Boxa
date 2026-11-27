@@ -30,6 +30,7 @@ type Shim struct {
 	WorkDir string // e.g. /home/user → box /work = /home/user/work
 	SnapDir string // gateway directory for T3 snapshot tarballs
 	mu      sync.Mutex
+	credMu  sync.RWMutex                 // C changes when the account key is rotated (M29-S)
 	boxes   map[string]map[string]string // box id → env
 	last    time.Time
 	logs    map[string]string // log id → full output of a truncated exec (in memory, newest shimLogKeep)
@@ -45,6 +46,20 @@ const shimLogKeep = 16
 func NewShim(d Driver, c Cred, ref string) *Shim {
 	wd := strings.TrimRight(orStr(d.Info().WorkDir, "/tmp/box"), "/")
 	return &Shim{D: d, C: c, Ref: ref, WorkDir: wd, boxes: map[string]map[string]string{}, logs: map[string]string{}}
+}
+
+// SetCred swaps the provider credential (the host's account key was
+// rotated): later calls use the new key, running calls finish with the old.
+func (s *Shim) SetCred(c Cred) {
+	s.credMu.Lock()
+	s.C = c
+	s.credMu.Unlock()
+}
+
+func (s *Shim) cred() Cred {
+	s.credMu.RLock()
+	defer s.credMu.RUnlock()
+	return s.C
 }
 
 // Unsupported is returned for RPCs an exec-only sandbox cannot serve.
@@ -108,7 +123,7 @@ func (s *Shim) exec(ctx context.Context, box, cmd, cwd string, env map[string]st
 	// cwd and env go inline (mkdir -p + cd + export), which works with every
 	// provider's exec whether or not it takes cwd/env fields.
 	r := ExecRequest{Command: ShellCommand(ExecRequest{Command: cmd, Cwd: cwd, Env: all}), TimeoutS: timeout}
-	res, err := s.D.Exec(ctx, s.C, s.Ref, r)
+	res, err := s.D.Exec(ctx, s.cred(), s.Ref, r)
 	s.mu.Lock()
 	s.last = time.Now()
 	s.mu.Unlock()
@@ -121,7 +136,7 @@ func (s *Shim) write(ctx context.Context, box, p string, data []byte) error {
 		if _, err := s.exec(ctx, box, "mkdir -p "+shq(path.Dir(full)), "/", nil, 30); err != nil {
 			return err
 		}
-		return f.PutFile(ctx, s.C, s.Ref, full, data)
+		return f.PutFile(ctx, s.cred(), s.Ref, full, data)
 	}
 	b64 := base64.StdEncoding.EncodeToString(data)
 	res, err := s.exec(ctx, box, "mkdir -p "+shq(path.Dir(full))+" && printf %s "+shq(b64)+" | base64 -d > "+shq(full), "/", nil, 60)
@@ -170,9 +185,9 @@ func (s *Shim) Call(ctx context.Context, method string, params, out any) error {
 	case proto.MStart, proto.MStop:
 		if p, ok := s.D.(Pauser); ok {
 			if method == proto.MStop {
-				return p.Pause(ctx, s.C, s.Ref)
+				return p.Pause(ctx, s.cred(), s.Ref)
 			}
-			return p.Resume(ctx, s.C, s.Ref)
+			return p.Resume(ctx, s.cred(), s.Ref)
 		}
 		return nil
 	case proto.MDelete:
@@ -181,7 +196,7 @@ func (s *Shim) Call(ctx context.Context, method string, params, out any) error {
 		s.mu.Lock()
 		delete(s.boxes, p.BoxID)
 		s.mu.Unlock()
-		err := s.D.Delete(ctx, s.C, s.Ref)
+		err := s.D.Delete(ctx, s.cred(), s.Ref)
 		if he, ok := err.(*HTTPError); ok && (he.Status == 404 || he.Status == 410) {
 			return nil
 		}
@@ -326,7 +341,7 @@ func (s *Shim) read(ctx context.Context, p proto.ReadParams, out any) error {
 	script := "if [ -d " + shq(full) + " ]; then echo __BOX_DIR__; find " + shq(full) + " -mindepth 1 -maxdepth 1 -printf '%f\\t%y\\t%s\\n' 2>/dev/null | head -500; " +
 		"elif [ -f " + shq(full) + " ]; then cat " + shq(full) + "; else echo 'no such file' >&2; exit 2; fi"
 	if f, ok := s.D.(Filer); ok {
-		if data, err := f.GetFile(ctx, s.C, s.Ref, full); err == nil {
+		if data, err := f.GetFile(ctx, s.cred(), s.Ref, full); err == nil {
 			return encodeOut(lineRange(string(data), p.From, p.To), out)
 		}
 	}

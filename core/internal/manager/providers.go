@@ -156,6 +156,7 @@ func (m *Manager) SetProviderToken(ctx context.Context, p *Principal, id, token 
 	}
 	m.Health.Reset(id)
 	m.syncDefaultAccount(ctx, p, mp, token)
+	m.refreshShimCreds(ctx, id, model.DefaultAccountID(id)) // M29-S: live shims of the default account
 	m.Emit(ctx, p.Actor(), "", "", "provider.connected", id+" token validated", nil)
 	go func() {
 		c, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -179,6 +180,9 @@ func (m *Manager) refreshLiveOffers(ctx context.Context, id string) error {
 	start := time.Now()
 	offers, err := prov.Offers(ctx, tok)
 	m.Health.Record(id, provhealth.Sample{Kind: provhealth.KindAPI, LatencyMS: float64(time.Since(start).Microseconds()) / 1000}, err, 0)
+	if err == nil {
+		offers = m.unionSandboxOffers(ctx, prov, tok, offers) // M29-S: templates of every account
+	}
 	defer m.invalidateCatalog() // after the offers are stored
 	mp, _ := m.Store.GetProvider(ctx, id)
 	now := time.Now().UTC()

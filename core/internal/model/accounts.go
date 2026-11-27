@@ -128,8 +128,24 @@ type ProviderAccount struct {
 	TrialEndsAt    *time.Time `json:"trial_ends_at,omitempty"`
 	ContractEndsAt *time.Time `json:"contract_ends_at,omitempty"`
 
-	Limits     map[string]AccountLimit `json:"limits"` // servers | vcpu | ram_gb | concurrent_sandboxes | …
+	Limits     map[string]AccountLimit `json:"limits"` // servers | vcpu | ram_gb | concurrent_sandboxes | create_per_sec | create_per_min | …
 	Thresholds AccountThresholds       `json:"thresholds"`
+
+	// M29-S sandbox accounts. Templates / snapshots are scoped to the
+	// provider account (E2B project, Daytona project, Novita team): a box
+	// created from template X can only land on an account that has X.
+	Templates         []string   `json:"templates"`                     // templates known to exist in this account (manual or synced; empty = unknown)
+	TemplatesMissing  []string   `json:"templates_missing"`             // learned: create answered "template not found" with this account's key
+	TemplatesSyncedAt *time.Time `json:"templates_synced_at,omitempty"` // last POST …/templates/sync
+	// BillingGroup names accounts that pay from one wallet (E2B workspace,
+	// Daytona organization, Novita account): out of credit on one is out of
+	// credit on all of them.
+	BillingGroup string `json:"billing_group,omitempty"`
+	// LimitGroup names accounts that share provider-side limits (several
+	// keys of one E2B project, projects of one Daytona organization):
+	// concurrent sandboxes and create rate are counted over the group.
+	LimitGroup string     `json:"limit_group,omitempty"`
+	CreditAt   *time.Time `json:"credit_at,omitempty"` // when credit_remaining was entered (effective credit = credit − ledger since then)
 
 	CreatedAt time.Time `json:"created_at"`
 	CreatedBy string    `json:"created_by,omitempty"`
@@ -162,4 +178,11 @@ type AccountStats struct {
 	Ineligible          string   `json:"ineligible,omitempty"` // why the scheduler skips it now
 	Breaker             string   `json:"breaker"`              // closed | open | half_open (account-level)
 	HasCredential       bool     `json:"has_credential"`
+	// M29-S sandbox figures (sandbox providers only)
+	SandboxesRunning int  `json:"sandboxes_running,omitempty"` // live sandboxes of this account that count toward concurrency (paused ones do not)
+	GroupRunning     int  `json:"group_running,omitempty"`     // the same over the account's limit_group
+	InFlight         int  `json:"in_flight,omitempty"`         // creates / forks / resumes in progress (limit group)
+	CreatesLastSec   int  `json:"creates_last_sec,omitempty"`  // creates started in the last second (limit group)
+	CreatesLastMin   int  `json:"creates_last_min,omitempty"`  // creates started in the last minute (limit group)
+	SandboxStats     bool `json:"-"`                           // the sandbox figures above were computed
 }

@@ -53,6 +53,10 @@ func Classify(err error) string {
 		return false
 	}
 	switch {
+	// M29-S: a full concurrent-sandbox (or build) limit also answers 429 but
+	// frees only when sandboxes stop: an account quota, not a rate limit
+	case has("concurrency limit reached", "maximum number of concurrent", "max_concurrent"):
+		return ClassQuota
 	case has("http 429", "too many requests", "rate limit", "ratelimit", "rate_limit", "throttl"):
 		return ClassRateLimit
 	case has("http 402", "payment required", "insufficient balance", "insufficient_balance", "insufficient funds", "insufficient credit",

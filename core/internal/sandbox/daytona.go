@@ -263,7 +263,7 @@ func (d *Daytona) PutFile(ctx context.Context, c Cred, id, path string, data []b
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return &HTTPError{Status: resp.StatusCode, Body: string(b)}
+		return httpErr(resp, string(b))
 	}
 	return nil
 }

@@ -329,7 +329,7 @@ func (m *Manager) provisionWithTemplate(id, baseTemplate string) {
 	lock.Lock()
 	defer lock.Unlock()
 	exclude := map[string]bool{}
-	var lastErr error
+	var lastErr, burstErr error
 	burstFallbacks := 0
 	for attempt := 1; attempt <= maxProvisionAttempts; attempt++ {
 		b, err := m.Store.GetBox(ctx, id)
@@ -361,6 +361,9 @@ func (m *Manager) provisionWithTemplate(id, baseTemplate string) {
 			lastErr = err
 			var ae *model.APIError
 			if errors.As(err, &ae) && ae.Code == model.ErrNoCapacity {
+				if burstErr != nil { // keep why the burst provider(s) failed (M29-S: e.g. no account has the template)
+					lastErr = model.EH(model.ErrNoCapacity, ae.Hint, "%s; last provider error: %v", ae.Message, burstErr)
+				}
 				break // retrying won't create capacity
 			}
 			continue
@@ -369,7 +372,7 @@ func (m *Manager) provisionWithTemplate(id, baseTemplate string) {
 		if host == nil && pl.Offer != nil {
 			host, err = m.rentBurstHost(ctx, pl.Offer)
 			if err != nil {
-				lastErr = err
+				lastErr, burstErr = err, err
 				// fall through to the next provider in the chain
 				exclude["provider:"+pl.Offer.Provider] = true
 				if burstFallbacks < len(m.chain()) {
@@ -1088,7 +1091,15 @@ func (m *Manager) Wake(ctx context.Context, p *Principal, id string) (*model.Box
 	if !m.Hub.Connected(b.HostID) {
 		return nil, model.EH(model.ErrProviderFailed, "The box's host is offline; retry shortly.", "host %s offline", b.HostID)
 	}
-	if err := m.Hub.Call(ctx, b.HostID, proto.MStart, proto.BoxRef{BoxID: b.ID}, nil); err != nil {
+	// M29-S: a paused sandbox resumes in its own account, which must have a
+	// free concurrency slot
+	release, err := m.sandboxWakeCheck(ctx, b)
+	if err != nil {
+		return nil, err
+	}
+	err = m.Hub.Call(ctx, b.HostID, proto.MStart, proto.BoxRef{BoxID: b.ID}, nil)
+	release()
+	if err != nil {
 		return nil, mapHostErr(err)
 	}
 	if b.Egress != nil {

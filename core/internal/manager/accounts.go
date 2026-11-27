@@ -82,6 +82,8 @@ func cloneAccount(a *model.ProviderAccount) *model.ProviderAccount {
 	c.Tags = append([]string{}, a.Tags...)
 	c.Regions = append([]string{}, a.Regions...)
 	c.Scopes = append([]string{}, a.Scopes...)
+	c.Templates = append([]string{}, a.Templates...)
+	c.TemplatesMissing = append([]string{}, a.TemplatesMissing...)
 	c.Limits = map[string]model.AccountLimit{}
 	for k, v := range a.Limits {
 		c.Limits[k] = v
@@ -99,6 +101,12 @@ func normAccount(a *model.ProviderAccount) {
 	}
 	if a.Scopes == nil {
 		a.Scopes = []string{}
+	}
+	if a.Templates == nil {
+		a.Templates = []string{}
+	}
+	if a.TemplatesMissing == nil {
+		a.TemplatesMissing = []string{}
 	}
 	if a.Limits == nil {
 		a.Limits = map[string]model.AccountLimit{}
@@ -439,13 +447,19 @@ func (m *Manager) computeStats(ctx context.Context, a *model.ProviderAccount, ho
 	st.BurnPerHourUSD = r4(math.Max(last24/window, priceHour))
 	st.SpendTodayUSD, st.SpendMonthUSD = r4(st.SpendTodayUSD), r4(st.SpendMonthUSD)
 	st.SpendToday, st.SpendMonth = r4(st.SpendTodayUSD/fx), r4(st.SpendMonthUSD/fx)
-	if a.Balance != nil {
+	// money left: the balance, else (M29-S) the promo / prepaid credit left
+	// (E2B Hobby $100, Novita $100): credit − ledger since it was entered
+	base, baseAt := a.Balance, a.BalanceAt
+	if base == nil && a.CreditRemaining != nil {
+		base, baseAt = a.CreditRemaining, a.CreditAt
+	}
+	if base != nil {
 		since := time.Time{}
-		if a.BalanceAt != nil {
-			since = *a.BalanceAt
+		if baseAt != nil {
+			since = *baseAt
 		}
 		spent, _ := m.Store.SumLedger(ctx, store.LedgerFilter{AccountID: a.ID, From: since})
-		eff := r4(*a.Balance - spent/fx)
+		eff := r4(*base - spent/fx)
 		usd := r4(eff * fx)
 		st.BalanceEffective, st.BalanceEffectiveUSD = &eff, &usd
 		if st.BurnPerHourUSD > 0 {
@@ -461,6 +475,9 @@ func (m *Manager) computeStats(ctx context.Context, a *model.ProviderAccount, ho
 		st.Breaker = provhealth.Open
 	} else if s := m.Health.Stats(acctKey(a), ""); s.Breaker.State != "" {
 		st.Breaker = s.Breaker.State
+	}
+	if _, ok := m.sandboxProv(a.Provider); ok {
+		m.fillSandboxStats(ctx, a, st, hosts, boxes, now)
 	}
 	why := m.ineligible(a, st, "", 0, now)
 	st.Eligible, st.Ineligible = why == "", why
@@ -504,7 +521,11 @@ func (m *Manager) ineligible(a *model.ProviderAccount, st *model.AccountStats, r
 		used = float64(st.HostsLive)
 	}
 	for _, k := range []string{"servers", "concurrent_sandboxes"} {
-		if l, ok := a.Limits[k]; ok && l.Limit > 0 && used+1 > l.Limit {
+		u := used
+		if k == "concurrent_sandboxes" && st != nil && st.SandboxStats {
+			u = float64(st.GroupRunning + st.InFlight) // paused sandboxes do not count (M29-S)
+		}
+		if l, ok := a.Limits[k]; ok && l.Limit > 0 && u+1 > l.Limit {
 			return fmt.Sprintf("%s limit %.0f reached", k, l.Limit)
 		}
 	}
@@ -616,6 +637,9 @@ func usageRatio(a *model.ProviderAccount) float64 {
 		u := l.Used
 		if k == "servers" || k == "concurrent_sandboxes" {
 			u = used
+			if k == "concurrent_sandboxes" && a.Stats != nil && a.Stats.SandboxStats {
+				u = float64(a.Stats.GroupRunning + a.Stats.InFlight)
+			}
 		} else if k == "vcpu" && a.Stats != nil {
 			u = a.Stats.VCPULive
 		}
@@ -795,26 +819,12 @@ func (m *Manager) acrossAccounts(ctx context.Context, prov, region string, price
 		}
 		err = fn(a, tok)
 		if err == nil {
-			ws := ""
-			if p := principalFrom(ctx); p != nil {
-				ws = p.WorkspaceID
-			}
-			if mins := pp.StickyMinutes; mins > 0 {
-				m.accts.mu.Lock()
-				m.accts.sticky[prov+"|"+ws] = stickyPick{a.ID, time.Now().Add(time.Duration(mins) * time.Minute)}
-				m.accts.mu.Unlock()
-			}
+			m.rememberSticky(ctx, prov, a, pp)
 			return a, nil
 		}
 		lastErr = err
-		cls := provhealth.Classify(err)
-		if cls == provhealth.ClassCapacity {
-			m.accts.mu.Lock()
-			m.accts.blocked[prov+"|"+region] = time.Now().Add(10 * time.Minute)
-			m.accts.mu.Unlock()
-			return a, err
-		}
-		if cls == provhealth.ClassInvalid {
+		stop, cls := m.failoverStops(prov, region, err)
+		if stop {
 			return a, err
 		}
 		if i+1 < len(accts) {
@@ -828,12 +838,52 @@ func (m *Manager) acrossAccounts(ctx context.Context, prov, region string, price
 	return nil, lastErr
 }
 
+// rememberSticky keeps the workspace on the account for StickyMinutes.
+func (m *Manager) rememberSticky(ctx context.Context, prov string, a *model.ProviderAccount, pp model.ProviderPrefs) {
+	mins := pp.StickyMinutes
+	if mins <= 0 {
+		return
+	}
+	ws := ""
+	if p := principalFrom(ctx); p != nil {
+		ws = p.WorkspaceID
+	}
+	m.accts.mu.Lock()
+	m.accts.init()
+	m.accts.sticky[prov+"|"+ws] = stickyPick{a.ID, time.Now().Add(time.Duration(mins) * time.Minute)}
+	m.accts.mu.Unlock()
+}
+
+// failoverStops: capacity (blocks provider × region 10 min) and invalid
+// requests stop the failover across accounts; other classes move on.
+func (m *Manager) failoverStops(prov, region string, err error) (bool, string) {
+	cls := provhealth.Classify(err)
+	switch cls {
+	case provhealth.ClassCapacity:
+		m.accts.mu.Lock()
+		m.accts.init()
+		m.accts.blocked[prov+"|"+region] = time.Now().Add(10 * time.Minute)
+		m.accts.mu.Unlock()
+		return true, cls
+	case provhealth.ClassInvalid:
+		return true, cls
+	}
+	return false, cls
+}
+
 // accountOutcome applies the failover matrix (spec §4.3) to an account
 // after a provider call (err == nil: success).
 func (m *Manager) accountOutcome(ctx context.Context, a *model.ProviderAccount, err error, retryAfter time.Duration) {
 	if a == nil {
 		return
 	}
+	// runs after the account lock is released (it locks the group's accounts)
+	var groupOut *model.ProviderAccount
+	defer func() {
+		if groupOut != nil {
+			m.syncBillingGroup(ctx, groupOut, true) // one wallet: the whole group is out of credit
+		}
+	}()
 	l := m.acctLock(a.ID)
 	l.Lock()
 	defer l.Unlock()
@@ -887,12 +937,16 @@ func (m *Manager) accountOutcome(ctx context.Context, a *model.ProviderAccount, 
 			}
 		}
 		key := "servers"
-		if _, ok := m.sandboxProv(cur.Provider); ok {
+		_, isSbx := m.sandboxProv(cur.Provider)
+		if isSbx {
+			// M29-S: running sandboxes of the limit group (paused ones and the
+			// failed create's own slot excluded)
 			key = "concurrent_sandboxes"
-		}
-		// the failed host itself is already stored as provisioning: do not count it
-		if used > 0 {
-			used--
+			st := &model.AccountStats{}
+			m.fillSandboxStats(ctx, cur, st, hosts, nil, now)
+			used = float64(st.GroupRunning)
+		} else if used > 0 {
+			used-- // the failed host itself is already stored as provisioning: do not count it
 		}
 		lim := cur.Limits[key]
 		if lim.Source != "manual" || lim.Limit == 0 || used < lim.Limit {
@@ -901,6 +955,9 @@ func (m *Manager) accountOutcome(ctx context.Context, a *model.ProviderAccount, 
 				map[string]any{"provider": cur.Provider, "account_id": cur.ID, "limit": key, "value": used})
 		}
 		u := now.Add(time.Hour)
+		if isSbx {
+			u = now.Add(2 * time.Minute) // a slot frees when a sandbox ends; the learned limit keeps the count honest
+		}
 		cur.Status, cur.StatusReason, cur.CooldownUntil = model.AccountQuotaFull, msg, &u
 	case provhealth.ClassRateLimit:
 		if retryAfter <= 0 {
@@ -925,6 +982,9 @@ func (m *Manager) accountOutcome(ctx context.Context, a *model.ProviderAccount, 
 	}
 	m.setAccountStatus(ctx, cur, old, now)
 	m.putAccount(ctx, cur)
+	if cls == provhealth.ClassPayment {
+		groupOut = cur
+	}
 }
 
 var retryRe = regexp.MustCompile(`(?i)retry[- _]after[":= ]+(\d+)`)
@@ -1179,6 +1239,7 @@ func (m *Manager) upsertEnvAccount(ctx context.Context, p provider.Provider, id,
 	case rotated:
 		m.EmitData(ctx, "system", "", "", "provider_account.key_rotated", p.ID()+" "+label+": env credential changed", nil,
 			map[string]any{"provider": p.ID(), "account_id": id, "key_fingerprint": fp, "credential_source": "env"})
+		m.refreshShimCreds(ctx, p.ID(), id)
 	}
 	go func() {
 		c, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
