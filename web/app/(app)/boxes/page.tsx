@@ -2,11 +2,14 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FilterX } from "lucide-react";
+import { FilterX, MapPin } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { paths, type BoxFilters } from "@/lib/api";
 import { useApi } from "@/lib/hooks";
-import type { Agent, Box, List } from "@/lib/types";
+import { PERMS, type Agent, type Box, type List, type LocationsView } from "@/lib/types";
+import { Can } from "@/lib/session";
+import { regionRank, useLocationFmt } from "@/lib/location";
+import { cn } from "@/lib/utils";
 import { useFmt } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/input";
@@ -19,6 +22,31 @@ import { CreateBoxDialog } from "@/components/boxmes/create-box";
 import { Empty, ErrorBox, LoadingRows, PageHeader } from "@/components/boxmes/page";
 
 const PROVIDERS = ["hetzner", "vultr", "contabo", "digitalocean", "netcup", "local"];
+const GROUPS = ["none", "location", "agent", "status"] as const;
+type GroupBy = (typeof GROUPS)[number];
+
+function Chip({ active, onClick, children, title }: { active: boolean; onClick: () => void; children: React.ReactNode; title?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-pressed={active}
+      className={cn(
+        "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[12.5px] transition-colors",
+        active ? "border-primary/60 bg-primary/15 text-primary" : "border-border text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+interface Group {
+  key: string;
+  title: React.ReactNode;
+  boxes: Box[];
+}
 
 function BoxesInner() {
   const router = useRouter();
@@ -26,21 +54,102 @@ function BoxesInner() {
   const t = useTranslations("boxes");
   const tc = useTranslations("common");
   const statusLabel = useBoxStatusLabel();
-  const { since } = useFmt();
-  const f: BoxFilters = { status: sp.get("status") ?? "", agent: sp.get("agent") ?? "", provider: sp.get("provider") ?? "", lifecycle: sp.get("lifecycle") ?? "" };
-  const set = (k: keyof BoxFilters, v: string) => {
+  const { since, usd } = useFmt();
+  const lf = useLocationFmt();
+  const f: BoxFilters = {
+    status: sp.get("status") ?? "",
+    agent: sp.get("agent") ?? "",
+    provider: sp.get("provider") ?? "",
+    lifecycle: sp.get("lifecycle") ?? "",
+    region: sp.get("region") ?? "",
+    location: sp.get("location") ?? "",
+  };
+  const groupBy: GroupBy = GROUPS.includes(sp.get("group") as GroupBy) ? (sp.get("group") as GroupBy) : "none";
+  const setMany = (kv: Record<string, string>) => {
     const n = new URLSearchParams(sp.toString());
-    if (v) n.set(k, v);
-    else n.delete(k);
+    for (const [k, v] of Object.entries(kv)) {
+      if (v) n.set(k, v);
+      else n.delete(k);
+    }
     router.replace(`/boxes${n.toString() ? `?${n}` : ""}`);
   };
+  const set = (k: keyof BoxFilters | "group", v: string) => setMany({ [k]: v });
   const { data, error, isLoading, mutate } = useApi<List<Box>>(paths.boxes(f));
   const { data: agents } = useApi<List<Agent>>(paths.agents);
+  const { data: locs } = useApi<LocationsView>(paths.boxLocations, { refreshInterval: 60_000 });
   const any = Object.values(f).some(Boolean);
+  const regions = [...(locs?.regions ?? [])].sort((a, b) => regionRank(a.region) - regionRank(b.region));
+  const siteRegion = locs?.items.find((l) => l.site === f.location)?.region ?? "";
+  const activeRegion = f.region || siteRegion;
+  const sites = (locs?.items ?? []).filter((l) => l.region === activeRegion);
+
+  const groups: Group[] = (() => {
+    const items = data?.items ?? [];
+    if (groupBy === "none") return [{ key: "all", title: null, boxes: items }];
+    const m = new Map<string, Group>();
+    for (const b of items) {
+      let key = "";
+      let title: React.ReactNode = "";
+      if (groupBy === "location") {
+        key = b.location?.site ?? "_unplaced";
+      } else if (groupBy === "agent") {
+        key = b.agent_id || "_none";
+        title = b.agent_name || b.agent_id || "—";
+      } else {
+        key = b.status;
+        title = statusLabel(b.status);
+      }
+      const g = m.get(key) ?? { key, title, boxes: [] };
+      g.boxes.push(b);
+      m.set(key, g);
+    }
+    const out = [...m.values()];
+    if (groupBy === "location") {
+      for (const g of out) {
+        const loc = g.boxes[0]?.location;
+        const row = locs?.items.find((l) => l.site === g.key);
+        g.title = loc ? (
+          <span className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
+            <span className="font-semibold">{lf.region(loc.region)}</span>
+            <span className="text-muted-foreground">—</span>
+            <span className="min-w-0 truncate">{lf.place(loc)}</span>
+            <span className="text-muted-foreground">· {t("groupCount", { n: g.boxes.length })}{row ? ` · ${t("costToday", { cost: usd(row.cost_today_usd) })}` : ""}</span>
+          </span>
+        ) : t("unplaced");
+      }
+      out.sort((a, b) => {
+        const la = a.boxes[0]?.location, lb = b.boxes[0]?.location;
+        return regionRank(la?.region ?? "zz") - regionRank(lb?.region ?? "zz") || b.boxes.length - a.boxes.length || a.key.localeCompare(b.key);
+      });
+    } else out.sort((a, b) => String(a.title).localeCompare(String(b.title)));
+    return out;
+  })();
 
   return (
     <>
-      <PageHeader title={t("title")} desc={t("desc")} actions={<CreateBoxDialog />} />
+      <PageHeader title={t("title")} desc={t("desc")} actions={<Can perm={PERMS.boxesWrite}><CreateBoxDialog /></Can>} />
+      {regions.length > 0 && (
+        <div className="mb-3 flex flex-col gap-2" data-location-chips>
+          <div className="no-scrollbar -mx-1 flex items-center gap-1.5 overflow-x-auto px-1">
+            <MapPin className="size-4 shrink-0 text-muted-foreground" aria-label={t("location")} />
+            <Chip active={!f.region && !f.location} onClick={() => setMany({ region: "", location: "" })}>{t("allLocations")} <span className="font-mono text-[11px]">{locs?.total.total ?? 0}</span></Chip>
+            {regions.map((r) => (
+              <Chip key={r.region} active={activeRegion === r.region && !f.location} onClick={() => setMany({ region: r.region, location: "" })}>
+                {lf.region(r.region)} <span className="font-mono text-[11px]">{r.total}</span>
+              </Chip>
+            ))}
+          </div>
+          {activeRegion && sites.length > 0 && (
+            <div className="no-scrollbar -mx-1 flex items-center gap-1.5 overflow-x-auto px-1 pl-6">
+              {sites.map((l) => (
+                <Chip key={l.site} active={f.location === l.site} title={lf.place(l)} onClick={() => setMany({ location: f.location === l.site ? "" : l.site, region: f.location === l.site ? activeRegion : "" })}>
+                  {lf.short(l)} <span className="font-mono text-[11px]">{l.total}</span>
+                </Chip>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <div className="mb-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
         <Select value={f.status} onChange={(e) => set("status", e.target.value)} aria-label={t("filterStatus")}>
           <option value="">{t("anyStatus")}</option>
@@ -60,7 +169,10 @@ function BoxesInner() {
           <option value="session">session</option>
           <option value="service">service</option>
         </Select>
-        {any && <Button variant="ghost" size="sm" className="col-span-2 sm:col-span-1" onClick={() => router.replace("/boxes")}><FilterX /> {tc("clearFilters")}</Button>}
+        <Select value={groupBy} onChange={(e) => set("group", e.target.value === "none" ? "" : e.target.value)} aria-label={t("groupBy")}>
+          {GROUPS.map((g) => <option key={g} value={g}>{t(`group.${g}` as "group.none")}</option>)}
+        </Select>
+        {any && <Button variant="ghost" size="sm" className="col-span-2 sm:col-span-1" onClick={() => router.replace(groupBy === "none" ? "/boxes" : `/boxes?group=${groupBy}`)}><FilterX /> {tc("clearFilters")}</Button>}
       </div>
 
       {error ? <ErrorBox error={error} retry={() => mutate()} /> : isLoading || !data ? <LoadingRows rows={6} /> : !data.items.length ? (
@@ -76,7 +188,14 @@ function BoxesInner() {
                 </TR>
               </THead>
               <TBody>
-                {data.items.map((b) => (
+                {groups.map((g) => (
+                  <React.Fragment key={g.key}>
+                  {g.title !== null && (
+                    <TR className="bg-surface-2/40 hover:bg-surface-2/40" data-group={g.key}>
+                      <TD colSpan={8} className="py-2 text-[13px]">{g.title}</TD>
+                    </TR>
+                  )}
+                  {g.boxes.map((b) => (
                   <TR key={b.id}>
                     <TD>
                       <Link href={`/boxes/${b.id}`} className="font-mono text-[13px] hover:text-primary">{b.slug}</Link>
@@ -84,27 +203,35 @@ function BoxesInner() {
                     </TD>
                     <TD className="text-[13px]">{b.agent_name}</TD>
                     <TD><BoxStatusChip status={b.status} /></TD>
-                    <TD><Mono>{b.provider}</Mono> <span className="text-muted-foreground">/</span> <Mono className="text-muted-foreground">{b.region}</Mono></TD>
+                    <TD>
+                      <Mono>{b.provider}</Mono> <span className="text-muted-foreground">/</span> <Mono className="text-muted-foreground">{b.region}</Mono>
+                      {b.location && <div className="text-[11.5px] text-muted-foreground">{lf.region(b.location.region)} · {lf.short(b.location)}</div>}
+                    </TD>
                     <TD><LifecycleBadge lc={b.lifecycle} /></TD>
                     <TD className="whitespace-nowrap text-[13px] text-muted-foreground">{b.status === "running" ? since(b.created_at) : "—"}</TD>
                     <TD className="min-w-[140px]">
                       <MoneyBudget spent={b.spent_usd} budget={b.budget_usd} />
                       <BudgetBar spent={b.spent_usd} budget={b.budget_usd} className="mt-1" />
                     </TD>
-                    <TD><BoxActions box={b} className="justify-end" /></TD>
+                    <TD><Can perm={PERMS.boxesWrite}><BoxActions box={b} className="justify-end" /></Can></TD>
                   </TR>
+                  ))}
+                  </React.Fragment>
                 ))}
               </TBody>
             </Table>
           </Card>
           {/* Mobile: thẻ */}
           <div className="flex flex-col gap-2.5 md:hidden">
-            {data.items.map((b) => (
+            {groups.map((g) => (
+              <React.Fragment key={g.key}>
+              {g.title !== null && <div className="mt-1 px-1 text-[12.5px]">{g.title}</div>}
+              {g.boxes.map((b) => (
               <Card key={b.id} className="p-3.5">
                 <div className="flex items-start justify-between gap-2">
                   <Link href={`/boxes/${b.id}`} className="min-w-0">
                     <p className="truncate font-mono text-sm">{b.slug}</p>
-                    <p className="text-xs text-muted-foreground">{b.agent_name} · <span className="font-mono">{b.provider}/{b.region}</span></p>
+                    <p className="text-xs text-muted-foreground">{b.agent_name} · <span className="font-mono">{b.provider}/{b.region}</span>{b.location ? ` · ${lf.short(b.location)}` : ""}</p>
                   </Link>
                   <BoxStatusChip status={b.status} />
                 </div>
@@ -114,8 +241,10 @@ function BoxesInner() {
                   <span className="ml-auto"><MoneyBudget spent={b.spent_usd} budget={b.budget_usd} /></span>
                 </div>
                 <BudgetBar spent={b.spent_usd} budget={b.budget_usd} className="mt-2" />
-                <BoxActions box={b} className="-mb-1 mt-2 justify-end border-t border-border pt-2" />
+                <Can perm={PERMS.boxesWrite}><BoxActions box={b} className="-mb-1 mt-2 justify-end border-t border-border pt-2" /></Can>
               </Card>
+              ))}
+              </React.Fragment>
             ))}
           </div>
         </>

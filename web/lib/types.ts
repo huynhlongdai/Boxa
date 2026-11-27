@@ -11,13 +11,14 @@ export type ErrorCode =
   | "UNAUTHORIZED"
   | "INVALID"
   | "RATE_LIMITED"
-  | "INTERNAL";
+  | "INTERNAL"
+  | "QUOTA_EXCEEDED";
 
-export const ERROR_CODES: ErrorCode[] = ["BUDGET_EXCEEDED", "NO_CAPACITY", "PROVIDER_FAILED", "BOX_SLEEPING", "TIMEOUT", "POLICY_DENIED", "NOT_FOUND", "UNAUTHORIZED", "INVALID", "RATE_LIMITED", "INTERNAL"];
+export const ERROR_CODES: ErrorCode[] = ["BUDGET_EXCEEDED", "NO_CAPACITY", "PROVIDER_FAILED", "BOX_SLEEPING", "TIMEOUT", "POLICY_DENIED", "NOT_FOUND", "UNAUTHORIZED", "INVALID", "RATE_LIMITED", "INTERNAL", "QUOTA_EXCEEDED"];
 
 /** v1.1: message/hint đã được Core dịch theo Accept-Language; code không đổi. */
 export interface ApiErrorBody {
-  error: { code: ErrorCode; message: string; hint?: string; retry_after_s?: number; docs_url?: string; next?: string[] };
+  error: { code: ErrorCode; message: string; hint?: string; retry_after_s?: number; docs_url?: string; next?: string[]; details?: Record<string, unknown> };
 }
 
 export interface List<T> {
@@ -1408,4 +1409,210 @@ export interface SshCert {
   direct_command?: string;
   config: string;
   user_ca: string;
+}
+
+// ---- v2.0: tenancy — workspace, vai trò, thành viên, lời mời, hạn mức, vị trí box ----
+export const WORKSPACE_ROLES = ["owner", "admin", "developer", "billing", "viewer", "auditor"] as const;
+export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
+
+/** Quyền trong workspace hiện tại (core/internal/manager/scope.go). */
+export const PERMS = {
+  view: "view",
+  boxesWrite: "boxes:write",
+  exec: "exec",
+  agentsWrite: "agents:write",
+  secretsRead: "secrets:read",
+  secretsWrite: "secrets:write",
+  secretsUse: "secrets:use",
+  templatesWrite: "templates:write",
+  billing: "billing:read",
+  members: "members:write",
+  audit: "audit:read",
+  emergency: "emergency_stop",
+  workspaceWrite: "workspace:write",
+  approvals: "approvals:decide",
+} as const;
+export type Perm = (typeof PERMS)[keyof typeof PERMS];
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name?: string;
+  email_verified: boolean;
+  platform_admin: boolean;
+  created_at: string;
+}
+
+export interface Workspace {
+  id: string;
+  name: string;
+  owner_user_id?: string;
+  plan?: string;
+  status?: "active" | "suspended" | string;
+  created_at?: string;
+  /** Vai trò của tôi trong workspace này ("" với API key). */
+  role: WorkspaceRole | "";
+}
+
+/** GET /v1/auth/me (với API key: dashboard tự dựng từ /workspaces/current). */
+export interface Me {
+  user: AuthUser | null;
+  workspace: Workspace | null;
+  workspaces: Workspace[];
+  role: WorkspaceRole | "";
+  permissions: string[];
+  platform_admin: boolean;
+}
+
+/** GET /api/session (route Next, không bao giờ chứa token). */
+export interface SessionInfo {
+  mock: boolean;
+  authed: boolean;
+  /** session = đăng nhập email/mật khẩu (cookie giữ token bxs_), key = dán API key, null = chưa đăng nhập. */
+  mode: "session" | "key" | "mock" | null;
+  key_prefix: string | null;
+  ws_base: string | null;
+  me: Me | null;
+}
+
+export interface AuthConfig {
+  signup_mode: "invite" | "open" | "closed";
+  first_user: boolean;
+  min_password_len: number;
+  email_verification: boolean;
+  email_configured: boolean;
+}
+
+export interface Quota {
+  plan: string;
+  max_boxes: number;
+  max_cpu_per_box: number;
+  max_ram_mb_per_box: number;
+  max_ttl_hours: number;
+  public_url: boolean;
+  egress: "open" | "restricted" | string;
+  max_members: number;
+  max_agents: number;
+  max_keys: number;
+  max_secrets: number;
+  max_boxes_per_minute: number;
+}
+
+export interface CurrentWorkspace extends Omit<Workspace, "role"> {
+  role: WorkspaceRole | "";
+  plan: string;
+  quota: Quota;
+  permissions: string[];
+  member_count: number;
+}
+
+export interface WorkspaceUsage {
+  workspace_id: string;
+  plan: string;
+  quota: Quota;
+  used: {
+    boxes: number;
+    boxes_total: number;
+    agents: number;
+    keys: number;
+    secrets: number;
+    members: number;
+    spent_today_usd: number;
+    spent_month_usd: number;
+  };
+}
+
+export interface PlanInfo {
+  id: string;
+  quota: Quota;
+}
+
+export interface Member {
+  user_id: string;
+  email: string;
+  name?: string;
+  role: WorkspaceRole;
+  email_verified: boolean;
+  joined_at: string;
+}
+
+export type InviteStatus = "pending" | "accepted" | "expired";
+
+export interface WorkspaceInvite {
+  id: string;
+  workspace_id: string;
+  email: string;
+  role: WorkspaceRole;
+  invited_by: string;
+  expires_at: string;
+  accepted_at: string | null;
+  accepted_by?: string;
+  created_at: string;
+  status: InviteStatus;
+}
+
+/** POST /workspaces/current/invites: link chỉ hiện một lần. */
+export interface WorkspaceInviteCreated extends WorkspaceInvite {
+  invite_url: string;
+  mailed: boolean;
+}
+
+/** GET /v1/workspace-invites/{token} (không cần đăng nhập). */
+export interface InvitePreview {
+  workspace: { id: string; name: string };
+  email: string;
+  role: WorkspaceRole;
+  invited_by: string;
+  expires_at: string;
+  status: InviteStatus;
+  account_exists: boolean;
+}
+
+export type LocationRegion = "eu" | "us" | "apac" | "sandbox" | "local" | "other";
+
+export interface BoxLocation {
+  region: LocationRegion | string;
+  country?: string;
+  city?: string;
+  provider: string;
+  /** "<provider>-<mã site>", vd hetzner-fsn — giá trị của ?location=. */
+  site: string;
+  host?: string;
+}
+
+export interface LocationRow extends BoxLocation {
+  running: number;
+  sleeping: number;
+  total: number;
+  cost_today_usd: number;
+}
+
+export interface RegionRow {
+  region: string;
+  running: number;
+  sleeping: number;
+  total: number;
+  cost_today_usd: number;
+}
+
+/** GET /v1/boxes/locations. */
+export interface LocationsView {
+  items: LocationRow[];
+  regions: RegionRow[];
+  total: RegionRow;
+}
+
+export interface Box {
+  /** v2.0: nơi box chạy (suy từ provider + vùng/host). */
+  location?: BoxLocation;
+  workspace_id?: string;
+}
+
+/** details của lỗi QUOTA_EXCEEDED (v2.0). */
+export interface QuotaDetails {
+  quota: string;
+  limit: number | boolean;
+  used?: number;
+  plan?: string;
+  upgrade_url?: string;
 }

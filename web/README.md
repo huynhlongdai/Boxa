@@ -25,7 +25,20 @@ Khi chạy `pnpm dev` mà **không đặt** `BOXMES_MOCK` và Core không trả 
 BOXMES_API=http://localhost:8080/v1 BOXMES_MOCK=0 pnpm dev
 ```
 
-Mở `/login`, dán API key có scope `admin`. Key được lưu trong cookie **httpOnly** `boxmes_key`; trình duyệt chỉ gọi `/api/boxmes/*`, route handler `app/api/boxmes/[...path]/route.ts` gắn `Authorization: Bearer <key>` rồi chuyển tiếp tới Core, nên key không bao giờ có trong JavaScript phía client.
+Mở `/signup` (tài khoản đầu tiên thành quản trị nền tảng + owner `ws_default`) hoặc `/login` (email + mật khẩu). Chế độ cũ vẫn còn: ở `/login` bấm **Đăng nhập bằng API key** và dán admin key / key workspace. Cả hai đều lưu vào cookie `boxmes_key`; trình duyệt chỉ gọi `/api/boxmes/*`, route handler `app/api/boxmes/[...path]/route.ts` gắn `Authorization: Bearer <token>` rồi chuyển tiếp tới Core, nên token/key không bao giờ có trong JavaScript phía client.
+
+### v2.0: phiên, workspace, CSRF
+
+- **Phiên**: `POST /api/auth/login {email, password}` / `POST /api/auth/signup {email, password, name?, workspace?, invite_code?, workspace_invite?}` gọi Core (`/v1/auth/login|signup`), cất token `bxs_…` vào cookie `boxmes_key` **HttpOnly; Secure; SameSite=Lax; Path=/** (hạn theo `expires_at` của Core) và chỉ trả `{ok, user, workspace, role}`. Proxy từ chối `/api/boxmes/auth/login|signup` (404) để token không bao giờ đi qua JS. `POST /api/auth/logout[?all=1]` huỷ phiên ở Core rồi xoá cookie. `Secure` luôn bật, trừ `BOXMES_INSECURE_COOKIE=1` hoặc `next dev` qua http trên host không phải localhost.
+- **`GET /api/session`**: `{mock, authed, mode: session|key|mock, key_prefix (chỉ chế độ key), ws_base, me}` — `me` là `/v1/auth/me` (user, workspace + role, workspaces[], permissions[], platform_admin). Với API key dashboard tự dựng `me` từ `/v1/workspaces/current` (quyền theo scope) và `/v1/admin/system` (200 = quản trị nền tảng). Không bao giờ chứa token.
+- **Chống CSRF** (`lib/server/csrf.ts`, áp cho proxy và `/api/auth/*`), ba lớp:
+  1. Cookie phiên `SameSite=Lax`: trình duyệt không gửi nó theo POST/PUT/PATCH/DELETE từ site khác.
+  2. Request đổi trạng thái có `Origin` (thiếu thì `Referer`) phải trùng `Host` / `X-Forwarded-Host` của dashboard hoặc nằm trong `BOXMES_DASHBOARD_ORIGINS` → sai là 403 `POLICY_DENIED`, kể cả `/api/auth/login` (chặn login CSRF).
+  3. Double-submit: khi request mang cookie phiên, header `X-Boxmes-CSRF` phải bằng cookie `boxmes_csrf` (không HttpOnly, `SameSite=Strict`, 128 bit ngẫu nhiên, cấp ở `/api/session`, xoay mỗi lần đăng nhập). Có cookie phiên mà thiếu cả Origin lẫn Referer vẫn phải qua lớp này. `lib/api.ts` tự gắn header; request không cookie phiên (curl, smoke MOCK) chỉ bị lớp 2 xét.
+- **Workspace**: bộ chọn ở top bar (`POST /v1/auth/workspace`, tải lại mọi khoá SWR, nối lại SSE), "+ Tạo workspace" (`POST /v1/workspaces` rồi chuyển sang). Key chỉ thuộc một workspace nên không đổi được.
+- **Quyền**: nav và nút ẩn theo `permissions[]` (`lib/session.ts`: `useSession().can(perm)`, `<Can perm>`); khu **Nền tảng** (Hạ tầng, Admin) chỉ hiện với `platform_admin`, vào thẳng URL thì gặp trang "cần vai trò…". Core vẫn là nơi quyết định (404 khác workspace, 403 `POLICY_DENIED`, 401 thiếu scope); 401 chỉ đẩy về `/login` khi `/api/session` xác nhận phiên đã hết.
+- **Hạn mức**: `QUOTA_EXCEEDED` hiện toast riêng (hạn mức nào, đã dùng/tối đa từ `error.details`, gói, `hint`, `next`, nút **Xem gói & hạn mức** → `/settings/billing`, cũng là `upgrade_url` Core trả về).
+- Smoke với Core thật: `BASE=http://localhost:3199 ADMIN_KEY=<admin key> bash scripts/smoke-v20.sh` (Next chạy `BOXMES_MOCK=0 BOXMES_API=<core>/v1`, Core mới chưa có user): đăng ký → cookie → CSRF → workspace → mời → xem lời mời → đăng ký bằng `workspace_invite` → accept → đổi workspace → thành viên / owner cuối → QUOTA_EXCEEDED → vị trí box → đăng xuất → chế độ admin key.
 
 ## Biến môi trường
 
@@ -38,6 +51,7 @@ Mở `/login`, dán API key có scope `admin`. Key được lưu trong cookie **
 **Phía Core (v1.10)**: đặt `BOXMES_DASHBOARD_URL=https://<domain dashboard>` (hoặc thêm vào `BOXMES_ACCESS_ORIGINS`, cách nhau dấu phẩy) để Core nhận WebSocket terminal từ origin của dashboard; thiếu thì Core trả 403 `POLICY_DENIED` trước khi upgrade. Dev trên localhost được chấp nhận khi Core cũng chạy trên loopback.
 | `BOXMES_MOCK` | (trống) | `1` luôn mock · `0` không bao giờ · trống = tự mock khi dev mà Core không chạy |
 | `BOXMES_INSECURE_COOKIE` | (trống) | `1` cho phép cookie không `Secure` khi chạy production qua http nội bộ |
+| `BOXMES_DASHBOARD_ORIGINS` | (trống; rơi về `BOXMES_DASHBOARD_URL`) | v2.0: origin được phép gửi request đổi trạng thái ngoài chính `Host` của dashboard (cách nhau dấu phẩy), khi reverse proxy đổi Host |
 
 Xem `.env.example`.
 
@@ -81,7 +95,8 @@ docker run -p 3000:3000 -e BOXMES_MOCK=1 boxmes-web
 | Route | Nội dung |
 |---|---|
 | `/` Tổng quan | 4 thẻ chỉ số kèm thanh ngân sách; hộp **Cần anh** (Duyệt / Từ chối); chi phí 7 ngày xếp chồng theo agent; top 5 task tốn nhất hôm nay; nút đỏ **Dừng khẩn cấp** (2 bước, gõ `DUNG`) |
-| `/boxes` | Bảng lọc theo trạng thái / agent / provider / lifecycle (lọc lưu trên URL), thẻ trên mobile, nút nhanh wake / sleep / snapshot / xoá; tạo box thủ công (có `Idempotency-Key`) |
+| `/boxes` | Bảng lọc theo trạng thái / agent / provider / lifecycle (lọc lưu trên URL), thẻ trên mobile, nút nhanh wake / sleep / snapshot / xoá; tạo box thủ công (có `Idempotency-Key`). v2.0: chip **Vị trí** theo vùng › site có đếm (`GET /v1/boxes/locations`, lọc `?region=` / `?location=`), **Nhóm theo** Không nhóm / Vị trí / Agent / Trạng thái (nhóm Vị trí: "EU — Đức · Falkenstein (Hetzner FSN) · 3 box · $0.61 hôm nay"); sidebar Boxes xổ ra EU › Falkenstein, Helsinki… |
+| `/approvals` | v2.0 **Cần anh**: yêu cầu chờ duyệt (nút Duyệt/Từ chối chỉ với `approvals:decide`) |
 | `/boxes/[id]` | Tab Tổng quan (spec, URL, lý do Scheduler chọn, **egress allowlist** — đang thực thi bằng incus ACL/nftables hay chỉ cảnh báo trên driver local, sửa danh sách —, chi phí giờ, ngân sách còn lại, CPU/RAM/đĩa) · **Port & app** (v1.7: URL Boxmes từng port, bật tắt chỉ-token, cấp / liệt kê / thu hồi URL token, wake on request, badge capability của provider, trạng thái app + restart + log SSE; cảnh báo URL preview của provider vẫn mở với ai biết sandbox id) · Terminal (xterm + WebSocket, **Chiếm quyền / Trả quyền**) · Timeline (lệnh, exit code, thời lượng, token tiết kiệm) · Files (`/work`, `/memory`, xem + tải về) · Logs · Snapshots (khôi phục / fork, nơi lưu: R2/B2/S3 hay tại host, lỗi upload) · Cấu hình (box.yaml chỉ đọc + **Lưu thành template**) |
 | `/agents` | Danh sách + **wizard 3 bước**: tên + kind → ngân sách + chính sách (provider, vùng, egress) → API key hiện một lần + đoạn cấu hình sinh sẵn theo kind (Claude Code MCP JSON, OpenAI Agents Python, n8n HTTP node, Hark, cURL) có nút Copy |
 | `/agents/[id]` | Keys (tạo / thu hồi), ngân sách, chính sách, dung lượng /memory, lịch sử box |
@@ -89,11 +104,13 @@ docker run -p 3000:3000 -e BOXMES_MOCK=1 boxmes-web
 | `/infra` | Chuỗi dự phòng (pool → Hetzner → Vultr → DigitalOcean → Contabo → netcup), thẻ provider (nhập + kiểm tra token có gợi ý định dạng riêng cho Contabo/netcup, nhãn “Dự phòng #n”, token từ env, danh sách vùng), host với thanh CPU/RAM/đĩa + drain / xoá, thêm host pool, bảng giá sắp theo $/vCPU-giờ với nhãn độ tin cậy, đề xuất mở rộng pool |
 | `/templates` | Danh sách + trình sửa YAML (đánh số dòng, kiểm tra qua `/templates/validate`), Lưu, **Dựng thử** |
 | `/secrets` | Chỉ tên, agent được dùng, ngày tạo / xoay vòng; thêm, xoay vòng, xoá (không bao giờ hiện giá trị) |
-| `/settings` | Ngôn ngữ; **Thông báo** (Telegram bot token + chat ID, SMTP, người nhận, sự kiện, giờ + múi giờ báo cáo, nút **Gửi thử** Telegram / email / báo cáo ngày, lịch sử gửi; secret chỉ ghi); **Lưu trữ snapshot** (R2/B2/S3/MinIO, kiểm tra kết nối); Reaper (giữ N snapshot, xoá sau N ngày); Mạng (chặn egress mặc định); `BASE_DOMAIN`, bảo vệ URL bằng token, ngân sách tháng |
+| `/settings` | v2.0 tab **Chung** (tên workspace, gói, vai trò, ngôn ngữ) · **Thành viên** (đổi vai trò, xoá, rời workspace, quy tắc owner cuối; mời nhiều email + vai trò, link hiện một lần, đang chờ / đã nhận / hết hạn, gửi lại, thu hồi) · **Gói & hạn mức** (`/settings/billing`: đã dùng/tối đa, so sánh gói) · **Hệ thống** (chỉ quản trị nền tảng): Ngôn ngữ; **Thông báo** (Telegram bot token + chat ID, SMTP, người nhận, sự kiện, giờ + múi giờ báo cáo, nút **Gửi thử** Telegram / email / báo cáo ngày, lịch sử gửi; secret chỉ ghi); **Lưu trữ snapshot** (R2/B2/S3/MinIO, kiểm tra kết nối); Reaper (giữ N snapshot, xoá sau N ngày); Mạng (chặn egress mặc định); `BASE_DOMAIN`, bảo vệ URL bằng token, ngân sách tháng |
 | `/developers` | Discovery (OpenAPI, llms.txt, MCP card, A2A card), schema tool, quick start, SDK/CLI, **A2A JSON-RPC** (message/send, message/stream, tasks/get, tasks/cancel), bảng mã lỗi |
 | `/admin` | Hệ thống · Hàng đợi job · Audit log · API keys · Quota & giới hạn · Tính năng / bảo trì (GPU khoá, nhãn P5; bật bảo trì hiện banner toàn cục) · Người dùng |
 | `/onboarding` | Token Hetzner → tạo host pool đầu tiên (có tiến trình) → tạo agent → copy cấu hình → chờ “lệnh đầu tiên” → thành công |
-| `/login` | Nhập API key admin → cookie httpOnly |
+| `/login` | v2.0: email + mật khẩu (RATE_LIMITED → "thử lại sau N phút"); "Đăng nhập bằng API key" thu gọn cho tự host |
+| `/signup` | v2.0: email, mật khẩu (thanh độ mạnh, ≥ 10 ký tự), tên, tên workspace (gợi ý từ email), mã mời khi `signup_mode=invite` (tự điền `?invite=`), đồng ý điều khoản; `closed` → thẻ danh sách chờ; `?workspace_invite=` khi đến từ lời mời |
+| `/invite/[token]` | v2.0: "X mời anh vào workspace Y với vai trò Z" (không cần đăng nhập để xem); đúng email → **Tham gia**; khác email → đổi tài khoản; chưa đăng nhập → Đăng nhập / Đăng ký rồi quay lại |
 
 **⌘K / Ctrl+K** (nút ⌘ trên thanh trên ở mobile): điều hướng, `wake <slug>`, `sleep <slug>`, `kill all` (mở hộp dừng khẩn cấp), `cost hôm nay`. Gõ không dấu cũng được.
 

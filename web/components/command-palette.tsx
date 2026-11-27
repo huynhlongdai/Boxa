@@ -14,7 +14,9 @@ import { useApi } from "@/lib/hooks";
 import { useFmt } from "@/lib/format";
 import { strip } from "@/lib/text";
 import type { Box, List, Overview } from "@/lib/types";
-import { NAV } from "./nav";
+import { NAV, visibleNav } from "./nav";
+import { useSession } from "@/lib/session";
+import { PERMS } from "@/lib/types";
 import { useEmergency } from "./boxmes/emergency";
 import { BoxStatusChip } from "./boxmes/status";
 import { toastError } from "@/lib/error-toast";
@@ -43,6 +45,7 @@ export function CommandPaletteProvider({ children }: { children: React.ReactNode
   const tb = useTranslations("boxActions");
   const { usd } = useFmt();
   const { mutate } = useSWRConfig();
+  const { can, platformAdmin } = useSession();
   const { data: boxes } = useApi<List<Box>>(open ? paths.boxes() : null);
   const { data: ov } = useApi<Overview>(open ? paths.overview : null);
 
@@ -154,13 +157,13 @@ export function CommandPaletteProvider({ children }: { children: React.ReactNode
                         <Moon /> <span className="font-mono">sleep &lt;slug&gt;</span>
                         <span className={hint}>{t("sleepDesc")}</span>
                       </Command.Item>
-                      <Command.Item value={`kill all ${killAliases}`} className={`${item} text-st-error [&_svg]:text-st-error`} onSelect={() => { close(); emergency.open(); }}>
+                      {can(PERMS.emergency) && <Command.Item value={`kill all ${killAliases}`} className={`${item} text-st-error [&_svg]:text-st-error`} onSelect={() => { close(); emergency.open(); }}>
                         <OctagonX /> <span className="font-mono">kill all</span>
                         <span className="ml-auto shrink-0 text-xs">{t("killDesc")}</span>
-                      </Command.Item>
+                      </Command.Item>}
                     </Command.Group>
                     <Command.Group heading={t("groupGoto")}>
-                      {NAV.map((n) => (
+                      {NAV.filter((n) => !n.soon && visibleNav(n, can, platformAdmin)).map((n) => (
                         <Command.Item key={n.href} value={`${t("goto")} go ${tn(n.key)} ${n.key} ${n.href}${n.key === "developers" ? ` ${t("aliases.developers")}` : ""}`} className={item} onSelect={() => { close(); router.push(n.href); }}>
                           <n.icon /> {tn(n.key)}
                         </Command.Item>

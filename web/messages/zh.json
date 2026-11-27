@@ -161,7 +161,14 @@
     "invalidKeyHint": "使用 `box keys create --admin` 创建 admin 权限的密钥。",
     "coreUnreachable": "无法连接 Boxmes Core",
     "coreUnreachableHint": "请检查 BOXMES_API（{url}）或设置 BOXMES_MOCK=1。",
-    "tryNext": "可以尝试："
+    "tryNext": "可以尝试：",
+    "csrfOrigin": "请求被拦截：来源不是本控制台",
+    "csrfToken": "请求被拦截：缺少或错误的防 CSRF 令牌",
+    "csrfHint": "请刷新页面后重试。若在反向代理之后，请将 BOXMES_DASHBOARD_ORIGINS 设为控制台地址。",
+    "useAuthRoute": "登录 / 注册不经过此代理",
+    "useAuthRouteHint": "请使用 POST /api/auth/login 或 /api/auth/signup：会话令牌保存在 HttpOnly Cookie 中，不会返回给浏览器。",
+    "missingCredentials": "缺少邮箱或密码",
+    "missingCredentialsHint": "请同时填写邮箱和密码。"
   },
   "approvals": {
     "type": {
@@ -175,7 +182,9 @@
     "approved": "已批准",
     "rejected": "已拒绝",
     "empty": "目前没有需要你处理的事项。",
-    "emptyDesc": "当智能体超过 80% 预算、服务即将停止或需要增购主机时，请求会显示在这里。"
+    "emptyDesc": "当智能体超过 80% 预算、服务即将停止或需要增购主机时，请求会显示在这里。",
+    "pageTitle": "待你处理",
+    "pageDesc": "智能体无法自行决定的事项：超出预算、停止服务、扩容资源池、主机故障。"
   },
   "boxActions": {
     "wake": "唤醒",
@@ -310,7 +319,19 @@
     "colSlug": "Slug",
     "colWhere": "云厂商 / 区域",
     "colLifecycle": "生命周期",
-    "colUptime": "运行时长"
+    "colUptime": "运行时长",
+    "location": "位置",
+    "allLocations": "全部位置",
+    "groupBy": "分组方式",
+    "group": {
+      "none": "不分组",
+      "location": "按位置分组",
+      "agent": "按智能体分组",
+      "status": "按状态分组"
+    },
+    "groupCount": "{n} 个 box",
+    "costToday": "今日 {cost}",
+    "unplaced": "尚未分配"
   },
   "charts": {
     "total": "合计",
@@ -502,7 +523,9 @@
       "RATE_LIMITEDHint": "等待 retry_after_s；用 box_exec_batch 合并命令。",
       "INTERNAL": "Core 内部意外错误。",
       "INTERNALHint": "重试一次；若仍失败，停止并通知运维者。",
-      "NO_CAPACITYHint": "降低规格，等待 retry_after_s 后重试，或调用 box_quote 查看备选。"
+      "NO_CAPACITYHint": "降低规格，等待 retry_after_s 后重试，或调用 box_quote 查看备选。",
+      "QUOTA_EXCEEDED": "超出工作区套餐限额（同时运行 box、CPU/内存、TTL、成员、智能体、密钥、机密等）。",
+      "QUOTA_EXCEEDEDHint": "读取 error.details (quota, limit, used, plan)；先让 box 休眠/删除或升级套餐后再重试。"
     },
     "a2a": "A2A：把任务交给 Boxmes",
     "a2aDesc": "其他 agent 向 <mono>/a2a</mono> 发送 JSON-RPC：text part 是命令（附 <mono>metadata.box_id</mono>），带 <mono>tool</mono> + <mono>arguments</mono> 的 data part 可调用任意工具。命令的 task id 就是 job id。",
@@ -651,18 +674,28 @@
   },
   "login": {
     "title": "登录 Boxmes",
-    "subtitle": "使用具有 admin 权限的 API 密钥",
+    "subtitle": "使用邮箱和密码登录",
     "keyLabel": "管理员 API 密钥",
     "keyHint": "使用 <mono>box keys create --admin</mono> 创建。密钥保存在 httpOnly Cookie 中，不会进入 JavaScript。",
     "checking": "检查中…",
     "submit": "登录",
     "failed": "登录失败",
-    "mock": "当前为 MOCK 模式 — 无需密钥直接进入"
+    "mock": "当前为 MOCK 模式 — 无需密钥直接进入",
+    "keySubtitle": "使用 API 密钥（自托管 / 运维人员）",
+    "emailLabel": "邮箱",
+    "passwordLabel": "密码",
+    "rateLimited": "失败次数过多，请 {minutes} 分钟后再试。",
+    "noAccount": "还没有账号？",
+    "signupLink": "注册",
+    "useKey": "使用 API 密钥登录",
+    "useEmail": "使用邮箱登录"
   },
   "meta": {
     "description": "面向 AI 智能体的个人云基础设施",
     "login": "登录",
-    "onboarding": "首次设置"
+    "onboarding": "首次设置",
+    "signup": "注册",
+    "invite": "工作区邀请"
   },
   "nav": {
     "overview": "总览",
@@ -680,7 +713,18 @@
     "more": "更多",
     "palette": "命令面板",
     "logout": "退出登录",
-    "recommend": "推荐盒子"
+    "recommend": "推荐盒子",
+    "approvals": "待你处理",
+    "volumes": "存储卷",
+    "billing": "账单",
+    "soon": "即将推出",
+    "groups": {
+      "ops": "运行",
+      "resources": "资源",
+      "money": "费用",
+      "integrations": "集成",
+      "platform": "平台"
+    }
   },
   "notFound": {
     "title": "找不到该页面",
@@ -820,7 +864,18 @@
     "network": "出站网络",
     "networkDesc": "每个 box 的允许列表在 box 页面设置，这里是未声明时的默认值。",
     "egressDeny": "默认拒绝出站",
-    "egressDenyHint": "未声明出站策略的 box 只能访问 agent 允许列表中的地址；没有允许列表则全部拒绝。"
+    "egressDenyHint": "未声明出站策略的 box 只能访问 agent 允许列表中的地址；没有允许列表则全部拒绝。",
+    "descV2": "工作区、成员、套餐与限额；平台管理员可配置系统。",
+    "tabGeneral": "常规",
+    "tabMembers": "成员",
+    "tabPlan": "套餐与限额",
+    "tabInstance": "系统",
+    "workspace": "工作区",
+    "workspaceDesc": "所有成员看到的名称（所有者和管理员可修改）。",
+    "workspaceName": "工作区名称",
+    "plan": "套餐",
+    "myRole": "我的角色",
+    "memberCount": "成员"
   },
   "shell": {
     "searchPlaceholder": "搜索或输入命令…",
@@ -831,7 +886,8 @@
     "pollingTitle": "SSE 已断开，每 10 秒刷新一次",
     "maintenance": "维护中：",
     "spentToday": "/ 今日 {budget}",
-    "language": "语言"
+    "language": "语言",
+    "mainNav": "主导航"
   },
   "status": {
     "box": {
@@ -1944,6 +2000,211 @@
       "sdkTs": "SDK TypeScript",
       "curl": "curl",
       "cli": "CLI"
+    }
+  },
+  "signup": {
+    "title": "创建 Boxmes 账号",
+    "titleInvite": "创建账号以加入工作区",
+    "subtitle": "为 AI 智能体打造的个人云基础设施",
+    "firstUser": "第一个账号将成为平台管理员",
+    "email": "邮箱",
+    "password": "密码",
+    "passwordHint": "至少 {n} 个字符，最多 72 字节。",
+    "strength": {
+      "0": "很弱",
+      "1": "弱",
+      "2": "一般",
+      "3": "强",
+      "4": "很强"
+    },
+    "name": "姓名（可选）",
+    "workspace": "工作区名称",
+    "workspaceHint": "根据邮箱自动建议，之后可在设置中修改。",
+    "inviteCode": "邀请码",
+    "inviteCodeHint": "此实例仅接受凭邀请码注册。",
+    "inviteEmailHint": "请使用收到邀请的邮箱。",
+    "terms": "我同意服务条款和可接受使用政策（AUP）。",
+    "codeWaitlist": "没有邀请码？请加入候补名单，或向运维人员索取。",
+    "creating": "正在创建…",
+    "submit": "创建账号",
+    "submitInvite": "创建账号并加入",
+    "haveAccount": "已有账号？",
+    "loginLink": "登录",
+    "failed": "注册失败",
+    "closedDesc": "注册暂未开放。留下邮箱，轮到你时会收到邀请码。",
+    "waitlistJoined": "已加入候补名单，排在第 {position} 位。",
+    "joinWaitlist": "加入候补名单",
+    "benefits": {
+      "b1": "智能体几秒内自行创建 box",
+      "b1Desc": "支持 MCP、A2A、REST 和 SDK——22 种智能体开箱即用。",
+      "b2": "费用一目了然",
+      "b2Desc": "按智能体设置预算，空闲 box 自动休眠，一键紧急停止。",
+      "b3": "团队协作",
+      "b3Desc": "独立的工作区，含 Owner / Admin / Developer / Billing / Viewer / Auditor 角色。"
+    },
+    "priceExample": "2 vCPU / 4 GB 低至 $0.024/小时"
+  },
+  "invite": {
+    "title": "工作区邀请",
+    "invalidTitle": "该邀请无法使用",
+    "toLogin": "前往登录",
+    "headline": "<b>{who}</b> 邀请你以 <b>{role}</b> 身份加入工作区 <b>{ws}</b>。",
+    "forEmail": "发送至 {email}",
+    "status": {
+      "pending": "待接受",
+      "accepted": "已接受",
+      "expired": "已过期"
+    },
+    "expires": "{time} 过期",
+    "expiredDesc": "该邀请已过期，请让邀请人重新发送。",
+    "acceptedDesc": "该邀请已被使用。",
+    "toDashboard": "进入控制台",
+    "alreadyMember": "你已是该工作区成员。",
+    "joining": "正在加入…",
+    "join": "加入",
+    "otherEmail": "你当前以 {current} 登录，但邀请发给的是 {email}。",
+    "switchAccount": "退出并切换账号",
+    "keyMode": "当前使用 API 密钥登录，接受邀请需要邮箱账号。",
+    "loginToJoin": "登录后加入",
+    "signupToJoin": "创建账号后加入",
+    "haveAccount": "已有账号？",
+    "loginLink": "登录"
+  },
+  "roles": {
+    "owner": "所有者",
+    "admin": "管理员",
+    "developer": "开发者",
+    "billing": "账单",
+    "viewer": "查看者",
+    "auditor": "审计员",
+    "key": "API 密钥"
+  },
+  "plans": {
+    "free": "免费版",
+    "pro": "专业版",
+    "team": "团队版",
+    "unlimited": "无限制"
+  },
+  "workspace": {
+    "switcher": "切换工作区",
+    "none": "暂无工作区",
+    "mine": "我的工作区",
+    "noneYet": "你还没有加入任何工作区。",
+    "keyMode": "当前使用 API 密钥：密钥只属于一个工作区，无法切换。",
+    "suspended": "已停用",
+    "switched": "已切换到 {name}",
+    "create": "创建工作区",
+    "createTitle": "新建工作区",
+    "createDesc": "你将成为所有者。每个工作区的 box、智能体、密钥和机密完全隔离。",
+    "name": "名称",
+    "namePlaceholder": "例如 kecon-team",
+    "created": "已创建工作区 {name}",
+    "account": "账号",
+    "platformAdmin": "平台管理员",
+    "keySession": "API 密钥会话",
+    "logoutAll": "在所有设备上退出",
+    "suspendedBanner": "工作区 {name} 已停用：仅可查看，所有写操作都会被拒绝。请联系运维人员。",
+    "noWorkspaceBanner": "你尚未加入任何工作区。请创建一个或接受邀请。",
+    "verifyBanner": "请验证邮箱以完整使用 Boxmes。",
+    "verifyResend": "重新发送",
+    "verifySent": "已发送",
+    "boxesOf": "{used}/{max} 个 box",
+    "boxesUnlimited": "{used} 个 box",
+    "forbiddenPlatform": "平台区域仅限平台管理员。",
+    "forbiddenRole": "你需要 {role} 角色才能打开此页面。",
+    "forbiddenYour": "你在 {name} 中的当前角色：{role}。请联系工作区所有者。",
+    "forbiddenAsk": "请联系工作区所有者或运维人员。"
+  },
+  "quota": {
+    "names": {
+      "max_boxes": "同时运行的 box",
+      "max_cpu_per_box": "每个 box 的 vCPU",
+      "max_ram_mb_per_box": "每个 box 的内存",
+      "max_ttl_hours": "最长 TTL",
+      "public_url": "公开 URL",
+      "egress": "出站网络",
+      "max_members": "成员",
+      "max_agents": "智能体",
+      "max_keys": "API 密钥",
+      "max_secrets": "机密",
+      "max_boxes_per_minute": "每分钟创建 box 数"
+    },
+    "exceededTitle": "已达到套餐限额",
+    "exceededUsed": "{what}：已用 {used}/{limit}",
+    "exceededLimit": "{what}：上限 {limit}",
+    "onPlan": "{plan}套餐",
+    "seePlan": "查看套餐与限额",
+    "yes": "是",
+    "no": "否",
+    "egressOpen": "开放",
+    "egressRestricted": "受限",
+    "unlimited": "无限制",
+    "gb": "{n} GB",
+    "vcpu": "{n} vCPU",
+    "hours": "{n} 小时",
+    "title": "套餐与限额",
+    "desc": "当前套餐的用量与上限。超出时 Core 返回 QUOTA_EXCEEDED 并附带提示。",
+    "spentToday": "今日支出",
+    "spentMonth": "本月支出",
+    "sleepingNote": "休眠中的 box 不计入同时运行数（运行中 {running} / 共 {total}）。",
+    "compare": "套餐对比",
+    "compareDesc": "套餐由平台运维人员变更；自助付费将在 v2.1 推出。",
+    "limit": "限额",
+    "current": "当前"
+  },
+  "members": {
+    "title": "成员",
+    "descManage": "修改角色或移除成员。只有所有者可以授予、修改或移除所有者角色。",
+    "descView": "该工作区的成员。由所有者或管理员管理成员。",
+    "lastOwnerRule": "工作区必须至少保留一名所有者：最后一名所有者不能离开、被移除或被降级。请先让其他成员成为所有者。",
+    "lastOwnerShort": "最后一名所有者——请先指定其他所有者",
+    "ownerOnly": "只有所有者可以修改所有者",
+    "colMember": "成员",
+    "colRole": "角色",
+    "colJoined": "加入时间",
+    "colEmail": "邮箱",
+    "colStatus": "状态",
+    "colExpires": "过期 / 接受时间",
+    "you": "你",
+    "unverified": "未验证",
+    "roleChanged": "{who} 现在是 {role}",
+    "leave": "离开工作区",
+    "leaveTitle": "离开 {name}？",
+    "leaveDesc": "你将失去该工作区 box、智能体和机密的访问权限，直到再次被邀请。",
+    "left": "已离开 {name}",
+    "remove": "从工作区移除",
+    "removeTitle": "将 {who} 从工作区移除？",
+    "removeDesc": "其会话立即失去权限；他们创建的智能体和密钥仍保留在工作区中。",
+    "removed": "已移除 {who}",
+    "invitesTitle": "邀请",
+    "invitesDesc": "通过邮箱和角色邀请。链接 7 天内有效；再次邀请同一邮箱会替换旧链接。",
+    "inviteEmails": "邮箱（多个用逗号分隔）",
+    "inviteEmailsHint": "没有账号的人需使用该邮箱注册。",
+    "invite": "邀请",
+    "invitedMailed": "已向 {email} 发送邀请",
+    "invitedLink": "已为 {email} 创建邀请——未配置邮件，请发送下方链接",
+    "linksOnce": "邀请链接只显示一次——请立即复制并发送：",
+    "noInvites": "暂无邀请",
+    "status": {
+      "pending": "待接受",
+      "accepted": "已接受",
+      "expired": "已过期"
+    },
+    "resend": "重新发送（新链接）",
+    "revoke": "撤销",
+    "revokeTitle": "撤销发给 {email} 的邀请？",
+    "revokeDesc": "已发送的链接将失效。",
+    "revoked": "邀请已撤销",
+    "keyMode": "请使用邮箱登录以管理成员。"
+  },
+  "location": {
+    "regions": {
+      "eu": "欧洲",
+      "us": "美洲",
+      "apac": "亚太",
+      "sandbox": "沙箱 API",
+      "local": "本机",
+      "other": "其他"
     }
   }
 }

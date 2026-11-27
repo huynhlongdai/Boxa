@@ -161,7 +161,14 @@
     "invalidKeyHint": "Create an admin-scope key with `box keys create --admin`.",
     "coreUnreachable": "Can't reach Boxmes Core",
     "coreUnreachableHint": "Check BOXMES_API ({url}) or set BOXMES_MOCK=1.",
-    "tryNext": "Try next:"
+    "tryNext": "Try next:",
+    "csrfOrigin": "Request blocked: it did not come from this dashboard",
+    "csrfToken": "Request blocked: missing or wrong anti-CSRF token",
+    "csrfHint": "Reload the page and try again. Behind a reverse proxy, set BOXMES_DASHBOARD_ORIGINS to the dashboard URL.",
+    "useAuthRoute": "Sign-in and sign-up do not go through this proxy",
+    "useAuthRouteHint": "Use POST /api/auth/login or /api/auth/signup: the session token is kept in an HttpOnly cookie and never returned to the browser.",
+    "missingCredentials": "Email or password missing",
+    "missingCredentialsHint": "Enter both email and password."
   },
   "approvals": {
     "type": {
@@ -175,7 +182,9 @@
     "approved": "Approved",
     "rejected": "Rejected",
     "empty": "Nothing needs you right now.",
-    "emptyDesc": "When an agent passes 80% of its budget, a service is about to stop, or more hosts are needed, requests show up here."
+    "emptyDesc": "When an agent passes 80% of its budget, a service is about to stop, or more hosts are needed, requests show up here.",
+    "pageTitle": "Needs you",
+    "pageDesc": "What agents cannot decide alone: budget overruns, stopping services, expanding the pool, host incidents."
   },
   "boxActions": {
     "wake": "Wake",
@@ -310,7 +319,19 @@
     "colSlug": "Slug",
     "colWhere": "Provider / region",
     "colLifecycle": "Lifecycle",
-    "colUptime": "Uptime"
+    "colUptime": "Uptime",
+    "location": "Location",
+    "allLocations": "All locations",
+    "groupBy": "Group by",
+    "group": {
+      "none": "No grouping",
+      "location": "Group by location",
+      "agent": "Group by agent",
+      "status": "Group by status"
+    },
+    "groupCount": "{n, plural, one {# box} other {# boxes}}",
+    "costToday": "{cost} today",
+    "unplaced": "Not placed yet"
   },
   "charts": {
     "total": "Total",
@@ -502,7 +523,9 @@
       "RATE_LIMITEDHint": "Wait retry_after_s; batch commands with box_exec_batch.",
       "INTERNAL": "Unexpected error inside Core.",
       "INTERNALHint": "Retry once; if it persists, stop and tell the operator.",
-      "NO_CAPACITYHint": "Lower the spec, wait retry_after_s and retry, or call box_quote for alternatives."
+      "NO_CAPACITYHint": "Lower the spec, wait retry_after_s and retry, or call box_quote for alternatives.",
+      "QUOTA_EXCEEDED": "The workspace plan does not allow it (concurrent boxes, CPU/RAM, TTL, members, agents, keys, secrets…).",
+      "QUOTA_EXCEEDEDHint": "Read error.details (quota, limit, used, plan); sleep or delete boxes, or upgrade the plan before retrying."
     },
     "a2a": "A2A: hand tasks to Boxmes",
     "a2aDesc": "Other agents send JSON-RPC to <mono>/a2a</mono>: a text part is a command (with <mono>metadata.box_id</mono>), a data part with <mono>tool</mono> + <mono>arguments</mono> calls any tool. A command's task id is its job id.",
@@ -651,18 +674,28 @@
   },
   "login": {
     "title": "Sign in to Boxmes",
-    "subtitle": "Use an API key with admin scope",
+    "subtitle": "Sign in with your email and password",
     "keyLabel": "Admin API key",
     "keyHint": "Create one with <mono>box keys create --admin</mono>. The key lives in an httpOnly cookie, never in JavaScript.",
     "checking": "Checking…",
     "submit": "Sign in",
     "failed": "Sign-in failed",
-    "mock": "MOCK MODE — enter without a key"
+    "mock": "MOCK MODE — enter without a key",
+    "keySubtitle": "Use an API key (self-hosted / operator)",
+    "emailLabel": "Email",
+    "passwordLabel": "Password",
+    "rateLimited": "Too many failed attempts. Try again in {minutes} min.",
+    "noAccount": "No account yet?",
+    "signupLink": "Sign up",
+    "useKey": "Sign in with an API key",
+    "useEmail": "Sign in with email"
   },
   "meta": {
     "description": "Personal cloud infrastructure for AI agents",
     "login": "Sign in",
-    "onboarding": "First-time setup"
+    "onboarding": "First-time setup",
+    "signup": "Sign up",
+    "invite": "Workspace invite"
   },
   "nav": {
     "overview": "Overview",
@@ -680,7 +713,18 @@
     "more": "More",
     "palette": "Commands",
     "logout": "Sign out",
-    "recommend": "Recommend"
+    "recommend": "Recommend",
+    "approvals": "Needs you",
+    "volumes": "Volumes",
+    "billing": "Billing",
+    "soon": "soon",
+    "groups": {
+      "ops": "Operations",
+      "resources": "Resources",
+      "money": "Money",
+      "integrations": "Integrations",
+      "platform": "Platform"
+    }
   },
   "notFound": {
     "title": "Page not found",
@@ -820,7 +864,18 @@
     "network": "Outbound network",
     "networkDesc": "Each box's allowlist lives on the box page. This is the default for boxes that declare none.",
     "egressDeny": "Deny egress by default",
-    "egressDenyHint": "Boxes without an egress policy may only reach their agent's allowlist; with no allowlist everything is blocked."
+    "egressDenyHint": "Boxes without an egress policy may only reach their agent's allowlist; with no allowlist everything is blocked.",
+    "descV2": "Workspace, members, plan & limits; system configuration for platform admins.",
+    "tabGeneral": "General",
+    "tabMembers": "Members",
+    "tabPlan": "Plan & limits",
+    "tabInstance": "System",
+    "workspace": "Workspace",
+    "workspaceDesc": "The name every member sees (owners and admins can rename it).",
+    "workspaceName": "Workspace name",
+    "plan": "Plan",
+    "myRole": "My role",
+    "memberCount": "Members"
   },
   "shell": {
     "searchPlaceholder": "Search or type a command…",
@@ -831,7 +886,8 @@
     "pollingTitle": "SSE lost — refreshing every 10 seconds",
     "maintenance": "Maintenance:",
     "spentToday": "/ {budget} today",
-    "language": "Language"
+    "language": "Language",
+    "mainNav": "Main navigation"
   },
   "status": {
     "box": {
@@ -1944,6 +2000,211 @@
       "sdkTs": "SDK TypeScript",
       "curl": "curl",
       "cli": "CLI"
+    }
+  },
+  "signup": {
+    "title": "Create your Boxmes account",
+    "titleInvite": "Create an account to join the workspace",
+    "subtitle": "Personal cloud infrastructure for AI agents",
+    "firstUser": "The first account becomes the platform admin",
+    "email": "Email",
+    "password": "Password",
+    "passwordHint": "At least {n} characters, at most 72 bytes.",
+    "strength": {
+      "0": "Very weak",
+      "1": "Weak",
+      "2": "Fair",
+      "3": "Strong",
+      "4": "Very strong"
+    },
+    "name": "Name (optional)",
+    "workspace": "Workspace name",
+    "workspaceHint": "Suggested from your email; you can rename it later in Settings.",
+    "inviteCode": "Invite code",
+    "inviteCodeHint": "This instance only accepts sign-ups with an invite code.",
+    "inviteEmailHint": "Use the email address the invite was sent to.",
+    "terms": "I agree to the Terms of Service and the Acceptable Use Policy (AUP).",
+    "codeWaitlist": "No code? Join the waitlist or ask the operator for one.",
+    "creating": "Creating…",
+    "submit": "Create account",
+    "submitInvite": "Create account and join",
+    "haveAccount": "Already have an account?",
+    "loginLink": "Sign in",
+    "failed": "Sign-up failed",
+    "closedDesc": "Sign-ups are closed. Leave your email and you will get an invite code when it is your turn.",
+    "waitlistJoined": "You are on the waitlist at position #{position}.",
+    "joinWaitlist": "Join the waitlist",
+    "benefits": {
+      "b1": "Agents create boxes in seconds",
+      "b1Desc": "MCP, A2A, REST and SDKs — 22 agent kinds work out of the box.",
+      "b2": "Spend always in view",
+      "b2Desc": "Per-agent budgets, idle boxes sleep themselves, one-tap emergency stop.",
+      "b3": "Work as a team",
+      "b3Desc": "Separate workspaces with Owner / Admin / Developer / Billing / Viewer / Auditor roles."
+    },
+    "priceExample": "2 vCPU / 4 GB from $0.024/hour"
+  },
+  "invite": {
+    "title": "Workspace invitation",
+    "invalidTitle": "This invite cannot be used",
+    "toLogin": "Go to sign in",
+    "headline": "<b>{who}</b> invited you to the workspace <b>{ws}</b> as <b>{role}</b>.",
+    "forEmail": "Sent to {email}",
+    "status": {
+      "pending": "Pending",
+      "accepted": "Accepted",
+      "expired": "Expired"
+    },
+    "expires": "expires {time}",
+    "expiredDesc": "This invite has expired. Ask the person who invited you to send a new one.",
+    "acceptedDesc": "This invite has already been used.",
+    "toDashboard": "Open the dashboard",
+    "alreadyMember": "You are already a member of this workspace.",
+    "joining": "Joining…",
+    "join": "Join",
+    "otherEmail": "You are signed in as {current}, but the invite is for {email}.",
+    "switchAccount": "Sign out and switch account",
+    "keyMode": "You are signed in with an API key. Invites need an email account.",
+    "loginToJoin": "Sign in to join",
+    "signupToJoin": "Create an account to join",
+    "haveAccount": "Already have an account?",
+    "loginLink": "Sign in"
+  },
+  "roles": {
+    "owner": "Owner",
+    "admin": "Admin",
+    "developer": "Developer",
+    "billing": "Billing",
+    "viewer": "Viewer",
+    "auditor": "Auditor",
+    "key": "API key"
+  },
+  "plans": {
+    "free": "Free",
+    "pro": "Pro",
+    "team": "Team",
+    "unlimited": "Unlimited"
+  },
+  "workspace": {
+    "switcher": "Switch workspace",
+    "none": "No workspace",
+    "mine": "My workspaces",
+    "noneYet": "You are not in any workspace yet.",
+    "keyMode": "Signed in with an API key: a key belongs to one workspace and cannot switch.",
+    "suspended": "suspended",
+    "switched": "Switched to {name}",
+    "create": "Create workspace",
+    "createTitle": "New workspace",
+    "createDesc": "You will be its owner. Boxes, agents, keys and secrets are fully separate per workspace.",
+    "name": "Name",
+    "namePlaceholder": "e.g. kecon-team",
+    "created": "Workspace {name} created",
+    "account": "Account",
+    "platformAdmin": "Platform admin",
+    "keySession": "API key session",
+    "logoutAll": "Sign out everywhere",
+    "suspendedBanner": "Workspace {name} is suspended: read-only, every write is refused. Contact the operator.",
+    "noWorkspaceBanner": "You are not in any workspace. Create one or accept an invite.",
+    "verifyBanner": "Verify your email to use Boxmes fully.",
+    "verifyResend": "Resend email",
+    "verifySent": "Sent",
+    "boxesOf": "{used}/{max} boxes",
+    "boxesUnlimited": "{used} boxes",
+    "forbiddenPlatform": "The Platform area is for platform admins only.",
+    "forbiddenRole": "You need the {role} role to open this page.",
+    "forbiddenYour": "Your current role in {name}: {role}. Ask a workspace owner.",
+    "forbiddenAsk": "Ask a workspace owner or the operator."
+  },
+  "quota": {
+    "names": {
+      "max_boxes": "Concurrent boxes",
+      "max_cpu_per_box": "vCPU per box",
+      "max_ram_mb_per_box": "RAM per box",
+      "max_ttl_hours": "Max TTL",
+      "public_url": "Public URLs",
+      "egress": "Egress",
+      "max_members": "Members",
+      "max_agents": "Agents",
+      "max_keys": "API keys",
+      "max_secrets": "Secrets",
+      "max_boxes_per_minute": "Box creations per minute"
+    },
+    "exceededTitle": "Plan limit reached",
+    "exceededUsed": "{what}: {used} of {limit} used",
+    "exceededLimit": "{what}: limit {limit}",
+    "onPlan": "{plan} plan",
+    "seePlan": "See plan & limits",
+    "yes": "Yes",
+    "no": "No",
+    "egressOpen": "Open",
+    "egressRestricted": "Restricted",
+    "unlimited": "Unlimited",
+    "gb": "{n} GB",
+    "vcpu": "{n} vCPU",
+    "hours": "{n} h",
+    "title": "Plan & limits",
+    "desc": "Usage against the current plan. Going over returns QUOTA_EXCEEDED with a hint.",
+    "spentToday": "Spent today",
+    "spentMonth": "Spent this month",
+    "sleepingNote": "Sleeping boxes do not count against concurrent boxes ({running} running / {total} total).",
+    "compare": "Compare plans",
+    "compareDesc": "Plans are changed by the platform operator; self-serve billing arrives in v2.1.",
+    "limit": "Limit",
+    "current": "current"
+  },
+  "members": {
+    "title": "Members",
+    "descManage": "Change roles or remove members. Only owners grant, change or remove the Owner role.",
+    "descView": "Who is in this workspace. Owners and admins manage members.",
+    "lastOwnerRule": "A workspace always keeps at least one owner: the last owner cannot leave, be removed or be demoted. Make someone else owner first.",
+    "lastOwnerShort": "Last owner — make someone else owner first",
+    "ownerOnly": "Only an owner can change an owner",
+    "colMember": "Member",
+    "colRole": "Role",
+    "colJoined": "Joined",
+    "colEmail": "Email",
+    "colStatus": "Status",
+    "colExpires": "Expires / accepted",
+    "you": "you",
+    "unverified": "unverified",
+    "roleChanged": "{who} is now {role}",
+    "leave": "Leave workspace",
+    "leaveTitle": "Leave {name}?",
+    "leaveDesc": "You will lose access to this workspace's boxes, agents and secrets until you are invited again.",
+    "left": "Left {name}",
+    "remove": "Remove from workspace",
+    "removeTitle": "Remove {who} from the workspace?",
+    "removeDesc": "Their sessions lose access immediately; agents and keys they created stay in the workspace.",
+    "removed": "Removed {who}",
+    "invitesTitle": "Invites",
+    "invitesDesc": "Invite by email and role. Links are valid for 7 days; inviting the same email again replaces the old link.",
+    "inviteEmails": "Emails (comma-separated)",
+    "inviteEmailsHint": "People without an account sign up with this exact email.",
+    "invite": "Invite",
+    "invitedMailed": "Invite emailed to {email}",
+    "invitedLink": "Invite created for {email} — email is not configured, send the link below",
+    "linksOnce": "Invite links are shown once — copy and send them now:",
+    "noInvites": "No invites yet",
+    "status": {
+      "pending": "Pending",
+      "accepted": "Accepted",
+      "expired": "Expired"
+    },
+    "resend": "Resend (new link)",
+    "revoke": "Revoke",
+    "revokeTitle": "Revoke the invite for {email}?",
+    "revokeDesc": "The link already sent will stop working.",
+    "revoked": "Invite revoked",
+    "keyMode": "Sign in with email to manage members."
+  },
+  "location": {
+    "regions": {
+      "eu": "EU",
+      "us": "US",
+      "apac": "APAC",
+      "sandbox": "Sandbox API",
+      "local": "Local machine",
+      "other": "Other"
     }
   }
 }

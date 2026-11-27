@@ -20,6 +20,8 @@ import { AccessTab } from "@/components/boxmes/access";
 import { DesktopTab } from "@/components/boxmes/desktop";
 import { BrowserTab } from "@/components/boxmes/browser";
 import { OverviewTab, TimelineTab, FilesTab, LogsTab, SnapshotsTab, ConfigTab } from "./tabs";
+import { Can } from "@/lib/session";
+import { PERMS } from "@/lib/types";
 
 const TABS = ["overview", "ports", "access", "terminal", "desktop", "browser", "timeline", "files", "logs", "snapshots", "config"] as const;
 
@@ -61,7 +63,7 @@ function Inner() {
         </div>
         <div className="flex flex-wrap items-center gap-1">
           <CloneButton box={box} />
-          <BoxActions box={box} labels className="flex-wrap" onDeleted={() => router.push("/boxes")} />
+          <Can perm={PERMS.boxesWrite}><BoxActions box={box} labels className="flex-wrap" onDeleted={() => router.push("/boxes")} /></Can>
         </div>
       </div>
 

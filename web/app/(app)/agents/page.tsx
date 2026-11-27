@@ -15,6 +15,8 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { BudgetBar, MoneyBudget } from "@/components/boxmes/budget";
 import { AgentWizard } from "@/components/boxmes/agent-wizard";
 import { Empty, ErrorBox, LoadingRows, PageHeader } from "@/components/boxmes/page";
+import { Can } from "@/lib/session";
+import { PERMS } from "@/lib/types";
 
 export default function AgentsPage() {
   const { data, error, isLoading, mutate } = useApi<List<Agent>>(paths.agents);
@@ -29,6 +31,7 @@ export default function AgentsPage() {
         title={t("title")}
         desc={t("desc")}
         actions={
+          <Can perm={PERMS.agentsWrite}>
           <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setKey((k) => k + 1); }}>
             <DialogTrigger asChild><Button size="sm"><Plus /> {t("create")}</Button></DialogTrigger>
             <DialogContent className="max-w-2xl">
@@ -39,6 +42,7 @@ export default function AgentsPage() {
               <AgentWizard key={key} compact />
             </DialogContent>
           </Dialog>
+          </Can>
         }
       />
       {error ? <ErrorBox error={error} retry={() => mutate()} /> : isLoading || !data ? <LoadingRows /> : !data.items.length ? (

@@ -2,6 +2,11 @@
 // Trình duyệt luôn gọi qua proxy Next (/api/boxmes/...), proxy gắn API key từ cookie httpOnly,
 // nên key không bao giờ nằm trong JS phía client.
 import type {
+  CurrentWorkspace,
+  InvitePreview,
+  Me,
+  Member,
+  WorkspaceInviteCreated,
   AdapterLintResult,
   AdminSystem,
   AdminUser,
@@ -97,6 +102,8 @@ export class ApiError extends Error {
   docsUrl?: string;
   /** v1.3: các lệnh gợi ý tiếp theo thường gỡ được lỗi (error.next). */
   next: string[];
+  /** v2.0: ngữ cảnh máy đọc được, vd QUOTA_EXCEEDED {quota, limit, used, plan, upgrade_url}. */
+  details?: Record<string, unknown>;
   constructor(status: number, body: Partial<ApiErrorBody> | null, fallback: string) {
     super(body?.error?.message ?? fallback);
     this.status = status;
@@ -105,6 +112,7 @@ export class ApiError extends Error {
     this.retryAfter = body?.error?.retry_after_s;
     this.docsUrl = body?.error?.docs_url;
     this.next = Array.isArray(body?.error?.next) ? body!.error!.next! : [];
+    this.details = body?.error?.details && typeof body.error.details === "object" ? body.error.details : undefined;
   }
 }
 
@@ -121,19 +129,57 @@ export function qs(q?: Query): string {
   return s ? `?${s}` : "";
 }
 
+const CSRF_COOKIE = "boxmes_csrf";
+const CSRF_HEADER = "X-Boxmes-CSRF";
+
+function readCookie(name: string): string {
+  if (typeof document === "undefined") return "";
+  for (const part of document.cookie.split(";")) {
+    const [k, ...v] = part.trim().split("=");
+    if (k === name) return decodeURIComponent(v.join("="));
+  }
+  return "";
+}
+
+/**
+ * v2.0: header double-submit chống CSRF cho request đổi trạng thái tới route Next (/api/*).
+ * Cookie boxmes_csrf do /api/session cấp; thiếu thì gọi /api/session một lần để lấy.
+ */
+export async function csrfHeaders(): Promise<Record<string, string>> {
+  let v = readCookie(CSRF_COOKIE);
+  if (!v && typeof window !== "undefined") {
+    await fetch("/api/session", { cache: "no-store", credentials: "same-origin" }).catch(() => null);
+    v = readCookie(CSRF_COOKIE);
+  }
+  return v ? { [CSRF_HEADER]: v } : {};
+}
+
+let sessionCheck: Promise<boolean> | null = null;
+/** 401 từ Core có thể là "phiên hết hạn" hoặc "việc này chỉ dành cho quản trị nền tảng": hỏi /api/session để phân biệt. */
+async function sessionStillValid(): Promise<boolean> {
+  sessionCheck ??= fetch("/api/session", { cache: "no-store", credentials: "same-origin" })
+    .then((r) => r.json() as Promise<{ authed?: boolean }>)
+    .then((s) => Boolean(s.authed))
+    .catch(() => true)
+    .finally(() => setTimeout(() => (sessionCheck = null), 5000));
+  return sessionCheck;
+}
+
 async function request<T>(method: string, path: string, body?: unknown, headers?: Record<string, string>): Promise<T> {
+  const unsafe = !["GET", "HEAD"].includes(method);
   const res = await fetch(`${PROXY_BASE}${path}`, {
     method,
     headers: {
       ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...(unsafe ? await csrfHeaders() : {}),
       ...headers,
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
     cache: "no-store",
     credentials: "same-origin",
   });
-  if (res.status === 401 && typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-    window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
+  if (res.status === 401 && typeof window !== "undefined" && !/^\/(login|signup|invite)/.test(window.location.pathname) && !(await sessionStillValid())) {
+    window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
   }
   const text = await res.text();
   let data: unknown = null;
@@ -147,6 +193,20 @@ async function request<T>(method: string, path: string, body?: unknown, headers?
   if (!res.ok) {
     throw new ApiError(res.status, (data as ApiErrorBody) ?? null, `HTTP ${res.status}`);
   }
+  return data as T;
+}
+
+/** v2.0: gọi route xác thực của Next (/api/auth/*) — cùng cách báo lỗi như proxy. */
+export async function authPost<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(await csrfHeaders()) },
+    body: JSON.stringify(body ?? {}),
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+  const data = (await res.json().catch(() => null)) as unknown;
+  if (!res.ok) throw new ApiError(res.status, (data as ApiErrorBody) ?? null, `HTTP ${res.status}`);
   return data as T;
 }
 
@@ -166,6 +226,10 @@ export interface BoxFilters {
   agent?: string;
   provider?: string;
   lifecycle?: string;
+  /** v2.0: eu | us | apac | sandbox | local | other */
+  region?: string;
+  /** v2.0: site "<provider>-<mã>", vd hetzner-fsn */
+  location?: string;
 }
 export interface CostFilters {
   agent?: string;
@@ -178,6 +242,15 @@ export interface CostFilters {
 /** Đường dẫn (khóa SWR) cho từng resource. */
 export const paths = {
   health: "/health",
+  // v2.0 tenancy
+  authConfig: "/auth/config",
+  plans: "/plans",
+  workspaceCurrent: "/workspaces/current",
+  workspaceUsage: "/workspaces/current/usage",
+  members: "/workspaces/current/members",
+  invites: "/workspaces/current/invites",
+  invitePreview: (token: string) => `/workspace-invites/${encodeURIComponent(token)}`,
+  boxLocations: "/boxes/locations",
   overview: "/overview",
   boxes: (f?: BoxFilters) => `/boxes${qs(f as Query)}`,
   box: (id: string) => `/boxes/${id}`,
@@ -258,6 +331,18 @@ export const paths = {
 };
 
 export const api = {
+  // ---- v2.0 tenancy ----
+  /** Đổi workspace hiện tại của phiên (Core cập nhật phiên phía server; token không đổi). */
+  switchWorkspace: (workspaceId: string) => http.post<Me>("/auth/workspace", { workspace_id: workspaceId }),
+  createWorkspace: (name: string) => http.post<CurrentWorkspace>("/workspaces", { name }),
+  renameWorkspace: (name: string) => http.patch<CurrentWorkspace>(paths.workspaceCurrent, { name }),
+  setMemberRole: (userId: string, role: string) => http.patch<Member>(`${paths.members}/${encodeURIComponent(userId)}`, { role }),
+  removeMember: (userId: string) => http.del<{ ok: boolean }>(`${paths.members}/${encodeURIComponent(userId)}`),
+  createInvite: (email: string, role: string) => http.post<WorkspaceInviteCreated>(paths.invites, { email, role }),
+  revokeInvite: (id: string) => http.del<{ ok: boolean }>(`${paths.invites}/${encodeURIComponent(id)}`),
+  invitePreview: (token: string) => http.get<InvitePreview>(paths.invitePreview(token)),
+  acceptInvite: (token: string) => http.post<Me>(`${paths.invitePreview(token)}/accept`),
+
   health: () => http.get<Health>(paths.health),
   overview: () => http.get<Overview>(paths.overview),
 

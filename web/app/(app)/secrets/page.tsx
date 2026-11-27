@@ -15,6 +15,8 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { ConfirmButton } from "@/components/boxmes/confirm";
 import { Empty, ErrorBox, LoadingRows, PageHeader } from "@/components/boxmes/page";
 import { Mono } from "@/components/boxmes/status";
+import { Can } from "@/lib/session";
+import { PERMS } from "@/lib/types";
 
 function AddSecret({ agents }: { agents: Agent[] }) {
   const [open, setOpen] = React.useState(false);
@@ -84,7 +86,7 @@ export default function SecretsPage() {
   const name = (id: string) => agents?.items.find((a) => a.id === id)?.name ?? id;
   return (
     <>
-      <PageHeader title={t("title")} desc={t("desc")} actions={<AddSecret agents={agents?.items ?? []} />} />
+      <PageHeader title={t("title")} desc={t("desc")} actions={<Can perm={PERMS.secretsWrite}><AddSecret agents={agents?.items ?? []} /></Can>} />
       <p className="mb-4 flex items-center gap-1.5 text-[13px] text-muted-foreground"><EyeOff className="size-4 shrink-0" /> <span>{t.rich("hint", { mono: (c) => <span className="font-mono">{c}</span> })}</span></p>
       {error ? <ErrorBox error={error} retry={() => mutate()} /> : !data ? <LoadingRows /> : !data.items.length ? <Empty title={t("empty")} /> : (
         <Card>
@@ -99,11 +101,13 @@ export default function SecretsPage() {
                   <TD className="whitespace-nowrap text-[13px] text-muted-foreground">{s.rotated_at ? relTime(s.rotated_at) : t("never")}</TD>
                   <TD>
                     <div className="flex justify-end gap-1">
+                      <Can perm={PERMS.secretsWrite}>
                       <RotateSecret s={s} />
                       <ConfirmButton size="xs" variant="outline" destructive title={t("deleteTitle", { name: s.name })} desc={t("deleteDesc")} confirmLabel={tc("delete")} typeToConfirm={s.name} aria-label={tc("delete")}
                         onConfirm={() => run("d", () => api.deleteSecret(s.name), { success: tc("deleted"), revalidate: [paths.secrets] })}>
                         <Trash2 />
                       </ConfirmButton>
+                      </Can>
                     </div>
                   </TD>
                 </TR>

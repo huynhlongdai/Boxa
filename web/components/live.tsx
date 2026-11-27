@@ -3,14 +3,10 @@
 import * as React from "react";
 import { SWRConfig, useSWRConfig } from "swr";
 import { fetcher, PROXY_BASE } from "@/lib/api";
-import type { Overview } from "@/lib/types";
+import type { Overview, SessionInfo } from "@/lib/types";
+import { useSession } from "@/lib/session";
 
-interface Session {
-  mock: boolean;
-  authed: boolean;
-  key_prefix: string | null;
-  ws_base: string | null;
-}
+type Session = SessionInfo;
 interface LiveCtx {
   connected: boolean;
   session: Session | null;
@@ -81,13 +77,7 @@ function StreamBridge({ onState }: { onState: (c: boolean, t?: number) => void }
 export function LiveProvider({ children }: { children: React.ReactNode }) {
   const [connected, setConnected] = React.useState(false);
   const [lastEventAt, setLast] = React.useState<number | null>(null);
-  const [session, setSession] = React.useState<Session | null>(null);
-  React.useEffect(() => {
-    fetch("/api/session", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((s: Session) => setSession(s))
-      .catch(() => setSession(null));
-  }, []);
+  const { session } = useSession();
   const onState = React.useCallback((c: boolean, t?: number) => {
     setConnected(c);
     if (t) setLast(t);
@@ -104,7 +94,8 @@ export function LiveProvider({ children }: { children: React.ReactNode }) {
       }}
     >
       <Ctx.Provider value={{ connected, session, lastEventAt }}>
-        <StreamBridge onState={onState} />
+        {/* v2.0: đổi workspace → nối lại SSE để luồng sự kiện theo workspace mới */}
+        <StreamBridge key={session?.me?.workspace?.id ?? "-"} onState={onState} />
         {children}
       </Ctx.Provider>
     </SWRConfig>

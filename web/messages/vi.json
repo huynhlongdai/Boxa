@@ -161,7 +161,14 @@
     "invalidKeyHint": "Tạo key scope admin bằng `box keys create --admin`.",
     "coreUnreachable": "Không kết nối được Boxmes Core",
     "coreUnreachableHint": "Kiểm tra BOXMES_API ({url}) hoặc bật BOXMES_MOCK=1.",
-    "tryNext": "Thử tiếp:"
+    "tryNext": "Thử tiếp:",
+    "csrfOrigin": "Yêu cầu bị chặn: nguồn gửi không phải dashboard này",
+    "csrfToken": "Yêu cầu bị chặn: thiếu hoặc sai mã chống CSRF",
+    "csrfHint": "Tải lại trang rồi thử lại. Nếu chạy sau reverse proxy, đặt BOXMES_DASHBOARD_ORIGINS bằng địa chỉ dashboard.",
+    "useAuthRoute": "Đăng nhập / đăng ký không đi qua proxy này",
+    "useAuthRouteHint": "Dùng POST /api/auth/login hoặc /api/auth/signup: token phiên được cất vào cookie HttpOnly, không trả cho trình duyệt.",
+    "missingCredentials": "Thiếu email hoặc mật khẩu",
+    "missingCredentialsHint": "Nhập cả email và mật khẩu."
   },
   "approvals": {
     "type": {
@@ -175,7 +182,9 @@
     "approved": "Đã duyệt",
     "rejected": "Đã từ chối",
     "empty": "Không có gì cần anh lúc này.",
-    "emptyDesc": "Khi agent vượt 80% ngân sách, service sắp bị dừng hay cần mua thêm host, yêu cầu sẽ hiện ở đây."
+    "emptyDesc": "Khi agent vượt 80% ngân sách, service sắp bị dừng hay cần mua thêm host, yêu cầu sẽ hiện ở đây.",
+    "pageTitle": "Cần anh",
+    "pageDesc": "Việc agent không tự quyết được: vượt ngân sách, dừng service, mở rộng pool, host gặp sự cố."
   },
   "boxActions": {
     "wake": "Đánh thức",
@@ -310,7 +319,19 @@
     "colSlug": "Slug",
     "colWhere": "Provider / vùng",
     "colLifecycle": "Lifecycle",
-    "colUptime": "Thời gian chạy"
+    "colUptime": "Thời gian chạy",
+    "location": "Vị trí",
+    "allLocations": "Mọi vị trí",
+    "groupBy": "Nhóm theo",
+    "group": {
+      "none": "Không nhóm",
+      "location": "Nhóm theo Vị trí",
+      "agent": "Nhóm theo Agent",
+      "status": "Nhóm theo Trạng thái"
+    },
+    "groupCount": "{n} box",
+    "costToday": "{cost} hôm nay",
+    "unplaced": "Chưa đặt chỗ"
   },
   "charts": {
     "total": "Tổng",
@@ -502,7 +523,9 @@
       "RATE_LIMITEDHint": "Đợi retry_after_s; gộp lệnh bằng box_exec_batch.",
       "INTERNAL": "Lỗi bất ngờ trong Core.",
       "INTERNALHint": "Thử lại một lần; nếu vẫn lỗi, dừng và báo người vận hành.",
-      "NO_CAPACITYHint": "Giảm spec, đợi retry_after_s rồi thử lại, hoặc gọi box_quote xem phương án khác."
+      "NO_CAPACITYHint": "Giảm spec, đợi retry_after_s rồi thử lại, hoặc gọi box_quote xem phương án khác.",
+      "QUOTA_EXCEEDED": "Vượt hạn mức gói của workspace (box đồng thời, CPU/RAM, TTL, thành viên, agent, key, secret…).",
+      "QUOTA_EXCEEDEDHint": "Đọc error.details (quota, limit, used, plan); cho box ngủ / xoá bớt hoặc nâng gói rồi mới thử lại."
     },
     "a2a": "A2A: giao việc cho Boxmes",
     "a2aDesc": "Agent khác gửi JSON-RPC tới <mono>/a2a</mono>: text part là lệnh (kèm <mono>metadata.box_id</mono>), data part <mono>tool</mono> + <mono>arguments</mono> để gọi bất kỳ tool nào. Task id của lệnh chính là job id.",
@@ -651,18 +674,28 @@
   },
   "login": {
     "title": "Đăng nhập Boxmes",
-    "subtitle": "Dùng API key có scope admin",
+    "subtitle": "Đăng nhập bằng email và mật khẩu",
     "keyLabel": "API key admin",
     "keyHint": "Tạo bằng <mono>box keys create --admin</mono>. Key được lưu trong cookie httpOnly, không nằm trong JavaScript.",
     "checking": "Đang kiểm tra…",
     "submit": "Đăng nhập",
     "failed": "Đăng nhập thất bại",
-    "mock": "Đang ở MOCK MODE — vào luôn không cần key"
+    "mock": "Đang ở MOCK MODE — vào luôn không cần key",
+    "keySubtitle": "Dùng API key (tự host / người vận hành)",
+    "emailLabel": "Email",
+    "passwordLabel": "Mật khẩu",
+    "rateLimited": "Sai quá nhiều lần. Thử lại sau {minutes} phút.",
+    "noAccount": "Chưa có tài khoản?",
+    "signupLink": "Đăng ký",
+    "useKey": "Đăng nhập bằng API key",
+    "useEmail": "Đăng nhập bằng email"
   },
   "meta": {
     "description": "Hạ tầng cloud cá nhân cho AI agent",
     "login": "Đăng nhập",
-    "onboarding": "Khởi động lần đầu"
+    "onboarding": "Khởi động lần đầu",
+    "signup": "Đăng ký",
+    "invite": "Lời mời workspace"
   },
   "nav": {
     "overview": "Tổng quan",
@@ -680,7 +713,18 @@
     "more": "Thêm",
     "palette": "Bảng lệnh",
     "logout": "Đăng xuất",
-    "recommend": "Gợi ý box"
+    "recommend": "Gợi ý box",
+    "approvals": "Cần anh",
+    "volumes": "Volumes",
+    "billing": "Thanh toán",
+    "soon": "sắp có",
+    "groups": {
+      "ops": "Vận hành",
+      "resources": "Tài nguyên",
+      "money": "Tiền",
+      "integrations": "Tích hợp",
+      "platform": "Nền tảng"
+    }
   },
   "notFound": {
     "title": "Không tìm thấy trang này",
@@ -820,7 +864,18 @@
     "network": "Mạng ra ngoài",
     "networkDesc": "Allowlist của từng box nằm ở trang box. Ở đây là mặc định cho box không khai báo.",
     "egressDeny": "Chặn egress mặc định",
-    "egressDenyHint": "Box không khai báo egress chỉ được ra địa chỉ trong allowlist của agent; không có allowlist thì chặn hết."
+    "egressDenyHint": "Box không khai báo egress chỉ được ra địa chỉ trong allowlist của agent; không có allowlist thì chặn hết.",
+    "descV2": "Workspace, thành viên, gói & hạn mức; cấu hình hệ thống cho quản trị nền tảng.",
+    "tabGeneral": "Chung",
+    "tabMembers": "Thành viên",
+    "tabPlan": "Gói & hạn mức",
+    "tabInstance": "Hệ thống",
+    "workspace": "Workspace",
+    "workspaceDesc": "Tên hiển thị cho mọi thành viên (Owner/Admin đổi được).",
+    "workspaceName": "Tên workspace",
+    "plan": "Gói",
+    "myRole": "Vai trò của tôi",
+    "memberCount": "Thành viên"
   },
   "shell": {
     "searchPlaceholder": "Tìm hoặc gõ lệnh…",
@@ -831,7 +886,8 @@
     "pollingTitle": "Mất SSE — đang làm mới mỗi 10 giây",
     "maintenance": "Đang bảo trì:",
     "spentToday": "/ {budget} hôm nay",
-    "language": "Ngôn ngữ"
+    "language": "Ngôn ngữ",
+    "mainNav": "Điều hướng chính"
   },
   "status": {
     "box": {
@@ -1944,6 +2000,211 @@
       "sdkTs": "SDK TypeScript",
       "curl": "curl",
       "cli": "CLI"
+    }
+  },
+  "signup": {
+    "title": "Tạo tài khoản Boxmes",
+    "titleInvite": "Tạo tài khoản để tham gia workspace",
+    "subtitle": "Hạ tầng cloud cá nhân cho AI agent",
+    "firstUser": "Tài khoản đầu tiên sẽ là quản trị nền tảng",
+    "email": "Email",
+    "password": "Mật khẩu",
+    "passwordHint": "Ít nhất {n} ký tự, tối đa 72 byte.",
+    "strength": {
+      "0": "Rất yếu",
+      "1": "Yếu",
+      "2": "Tạm được",
+      "3": "Mạnh",
+      "4": "Rất mạnh"
+    },
+    "name": "Tên (tuỳ chọn)",
+    "workspace": "Tên workspace",
+    "workspaceHint": "Gợi ý từ email; đổi được sau trong Cài đặt.",
+    "inviteCode": "Mã mời",
+    "inviteCodeHint": "Instance này đang ở chế độ chỉ đăng ký bằng mã mời.",
+    "inviteEmailHint": "Dùng đúng email nhận lời mời.",
+    "terms": "Tôi đồng ý với Điều khoản sử dụng và Chính sách sử dụng chấp nhận được (AUP).",
+    "codeWaitlist": "Chưa có mã? Để lại email ở danh sách chờ — chuyển chế độ đăng ký hoặc hỏi người vận hành.",
+    "creating": "Đang tạo…",
+    "submit": "Tạo tài khoản",
+    "submitInvite": "Tạo tài khoản và tham gia",
+    "haveAccount": "Đã có tài khoản?",
+    "loginLink": "Đăng nhập",
+    "failed": "Đăng ký thất bại",
+    "closedDesc": "Đăng ký đang đóng. Để lại email, anh sẽ nhận mã mời khi tới lượt.",
+    "waitlistJoined": "Đã vào danh sách chờ, vị trí #{position}.",
+    "joinWaitlist": "Tham gia danh sách chờ",
+    "benefits": {
+      "b1": "Agent tự tạo box trong vài giây",
+      "b1Desc": "MCP, A2A, REST và SDK — 22 loại agent dùng được ngay.",
+      "b2": "Tiền luôn trong tầm mắt",
+      "b2Desc": "Ngân sách theo agent, box tự ngủ khi rảnh, dừng khẩn cấp một chạm.",
+      "b3": "Làm việc cùng nhóm",
+      "b3Desc": "Workspace riêng, vai trò Owner / Admin / Developer / Billing / Viewer / Auditor."
+    },
+    "priceExample": "2 vCPU / 4 GB từ $0.024/giờ"
+  },
+  "invite": {
+    "title": "Lời mời vào workspace",
+    "invalidTitle": "Lời mời không dùng được",
+    "toLogin": "Tới trang đăng nhập",
+    "headline": "<b>{who}</b> mời anh vào workspace <b>{ws}</b> với vai trò <b>{role}</b>.",
+    "forEmail": "Gửi tới {email}",
+    "status": {
+      "pending": "Đang chờ",
+      "accepted": "Đã nhận",
+      "expired": "Hết hạn"
+    },
+    "expires": "hết hạn {time}",
+    "expiredDesc": "Lời mời đã hết hạn. Hãy nhờ người mời gửi lại.",
+    "acceptedDesc": "Lời mời này đã được dùng.",
+    "toDashboard": "Vào dashboard",
+    "alreadyMember": "Anh đã là thành viên của workspace này.",
+    "joining": "Đang tham gia…",
+    "join": "Tham gia",
+    "otherEmail": "Anh đang đăng nhập bằng {current}, còn lời mời gửi tới {email}.",
+    "switchAccount": "Đăng xuất và đổi tài khoản",
+    "keyMode": "Đang đăng nhập bằng API key. Lời mời cần tài khoản email.",
+    "loginToJoin": "Đăng nhập để tham gia",
+    "signupToJoin": "Tạo tài khoản để tham gia",
+    "haveAccount": "Đã có tài khoản?",
+    "loginLink": "Đăng nhập"
+  },
+  "roles": {
+    "owner": "Owner",
+    "admin": "Admin",
+    "developer": "Developer",
+    "billing": "Billing",
+    "viewer": "Viewer",
+    "auditor": "Auditor",
+    "key": "API key"
+  },
+  "plans": {
+    "free": "Free",
+    "pro": "Pro",
+    "team": "Team",
+    "unlimited": "Không giới hạn"
+  },
+  "workspace": {
+    "switcher": "Chọn workspace",
+    "none": "Chưa có workspace",
+    "mine": "Workspace của tôi",
+    "noneYet": "Anh chưa thuộc workspace nào.",
+    "keyMode": "Đang dùng API key: key chỉ thuộc một workspace, không đổi được.",
+    "suspended": "đang khoá",
+    "switched": "Đã chuyển sang {name}",
+    "create": "Tạo workspace",
+    "createTitle": "Tạo workspace mới",
+    "createDesc": "Anh là owner. Box, agent, key và secret của mỗi workspace tách biệt hoàn toàn.",
+    "name": "Tên",
+    "namePlaceholder": "vd kecon-team",
+    "created": "Đã tạo workspace {name}",
+    "account": "Tài khoản",
+    "platformAdmin": "Quản trị nền tảng",
+    "keySession": "Phiên API key",
+    "logoutAll": "Đăng xuất mọi nơi",
+    "suspendedBanner": "Workspace {name} đang bị khoá: chỉ xem được, mọi thao tác ghi bị từ chối. Liên hệ người vận hành.",
+    "noWorkspaceBanner": "Anh chưa thuộc workspace nào. Tạo workspace mới hoặc nhận lời mời.",
+    "verifyBanner": "Xác thực email để dùng đầy đủ Boxmes.",
+    "verifyResend": "Gửi lại thư",
+    "verifySent": "Đã gửi lại",
+    "boxesOf": "{used}/{max} box",
+    "boxesUnlimited": "{used} box",
+    "forbiddenPlatform": "Khu Nền tảng chỉ dành cho quản trị nền tảng.",
+    "forbiddenRole": "Anh cần vai trò {role} để mở trang này.",
+    "forbiddenYour": "Vai trò hiện tại của anh ở {name}: {role}. Hỏi owner của workspace.",
+    "forbiddenAsk": "Hỏi owner của workspace hoặc người vận hành."
+  },
+  "quota": {
+    "names": {
+      "max_boxes": "Box chạy đồng thời",
+      "max_cpu_per_box": "vCPU mỗi box",
+      "max_ram_mb_per_box": "RAM mỗi box",
+      "max_ttl_hours": "TTL tối đa",
+      "public_url": "URL công khai",
+      "egress": "Mạng ra ngoài",
+      "max_members": "Thành viên",
+      "max_agents": "Agent",
+      "max_keys": "API key",
+      "max_secrets": "Secret",
+      "max_boxes_per_minute": "Tạo box mỗi phút"
+    },
+    "exceededTitle": "Đã chạm hạn mức của gói",
+    "exceededUsed": "{what}: đã dùng {used}/{limit}",
+    "exceededLimit": "{what}: tối đa {limit}",
+    "onPlan": "gói {plan}",
+    "seePlan": "Xem gói & hạn mức",
+    "yes": "Có",
+    "no": "Không",
+    "egressOpen": "Mở",
+    "egressRestricted": "Hạn chế",
+    "unlimited": "Không giới hạn",
+    "gb": "{n} GB",
+    "vcpu": "{n} vCPU",
+    "hours": "{n} giờ",
+    "title": "Gói & hạn mức",
+    "desc": "Đã dùng so với tối đa của gói hiện tại. Vượt hạn mức → Core trả QUOTA_EXCEEDED kèm gợi ý.",
+    "spentToday": "Chi hôm nay",
+    "spentMonth": "Chi tháng này",
+    "sleepingNote": "Box đang ngủ không tính vào số box đồng thời ({running} đang chạy / {total} tổng).",
+    "compare": "So sánh gói",
+    "compareDesc": "Đổi gói do người vận hành nền tảng thực hiện; thanh toán tự phục vụ có ở v2.1.",
+    "limit": "Hạn mức",
+    "current": "hiện tại"
+  },
+  "members": {
+    "title": "Thành viên",
+    "descManage": "Đổi vai trò, xoá thành viên. Chỉ owner thêm, đổi hoặc gỡ vai trò Owner.",
+    "descView": "Ai đang ở workspace này. Owner hoặc Admin quản lý thành viên.",
+    "lastOwnerRule": "Workspace phải luôn còn ít nhất một Owner: owner cuối cùng không thể rời đi, bị xoá hay bị hạ quyền. Hãy cho người khác làm Owner trước.",
+    "lastOwnerShort": "Owner cuối cùng — cho người khác làm Owner trước",
+    "ownerOnly": "Chỉ owner đổi được vai trò của owner",
+    "colMember": "Thành viên",
+    "colRole": "Vai trò",
+    "colJoined": "Tham gia",
+    "colEmail": "Email",
+    "colStatus": "Trạng thái",
+    "colExpires": "Hết hạn / nhận lúc",
+    "you": "anh",
+    "unverified": "chưa xác thực",
+    "roleChanged": "{who} giờ là {role}",
+    "leave": "Rời workspace",
+    "leaveTitle": "Rời {name}?",
+    "leaveDesc": "Anh sẽ mất quyền truy cập box, agent và secret của workspace này cho tới khi được mời lại.",
+    "left": "Đã rời {name}",
+    "remove": "Xoá khỏi workspace",
+    "removeTitle": "Xoá {who} khỏi workspace?",
+    "removeDesc": "Phiên của họ mất quyền ngay; agent và key họ tạo vẫn còn trong workspace.",
+    "removed": "Đã xoá {who}",
+    "invitesTitle": "Lời mời",
+    "invitesDesc": "Mời bằng email + vai trò. Link hiệu lực 7 ngày; mời lại cùng email sẽ thay link cũ.",
+    "inviteEmails": "Email (nhiều email cách nhau dấu phẩy)",
+    "inviteEmailsHint": "Người chưa có tài khoản sẽ đăng ký bằng đúng email này.",
+    "invite": "Mời",
+    "invitedMailed": "Đã gửi lời mời tới {email}",
+    "invitedLink": "Đã tạo lời mời cho {email} — chưa cấu hình email, hãy gửi link bên dưới",
+    "linksOnce": "Link mời chỉ hiện một lần — copy và gửi ngay:",
+    "noInvites": "Chưa có lời mời nào",
+    "status": {
+      "pending": "Đang chờ",
+      "accepted": "Đã nhận",
+      "expired": "Hết hạn"
+    },
+    "resend": "Gửi lại (link mới)",
+    "revoke": "Thu hồi",
+    "revokeTitle": "Thu hồi lời mời cho {email}?",
+    "revokeDesc": "Link đã gửi sẽ không dùng được nữa.",
+    "revoked": "Đã thu hồi lời mời",
+    "keyMode": "Đăng nhập bằng email để quản lý thành viên."
+  },
+  "location": {
+    "regions": {
+      "eu": "EU",
+      "us": "US",
+      "apac": "APAC",
+      "sandbox": "Sandbox API",
+      "local": "Máy local",
+      "other": "Khác"
     }
   }
 }

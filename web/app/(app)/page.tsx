@@ -15,6 +15,8 @@ import { StackedCostChart } from "@/components/boxmes/charts";
 import { EmergencyButton } from "@/components/boxmes/emergency";
 import { ErrorBox, PageHeader } from "@/components/boxmes/page";
 import { Badge } from "@/components/ui/badge";
+import { Can } from "@/lib/session";
+import { PERMS } from "@/lib/types";
 
 export default function OverviewPage() {
   const { data, error, mutate } = useApi<Overview>(paths.overview);
@@ -26,7 +28,7 @@ export default function OverviewPage() {
       <PageHeader
         title={t("title")}
         desc={t("desc")}
-        actions={<EmergencyButton />}
+        actions={<Can perm={PERMS.emergency}><EmergencyButton /></Can>}
       />
       {error && <ErrorBox error={error} retry={() => mutate()} />}
 

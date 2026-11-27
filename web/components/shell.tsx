@@ -1,11 +1,11 @@
 "use client";
 import * as React from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Box as BoxIcon, Command as CmdIcon, Languages, LogOut, MoreHorizontal, Rocket, Search, Wrench } from "lucide-react";
-import { NAV, isActive } from "./nav";
+import { NAV, NAV_GROUPS, isActive, visibleNav, type NavItem } from "./nav";
 import { usePalette } from "./command-palette";
 import { useLive } from "./live";
 import { Dot } from "./boxmes/status";
@@ -13,7 +13,10 @@ import { SheetContent } from "./ui/dialog";
 import { LocaleGrid, LocaleSelect } from "./locale-switcher";
 import { useApi } from "@/lib/hooks";
 import { paths } from "@/lib/api";
-import type { Overview, Settings } from "@/lib/types";
+import type { LocationsView, Overview, Settings } from "@/lib/types";
+import { useSession } from "@/lib/session";
+import { regionRank, useLocationFmt } from "@/lib/location";
+import { PlanCard, UserMenu, WorkspaceBanners, WorkspaceSwitcher, useLogout } from "./boxmes/workspace";
 import { cn } from "@/lib/utils";
 import { useFmt } from "@/lib/format";
 
@@ -41,7 +44,9 @@ function LiveIndicator({ compact }: { compact?: boolean }) {
 }
 
 function MaintenanceBanner() {
-  const { data } = useApi<Settings>(paths.settings);
+  // /settings là cấu hình toàn hệ thống: chỉ quản trị nền tảng đọc được (v2.0).
+  const { platformAdmin, session } = useSession();
+  const { data } = useApi<Settings>(session && platformAdmin ? paths.settings : null);
   const t = useTranslations("shell");
   if (!data?.maintenance.enabled) return null;
   return (
@@ -54,7 +59,8 @@ function MaintenanceBanner() {
 }
 
 function SpendPill() {
-  const { data } = useApi<Overview>(paths.overview);
+  const { session, me } = useSession();
+  const { data } = useApi<Overview>(session && (me?.workspace || !me) ? paths.overview : null);
   const t = useTranslations("shell");
   const { usd } = useFmt();
   if (!data) return null;
@@ -67,22 +73,90 @@ function SpendPill() {
   );
 }
 
+/** Sidebar: Boxes xổ ra theo vùng › site (GET /v1/boxes/locations), mở /boxes?region= / ?location=. */
+function BoxesSubNav() {
+  const sp = useSearchParams();
+  const lf = useLocationFmt();
+  const { data } = useApi<LocationsView>(paths.boxLocations, { refreshInterval: 60_000 });
+  if (!data || !data.items.length) return null;
+  const region = sp.get("region") ?? "";
+  const location = sp.get("location") ?? "";
+  const regions = [...data.regions].sort((a, b) => regionRank(a.region) - regionRank(b.region));
+  return (
+    <div className="ml-[1.125rem] hidden flex-col gap-0.5 border-l border-border py-1 pl-2 lg:flex">
+      {regions.map((r) => (
+        <div key={r.region} className="flex flex-col gap-0.5">
+          <Link
+            href={`/boxes?region=${r.region}`}
+            className={cn("flex h-7 items-center justify-between gap-2 rounded px-2 text-[12.5px]", region === r.region && !location ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:text-foreground")}
+          >
+            <span className="truncate">{lf.region(r.region)}</span>
+            <span className="font-mono text-[11px]">{r.total}</span>
+          </Link>
+          {data.items
+            .filter((l) => l.region === r.region)
+            .map((l) => (
+              <Link
+                key={l.site}
+                href={`/boxes?location=${encodeURIComponent(l.site)}`}
+                title={lf.place(l)}
+                className={cn("ml-2 flex h-6 items-center justify-between gap-2 rounded px-2 text-[12px]", location === l.site ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:text-foreground")}
+              >
+                <span className="truncate">› {lf.short(l)}</span>
+                <span className="font-mono text-[10.5px]">{l.total}</span>
+              </Link>
+            ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SideLink({ n, pathname, pending, label, soonLabel }: { n: NavItem; pathname: string; pending: number; label: string; soonLabel: string }) {
+  const active = isActive(pathname, n.href);
+  if (n.soon) {
+    return (
+      <span title={`${label} · ${soonLabel}`} className="flex h-9 cursor-not-allowed items-center justify-center gap-2.5 rounded-md px-2.5 text-sm text-muted-foreground/50 lg:justify-start">
+        <n.icon className="size-[18px] shrink-0" />
+        <span className="hidden truncate lg:inline">{label}</span>
+        <span className="ml-auto hidden rounded border border-border px-1 text-[10px] lg:inline">{soonLabel}</span>
+      </span>
+    );
+  }
+  return (
+    <Link
+      href={n.href}
+      title={label}
+      className={cn(
+        "relative flex h-9 items-center justify-center gap-2.5 rounded-md px-2.5 text-sm transition-colors lg:justify-start",
+        active ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-surface-2/60 hover:text-foreground",
+      )}
+    >
+      <n.icon className="size-[18px] shrink-0" />
+      <span className="hidden truncate lg:inline">{label}</span>
+      {n.key === "approvals" && pending > 0 && (
+        <span className="absolute right-1 top-1 grid min-w-4 place-items-center rounded-full bg-st-warning px-1 text-[10px] font-semibold text-black lg:static lg:ml-auto">
+          {pending}
+        </span>
+      )}
+    </Link>
+  );
+}
+
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
   const palette = usePalette();
   const [moreOpen, setMoreOpen] = React.useState(false);
   const tn = useTranslations("nav");
   const ts = useTranslations("shell");
-  const { data: ov } = useApi<Overview>(paths.overview);
+  const { session, me, can, platformAdmin } = useSession();
+  const { data: ov } = useApi<Overview>(session && (me?.workspace || !me) ? paths.overview : null);
   const pending = ov?.approvals_pending ?? 0;
-  const moreItems = NAV.filter((n) => !n.mobileTab);
+  const show = (n: NavItem) => Boolean(session) && visibleNav(n, can, platformAdmin);
+  const moreItems = NAV.filter((n) => !n.mobileTab && !n.soon && show(n));
   const moreActive = moreItems.some((n) => isActive(pathname, n.href));
-
-  const logout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
-  };
+  const logoutFn = useLogout();
+  const logout = () => logoutFn(false);
 
   return (
     <div className="flex min-h-dvh">
@@ -103,31 +177,33 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <kbd className="ml-auto hidden rounded border border-border px-1 font-mono text-[10px] lg:inline">⌘K</kbd>
           </button>
         </div>
-        <nav className="mt-3 flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 lg:px-3">
-          {NAV.map((n) => {
-            const active = isActive(pathname, n.href);
+        <nav className="mt-3 flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-2 lg:px-3" aria-label={ts("mainNav")}>
+          {NAV_GROUPS.map((g, gi) => {
+            const items = g.items.filter(show);
+            if (!items.length) return null;
             return (
-              <Link
-                key={n.href}
-                href={n.href}
-                title={tn(n.key)}
-                className={cn(
-                  "relative flex h-9 items-center justify-center gap-2.5 rounded-md px-2.5 text-sm transition-colors lg:justify-start",
-                  active ? "bg-surface-2 text-foreground" : "text-muted-foreground hover:bg-surface-2/60 hover:text-foreground",
-                )}
-              >
-                <n.icon className="size-[18px] shrink-0" />
-                <span className="hidden truncate lg:inline">{tn(n.key)}</span>
-                {n.href === "/" && pending > 0 && (
-                  <span className="absolute right-1 top-1 grid min-w-4 place-items-center rounded-full bg-st-warning px-1 text-[10px] font-semibold text-black lg:static lg:ml-auto">
-                    {pending}
-                  </span>
-                )}
-              </Link>
+              <div key={g.key ?? `g${gi}`} className={cn("flex flex-col gap-0.5", gi > 0 && "mt-2")}>
+                {g.key ? (
+                  <p className="hidden px-2.5 pb-0.5 pt-1 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground/70 lg:block">{tn(`groups.${g.key}`)}</p>
+                ) : gi > 0 ? (
+                  <div className="mx-2 mb-1 hidden h-px bg-border lg:block" />
+                ) : null}
+                {items.map((n) => (
+                  <React.Fragment key={n.href}>
+                    <SideLink n={n} pathname={pathname} pending={pending} label={tn(n.key)} soonLabel={tn("soon")} />
+                    {n.key === "boxes" && pathname.startsWith("/boxes") && (
+                      <React.Suspense fallback={null}>
+                        <BoxesSubNav />
+                      </React.Suspense>
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
             );
           })}
         </nav>
         <div className="flex flex-col gap-2 border-t border-border p-3">
+          <PlanCard />
           <Link href="/onboarding" className="hidden items-center gap-2 text-[13px] text-muted-foreground hover:text-foreground lg:flex">
             <Rocket className="size-4" /> {tn("onboarding")}
           </Link>
@@ -145,9 +221,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <MaintenanceBanner />
+        <WorkspaceBanners />
         {/* Top bar */}
         <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background/85 px-4 backdrop-blur md:px-6">
-          <span className="md:hidden"><Logo /></span>
+          <span className="md:hidden"><Logo compact /></span>
+          <WorkspaceSwitcher className="max-w-[11rem] sm:max-w-[15rem]" />
           <div className="ml-auto flex items-center gap-2">
             <SpendPill />
             <span className="md:hidden"><LiveIndicator compact /></span>
@@ -158,6 +236,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             >
               <CmdIcon className="size-4" />
             </button>
+            <UserMenu />
           </div>
         </header>
         <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 pb-28 pt-5 md:px-6 md:pb-10">{children}</main>
@@ -165,13 +244,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       {/* Mobile bottom tab bar */}
       <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
-        {NAV.filter((n) => n.mobileTab).map((n) => {
+        {NAV.filter((n) => n.mobileTab && show(n)).slice(0, 4).map((n) => {
           const active = isActive(pathname, n.href);
           return (
             <Link key={n.href} href={n.href} className={cn("relative flex h-14 flex-col items-center justify-center gap-0.5 text-[10.5px]", active ? "text-primary" : "text-muted-foreground")}>
               <n.icon className="size-5" />
               <span className="max-w-full truncate px-1">{tn(n.key)}</span>
-              {n.href === "/" && pending > 0 && (
+              {n.key === "approvals" && pending > 0 && (
                 <span className="absolute right-[22%] top-1.5 grid min-w-4 place-items-center rounded-full bg-st-warning px-1 text-[10px] font-semibold text-black">{pending}</span>
               )}
             </Link>

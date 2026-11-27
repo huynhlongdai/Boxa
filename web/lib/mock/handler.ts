@@ -13,6 +13,7 @@ import { handleV18 } from "./v18";
 import { handleV110 } from "./v110";
 import { accessP1, handleV111 } from "./v111";
 import { handleV17, hydrateV17 } from "./v17";
+import { boxLocation, handleV20 } from "./v20";
 
 type G = typeof globalThis & { __boxmesMock?: MockState };
 
@@ -162,7 +163,7 @@ const EGRESS_RE = /^(\*\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}(:\
 function hydrateBox(s: MockState, b: MockState["boxes"][number]): Box {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { _ready_at, _taken_over, ...rest } = b;
-  return hydrateV17(b, { ...rest, egress: egressFor(s, b), spent_usd: sum(s.ledger.filter((l) => l.box_id === b.id)) });
+  return hydrateV17(b, { ...rest, egress: egressFor(s, b), spent_usd: sum(s.ledger.filter((l) => l.box_id === b.id)), location: boxLocation(b) });
 }
 
 function hydrateHost(s: MockState, h: MockState["hosts"][number]): Host {
@@ -442,6 +443,11 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
   if (r0 === "health") return ok({ ok: true, version: "0.1.0-mock", components: { db: "ok", scheduler: "ok", reaper: "ok", price_feed: "ok", gateway: "ok" } });
   if (r0 === "overview") return ok(overview(s));
 
+  // ---- v2.0: tenancy (auth/me, workspace, thành viên, lời mời, gói, hạn mức, vị trí box) ----
+  const today0 = startOfTodayUTC();
+  const v20 = handleV20(s, { ok, list, err: (st, code, key, params) => err(st, code, key, params) }, M, segs, q, body, (id) => sum(s.ledger.filter((l) => l.box_id === id && Date.parse(l.ts) >= today0)));
+  if (v20) return v20;
+
   // ---- v1.1: discovery, agent kinds, quote ----
   const disc = discovery(segs, q, apiBase);
   if (disc) return disc;
@@ -498,6 +504,9 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
         if (ag) items = items.filter((b) => b.agent_id === ag || b.agent_name === ag);
         if (pv) items = items.filter((b) => b.provider === pv);
         if (lc) items = items.filter((b) => b.lifecycle === lc);
+        const rg = q.get("region"), lo = q.get("location");
+        if (rg) items = items.filter((b) => boxLocation(b)?.region === rg);
+        if (lo) items = items.filter((b) => boxLocation(b)?.site === lo);
         return list(items.map((b) => hydrateBox(s, b)));
       }
       if (M === "POST") return createBox(s, body);

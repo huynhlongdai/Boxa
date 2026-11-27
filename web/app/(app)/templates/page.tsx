@@ -15,6 +15,8 @@ import { Field, Input } from "@/components/ui/input";
 import { ConfirmButton } from "@/components/boxmes/confirm";
 import { YamlEditor } from "@/components/boxmes/yaml-editor";
 import { ErrorBox, LoadingRows, PageHeader } from "@/components/boxmes/page";
+import { Can } from "@/lib/session";
+import { PERMS } from "@/lib/types";
 
 const NEW_YAML = `name: moi
 image: ubuntu:24.04
@@ -61,7 +63,7 @@ function Inner() {
   return (
     <>
       <PageHeader title={t("title")} desc={t("desc")} actions={
-        <Button size="sm" onClick={() => { setIsNew(true); setSel(null); setYaml(NEW_YAML); setName(""); setDesc(""); }}><Plus /> {t("new")}</Button>
+        <Can perm={PERMS.templatesWrite}><Button size="sm" onClick={() => { setIsNew(true); setSel(null); setYaml(NEW_YAML); setName(""); setDesc(""); }}><Plus /> {t("new")}</Button></Can>
       } />
       {error ? <ErrorBox error={error} retry={() => mutate()} /> : !data ? <LoadingRows /> : (
         <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
@@ -85,22 +87,28 @@ function Inner() {
             </div>
             <YamlEditor value={yaml} onChange={setYaml} onValidated={setValid} />
             <div className="flex flex-wrap items-center gap-2">
+              <Can perm={PERMS.templatesWrite}>
               <Button disabled={!dirty || !valid?.ok || !name || !!pending} onClick={async () => {
                 if (isNew) {
                   const tp = await run("c", () => api.createTemplate({ name, description: desc, yaml }), { success: t("createdToast", { name }), revalidate: [paths.templates] });
                   if (tp) { setIsNew(false); setSel(tp.name); }
                 } else await run("u", () => api.updateTemplate(name, { description: desc, yaml }), { success: tc("saved"), revalidate: [paths.templates] });
               }}><Save /> {tc("save")}</Button>
+              </Can>
+              <Can perm={PERMS.boxesWrite}>
               <Button variant="secondary" disabled={!valid?.ok || !!pending} onClick={async () => {
                 const b = await run("try", () => api.createBox({ yaml }, crypto.randomUUID()), { success: (x) => t("tryToast", { slug: x.slug }) });
                 if (b) router.push(`/boxes/${b.id}`);
               }}><FlaskConical /> {t("tryBuild")}</Button>
+              </Can>
+              <Can perm={PERMS.templatesWrite}>
               {current && !isNew && (
                 <ConfirmButton variant="ghost" className="ml-auto text-st-error" destructive title={t("deleteTitle", { name: current.name })} desc={t("deleteDesc")} confirmLabel={tc("delete")}
                   onConfirm={async () => { const r = await run("d", () => api.deleteTemplate(current.name), { success: tc("deleted"), revalidate: [paths.templates] }); if (r) setSel(null); }}>
                   <Trash2 /> {tc("delete")}
                 </ConfirmButton>
               )}
+              </Can>
             </div>
             {current && !isNew && <p className="text-xs text-muted-foreground">{t("createdAgo", { time: relTime(current.created_at) })}</p>}
           </div>

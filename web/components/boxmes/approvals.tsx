@@ -9,6 +9,8 @@ import { useFmt } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Empty, ErrorBox, LoadingRows } from "./page";
+import { useSession } from "@/lib/session";
+import { PERMS } from "@/lib/types";
 
 const ICON: Record<Approval["type"], React.ReactNode> = {
   budget: <AlertTriangle className="text-st-warning" />,
@@ -22,6 +24,7 @@ export function ApprovalItem({ a }: { a: Approval }) {
   const t = useTranslations("approvals");
   const { usd, relTime } = useFmt();
   const reval = [paths.approvals, paths.overview, paths.hosts, paths.agents];
+  const { can } = useSession();
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-border bg-background p-3.5 sm:flex-row sm:items-start">
       <div className="flex flex-1 gap-3">
@@ -38,7 +41,7 @@ export function ApprovalItem({ a }: { a: Approval }) {
           </div>
         </div>
       </div>
-      {a.status === "pending" ? (
+      {a.status === "pending" && can(PERMS.approvals) ? (
         <div className="flex gap-2 sm:flex-col">
           <Button size="sm" variant="success" className="flex-1" disabled={!!pending} onClick={() => run("a", () => api.approve(a.id), { success: t("approved"), revalidate: reval })}>
             <Check /> {t("approve")}
@@ -47,7 +50,7 @@ export function ApprovalItem({ a }: { a: Approval }) {
             <X /> {t("reject")}
           </Button>
         </div>
-      ) : (
+      ) : a.status === "pending" ? null : (
         <Badge variant={a.status === "approved" ? "green" : "gray"} className={cn("self-start")}>{a.status === "approved" ? t("approved") : t("rejected")}</Badge>
       )}
     </div>

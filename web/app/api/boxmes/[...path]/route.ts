@@ -9,6 +9,7 @@ import { getTranslations } from "next-intl/server";
 import { sessionKey, coreBase, isMock } from "@/lib/server/config";
 import { localeCookie, normalizeLocale, resolveLocale } from "@/i18n/config";
 import { handleMock } from "@/lib/mock/handler";
+import { csrfCheck } from "@/lib/server/csrf";
 import { mockAppLogStream, mockStream } from "@/lib/mock/stream";
 
 export const dynamic = "force-dynamic";
@@ -25,9 +26,21 @@ function isAppLogFollow(segs: string[], q: URLSearchParams) {
 const json = (status: number, body: unknown, extra?: Record<string, string>) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json; charset=utf-8", ...extra } });
 
-/** Các endpoint không cần đăng nhập (contract v1.1: discovery + health). */
-function isPublic(segs: string[]) {
-  return segs[0] === "health" || segs[0] === "_root" || segs[0] === "openapi.json" || segs[0] === "tools" || segs[0] === "agent-kinds";
+/** Các endpoint không cần đăng nhập (contract v1.1: discovery + health; v2.0: cấu hình đăng ký, gói, xem lời mời, quên mật khẩu). */
+function isPublic(segs: string[], method: string) {
+  if (["health", "_root", "openapi.json", "tools", "agent-kinds", "profiles", "errors", "plans", "waitlist"].includes(segs[0])) return true;
+  if (segs[0] === "workspace-invites" && segs.length === 2 && method === "GET") return true;
+  const p = segs.join("/");
+  return ["auth/config", "auth/verify-email", "auth/password/forgot", "auth/password/reset"].includes(p);
+}
+
+/**
+ * v2.0: đăng nhập / đăng ký trả token phiên trong body — chỉ được đi qua route riêng /api/auth/login|signup
+ * (route đó cất token vào cookie HttpOnly), không bao giờ qua proxy tới JS của trình duyệt.
+ */
+function isTokenIssuing(segs: string[]) {
+  const p = segs.join("/");
+  return p === "auth/login" || p === "auth/signup";
 }
 
 async function handle(req: NextRequest, ctx: Ctx) {
@@ -41,6 +54,14 @@ async function handle(req: NextRequest, ctx: Ctx) {
   const browserLang = req.headers.get("accept-language");
   const locale = resolveLocale(cookieLocale, browserLang);
   const acceptLanguage = cookieLocale ? `${cookieLocale}, en;q=0.5` : browserLang || locale;
+
+  // v2.0 chống CSRF (Origin/Referer khớp Host + double-submit khi có cookie phiên) — xem lib/server/csrf.ts.
+  const csrf = csrfCheck(req);
+  if (csrf || isTokenIssuing(segs)) {
+    const te = await getTranslations({ locale, namespace: "apiErrors" });
+    if (csrf) return json(403, { error: { code: "POLICY_DENIED", message: te(csrf === "origin" ? "csrfOrigin" : "csrfToken"), hint: te("csrfHint") } });
+    return json(404, { error: { code: "NOT_FOUND", message: te("useAuthRoute"), hint: te("useAuthRouteHint") } });
+  }
 
   if (mock) {
     if (segs[0] === "stream") {
@@ -74,7 +95,7 @@ async function handle(req: NextRequest, ctx: Ctx) {
   }
 
   const t = await getTranslations({ locale, namespace: "apiErrors" });
-  if (!key && !isPublic(segs)) {
+  if (!key && !isPublic(segs, req.method)) {
     return json(401, { error: { code: "UNAUTHORIZED", message: t("notLoggedIn"), hint: t("notLoggedInHint") } });
   }
 

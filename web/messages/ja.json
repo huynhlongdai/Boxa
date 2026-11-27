@@ -161,7 +161,14 @@
     "invalidKeyHint": "`box keys create --admin` で admin スコープのキーを作成してください。",
     "coreUnreachable": "Boxmes Core に接続できません",
     "coreUnreachableHint": "BOXMES_API（{url}）を確認するか、BOXMES_MOCK=1 を設定してください。",
-    "tryNext": "次に試すこと："
+    "tryNext": "次に試すこと：",
+    "csrfOrigin": "リクエストをブロックしました：このダッシュボードからの送信ではありません",
+    "csrfToken": "リクエストをブロックしました：CSRF 対策トークンがないか不正です",
+    "csrfHint": "ページを再読み込みして再試行してください。リバースプロキシ配下では BOXMES_DASHBOARD_ORIGINS にダッシュボードの URL を設定してください。",
+    "useAuthRoute": "ログイン / 登録はこのプロキシを経由しません",
+    "useAuthRouteHint": "POST /api/auth/login または /api/auth/signup を使ってください。セッショントークンは HttpOnly Cookie に保存され、ブラウザには返されません。",
+    "missingCredentials": "メールアドレスまたはパスワードがありません",
+    "missingCredentialsHint": "メールアドレスとパスワードの両方を入力してください。"
   },
   "approvals": {
     "type": {
@@ -175,7 +182,9 @@
     "approved": "承認済み",
     "rejected": "却下済み",
     "empty": "今は対応が必要なものはありません。",
-    "emptyDesc": "エージェントが予算の 80% を超えたとき、サービスが停止しそうなとき、ホストの追加が必要なときに、ここにリクエストが表示されます。"
+    "emptyDesc": "エージェントが予算の 80% を超えたとき、サービスが停止しそうなとき、ホストの追加が必要なときに、ここにリクエストが表示されます。",
+    "pageTitle": "要対応",
+    "pageDesc": "エージェントが単独で決められないこと：予算超過、サービス停止、プール拡張、ホスト障害。"
   },
   "boxActions": {
     "wake": "起動",
@@ -310,7 +319,19 @@
     "colSlug": "Slug",
     "colWhere": "プロバイダー / リージョン",
     "colLifecycle": "ライフサイクル",
-    "colUptime": "稼働時間"
+    "colUptime": "稼働時間",
+    "location": "場所",
+    "allLocations": "すべての場所",
+    "groupBy": "グループ化",
+    "group": {
+      "none": "グループ化しない",
+      "location": "場所でグループ化",
+      "agent": "エージェントでグループ化",
+      "status": "状態でグループ化"
+    },
+    "groupCount": "{n} box",
+    "costToday": "本日 {cost}",
+    "unplaced": "未配置"
   },
   "charts": {
     "total": "合計",
@@ -502,7 +523,9 @@
       "RATE_LIMITEDHint": "retry_after_s 待ち、box_exec_batch でまとめて実行。",
       "INTERNAL": "Core 内部の予期しないエラー。",
       "INTERNALHint": "一度だけ再試行し、続く場合は停止して運用者に知らせます。",
-      "NO_CAPACITYHint": "スペックを下げる、retry_after_s 待って再試行、または box_quote で代替案を確認。"
+      "NO_CAPACITYHint": "スペックを下げる、retry_after_s 待って再試行、または box_quote で代替案を確認。",
+      "QUOTA_EXCEEDED": "ワークスペースのプラン上限を超えています（同時 box、CPU/RAM、TTL、メンバー、エージェント、キー、シークレットなど）。",
+      "QUOTA_EXCEEDEDHint": "error.details (quota, limit, used, plan) を確認し、box をスリープ/削除するかプランをアップグレードしてから再試行してください。"
     },
     "a2a": "A2A: Boxmes にタスクを任せる",
     "a2aDesc": "他のエージェントは <mono>/a2a</mono> に JSON-RPC を送ります。text part はコマンド（<mono>metadata.box_id</mono> 付き）、<mono>tool</mono> + <mono>arguments</mono> の data part で任意のツールを呼べます。コマンドの task id は job id です。",
@@ -651,18 +674,28 @@
   },
   "login": {
     "title": "Boxmes にログイン",
-    "subtitle": "admin スコープの API キーを使用",
+    "subtitle": "メールアドレスとパスワードでログイン",
     "keyLabel": "管理者 API キー",
     "keyHint": "<mono>box keys create --admin</mono> で作成します。キーは httpOnly Cookie に保存され、JavaScript からは見えません。",
     "checking": "確認中…",
     "submit": "ログイン",
     "failed": "ログインに失敗しました",
-    "mock": "MOCK モード — キーなしで入る"
+    "mock": "MOCK モード — キーなしで入る",
+    "keySubtitle": "API キーを使用（セルフホスト / 運用者）",
+    "emailLabel": "メールアドレス",
+    "passwordLabel": "パスワード",
+    "rateLimited": "失敗が多すぎます。{minutes} 分後に再試行してください。",
+    "noAccount": "アカウントをお持ちでない場合",
+    "signupLink": "登録",
+    "useKey": "API キーでログイン",
+    "useEmail": "メールアドレスでログイン"
   },
   "meta": {
     "description": "AI エージェントのためのパーソナルクラウド基盤",
     "login": "ログイン",
-    "onboarding": "初期セットアップ"
+    "onboarding": "初期セットアップ",
+    "signup": "登録",
+    "invite": "ワークスペースへの招待"
   },
   "nav": {
     "overview": "概要",
@@ -680,7 +713,18 @@
     "more": "その他",
     "palette": "コマンド",
     "logout": "ログアウト",
-    "recommend": "ボックス提案"
+    "recommend": "ボックス提案",
+    "approvals": "要対応",
+    "volumes": "ボリューム",
+    "billing": "請求",
+    "soon": "近日",
+    "groups": {
+      "ops": "運用",
+      "resources": "リソース",
+      "money": "お金",
+      "integrations": "連携",
+      "platform": "プラットフォーム"
+    }
   },
   "notFound": {
     "title": "ページが見つかりません",
@@ -820,7 +864,18 @@
     "network": "外向きネットワーク",
     "networkDesc": "各 box の許可リストは box ページで設定します。ここは未指定の box の既定値です。",
     "egressDeny": "既定で egress を拒否",
-    "egressDenyHint": "egress 未指定の box はエージェントの許可リストのみに接続できます。許可リストがなければすべて遮断します。"
+    "egressDenyHint": "egress 未指定の box はエージェントの許可リストのみに接続できます。許可リストがなければすべて遮断します。",
+    "descV2": "ワークスペース、メンバー、プランと上限。プラットフォーム管理者はシステム設定も行えます。",
+    "tabGeneral": "一般",
+    "tabMembers": "メンバー",
+    "tabPlan": "プランと上限",
+    "tabInstance": "システム",
+    "workspace": "ワークスペース",
+    "workspaceDesc": "全メンバーに表示される名前です（オーナーと管理者が変更できます）。",
+    "workspaceName": "ワークスペース名",
+    "plan": "プラン",
+    "myRole": "自分のロール",
+    "memberCount": "メンバー"
   },
   "shell": {
     "searchPlaceholder": "検索またはコマンド入力…",
@@ -831,7 +886,8 @@
     "pollingTitle": "SSE 切断 — 10 秒ごとに再取得中",
     "maintenance": "メンテナンス中：",
     "spentToday": "/ 本日 {budget}",
-    "language": "言語"
+    "language": "言語",
+    "mainNav": "メインナビゲーション"
   },
   "status": {
     "box": {
@@ -1944,6 +2000,211 @@
       "sdkTs": "SDK TypeScript",
       "curl": "curl",
       "cli": "CLI"
+    }
+  },
+  "signup": {
+    "title": "Boxmes アカウントを作成",
+    "titleInvite": "アカウントを作成してワークスペースに参加",
+    "subtitle": "AI エージェントのためのパーソナルクラウド基盤",
+    "firstUser": "最初のアカウントがプラットフォーム管理者になります",
+    "email": "メールアドレス",
+    "password": "パスワード",
+    "passwordHint": "{n} 文字以上、72 バイト以内。",
+    "strength": {
+      "0": "とても弱い",
+      "1": "弱い",
+      "2": "普通",
+      "3": "強い",
+      "4": "とても強い"
+    },
+    "name": "名前（任意）",
+    "workspace": "ワークスペース名",
+    "workspaceHint": "メールアドレスから提案。後で設定から変更できます。",
+    "inviteCode": "招待コード",
+    "inviteCodeHint": "このインスタンスは招待コードでのみ登録できます。",
+    "inviteEmailHint": "招待が送られたメールアドレスを使ってください。",
+    "terms": "利用規約と利用ポリシー（AUP）に同意します。",
+    "codeWaitlist": "コードがない場合は、ウェイトリストに登録するか運用者に依頼してください。",
+    "creating": "作成中…",
+    "submit": "アカウントを作成",
+    "submitInvite": "アカウントを作成して参加",
+    "haveAccount": "アカウントをお持ちの場合",
+    "loginLink": "ログイン",
+    "failed": "登録に失敗しました",
+    "closedDesc": "現在登録は受け付けていません。メールアドレスを登録すると、順番が来たら招待コードが届きます。",
+    "waitlistJoined": "ウェイトリストに登録しました（{position} 番目）。",
+    "joinWaitlist": "ウェイトリストに登録",
+    "benefits": {
+      "b1": "エージェントが数秒で box を作成",
+      "b1Desc": "MCP・A2A・REST・SDK に対応。22 種類のエージェントがすぐ使えます。",
+      "b2": "費用は常に見える化",
+      "b2Desc": "エージェントごとの予算、アイドル時は自動スリープ、ワンタップで緊急停止。",
+      "b3": "チームで利用",
+      "b3Desc": "ワークスペースを分離し、Owner / Admin / Developer / Billing / Viewer / Auditor のロールを設定。"
+    },
+    "priceExample": "2 vCPU / 4 GB で $0.024/時間から"
+  },
+  "invite": {
+    "title": "ワークスペースへの招待",
+    "invalidTitle": "この招待は使用できません",
+    "toLogin": "ログインへ",
+    "headline": "<b>{who}</b> から、ワークスペース <b>{ws}</b> に <b>{role}</b> として招待されています。",
+    "forEmail": "宛先：{email}",
+    "status": {
+      "pending": "保留中",
+      "accepted": "承諾済み",
+      "expired": "期限切れ"
+    },
+    "expires": "有効期限 {time}",
+    "expiredDesc": "招待の有効期限が切れています。招待者に再送を依頼してください。",
+    "acceptedDesc": "この招待はすでに使用されています。",
+    "toDashboard": "ダッシュボードへ",
+    "alreadyMember": "すでにこのワークスペースのメンバーです。",
+    "joining": "参加中…",
+    "join": "参加する",
+    "otherEmail": "{current} でログイン中ですが、招待の宛先は {email} です。",
+    "switchAccount": "ログアウトしてアカウントを切り替える",
+    "keyMode": "API キーでログイン中です。招待の承諾にはメールアカウントが必要です。",
+    "loginToJoin": "ログインして参加",
+    "signupToJoin": "アカウントを作成して参加",
+    "haveAccount": "アカウントをお持ちの場合",
+    "loginLink": "ログイン"
+  },
+  "roles": {
+    "owner": "オーナー",
+    "admin": "管理者",
+    "developer": "開発者",
+    "billing": "請求担当",
+    "viewer": "閲覧者",
+    "auditor": "監査担当",
+    "key": "API キー"
+  },
+  "plans": {
+    "free": "Free",
+    "pro": "Pro",
+    "team": "Team",
+    "unlimited": "無制限"
+  },
+  "workspace": {
+    "switcher": "ワークスペースを切り替え",
+    "none": "ワークスペースなし",
+    "mine": "マイワークスペース",
+    "noneYet": "まだどのワークスペースにも参加していません。",
+    "keyMode": "API キーでログイン中：キーは 1 つのワークスペースに属し、切り替えできません。",
+    "suspended": "停止中",
+    "switched": "{name} に切り替えました",
+    "create": "ワークスペースを作成",
+    "createTitle": "新しいワークスペース",
+    "createDesc": "あなたがオーナーになります。box・エージェント・キー・シークレットはワークスペースごとに完全に分離されます。",
+    "name": "名前",
+    "namePlaceholder": "例：kecon-team",
+    "created": "ワークスペース {name} を作成しました",
+    "account": "アカウント",
+    "platformAdmin": "プラットフォーム管理者",
+    "keySession": "API キーセッション",
+    "logoutAll": "すべての端末からログアウト",
+    "suspendedBanner": "ワークスペース {name} は停止中です：閲覧のみ可能で、書き込みはすべて拒否されます。運用者に連絡してください。",
+    "noWorkspaceBanner": "どのワークスペースにも参加していません。作成するか招待を承諾してください。",
+    "verifyBanner": "Boxmes をすべて使うにはメールアドレスを確認してください。",
+    "verifyResend": "再送信",
+    "verifySent": "送信しました",
+    "boxesOf": "{used}/{max} box",
+    "boxesUnlimited": "{used} box",
+    "forbiddenPlatform": "プラットフォーム領域はプラットフォーム管理者専用です。",
+    "forbiddenRole": "このページを開くには {role} ロールが必要です。",
+    "forbiddenYour": "{name} での現在のロール：{role}。ワークスペースのオーナーに依頼してください。",
+    "forbiddenAsk": "ワークスペースのオーナーまたは運用者に依頼してください。"
+  },
+  "quota": {
+    "names": {
+      "max_boxes": "同時実行 box",
+      "max_cpu_per_box": "box あたり vCPU",
+      "max_ram_mb_per_box": "box あたり RAM",
+      "max_ttl_hours": "最大 TTL",
+      "public_url": "公開 URL",
+      "egress": "外向き通信",
+      "max_members": "メンバー",
+      "max_agents": "エージェント",
+      "max_keys": "API キー",
+      "max_secrets": "シークレット",
+      "max_boxes_per_minute": "1 分あたりの box 作成数"
+    },
+    "exceededTitle": "プランの上限に達しました",
+    "exceededUsed": "{what}：{used}/{limit} 使用中",
+    "exceededLimit": "{what}：上限 {limit}",
+    "onPlan": "{plan} プラン",
+    "seePlan": "プランと上限を見る",
+    "yes": "可",
+    "no": "不可",
+    "egressOpen": "制限なし",
+    "egressRestricted": "制限あり",
+    "unlimited": "無制限",
+    "gb": "{n} GB",
+    "vcpu": "{n} vCPU",
+    "hours": "{n} 時間",
+    "title": "プランと上限",
+    "desc": "現在のプランに対する使用量です。超過すると Core が QUOTA_EXCEEDED とヒントを返します。",
+    "spentToday": "本日の支出",
+    "spentMonth": "今月の支出",
+    "sleepingNote": "スリープ中の box は同時実行数に含まれません（実行中 {running} / 合計 {total}）。",
+    "compare": "プラン比較",
+    "compareDesc": "プラン変更はプラットフォーム運用者が行います。セルフサービスの支払いは v2.1 で提供予定です。",
+    "limit": "上限",
+    "current": "現在"
+  },
+  "members": {
+    "title": "メンバー",
+    "descManage": "ロールの変更やメンバーの削除ができます。Owner ロールの付与・変更・削除はオーナーのみ可能です。",
+    "descView": "このワークスペースのメンバーです。メンバー管理はオーナーまたは管理者が行います。",
+    "lastOwnerRule": "ワークスペースには常に 1 人以上のオーナーが必要です。最後のオーナーは退出・削除・降格できません。先に別のメンバーをオーナーにしてください。",
+    "lastOwnerShort": "最後のオーナー — 先に別のオーナーを指定してください",
+    "ownerOnly": "オーナーを変更できるのはオーナーのみです",
+    "colMember": "メンバー",
+    "colRole": "ロール",
+    "colJoined": "参加日時",
+    "colEmail": "メールアドレス",
+    "colStatus": "状態",
+    "colExpires": "期限 / 承諾日時",
+    "you": "あなた",
+    "unverified": "未確認",
+    "roleChanged": "{who} は {role} になりました",
+    "leave": "ワークスペースから退出",
+    "leaveTitle": "{name} から退出しますか？",
+    "leaveDesc": "再度招待されるまで、このワークスペースの box・エージェント・シークレットにアクセスできなくなります。",
+    "left": "{name} から退出しました",
+    "remove": "ワークスペースから削除",
+    "removeTitle": "{who} をワークスペースから削除しますか？",
+    "removeDesc": "セッションは直ちにアクセスを失います。作成したエージェントとキーはワークスペースに残ります。",
+    "removed": "{who} を削除しました",
+    "invitesTitle": "招待",
+    "invitesDesc": "メールアドレスとロールで招待します。リンクの有効期間は 7 日で、同じアドレスを再招待すると古いリンクは置き換えられます。",
+    "inviteEmails": "メールアドレス（カンマ区切りで複数可）",
+    "inviteEmailsHint": "アカウントのない人はこのメールアドレスで登録します。",
+    "invite": "招待",
+    "invitedMailed": "{email} に招待メールを送信しました",
+    "invitedLink": "{email} への招待を作成しました — メール未設定のため、下のリンクを送ってください",
+    "linksOnce": "招待リンクは一度だけ表示されます。今すぐコピーして送ってください：",
+    "noInvites": "招待はまだありません",
+    "status": {
+      "pending": "保留中",
+      "accepted": "承諾済み",
+      "expired": "期限切れ"
+    },
+    "resend": "再送信（新しいリンク）",
+    "revoke": "取り消す",
+    "revokeTitle": "{email} への招待を取り消しますか？",
+    "revokeDesc": "送信済みのリンクは使えなくなります。",
+    "revoked": "招待を取り消しました",
+    "keyMode": "メンバーを管理するにはメールアドレスでログインしてください。"
+  },
+  "location": {
+    "regions": {
+      "eu": "EU",
+      "us": "US",
+      "apac": "APAC",
+      "sandbox": "サンドボックス API",
+      "local": "ローカル",
+      "other": "その他"
     }
   }
 }

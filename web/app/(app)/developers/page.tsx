@@ -18,7 +18,7 @@ import { ErrorBox, LoadingRows, PageHeader } from "@/components/boxmes/page";
 const API = (process.env.NEXT_PUBLIC_BOXMES_API || "http://localhost:8080/v1").replace(/\/+$/, "");
 const ROOT = API.replace(/\/v1$/, "");
 const FORMATS: ToolFormat[] = ["openai", "anthropic", "gemini", "mcp"];
-const HTTP: Record<string, number> = { BUDGET_EXCEEDED: 402, NO_CAPACITY: 503, PROVIDER_FAILED: 503, BOX_SLEEPING: 409, TIMEOUT: 504, POLICY_DENIED: 403, NOT_FOUND: 404, UNAUTHORIZED: 401, INVALID: 400, RATE_LIMITED: 429, INTERNAL: 500 };
+const HTTP: Record<string, number> = { BUDGET_EXCEEDED: 402, NO_CAPACITY: 503, PROVIDER_FAILED: 503, BOX_SLEEPING: 409, TIMEOUT: 504, POLICY_DENIED: 403, NOT_FOUND: 404, UNAUTHORIZED: 401, INVALID: 400, RATE_LIMITED: 429, INTERNAL: 500, QUOTA_EXCEEDED: 403 };
 const mono = (c: React.ReactNode) => <code className="rounded bg-surface-2 px-1 font-mono text-[12px]">{c}</code>;
 
 type ItemKey = "openapi" | "llms" | "llmsFull" | "mcp" | "a2a" | "mcpEndpoint";
