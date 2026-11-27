@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/provider"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/provider"
 )
 
 var bg = context.Background()

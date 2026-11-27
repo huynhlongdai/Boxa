@@ -3,11 +3,11 @@ package api
 // v1.11 access P1 endpoints: the box's browser over CDP, the desktop over VNC
 // (noVNC served by core) and view-only desktop share links.
 //
-//   wss://<name>.<domain>/.boxaz/cdp?ticket=…                 browser WebSocket (connectOverCDP / puppeteer.connect)
-//   https://<name>.<domain>/.boxaz/cdp/json/version?ticket=…  rewritten so connectOverCDP("https://…/.boxaz/cdp?ticket=…") works
-//   wss://<name>.<domain>/.boxaz/vnc?ticket=… | ?share=…      RFB over binary frames (view-only enforced by core)
-//   https://<name>.<domain>/.boxaz/desktop?ticket=… | ?share=… noVNC page (vendored, no CDN)
-//   /.boxaz/novnc/…                                            noVNC static files
+//   wss://<name>.<domain>/.boxmes/cdp?ticket=…                 browser WebSocket (connectOverCDP / puppeteer.connect)
+//   https://<name>.<domain>/.boxmes/cdp/json/version?ticket=…  rewritten so connectOverCDP("https://…/.boxmes/cdp?ticket=…") works
+//   wss://<name>.<domain>/.boxmes/vnc?ticket=… | ?share=…      RFB over binary frames (view-only enforced by core)
+//   https://<name>.<domain>/.boxmes/desktop?ticket=… | ?share=… noVNC page (vendored, no CDN)
+//   /.boxmes/novnc/…                                            noVNC static files
 // and the same on core: /v1/boxes/{id}/{cdp,vnc,desktop/view}, /v1/novnc/….
 
 import (
@@ -35,11 +35,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 
-	"boxaz/core/internal/egress"
-	"boxaz/core/internal/hostlink"
-	"boxaz/core/internal/manager"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/wsconn"
+	"boxmes/core/internal/egress"
+	"boxmes/core/internal/hostlink"
+	"boxmes/core/internal/manager"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/wsconn"
 )
 
 //go:embed novnc
@@ -79,14 +79,14 @@ func (s *Server) routesAccessP1Open(r chi.Router) {
 func (s *Server) accessHostP1(w http.ResponseWriter, r *http.Request, b *model.Box) bool {
 	p := r.URL.Path
 	switch {
-	case p == "/.boxaz/cdp" || strings.HasPrefix(p, "/.boxaz/cdp/"):
-		s.accessCDP(w, r, b, "/.boxaz/cdp")
-	case p == "/.boxaz/vnc":
+	case p == "/.boxmes/cdp" || strings.HasPrefix(p, "/.boxmes/cdp/"):
+		s.accessCDP(w, r, b, "/.boxmes/cdp")
+	case p == "/.boxmes/vnc":
 		s.accessVNC(w, r, b)
-	case p == "/.boxaz/desktop" || p == "/.boxaz/desktop/":
-		s.desktopPage(w, r, b, "/.boxaz/novnc", "/.boxaz/vnc")
-	case strings.HasPrefix(p, "/.boxaz/novnc/"):
-		serveNoVNC(w, r, strings.TrimPrefix(p, "/.boxaz/novnc/"))
+	case p == "/.boxmes/desktop" || p == "/.boxmes/desktop/":
+		s.desktopPage(w, r, b, "/.boxmes/novnc", "/.boxmes/vnc")
+	case strings.HasPrefix(p, "/.boxmes/novnc/"):
+		serveNoVNC(w, r, strings.TrimPrefix(p, "/.boxmes/novnc/"))
 	default:
 		return false
 	}
@@ -206,7 +206,7 @@ func (s *Server) shareRevoke(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"revoked": n, "viewers_closed": closed})
 }
 
-// absURL completes a path-only URL (core without BOXAZ_PUBLIC_URL) with the
+// absURL completes a path-only URL (core without BOXMES_PUBLIC_URL) with the
 // scheme and host of the request.
 func absURL(r *http.Request, u string, ws bool) string {
 	if !strings.HasPrefix(u, "/") {
@@ -229,7 +229,7 @@ func requestIsSecure(r *http.Request) bool {
 }
 
 // accessCDP proxies the box browser's DevTools endpoint. base is the path
-// prefix the client used (/.boxaz/cdp or /v1/boxes/{id}/cdp).
+// prefix the client used (/.boxmes/cdp or /v1/boxes/{id}/cdp).
 func (s *Server) accessCDP(w http.ResponseWriter, r *http.Request, hostBox *model.Box, base string) {
 	rest := strings.TrimPrefix(r.URL.Path, base)
 	if rest == "/" {
@@ -290,7 +290,7 @@ func (s *Server) accessCDP(w http.ResponseWriter, r *http.Request, hostBox *mode
 		target = pu.Path
 	}
 	if !strings.HasPrefix(target, "/devtools/") {
-		writeErr(w, r, model.EH(model.ErrNotFound, "Connect to /.boxaz/cdp (the browser) or /.boxaz/cdp/devtools/page/<id>.", "no CDP socket %s", target))
+		writeErr(w, r, model.EH(model.ErrNotFound, "Connect to /.boxmes/cdp (the browser) or /.boxmes/cdp/devtools/page/<id>.", "no CDP socket %s", target))
 		return
 	}
 	s.cdpWS(w, r, c, b, peer, target)
@@ -616,7 +616,7 @@ func filterCDPMessage(p []byte) ([]byte, bool) {
 var vncUpgrader = websocket.Upgrader{ReadBufferSize: 64 << 10, WriteBufferSize: 64 << 10, Subprotocols: []string{"binary"},
 	CheckOrigin: func(r *http.Request) bool { return true }}
 
-// sameOrigin: the noVNC page on the box host opens /.boxaz/vnc on its own origin.
+// sameOrigin: the noVNC page on the box host opens /.boxmes/vnc on its own origin.
 func sameOrigin(r *http.Request) bool {
 	o := r.Header.Get("Origin")
 	if o == "" {

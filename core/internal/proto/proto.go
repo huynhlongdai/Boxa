@@ -6,10 +6,10 @@ package proto
 import (
 	"encoding/json"
 
-	"boxaz/core/internal/model"
+	"boxmes/core/internal/model"
 )
 
-const Version = "boxaz-wire/1"
+const Version = "boxmes-wire/1"
 
 // Frame types.
 const (

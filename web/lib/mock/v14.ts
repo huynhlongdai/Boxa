@@ -1,4 +1,4 @@
-// MOCK MODE v1.4: provider Sandbox API (T2 dial-in / T3 shim). Bám theo boxaz/core/internal/manager/sandbox14.go,
+// MOCK MODE v1.4: provider Sandbox API (T2 dial-in / T3 shim). Bám theo boxmes/core/internal/manager/sandbox14.go,
 // selector/score.go (loại theo capability) và api/v14.go (lint adapter YAML).
 import { parse as parseYaml } from "yaml";
 import type { AdapterLintResult, CatalogItem, Offer, Provider, ProviderPrefs, RecommendOption, Rejection, Requirements, SandboxInfo, SandboxProvider, SandboxSize } from "../types";
@@ -23,7 +23,7 @@ export function sizePrice(info: Pick<SandboxInfo, "pricing">, z: SandboxSize): n
   return z.fixed_price ? r4(z.price_hour ?? 0) : perHour(info, z.cpu, z.ram_mb, z.disk_gb);
 }
 
-/** Chế độ hiệu lực: dial (T2, boxd dial-in) | shim (T3). Mock coi như BOXAZ_PUBLIC_URL đã đặt. */
+/** Chế độ hiệu lực: dial (T2, boxd dial-in) | shim (T3). Mock coi như BOXMES_PUBLIC_URL đã đặt. */
 export function sandboxMode(info: SandboxInfo, prefs?: Partial<ProviderPrefs>): "dial" | "shim" {
   if (info.dial_only) return "dial"; // không có API exec: không thể chạy shim T3
   const m = (prefs?.sandbox_mode ?? "auto").toLowerCase();

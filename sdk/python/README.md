@@ -1,17 +1,17 @@
-# boxaz — Python SDK
+# boxmes — Python SDK
 
-Typed sync + async client for [Boxaz](../../core/README.md): cheap, disposable Linux boxes for AI agents.
+Typed sync + async client for [Boxmes](../../core/README.md): cheap, disposable Linux boxes for AI agents.
 Works with zero dependencies (stdlib `urllib`); uses `httpx` automatically when installed.
 
 ```bash
 pip install ./sdk/python            # or: pip install "./sdk/python[httpx]"
-export BOXAZ_URL=http://127.0.0.1:8080 BOXAZ_API_KEY=bx_agent_... BOXAZ_LANG=vi   # BOXAZ_LANG optional: vi|en|zh|ja
+export BOXMES_URL=http://127.0.0.1:8080 BOXMES_API_KEY=bx_agent_... BOXMES_LANG=vi   # BOXMES_LANG optional: vi|en|zh|ja
 ```
 
 ```python
-from boxaz import Boxaz, BoxazError
+from boxmes import Boxmes, BoxmesError
 
-bx = Boxaz()                                      # or Boxaz(api_key, base_url, lang="ja")
+bx = Boxmes()                                      # or Boxmes(api_key, base_url, lang="ja")
 print(bx.quote("python", "task", ram_mb=1024, ttl_seconds=1800))   # dry-run price, creates nothing
 box = bx.create_box("python", "task", ttl_seconds=1800, idempotency_key="job-42")
 r = bx.exec(box["id"], "python3 -c 'print(42)'")
@@ -24,11 +24,11 @@ bx.down(box["id"])
 
 try:
     bx.get_box("box_nope")
-except BoxazError as e:                           # e.code is stable; message/hint follow lang
+except BoxmesError as e:                           # e.code is stable; message/hint follow lang
     print(e.code, e.message, e.hint, e.retry_after_s, e.docs_url)
 ```
 
-Async: `AsyncBoxaz` has the same methods (`await bx.exec(...)`, `async with AsyncBoxaz() as bx:`).
+Async: `AsyncBoxmes` has the same methods (`await bx.exec(...)`, `async with AsyncBoxmes() as bx:`).
 Retryable codes (`NO_CAPACITY`, `PROVIDER_FAILED`, `RATE_LIMITED`, `INTERNAL`) are retried `max_retries`
 times (default 2), honouring `retry_after_s`. Loopback URLs bypass `HTTP(S)_PROXY`.
 
@@ -39,7 +39,7 @@ for p in bx.sandbox_providers()["items"]:          # E2B, Daytona, Prized, Runlo
     print(p["id"], p["tier"], p["mode"], p["verification"], p["from_usd_h"], p["capabilities"]["fork"])
 rec = bx.recommend(template="base", untrusted=True, fork=True, isolation="sandbox", lifetime="ephemeral")
 print(rec["pick"]["provider"], rec["pick"]["tier"], [r["reason"] for r in rec["rejected"]])
-admin = Boxaz(admin_key, base_url)
+admin = Boxmes(admin_key, base_url)
 print(admin.lint_adapter(open("my-sandbox.yaml").read()))   # {ok, error?, info?} — admin key
 ```
 
@@ -50,10 +50,10 @@ executed through `/mcp` so argument mapping is identical to MCP.
 
 ```python
 from openai import OpenAI
-from boxaz import Boxaz, as_openai_tools, handle_tool_call
+from boxmes import Boxmes, as_openai_tools, handle_tool_call
 
-bx, llm = Boxaz(), OpenAI()
-messages = [{"role": "user", "content": "Run python3 -c 'print(6*7)' in a Boxaz box and tell me the result."}]
+bx, llm = Boxmes(), OpenAI()
+messages = [{"role": "user", "content": "Run python3 -c 'print(6*7)' in a Boxmes box and tell me the result."}]
 while True:
     resp = llm.chat.completions.create(model="gpt-4.1", messages=messages, tools=as_openai_tools(bx))
     msg = resp.choices[0].message
@@ -72,6 +72,6 @@ Also: `as_openai_tools(bx, responses_api=True)`, `as_anthropic_tools(bx)`, `as_g
 
 ```bash
 (cd ../../core && go build -o bin/ ./cmd/...)    # tests start core + boxd (local driver) from core/bin
-python3 -m pytest -q tests                        # or BOXAZ_TEST_URL=… BOXAZ_TEST_ADMIN_KEY=… against a running core
+python3 -m pytest -q tests                        # or BOXMES_TEST_URL=… BOXMES_TEST_ADMIN_KEY=… against a running core
 ```
 Tests skip when no core binary / URL is available.

@@ -25,16 +25,16 @@ interface V17State {
   seq: number;
 }
 
-const GW_DOMAIN = "boxaz.dev";
+const GW_DOMAIN = "boxmes.dev";
 const MAX_LOG = 24 << 10;
 const enc = new TextEncoder();
 const bytes = (s: string) => enc.encode(s).length;
 
-type G = typeof globalThis & { __boxazV17?: V17State };
+type G = typeof globalThis & { __boxmesV17?: V17State };
 function st(): V17State {
   const g = globalThis as G;
-  if (!g.__boxazV17) g.__boxazV17 = { boxes: {}, seq: 0 };
-  return g.__boxazV17;
+  if (!g.__boxmesV17) g.__boxmesV17 = { boxes: {}, seq: 0 };
+  return g.__boxmesV17;
 }
 
 const iso = (t: number) => new Date(t).toISOString();
@@ -216,13 +216,13 @@ function portViewBase(b: MBox, v: V17Box, port: number): PortView {
   const provider_preview: PortView["provider_preview"] = caps?.inbound_http ? (priv ? "private" : "public") : undefined;
   if (access === "token") {
     return { port, url: gw, kind: "gateway", public: false, gateway_url: gw, access, ...(provider_preview ? { provider_preview } : {}),
-      note: "token required: open with ?token=<bxt_…> (exchanged for a cookie), Authorization: Bearer <token> or X-Boxaz-Token; issue one with POST /v1/boxes/{id}/ports/{port}/tokens (box url --token)",
-      caveats: ["Boxaz gateway URL: wakes a sleeping box on the first request and passes WebSocket/SSE through"] };
+      note: "token required: open with ?token=<bxt_…> (exchanged for a cookie), Authorization: Bearer <token> or X-Boxmes-Token; issue one with POST /v1/boxes/{id}/ports/{port}/tokens (box url --token)",
+      caveats: ["Boxmes gateway URL: wakes a sleeping box on the first request and passes WebSocket/SSE through"] };
   }
   if (priv) {
     return { port, url: gw, kind: "gateway", public: true, gateway_url: gw, access, provider_preview: "private",
-      note: `${b.provider} preview host is private (refuses requests without the sandbox traffic token); served through the Boxaz gateway, which wakes a sleeping box`,
-      caveats: ["Boxaz gateway URL: host-based <name>.<domain> / <name>-<label>.<domain>; WebSocket and SSE pass through; a sleeping box is woken by the first request"] };
+      note: `${b.provider} preview host is private (refuses requests without the sandbox traffic token); served through the Boxmes gateway, which wakes a sleeping box`,
+      caveats: ["Boxmes gateway URL: host-based <name>.<domain> / <name>-<label>.<domain>; WebSocket and SSE pass through; a sleeping box is woken by the first request"] };
   }
   if (caps?.inbound_http && b.provider !== "prized") {
     const host = b.provider === "e2b" ? "e2b.app" : "sandbox.novita.ai";

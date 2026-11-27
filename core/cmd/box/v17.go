@@ -15,10 +15,10 @@ import (
 	"strings"
 	"time"
 
-	"boxaz/core/internal/client"
-	"boxaz/core/internal/manager"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/proto"
+	"boxmes/core/internal/client"
+	"boxmes/core/internal/manager"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/proto"
 )
 
 func cmdURLToken(ctx context.Context, c *client.Client, box, portS string, issue bool, ttl time.Duration, label string, list bool, revoke string, public bool) error {
@@ -67,7 +67,7 @@ func cmdURLToken(ctx context.Context, c *client.Client, box, portS string, issue
 	if t.URL != "" {
 		fmt.Println(t.URL)
 	}
-	fmt.Printf("token %s (id %s, expires %s) — send it as ?token=, Authorization: Bearer or X-Boxaz-Token\n", t.Token, t.ID, t.ExpiresAt.Local().Format(time.RFC3339))
+	fmt.Printf("token %s (id %s, expires %s) — send it as ?token=, Authorization: Bearer or X-Boxmes-Token\n", t.Token, t.ID, t.ExpiresAt.Local().Format(time.RFC3339))
 	return nil
 }
 

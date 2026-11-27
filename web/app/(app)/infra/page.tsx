@@ -15,15 +15,15 @@ import { Input, Select } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { ConfirmButton } from "@/components/boxaz/confirm";
-import { ApprovalList } from "@/components/boxaz/approvals";
-import { ConfidenceBadge, HostStatusChip, Mono, ProviderChip } from "@/components/boxaz/status";
-import { ErrorBox, LoadingRows, PageHeader, SectionTitle } from "@/components/boxaz/page";
+import { ConfirmButton } from "@/components/boxmes/confirm";
+import { ApprovalList } from "@/components/boxmes/approvals";
+import { ConfidenceBadge, HostStatusChip, Mono, ProviderChip } from "@/components/boxmes/status";
+import { ErrorBox, LoadingRows, PageHeader, SectionTitle } from "@/components/boxmes/page";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CatalogView, ConnectProviderWizard, ProviderHealthView } from "@/components/boxaz/provider-manager";
-import { SpeedSummary, WarmPoolSettings } from "@/components/boxaz/speed";
-import { MeshView } from "@/components/boxaz/mesh";
-import { ProviderLogo, SandboxProvidersView, TierBadge, VerificationBadge } from "@/components/boxaz/sandbox";
+import { CatalogView, ConnectProviderWizard, ProviderHealthView } from "@/components/boxmes/provider-manager";
+import { SpeedSummary, WarmPoolSettings } from "@/components/boxmes/speed";
+import { MeshView } from "@/components/boxmes/mesh";
+import { ProviderLogo, SandboxProvidersView, TierBadge, VerificationBadge } from "@/components/boxmes/sandbox";
 
 const TABS = ["providers", "sandbox", "health", "catalog", "speed", "mesh"] as const;
 

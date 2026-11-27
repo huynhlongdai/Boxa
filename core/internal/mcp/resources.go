@@ -7,15 +7,15 @@ import (
 	"net/url"
 	"strings"
 
-	"boxaz/core/internal/i18n"
+	"boxmes/core/internal/i18n"
 )
 
 // ---- resources ----
 //
-//	boxaz://box/{box_id}              Box JSON
-//	boxaz://box/{box_id}/file/{path}  file content or directory listing (path relative to /, e.g. work/main.py)
-//	boxaz://box/{box_id}/logs         recent exec calls (exit code, tokens_saved, log_id)
-//	boxaz://log/{log_id}              full output of one exec
+//	boxmes://box/{box_id}              Box JSON
+//	boxmes://box/{box_id}/file/{path}  file content or directory listing (path relative to /, e.g. work/main.py)
+//	boxmes://box/{box_id}/logs         recent exec calls (exit code, tokens_saved, log_id)
+//	boxmes://log/{log_id}              full output of one exec
 
 // ResourceTemplate is an MCP resource template.
 type ResourceTemplate struct {
@@ -27,10 +27,10 @@ type ResourceTemplate struct {
 }
 
 var ResourceTemplates = []ResourceTemplate{
-	{"boxaz://box/{box_id}", "box", "Box", "Box object (status, spec, cost, url).", "application/json"},
-	{"boxaz://box/{box_id}/file/{path}", "box-file", "Box file", "A file or directory inside the box; path is relative to / (work/main.py, memory/notes.md, AGENTS.md).", "text/plain"},
-	{"boxaz://box/{box_id}/logs", "box-logs", "Box exec log", "Recent exec calls of the box with exit codes, tokens_saved and log ids.", "application/json"},
-	{"boxaz://log/{log_id}", "log", "Full exec output", "Full stdout+stderr of one exec (log_id from an exec result).", "text/plain"},
+	{"boxmes://box/{box_id}", "box", "Box", "Box object (status, spec, cost, url).", "application/json"},
+	{"boxmes://box/{box_id}/file/{path}", "box-file", "Box file", "A file or directory inside the box; path is relative to / (work/main.py, memory/notes.md, AGENTS.md).", "text/plain"},
+	{"boxmes://box/{box_id}/logs", "box-logs", "Box exec log", "Recent exec calls of the box with exit codes, tokens_saved and log ids.", "application/json"},
+	{"boxmes://log/{log_id}", "log", "Full exec output", "Full stdout+stderr of one exec (log_id from an exec result).", "text/plain"},
 }
 
 func listResources(ctx context.Context, c Caller) map[string]any {
@@ -45,11 +45,11 @@ func listResources(ctx context.Context, c Caller) map[string]any {
 		json.Unmarshal(b, &l)
 		for _, bx := range l.Items {
 			res = append(res,
-				map[string]any{"uri": "boxaz://box/" + bx.ID, "name": bx.Slug, "title": "Box " + bx.Slug,
+				map[string]any{"uri": "boxmes://box/" + bx.ID, "name": bx.Slug, "title": "Box " + bx.Slug,
 					"description": fmt.Sprintf("%s box (%s)", bx.Template, bx.Status), "mimeType": "application/json"},
-				map[string]any{"uri": "boxaz://box/" + bx.ID + "/file/AGENTS.md", "name": bx.Slug + "/AGENTS.md",
+				map[string]any{"uri": "boxmes://box/" + bx.ID + "/file/AGENTS.md", "name": bx.Slug + "/AGENTS.md",
 					"description": "AGENTS.md of " + bx.Slug, "mimeType": "text/markdown"},
-				map[string]any{"uri": "boxaz://box/" + bx.ID + "/logs", "name": bx.Slug + "/logs",
+				map[string]any{"uri": "boxmes://box/" + bx.ID + "/logs", "name": bx.Slug + "/logs",
 					"description": "Recent exec calls of " + bx.Slug, "mimeType": "application/json"},
 			)
 		}
@@ -57,10 +57,17 @@ func listResources(ctx context.Context, c Caller) map[string]any {
 	return map[string]any{"resources": res}
 }
 
+// legacyScheme is the pre-rename resource URI scheme, still accepted on read
+// (resources are always listed and returned as boxmes://).
+const legacyScheme = "boxaz://"
+
 func readResource(ctx context.Context, c Caller, uri string) (map[string]any, error) {
-	const pfx = "boxaz://"
+	const pfx = "boxmes://"
+	if strings.HasPrefix(uri, legacyScheme) { // compat: boxaz:// URIs from before the rename
+		uri = pfx + strings.TrimPrefix(uri, legacyScheme)
+	}
 	if !strings.HasPrefix(uri, pfx) {
-		return nil, fmt.Errorf("unsupported resource uri %q (want boxaz://…)", uri)
+		return nil, fmt.Errorf("unsupported resource uri %q (want boxmes://…)", uri)
 	}
 	rest := strings.TrimPrefix(uri, pfx)
 	text := func(mime, body string) map[string]any {

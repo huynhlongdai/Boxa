@@ -17,13 +17,13 @@ import (
 	"sync"
 	"time"
 
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/sandbox"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/sandbox"
 )
 
 // ReservedSubdomains can never be box labels at the gateway domain (and are
 // never routed to a box): service names commonly given explicit DNS records.
-// BOXAZ_GATEWAY_RESERVED adds more (comma separated).
+// BOXMES_GATEWAY_RESERVED adds more (comma separated).
 var ReservedSubdomains = []string{
 	"admin", "api", "app", "assets", "auth", "autoconfig", "autodiscover", "blog", "cdn", "console", "core", "dashboard",
 	"cdp", "dl", "docs", "ftp", "git", "grafana", "gw", "hark", "help", "ide", "imap", "login", "mail", "mcp", "metrics", "mx", "ns", "ns1",
@@ -61,7 +61,7 @@ func IsReservedSubdomain(label string) bool {
 
 func reservedList() []string {
 	out := append([]string{}, ReservedSubdomains...)
-	for _, x := range strings.Split(os.Getenv("BOXAZ_GATEWAY_RESERVED"), ",") {
+	for _, x := range strings.Split(os.Getenv("BOXMES_GATEWAY_RESERVED"), ",") {
 		if x = strings.ToLower(strings.TrimSpace(x)); x != "" {
 			out = append(out, x)
 		}
@@ -71,7 +71,7 @@ func reservedList() []string {
 }
 
 // GatewayDomain is the effective host-based gateway domain: env
-// BOXAZ_GATEWAY_DOMAIN, else settings.gateway.domain, else "".
+// BOXMES_GATEWAY_DOMAIN, else settings.gateway.domain, else "".
 func (m *Manager) GatewayDomain(ctx context.Context) string {
 	if d := normDomain(m.Cfg.GatewayDomain); d != "" {
 		return d
@@ -88,7 +88,7 @@ func normDomain(d string) string {
 }
 
 // GatewayHost classifies a request host against the gateway domain:
-// "box" (seg = "<key>-<port>"), "core" (the BOXAZ_PUBLIC_URL host or the bare
+// "box" (seg = "<key>-<port>"), "core" (the BOXMES_PUBLIC_URL host or the bare
 // domain: API + dashboard), "reserved" / "other" (a subdomain that is not a
 // box label) or "" (not under the gateway domain).
 func (m *Manager) GatewayHost(ctx context.Context, host string) (kind, seg string) {
@@ -100,7 +100,7 @@ func (m *Manager) GatewayHost(ctx context.Context, host string) (kind, seg strin
 	if pu, err := url.Parse(m.Cfg.PublicURL); err == nil && pu.Hostname() != "" && strings.EqualFold(pu.Hostname(), host) {
 		return "core", ""
 	}
-	if host == d { // v1.11: the bare gateway domain is not a control origin (only BOXAZ_PUBLIC_URL's host is)
+	if host == d { // v1.11: the bare gateway domain is not a control origin (only BOXMES_PUBLIC_URL's host is)
 		return "reserved", ""
 	}
 	if !strings.HasSuffix(host, "."+d) {
@@ -119,7 +119,7 @@ func (m *Manager) GatewayHost(ctx context.Context, host string) (kind, seg strin
 }
 
 // ProviderPreviewMode is the effective provider-preview policy (auto |
-// private | public): env BOXAZ_PROVIDER_PREVIEW, else settings, else auto.
+// private | public): env BOXMES_PROVIDER_PREVIEW, else settings, else auto.
 func (m *Manager) ProviderPreviewMode(ctx context.Context) string {
 	v := strings.ToLower(strings.TrimSpace(m.Cfg.ProviderPreview))
 	if v == "" {
@@ -133,7 +133,7 @@ func (m *Manager) ProviderPreviewMode(ctx context.Context) string {
 }
 
 // gatewayInternetFacing: the gateway URLs work from the internet (a gateway
-// domain, or an internet-facing BOXAZ_PUBLIC_URL).
+// domain, or an internet-facing BOXMES_PUBLIC_URL).
 func (m *Manager) gatewayInternetFacing(ctx context.Context) bool {
 	if ok, _ := CoreLooksPublic(m.Cfg.PublicURL); ok || m.Cfg.AssumePublicURL && m.Cfg.PublicURL != "" {
 		return true
@@ -231,7 +231,7 @@ var gwCheckCache struct {
 	c   *GatewayCheck
 }
 
-// Gateway describes the gateway; check=true probes BOXAZ_PUBLIC_URL (cached 60 s).
+// Gateway describes the gateway; check=true probes BOXMES_PUBLIC_URL (cached 60 s).
 func (m *Manager) Gateway(ctx context.Context, check bool) *GatewayInfo {
 	s := m.Settings(ctx)
 	g := &GatewayInfo{Domain: m.GatewayDomain(ctx), PublicURL: m.Cfg.PublicURL, Reserved: reservedList(), ProviderPreview: m.ProviderPreviewMode(ctx)}
@@ -273,11 +273,11 @@ func (m *Manager) Gateway(ctx context.Context, check bool) *GatewayInfo {
 		}
 		switch {
 		case !gp.PreviewHost:
-			gp.Note = "no provider preview host: traffic reaches the box only through the Boxaz gateway (boxd / ingress agent)"
+			gp.Note = "no provider preview host: traffic reaches the box only through the Boxmes gateway (boxd / ingress agent)"
 		case gp.PrivatePreview:
 			gp.Note = "preview host refuses requests without the sandbox traffic token when the sandbox is created private; the gateway adds it upstream"
 		default:
-			gp.Note = "preview host is public at the provider: anyone with the sandbox id can reach a port directly, even when its Boxaz URL needs a token"
+			gp.Note = "preview host is public at the provider: anyone with the sandbox id can reach a port directly, even when its Boxmes URL needs a token"
 		}
 		g.Providers = append(g.Providers, gp)
 	}

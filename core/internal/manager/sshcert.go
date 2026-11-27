@@ -9,7 +9,7 @@ package manager
 // refuses it from then on, even before it expires.
 //
 // A certificate authenticates on its own, without an API key: over the
-// WebSocket (wss://<name>.<domain>/.boxaz/ssh with no ticket — `box
+// WebSocket (wss://<name>.<domain>/.boxmes/ssh with no ticket — `box
 // ssh-proxy --anon %h`) and on the direct listener (`ssh -p 2222
 // <name>@ssh.<domain>`).
 
@@ -28,9 +28,9 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/secret"
-	"boxaz/core/internal/store"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/secret"
+	"boxmes/core/internal/store"
 )
 
 const sshUserCAKV = "ssh:userca"
@@ -185,7 +185,7 @@ func (m *Manager) IssueSSHCert(ctx context.Context, p *Principal, in SSHCertInpu
 	if name == "" {
 		name = b.Slug
 	}
-	host := name + ".boxaz"
+	host := name + ".boxmes"
 	if d := m.GatewayDomain(ctx); d != "" && b.Subdomain != "" {
 		host = b.Subdomain + "." + d
 	}
@@ -198,7 +198,7 @@ func (m *Manager) IssueSSHCert(ctx context.Context, p *Principal, in SSHCertInpu
 		h, port, _ := strings.Cut(d, ":")
 		out.Direct = "ssh -p " + port + " -o CertificateFile=<key>-cert.pub -i <key> " + name + "@" + h
 	}
-	out.Config = fmt.Sprintf("Host %s\n  HostName %s\n  User %s\n  IdentityFile <key>\n  CertificateFile <key>-cert.pub\n  IdentitiesOnly yes\n  ProxyCommand box ssh-proxy --anon %%h\n  HostKeyAlias %s\n  UserKnownHostsFile ~/.boxaz/known_hosts\n  ServerAliveInterval 25\n", host, host, name, SSHHostKeyAlias)
+	out.Config = fmt.Sprintf("Host %s\n  HostName %s\n  User %s\n  IdentityFile <key>\n  CertificateFile <key>-cert.pub\n  IdentitiesOnly yes\n  ProxyCommand box ssh-proxy --anon %%h\n  HostKeyAlias %s\n  UserKnownHostsFile ~/.boxmes/known_hosts\n  ServerAliveInterval 25\n", host, host, name, SSHHostKeyAlias)
 	return out, nil
 }
 
@@ -328,7 +328,7 @@ func (m *Manager) ServeSSHAnon(ctx context.Context, nc net.Conn, b *model.Box) {
 		nc.Close()
 		return
 	}
-	cfg := &ssh.ServerConfig{ServerVersion: "SSH-2.0-boxaz", MaxAuthTries: 6,
+	cfg := &ssh.ServerConfig{ServerVersion: "SSH-2.0-boxmes", MaxAuthTries: 6,
 		PublicKeyCallback: func(c ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
 			if _, ok := key.(*ssh.Certificate); ok {
 				return m.sshCertAuth(key, b.ID, "")

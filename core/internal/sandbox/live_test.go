@@ -6,10 +6,10 @@ import (
 )
 
 // TestPrizedLive makes free, read-only calls against the real Prized API
-// (no sandbox is created). Opt-in: BOXAZ_LIVE_PRIZED=1 PRIZED_API_KEY=dcp_….
+// (no sandbox is created). Opt-in: BOXMES_LIVE_PRIZED=1 PRIZED_API_KEY=dcp_….
 func TestPrizedLive(t *testing.T) {
-	if os.Getenv("BOXAZ_LIVE_PRIZED") != "1" {
-		t.Skip("set BOXAZ_LIVE_PRIZED=1 and PRIZED_API_KEY to run")
+	if os.Getenv("BOXMES_LIVE_PRIZED") != "1" {
+		t.Skip("set BOXMES_LIVE_PRIZED=1 and PRIZED_API_KEY to run")
 	}
 	d := NewPrized(nil, "")
 	c := Cred{"token": os.Getenv("PRIZED_API_KEY")}

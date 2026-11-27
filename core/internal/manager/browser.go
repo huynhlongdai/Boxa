@@ -6,8 +6,8 @@ package manager
 // with proc.open finds or installs Chromium / Xvfb + x11vnc, starts them bound
 // to 127.0.0.1, and core reaches them with OpenStream (the same plumbing as
 // box forward). Works on every tier with a live link (boxd or the in-box
-// ingress agent). A watcher stops the browser after BOXAZ_BROWSER_IDLE (10
-// min) and the desktop after BOXAZ_DESKTOP_IDLE (15 min) without clients;
+// ingress agent). A watcher stops the browser after BOXMES_BROWSER_IDLE (10
+// min) and the desktop after BOXMES_DESKTOP_IDLE (15 min) without clients;
 // sleep and delete end them with the box.
 
 import (
@@ -23,8 +23,8 @@ import (
 	"sync"
 	"time"
 
-	"boxaz/core/internal/hostlink"
-	"boxaz/core/internal/model"
+	"boxmes/core/internal/hostlink"
+	"boxmes/core/internal/model"
 )
 
 const (
@@ -293,8 +293,8 @@ type BrowserInput struct {
 // BrowserSession is the POST answer: a CDP endpoint (Browserbase-shaped).
 type BrowserSession struct {
 	*BrowserState
-	CDPURL     string    `json:"cdp_url"`            // wss://<name>.<domain>/.boxaz/cdp?ticket=… (connectOverCDP / puppeteer.connect)
-	HTTPURL    string    `json:"http_url,omitempty"` // https://…/.boxaz/cdp?ticket=… (connectOverCDP fetches /json/version)
+	CDPURL     string    `json:"cdp_url"`            // wss://<name>.<domain>/.boxmes/cdp?ticket=… (connectOverCDP / puppeteer.connect)
+	HTTPURL    string    `json:"http_url,omitempty"` // https://…/.boxmes/cdp?ticket=… (connectOverCDP fetches /json/version)
 	CoreURL    string    `json:"core_url"`
 	TicketID   string    `json:"ticket_id"`
 	ExpiresAt  time.Time `json:"expires_at"`
@@ -368,7 +368,7 @@ func (m *Manager) StopBrowser(ctx context.Context, p *Principal, ref string) (ma
 	if err != nil {
 		return nil, err
 	}
-	m.closeKind(b.ID, "cdp", "[boxaz] browser stopped")
+	m.closeKind(b.ID, "cdp", "[boxmes] browser stopped")
 	peer, ok := m.linkPeer(b)
 	if b.Status != model.StatusRunning || !ok {
 		return map[string]any{"box_id": b.ID, "stopped": false, "note": "box is not running"}, nil

@@ -14,11 +14,11 @@ import (
 	"strconv"
 	"time"
 
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/proto"
-	"boxaz/core/internal/sandbox"
-	"boxaz/core/internal/secret"
-	"boxaz/core/internal/store"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/proto"
+	"boxmes/core/internal/sandbox"
+	"boxmes/core/internal/secret"
+	"boxmes/core/internal/store"
 )
 
 // newShim builds a T3 shim whose snapshots land in core's snapshot dir.
@@ -67,12 +67,12 @@ type PortView struct {
 	Port   int    `json:"port"`
 	URL    string `json:"url"`
 	Kind   string `json:"kind"`   // provider-preview | ingress | tunnel | none
-	Public bool   `json:"public"` // reachable without a Boxaz token
+	Public bool   `json:"public"` // reachable without a Boxmes token
 	Note   string `json:"note,omitempty"`
 	// Caveats explain the limits of the URL's kind and why earlier steps of
 	// the fallback chain (provider preview → ingress → tunnel) were skipped.
 	Caveats []string `json:"caveats,omitempty"`
-	// v1.7: the stable Boxaz gateway URL of this port (wake on request, URL
+	// v1.7: the stable Boxmes gateway URL of this port (wake on request, URL
 	// tokens, WebSocket/SSE pass-through) and its access mode.
 	GatewayURL string `json:"gateway_url,omitempty"`
 	Access     string `json:"access"` // public | token
@@ -89,7 +89,7 @@ type PortView struct {
 	AliasURL string `json:"alias_url,omitempty"`
 }
 
-const caveatPreviewPublic = "the provider preview URL of this port stays reachable at the provider by anyone who knows the sandbox id (this provider cannot refuse public preview traffic, or the sandbox was created public): the token protects only the Boxaz URL"
+const caveatPreviewPublic = "the provider preview URL of this port stays reachable at the provider by anyone who knows the sandbox id (this provider cannot refuse public preview traffic, or the sandbox was created public): the token protects only the Boxmes URL"
 
 // hasPreviewHost reports whether a sandbox provider serves ports on its own
 // preview host.
@@ -139,7 +139,7 @@ func (m *Manager) portView(ctx context.Context, b *model.Box, h *model.Host, por
 		}
 		return PortView{Port: port, URL: gw, Kind: KindGateway, Public: false, GatewayURL: v.GatewayURL, Access: v.Access, ProviderPreview: v.ProviderPreview,
 			Label: v.Label, Primary: v.Primary, AliasURL: v.AliasURL,
-			Note:    "token required: open with ?token=<bxt_…> (exchanged for a cookie), Authorization: Bearer <token> or X-Boxaz-Token; issue one with POST /v1/boxes/{id}/ports/{port}/tokens (box url --token)",
+			Note:    "token required: open with ?token=<bxt_…> (exchanged for a cookie), Authorization: Bearer <token> or X-Boxmes-Token; issue one with POST /v1/boxes/{id}/ports/{port}/tokens (box url --token)",
 			Caveats: cav}
 	}
 	return v
@@ -152,7 +152,7 @@ func (m *Manager) portViewChain(ctx context.Context, b *model.Box, h *model.Host
 			// the provider refuses direct preview traffic: the gateway (which
 			// adds the sandbox traffic token upstream) is the only way in
 			v.URL, v.Kind, v.Public = m.GatewayURL(b, port), KindGateway, true
-			v.Note = h.Provider + " preview host is private (refuses requests without the sandbox traffic token); served through the Boxaz gateway, which wakes a sleeping box"
+			v.Note = h.Provider + " preview host is private (refuses requests without the sandbox traffic token); served through the Boxmes gateway, which wakes a sleeping box"
 			v.Caveats = []string{caveatGateway}
 			return v
 		}
@@ -161,7 +161,7 @@ func (m *Manager) portViewChain(ctx context.Context, b *model.Box, h *model.Host
 			v.Note = h.Provider + " preview URL: serve on 0.0.0.0:" + strconv.Itoa(port) + "; works while the box runs (sleeping boxes answer 502 until woken)"
 			return v
 		}
-		// no provider preview: Boxaz ingress, then an in-box tunnel
+		// no provider preview: Boxmes ingress, then an in-box tunnel
 		v = m.ensurePublic(ctx, b, port, false)
 		if v.Kind == "ingress" {
 			// same path through core, but the readable gateway URL (v1.9)
@@ -181,7 +181,7 @@ func (m *Manager) portViewChain(ctx context.Context, b *model.Box, h *model.Host
 		v.URL, v.Kind, v.Public = b.URL, "ingress", !m.Settings(ctx).URLTokenProtect
 		return v
 	}
-	v.Note = "Boxaz ingress serves the first declared port; create the box with this port first in ports"
+	v.Note = "Boxmes ingress serves the first declared port; create the box with this port first in ports"
 	return v
 }
 

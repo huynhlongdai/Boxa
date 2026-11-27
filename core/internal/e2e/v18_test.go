@@ -18,9 +18,9 @@ import (
 	"testing"
 	"time"
 
-	"boxaz/core/internal/manager"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/sandbox"
+	"boxmes/core/internal/manager"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/sandbox"
 )
 
 // privSandbox: deploySandbox + TrafficGuard; PreviewURL is the local preview server.

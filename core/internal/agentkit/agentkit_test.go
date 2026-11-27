@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"boxaz/core/internal/i18n"
+	"boxmes/core/internal/i18n"
 )
 
 var contractIDs = "claude-code, codex-cli, gemini-cli, cursor, windsurf, cline, openai-agents, langchain, langgraph, crewai, autogen, vercel-ai-sdk, mastra, pydantic-ai, llamaindex, n8n, dify, flowise, make, zapier, hark, custom"
@@ -40,8 +40,8 @@ func TestSnippets(t *testing.T) {
 					t.Errorf("%s/%s: bad note %q", k.ID, l, n)
 				}
 			}
-			if !strings.Contains(s.Snippet, "BOXAZ_API_KEY") {
-				t.Errorf("%s: snippet does not use BOXAZ_API_KEY", k.ID)
+			if !strings.Contains(s.Snippet, "BOXMES_API_KEY") {
+				t.Errorf("%s: snippet does not use BOXMES_API_KEY", k.ID)
 			}
 			switch k.Language {
 			case "json":

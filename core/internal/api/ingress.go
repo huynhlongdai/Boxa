@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"boxaz/core/internal/model"
+	"boxmes/core/internal/model"
 )
 
 var hopHeaders = map[string]bool{"Connection": true, "Keep-Alive": true, "Proxy-Authenticate": true, "Proxy-Authorization": true, "Te": true, "Trailer": true, "Transfer-Encoding": true, "Upgrade": true}
@@ -33,7 +33,10 @@ func (s *Server) ingressMW(next http.Handler) http.Handler {
 		// is core itself, reserved and unknown subdomains get a 404.
 		switch kind, seg := s.M.GatewayHost(r.Context(), host); kind {
 		case "box":
-			if strings.HasPrefix(r.URL.Path, "/.boxaz/") { // v1.10 terminal / tcp / ssh on the box host
+			if rest, ok := legacyAccessPath(r.URL.Path); ok { // compat: /.boxaz/… from before the rename
+				r.URL.Path, r.URL.RawPath = "/.boxmes/"+rest, ""
+			}
+			if strings.HasPrefix(r.URL.Path, "/.boxmes/") { // v1.10 terminal / tcp / ssh on the box host
 				s.accessHost(w, r, seg)
 				return
 			}
@@ -49,33 +52,41 @@ func (s *Server) ingressMW(next http.Handler) http.Handler {
 		}
 		b, err := s.M.BoxForHost(r.Context(), host)
 		if err != nil {
-			http.Error(w, "boxaz: no running box at this address", http.StatusNotFound)
+			http.Error(w, "boxmes: no running box at this address", http.StatusNotFound)
 			return
 		}
 		if s.M.Settings(r.Context()).URLTokenProtect {
 			want := s.M.URLToken(b.ID)
-			tokParam := "boxaz_token"
-			if r.URL.Query().Get(tokParam) == "" && r.URL.Query().Get(legacyTokenParam) != "" {
-				tokParam = legacyTokenParam // compat: links minted before the rename
+			tokParam := "boxmes_token"
+			if r.URL.Query().Get(tokParam) == "" {
+				for _, lp := range legacyTokenParams { // compat: links minted before the renames
+					if r.URL.Query().Get(lp) != "" {
+						tokParam = lp
+						break
+					}
+				}
 			}
 			if t := r.URL.Query().Get(tokParam); t != "" {
 				if t != want {
-					http.Error(w, "boxaz: bad token", http.StatusForbidden)
+					http.Error(w, "boxmes: bad token", http.StatusForbidden)
 					return
 				}
-				http.SetCookie(w, &http.Cookie{Name: "boxaz_t", Value: t, Path: "/", HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode})
+				http.SetCookie(w, &http.Cookie{Name: "boxmes_t", Value: t, Path: "/", HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode})
 				q := r.URL.Query()
 				q.Del(tokParam)
 				r.URL.RawQuery = q.Encode()
 				http.Redirect(w, r, r.URL.RequestURI(), http.StatusFound)
 				return
 			}
-			c, err := r.Cookie("boxaz_t")
-			if err != nil {
-				c, err = r.Cookie(legacyTokenCookie)
+			c, err := r.Cookie("boxmes_t")
+			for _, lc := range legacyTokenCookies {
+				if err == nil {
+					break
+				}
+				c, err = r.Cookie(lc)
 			}
 			if err != nil || c.Value != want {
-				http.Error(w, "boxaz: this box URL is token-protected (open the URL with ?boxaz_token=…)", http.StatusUnauthorized)
+				http.Error(w, "boxmes: this box URL is token-protected (open the URL with ?boxmes_token=…)", http.StatusUnauthorized)
 				return
 			}
 		}
@@ -91,7 +102,7 @@ func (s *Server) ingressMW(next http.Handler) http.Handler {
 		res, err := s.M.Proxy(r.Context(), b, r.Method, r.URL.RequestURI(), hdr, body)
 		if err != nil {
 			ae := model.AsAPIError(err)
-			http.Error(w, "boxaz: "+ae.Message, http.StatusBadGateway)
+			http.Error(w, "boxmes: "+ae.Message, http.StatusBadGateway)
 			return
 		}
 		for k, vs := range res.Headers {
@@ -116,14 +127,56 @@ func (s *Server) tlsAsk(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(404)
 }
 
-// Pre-rename names of the box URL token (query parameter and cookie), still
-// accepted so existing links keep working.
-const (
-	legacyTokenParam  = "boxa_token"
-	legacyTokenCookie = "boxa_t"
+// Pre-rename names (Boxaz, then Boxa) still accepted so existing links,
+// sessions and clients keep working. Newest first.
+var (
+	legacyTokenParams   = []string{"boxaz_token", "boxa_token"} // box URL token query parameter
+	legacyTokenCookies  = []string{"boxaz_t", "boxa_t"}         // box URL token cookie
+	legacyKeyCookies    = []string{"boxaz_key", "boxa_key"}     // dashboard API key cookie
+	legacyGatewayCookie = []string{"boxaz_ut"}                  // gateway URL token cookie (v1.7+, Boxaz era)
+	legacyTokenHeaders  = []string{"X-Boxaz-Token"}             // gateway URL token header
 )
 
-// pathIngress serves <public url>/x/<key>-<port>/… : the v1.7 Boxaz gateway
+// legacyAccessPath maps /.boxaz/<rest> (box-host access paths from the Boxaz
+// era: terminal, tcp, ssh, cdp, vnc, desktop, novnc) to <rest>.
+func legacyAccessPath(p string) (string, bool) {
+	if strings.HasPrefix(p, "/.boxaz/") {
+		return strings.TrimPrefix(p, "/.boxaz/"), true
+	}
+	return "", false
+}
+
+// isGatewayOwnedCookie reports cookies the gateway / dashboard own (current
+// and legacy names); they are never forwarded to a box's app.
+func isGatewayOwnedCookie(name string) bool {
+	switch name {
+	case gatewayCookie, "boxmes_key", "boxmes_t":
+		return true
+	}
+	for _, l := range [][]string{legacyGatewayCookie, legacyKeyCookies, legacyTokenCookies} {
+		for _, n := range l {
+			if n == name {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// isGatewayTokenHeader reports the URL token headers (current and legacy).
+func isGatewayTokenHeader(k string) bool {
+	if http.CanonicalHeaderKey(k) == "X-Boxmes-Token" {
+		return true
+	}
+	for _, h := range legacyTokenHeaders {
+		if http.CanonicalHeaderKey(k) == h {
+			return true
+		}
+	}
+	return false
+}
+
+// pathIngress serves <public url>/x/<key>-<port>/… : the v1.7 Boxmes gateway
 // (stable URL per box+port, wake on request, URL tokens, unbuffered proxy).
 // The key in the path is unguessable per box; the prefix is stripped before
 // forwarding.

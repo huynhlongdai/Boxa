@@ -13,7 +13,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"boxaz/core/internal/proto"
+	"boxmes/core/internal/proto"
 )
 
 // ErrClosed is returned for calls on a dead connection.

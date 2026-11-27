@@ -13,8 +13,8 @@ import { useFmt } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/input";
-import { AgentWizard, type WizardResult } from "@/components/boxaz/agent-wizard";
-import { ConfidenceBadge } from "@/components/boxaz/status";
+import { AgentWizard, type WizardResult } from "@/components/boxmes/agent-wizard";
+import { ConfidenceBadge } from "@/components/boxmes/status";
 import { LocaleSelect } from "@/components/locale-switcher";
 import { toastError } from "@/lib/error-toast";
 
@@ -185,7 +185,7 @@ export default function OnboardingPage() {
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 font-semibold"><span className="grid size-7 place-items-center rounded-md bg-primary/15 text-primary"><BoxIcon className="size-4" /></span>Boxaz</Link>
+        <Link href="/" className="flex items-center gap-2 font-semibold"><span className="grid size-7 place-items-center rounded-md bg-primary/15 text-primary"><BoxIcon className="size-4" /></span>Boxmes</Link>
         <div className="flex items-center gap-4"><LocaleSelect /><Link href="/" className="text-[13px] text-muted-foreground hover:text-foreground">{t("later")}</Link></div>
       </div>
       <h1 className="mb-1 text-2xl font-semibold tracking-tight">{t("title")}</h1>

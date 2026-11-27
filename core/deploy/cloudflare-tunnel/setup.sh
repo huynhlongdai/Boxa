@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Boxaz gateway on your own domain through a remotely-managed Cloudflare
+# Boxmes gateway on your own domain through a remotely-managed Cloudflare
 # Tunnel. Idempotent: re-running reuses the tunnel and records by name.
 #
 #   CF_ACCOUNT_ID=… CF_ZONE_ID=… GATEWAY_DOMAIN=example.com \
@@ -19,10 +19,10 @@
 # CF_API_TOKEN may be empty when a proxy injects the Authorization header.
 set -euo pipefail
 : "${CF_ACCOUNT_ID:?set CF_ACCOUNT_ID}" "${CF_ZONE_ID:?set CF_ZONE_ID}" "${GATEWAY_DOMAIN:?set GATEWAY_DOMAIN (e.g. example.com)}"
-TUNNEL_NAME=${TUNNEL_NAME:-boxaz-gw}
+TUNNEL_NAME=${TUNNEL_NAME:-boxmes-gw}
 PUBLIC_HOST=${PUBLIC_HOST:-gw.$GATEWAY_DOMAIN}
 CORE_URL=${CORE_URL:-http://localhost:8080}
-TOKEN_FILE=${TOKEN_FILE:-$HOME/.config/boxaz/tunnel-token}
+TOKEN_FILE=${TOKEN_FILE:-$HOME/.config/boxmes/tunnel-token}
 CF_API=${CF_API:-https://api.cloudflare.com/client/v4}
 FORCE=${FORCE:-0}
 
@@ -84,6 +84,6 @@ chmod 600 "$TOKEN_FILE"
 cat <<MSG
 
 Tunnel id: $TID
-Core env:  BOXAZ_PUBLIC_URL=https://$PUBLIC_HOST  BOXAZ_GATEWAY_DOMAIN=$GATEWAY_DOMAIN
+Core env:  BOXMES_PUBLIC_URL=https://$PUBLIC_HOST  BOXMES_GATEWAY_DOMAIN=$GATEWAY_DOMAIN
 Run:       TOKEN_FILE=$TOKEN_FILE $(dirname "$0")/run.sh
 MSG

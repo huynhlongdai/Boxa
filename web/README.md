@@ -1,6 +1,6 @@
-# Boxaz Web
+# Boxmes Web
 
-Giao diện quản trị của **Boxaz**, hạ tầng cloud cá nhân cho AI agent. Anh dùng nó để giám sát, duyệt và cứu hộ; còn tạo box, chạy lệnh là việc của agent.
+Giao diện quản trị của **Boxmes**, hạ tầng cloud cá nhân cho AI agent. Anh dùng nó để giám sát, duyệt và cứu hộ; còn tạo box, chạy lệnh là việc của agent.
 
 - Next.js 15 (App Router) + TypeScript + Tailwind + các component kiểu shadcn/ui (viết sẵn trong `components/ui`)
 - Recharts (biểu đồ), xterm.js (terminal), cmdk (⌘K), SWR (dữ liệu), lucide-react (icon)
@@ -10,34 +10,34 @@ Giao diện quản trị của **Boxaz**, hạ tầng cloud cá nhân cho AI age
 ## Chạy nhanh (MOCK MODE, không cần Core)
 
 ```bash
-cd boxaz/web
+cd boxmes/web
 pnpm install
-BOXAZ_MOCK=1 pnpm dev        # http://localhost:3000
+BOXMES_MOCK=1 pnpm dev        # http://localhost:3000
 ```
 
 Ở MOCK MODE, proxy trả dữ liệu giả lập đúng contract (agent `shopee-crawler`, `kecon-writer`, `replingo-bot`, `n8n-flows`, `hark-main`; box trên Hetzner fsn1/hel1, Vultr sgp, Contabo). Các thao tác ghi (wake/sleep/snapshot, tạo agent, duyệt, dừng khẩn cấp…) sửa trạng thái trong bộ nhớ, khởi động lại server là về như cũ. SSE `/stream` cũng được giả lập (chi phí tăng dần, sự kiện mới).
 
-Khi chạy `pnpm dev` mà **không đặt** `BOXAZ_MOCK` và Core không trả lời ở `BOXAZ_API`, app tự chuyển sang mock.
+Khi chạy `pnpm dev` mà **không đặt** `BOXMES_MOCK` và Core không trả lời ở `BOXMES_API`, app tự chuyển sang mock.
 
-## Chạy với Boxaz Core thật
+## Chạy với Boxmes Core thật
 
 ```bash
-BOXAZ_API=http://localhost:8080/v1 BOXAZ_MOCK=0 pnpm dev
+BOXMES_API=http://localhost:8080/v1 BOXMES_MOCK=0 pnpm dev
 ```
 
-Mở `/login`, dán API key có scope `admin`. Key được lưu trong cookie **httpOnly** `boxaz_key`; trình duyệt chỉ gọi `/api/boxaz/*`, route handler `app/api/boxaz/[...path]/route.ts` gắn `Authorization: Bearer <key>` rồi chuyển tiếp tới Core, nên key không bao giờ có trong JavaScript phía client.
+Mở `/login`, dán API key có scope `admin`. Key được lưu trong cookie **httpOnly** `boxmes_key`; trình duyệt chỉ gọi `/api/boxmes/*`, route handler `app/api/boxmes/[...path]/route.ts` gắn `Authorization: Bearer <key>` rồi chuyển tiếp tới Core, nên key không bao giờ có trong JavaScript phía client.
 
 ## Biến môi trường
 
 | Biến | Mặc định | Ý nghĩa |
 |---|---|---|
-| `BOXAZ_API` | `http://localhost:8080/v1` | URL Core cho proxy phía server (đọc lúc chạy) |
-| `NEXT_PUBLIC_BOXAZ_API` | `http://localhost:8080/v1` | Dùng lúc build: hiển thị trong snippet cấu hình, suy ra URL WebSocket terminal. Proxy cũng dùng nếu thiếu `BOXAZ_API` |
-| `NEXT_PUBLIC_BOXAZ_WS` | (`core_url` của ticket, rồi suy từ `NEXT_PUBLIC_BOXAZ_API`, `http→ws`) | URL WebSocket riêng cho terminal, vd `wss://boxaz.example.com/v1` |
+| `BOXMES_API` | `http://localhost:8080/v1` | URL Core cho proxy phía server (đọc lúc chạy) |
+| `NEXT_PUBLIC_BOXMES_API` | `http://localhost:8080/v1` | Dùng lúc build: hiển thị trong snippet cấu hình, suy ra URL WebSocket terminal. Proxy cũng dùng nếu thiếu `BOXMES_API` |
+| `NEXT_PUBLIC_BOXMES_WS` | (`core_url` của ticket, rồi suy từ `NEXT_PUBLIC_BOXMES_API`, `http→ws`) | URL WebSocket riêng cho terminal, vd `wss://boxmes.example.com/v1` |
 
-**Phía Core (v1.10)**: đặt `BOXAZ_DASHBOARD_URL=https://<domain dashboard>` (hoặc thêm vào `BOXAZ_ACCESS_ORIGINS`, cách nhau dấu phẩy) để Core nhận WebSocket terminal từ origin của dashboard; thiếu thì Core trả 403 `POLICY_DENIED` trước khi upgrade. Dev trên localhost được chấp nhận khi Core cũng chạy trên loopback.
-| `BOXAZ_MOCK` | (trống) | `1` luôn mock · `0` không bao giờ · trống = tự mock khi dev mà Core không chạy |
-| `BOXAZ_INSECURE_COOKIE` | (trống) | `1` cho phép cookie không `Secure` khi chạy production qua http nội bộ |
+**Phía Core (v1.10)**: đặt `BOXMES_DASHBOARD_URL=https://<domain dashboard>` (hoặc thêm vào `BOXMES_ACCESS_ORIGINS`, cách nhau dấu phẩy) để Core nhận WebSocket terminal từ origin của dashboard; thiếu thì Core trả 403 `POLICY_DENIED` trước khi upgrade. Dev trên localhost được chấp nhận khi Core cũng chạy trên loopback.
+| `BOXMES_MOCK` | (trống) | `1` luôn mock · `0` không bao giờ · trống = tự mock khi dev mà Core không chạy |
+| `BOXMES_INSECURE_COOKIE` | (trống) | `1` cho phép cookie không `Secure` khi chạy production qua http nội bộ |
 
 Xem `.env.example`.
 
@@ -68,10 +68,10 @@ CHROMIUM_PATH=/usr/bin/chromium BASE=http://localhost:3199 OUT=./docs/screenshot
 ## Docker
 
 ```bash
-docker build -t boxaz-web --build-arg NEXT_PUBLIC_BOXAZ_API=https://boxaz.example.com/v1 .
-docker run -p 3000:3000 -e BOXAZ_API=http://boxaz-core:8080/v1 -e BOXAZ_MOCK=0 boxaz-web
+docker build -t boxmes-web --build-arg NEXT_PUBLIC_BOXMES_API=https://boxmes.example.com/v1 .
+docker run -p 3000:3000 -e BOXMES_API=http://boxmes-core:8080/v1 -e BOXMES_MOCK=0 boxmes-web
 # demo không cần Core:
-docker run -p 3000:3000 -e BOXAZ_MOCK=1 boxaz-web
+docker run -p 3000:3000 -e BOXMES_MOCK=1 boxmes-web
 ```
 
 Ảnh dùng `output: "standalone"` (`node server.js`). Khi chạy standalone ngoài Docker, nhớ copy `.next/static` vào `.next/standalone/.next/static` và `public/` vào `.next/standalone/public` (script `smoke.sh` đã làm việc này).
@@ -82,7 +82,7 @@ docker run -p 3000:3000 -e BOXAZ_MOCK=1 boxaz-web
 |---|---|
 | `/` Tổng quan | 4 thẻ chỉ số kèm thanh ngân sách; hộp **Cần anh** (Duyệt / Từ chối); chi phí 7 ngày xếp chồng theo agent; top 5 task tốn nhất hôm nay; nút đỏ **Dừng khẩn cấp** (2 bước, gõ `DUNG`) |
 | `/boxes` | Bảng lọc theo trạng thái / agent / provider / lifecycle (lọc lưu trên URL), thẻ trên mobile, nút nhanh wake / sleep / snapshot / xoá; tạo box thủ công (có `Idempotency-Key`) |
-| `/boxes/[id]` | Tab Tổng quan (spec, URL, lý do Scheduler chọn, **egress allowlist** — đang thực thi bằng incus ACL/nftables hay chỉ cảnh báo trên driver local, sửa danh sách —, chi phí giờ, ngân sách còn lại, CPU/RAM/đĩa) · **Port & app** (v1.7: URL Boxaz từng port, bật tắt chỉ-token, cấp / liệt kê / thu hồi URL token, wake on request, badge capability của provider, trạng thái app + restart + log SSE; cảnh báo URL preview của provider vẫn mở với ai biết sandbox id) · Terminal (xterm + WebSocket, **Chiếm quyền / Trả quyền**) · Timeline (lệnh, exit code, thời lượng, token tiết kiệm) · Files (`/work`, `/memory`, xem + tải về) · Logs · Snapshots (khôi phục / fork, nơi lưu: R2/B2/S3 hay tại host, lỗi upload) · Cấu hình (box.yaml chỉ đọc + **Lưu thành template**) |
+| `/boxes/[id]` | Tab Tổng quan (spec, URL, lý do Scheduler chọn, **egress allowlist** — đang thực thi bằng incus ACL/nftables hay chỉ cảnh báo trên driver local, sửa danh sách —, chi phí giờ, ngân sách còn lại, CPU/RAM/đĩa) · **Port & app** (v1.7: URL Boxmes từng port, bật tắt chỉ-token, cấp / liệt kê / thu hồi URL token, wake on request, badge capability của provider, trạng thái app + restart + log SSE; cảnh báo URL preview của provider vẫn mở với ai biết sandbox id) · Terminal (xterm + WebSocket, **Chiếm quyền / Trả quyền**) · Timeline (lệnh, exit code, thời lượng, token tiết kiệm) · Files (`/work`, `/memory`, xem + tải về) · Logs · Snapshots (khôi phục / fork, nơi lưu: R2/B2/S3 hay tại host, lỗi upload) · Cấu hình (box.yaml chỉ đọc + **Lưu thành template**) |
 | `/agents` | Danh sách + **wizard 3 bước**: tên + kind → ngân sách + chính sách (provider, vùng, egress) → API key hiện một lần + đoạn cấu hình sinh sẵn theo kind (Claude Code MCP JSON, OpenAI Agents Python, n8n HTTP node, Hark, cURL) có nút Copy |
 | `/agents/[id]` | Keys (tạo / thu hồi), ngân sách, chính sách, dung lượng /memory, lịch sử box |
 | `/costs` | Ledger lọc theo agent / task / provider / ngày, xuất CSV (`/costs.csv`), biểu đồ theo provider, pool vs burst, 7 ngày; thẻ gợi ý tiết kiệm |
@@ -97,38 +97,38 @@ docker run -p 3000:3000 -e BOXAZ_MOCK=1 boxaz-web
 
 **⌘K / Ctrl+K** (nút ⌘ trên thanh trên ở mobile): điều hướng, `wake <slug>`, `sleep <slug>`, `kill all` (mở hộp dừng khẩn cấp), `cost hôm nay`. Gõ không dấu cũng được.
 
-**Cập nhật trực tiếp**: `EventSource('/api/boxaz/stream')` cập nhật cache SWR theo `overview.updated`, `box.updated`, `event.created`, `approval.created`. Mất SSE thì SWR tự polling 10 giây (có SSE: 60 giây). Chỉ báo “Trực tiếp / Polling 10s” ở góc sidebar.
+**Cập nhật trực tiếp**: `EventSource('/api/boxmes/stream')` cập nhật cache SWR theo `overview.updated`, `box.updated`, `event.created`, `approval.created`. Mất SSE thì SWR tự polling 10 giây (có SSE: 60 giây). Chỉ báo “Trực tiếp / Polling 10s” ở góc sidebar.
 
 ## Cấu trúc
 
 ```
 app/(app)/…            các trang có sidebar (layout kiểm tra phiên)
 app/onboarding, login  trang không có sidebar
-app/api/boxaz/[...path] proxy → Core (hoặc mock)
+app/api/boxmes/[...path] proxy → Core (hoặc mock)
 app/api/auth/*         đăng nhập / đăng xuất (cookie httpOnly)
 app/api/session        cho client biết mock hay không (không trả key)
 components/ui          primitive kiểu shadcn (button, card, dialog/sheet, tabs, switch, table…)
-components/boxaz        component nghiệp vụ (chip trạng thái, thẻ chỉ số + ngân sách, hộp duyệt, biểu đồ, terminal, YAML editor, code block có Copy, wizard agent…)
+components/boxmes        component nghiệp vụ (chip trạng thái, thẻ chỉ số + ngân sách, hộp duyệt, biểu đồ, terminal, YAML editor, code block có Copy, wizard agent…)
 lib/types.ts, api.ts   kiểu + client theo contract
 lib/mock/              seed + handler + SSE giả lập
 ```
 
-## Đối chiếu với boxaz/core (đã kiểm tra trực tiếp ngày 2026-10-26)
+## Đối chiếu với boxmes/core (đã kiểm tra trực tiếp ngày 2026-10-26)
 
-Đã chạy web (BOXAZ_MOCK=0) qua proxy tới bản Core đang chạy thử: đăng nhập bằng key admin và 19 endpoint GET (`health`, `overview`, `boxes`, `agents`, `keys`, `costs`, `costs/suggestions`, `providers`, `hosts`, `offers`, `templates`, `secrets`, `approvals`, `settings`, `admin/*`) đều trả 200. Những chỗ contract v1 mô tả sơ lược, web và mock đã theo shape thật của Core:
+Đã chạy web (BOXMES_MOCK=0) qua proxy tới bản Core đang chạy thử: đăng nhập bằng key admin và 19 endpoint GET (`health`, `overview`, `boxes`, `agents`, `keys`, `costs`, `costs/suggestions`, `providers`, `hosts`, `offers`, `templates`, `secrets`, `approvals`, `settings`, `admin/*`) đều trả 200. Những chỗ contract v1 mô tả sơ lược, web và mock đã theo shape thật của Core:
 
 - `GET /admin/jobs` = job nền định kỳ `{name, interval_s, last_run_at, last_status, last_error, duration_ms, runs}` (không phải exec Job).
 - `GET /admin/quotas` = map số (`max_boxes_per_agent`, `max_cpu_per_box`, `max_ram_mb_per_box`, `max_disk_gb_per_box`, `rate_limit_per_minute`); form tự hiện mọi khoá, có nhãn tiếng Việt cho khoá đã biết.
 - `GET /admin/users` = `{id, email, name?, email_verified, platform_admin, workspaces:[{id,name,role}]}` (v2); `GET /admin/system` có `detail` cho từng thành phần, `db`, `auto_burst`.
 - `GET /costs/suggestions` = `{kind, title, detail, saving_usd, box_id?, agent_id?}`; `GET /boxes/:id/observe` = `{files_changed, processes:[{pid,cmd}], ports, since}`.
 - Timeline đọc event `box.exec` có message dạng `exit=<code> <ms>ms: <lệnh>` (tiền tố `TIMEOUT ` nếu quá giờ).
-- Snippet của Core tham chiếu biến môi trường `BOXAZ_API_KEY`; wizard hiện thêm khối `export BOXAZ_API_KEY=…` với key vừa tạo.
+- Snippet của Core tham chiếu biến môi trường `BOXMES_API_KEY`; wizard hiện thêm khối `export BOXMES_API_KEY=…` với key vừa tạo.
 - Tên sự kiện thông báo (v1.2): `daily_report`, `budget`, `approval`, `emergency_stop`, `box_failed`, `host_down`. Cấu hình qua `GET/PUT /notify`, gửi thử `POST /notify/test`.
 - v1.2: `GET/PUT /storage` + `POST /storage/test`, `PUT /boxes/:id/egress`, `POST /jobs/:id/cancel`, `GET /providers/:id/regions`; Provider có `implemented`, `chain_rank`, `token_source`; Snapshot có `storage`, `remote_url`, `upload_error`; Box có `egress`.
 
 ## Điểm cần Core bổ sung
 
-1. ~~Xác thực WebSocket terminal~~: xong ở v1.10. Tab Terminal lấy ticket một lần (`POST /api/boxaz/boxes/{id}/tickets {purpose:"terminal"}`, proxy gắn key phía server) rồi mở `wss://<core>/v1/boxes/{id}/terminal?ticket=bxa_…&proto=2&mode=control|view[&session=…]`. Core không còn nhận cookie hay `?token=` trên WebSocket. Phiên terminal bền: chọn / gắn lại (replay) / mở mới / đóng, tự kết nối lại bằng ticket mới. Tab **Truy cập**: lệnh `box forward` / `box ssh`, ssh-config, port forward, ticket + thu hồi tất cả; Settings có **SSH keys**.
+1. ~~Xác thực WebSocket terminal~~: xong ở v1.10. Tab Terminal lấy ticket một lần (`POST /api/boxmes/boxes/{id}/tickets {purpose:"terminal"}`, proxy gắn key phía server) rồi mở `wss://<core>/v1/boxes/{id}/terminal?ticket=bxa_…&proto=2&mode=control|view[&session=…]`. Core không còn nhận cookie hay `?token=` trên WebSocket. Phiên terminal bền: chọn / gắn lại (replay) / mở mới / đóng, tự kết nối lại bằng ticket mới. Tab **Truy cập**: lệnh `box forward` / `box ssh`, ssh-config, port forward, ticket + thu hồi tất cả; Settings có **SSH keys**.
 2. ~~Khôi phục / fork snapshot~~: Core đã có từ v1.1; từ v1.2 snapshot trên R2/B2 khôi phục/fork được ở host bất kỳ.
 3. **Token tiết kiệm & log theo lệnh**: event `box.exec` chưa có `tokens_saved` và `log_id`. Web đọc được đuôi tuỳ chọn ` tokens_saved=<n> log=<id>` nếu Core thêm vào message (mock đã làm vậy); không có thì tab Logs hiện nhật ký sự kiện của box và ô mở log theo `log_id`.
 4. **box.yaml gốc**: tab Cấu hình dựng lại YAML từ object Box vì contract chưa có endpoint trả YAML gốc.

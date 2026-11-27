@@ -1,11 +1,11 @@
 import { cookies, headers } from "next/headers";
 import { getRequestConfig } from "next-intl/server";
-import { LEGACY_LOCALE_COOKIE, LOCALE_COOKIE, TIME_ZONE, resolveLocale } from "./config";
+import { localeCookie, TIME_ZONE, resolveLocale } from "./config";
 
 export default getRequestConfig(async () => {
   const jar = await cookies();
   const h = await headers();
-  const locale = resolveLocale((jar.get(LOCALE_COOKIE)?.value ?? jar.get(LEGACY_LOCALE_COOKIE)?.value), h.get("accept-language"));
+  const locale = resolveLocale(localeCookie(jar), h.get("accept-language"));
   return {
     locale,
     timeZone: TIME_ZONE,

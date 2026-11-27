@@ -136,7 +136,7 @@
     "history": "box 历史",
     "noBoxes": "该智能体尚未创建 box",
     "connect": "接入智能体",
-    "connectDesc": "按传输方式提供配置 — 与 BOXAZ_API_KEY 一起粘贴到智能体中。"
+    "connectDesc": "按传输方式提供配置 — 与 BOXMES_API_KEY 一起粘贴到智能体中。"
   },
   "agents": {
     "title": "智能体",
@@ -159,8 +159,8 @@
     "missingKeyHint": "粘贴管理员 API 密钥（bx_live_…）。",
     "invalidKey": "API 密钥无效或没有 admin 权限",
     "invalidKeyHint": "使用 `box keys create --admin` 创建 admin 权限的密钥。",
-    "coreUnreachable": "无法连接 Boxaz Core",
-    "coreUnreachableHint": "请检查 BOXAZ_API（{url}）或设置 BOXAZ_MOCK=1。",
+    "coreUnreachable": "无法连接 Boxmes Core",
+    "coreUnreachableHint": "请检查 BOXMES_API（{url}）或设置 BOXMES_MOCK=1。",
     "tryNext": "可以尝试："
   },
   "approvals": {
@@ -430,14 +430,14 @@
     "billingPool": "资源池 · 按月",
     "billingBurst": "突发 · 按小时",
     "pickAgentFirst": "请选择智能体，以按其策略报价。",
-    "descNeed": "描述盒子需要什么，Boxaz 按价格、速度和可靠性为方案排序。",
+    "descNeed": "描述盒子需要什么，Boxmes 按价格、速度和可靠性为方案排序。",
     "mode": "创建方式",
     "modeNeed": "按需求",
     "modeManual": "手动配置"
   },
   "developers": {
     "title": "接入智能体",
-    "desc": "智能体自行接入 Boxaz 所需的一切：机器可读文档、工具 schema、示例调用和错误码表。",
+    "desc": "智能体自行接入 Boxmes 所需的一切：机器可读文档、工具 schema、示例调用和错误码表。",
     "baseUrl": "Core 根地址",
     "noAuth": "无需密钥",
     "needsKey": "需要密钥",
@@ -453,9 +453,9 @@
       "mcp": "MCP 服务器卡片",
       "mcpDesc": "/.well-known/mcp.json：传输方式（HTTP、stdio）、认证、工具列表。",
       "a2a": "A2A 智能体卡片",
-      "a2aDesc": "/.well-known/agent.json：让其他 agent 通过 /a2a 把任务交给 Boxaz。",
+      "a2aDesc": "/.well-known/agent.json：让其他 agent 通过 /a2a 把任务交给 Boxmes。",
       "mcpEndpoint": "MCP 端点",
-      "mcpEndpointDesc": "Streamable HTTP，请求头 Authorization: Bearer $BOXAZ_API_KEY。"
+      "mcpEndpointDesc": "Streamable HTTP，请求头 Authorization: Bearer $BOXMES_API_KEY。"
     },
     "preview": "预览",
     "hidePreview": "收起",
@@ -470,9 +470,9 @@
     "quickstart": "快速开始（curl）",
     "quickstartDesc": "报价 → 创建 → 执行 → 等待任务 → 查看日志 → 删除。将 BOX_ID、JOB_ID、LOG_ID 替换为返回值。",
     "sdk": "SDK 与 CLI",
-    "sdkDesc": "安装一次，通过 BOXAZ_URL 和 BOXAZ_API_KEY 配置。",
+    "sdkDesc": "安装一次，通过 BOXMES_URL 和 BOXMES_API_KEY 配置。",
     "sdkNote": "SDK 包名为暂定，Core 发布时请再确认。",
-    "cliFromSource": "box CLI（来自 boxaz/core 源码）",
+    "cliFromSource": "box CLI（来自 boxmes/core 源码）",
     "errors": "错误码",
     "errorsDesc": "智能体读取 <mono>code</mono>（永不变化）并遵循 <mono>hint</mono>；<mono>message</mono>/<mono>hint</mono> 按 Accept-Language 本地化；如有 <mono>retry_after_s</mono> 请遵守。",
     "colCode": "代码",
@@ -495,7 +495,7 @@
       "NOT_FOUND": "不存在该 ID 的 box/任务/日志等。",
       "NOT_FOUNDHint": "调用 box_list（或相应列表）获取正确 ID。",
       "UNAUTHORIZED": "缺少密钥或密钥已吊销。",
-      "UNAUTHORIZEDHint": "检查 BOXAZ_API_KEY，不要循环重试。",
+      "UNAUTHORIZEDHint": "检查 BOXMES_API_KEY，不要循环重试。",
       "INVALID": "参数或 box.yaml 错误。",
       "INVALIDHint": "按 message 指出的字段或行修正后重新发送。",
       "RATE_LIMITED": "请求过于频繁。",
@@ -504,7 +504,7 @@
       "INTERNALHint": "重试一次；若仍失败，停止并通知运维者。",
       "NO_CAPACITYHint": "降低规格，等待 retry_after_s 后重试，或调用 box_quote 查看备选。"
     },
-    "a2a": "A2A：把任务交给 Boxaz",
+    "a2a": "A2A：把任务交给 Boxmes",
     "a2aDesc": "其他 agent 向 <mono>/a2a</mono> 发送 JSON-RPC：text part 是命令（附 <mono>metadata.box_id</mono>），带 <mono>tool</mono> + <mono>arguments</mono> 的 data part 可调用任意工具。命令的 task id 就是 job id。",
     "a2aColMethod": "方法",
     "a2aColDoes": "作用",
@@ -587,7 +587,7 @@
     "chainPool": "现有资源池",
     "tokenHint": {
       "contabo": "粘贴 Contabo API 页面中的 client_id:client_secret:api_user:api_password（或 4 个字段的 JSON）。",
-      "netcup": "粘贴 SCP 刷新令牌（客户端 scp）。将备用服务器昵称设为 boxaz-spare-1，Boxaz 会认领并重装。",
+      "netcup": "粘贴 SCP 刷新令牌（客户端 scp）。将备用服务器昵称设为 boxmes-spare-1，Boxmes 会认领并重装。",
       "digitalocean": "具有读写权限的个人访问令牌。",
       "hetzner": "Hetzner Cloud 项目的读写 API 令牌。",
       "vultr": "具有 manage_servers 权限的 API 密钥。"
@@ -645,12 +645,12 @@
   "locale": {
     "label": "语言",
     "dashboard": "界面语言",
-    "dashboardHint": "保存在本浏览器的 boxaz_locale Cookie 中。Core 返回的错误也会使用该语言。",
+    "dashboardHint": "保存在本浏览器的 boxmes_locale Cookie 中。Core 返回的错误也会使用该语言。",
     "notify": "通知与 API 错误的默认语言",
     "notifyHint": "用于 Telegram、邮件以及未发送 Accept-Language 的智能体。"
   },
   "login": {
-    "title": "登录 Boxaz",
+    "title": "登录 Boxmes",
     "subtitle": "使用具有 admin 权限的 API 密钥",
     "keyLabel": "管理员 API 密钥",
     "keyHint": "使用 <mono>box keys create --admin</mono> 创建。密钥保存在 httpOnly Cookie 中，不会进入 JavaScript。",
@@ -726,7 +726,7 @@
     "toOverview": "前往总览",
     "viewAgent": "查看智能体",
     "waiting": "等待智能体第一次调用…",
-    "waitingDesc": "将配置粘贴到 <mono>{name}</mono>，然后让它运行 <mono>box_list</mono> 或创建一个 box。Boxaz 收到调用后页面会自动跳转。"
+    "waitingDesc": "将配置粘贴到 <mono>{name}</mono>，然后让它运行 <mono>box_list</mono> 或创建一个 box。Boxmes 收到调用后页面会自动跳转。"
   },
   "overview": {
     "title": "总览",
@@ -857,7 +857,7 @@
     },
     "confidence": {
       "verified": "已验证",
-      "verifiedHint": "Boxaz 已自测此报价",
+      "verifiedHint": "Boxmes 已自测此报价",
       "unverified": "未验证",
       "unverifiedHint": "来自 battleships，尚未自测",
       "stock_limited": "库存有限",
@@ -878,13 +878,13 @@
   },
   "terminal": {
     "promptUser": "you",
-    "mockHeader": "# Boxaz 终端（MOCK）· {id} · {where}",
+    "mockHeader": "# Boxmes 终端（MOCK）· {id} · {where}",
     "mockWatching": "# 正在查看 agent {agent}。选择“控制”即可输入命令。",
     "mockHelp": "模拟命令：ls [path]、cat [file]、pwd、whoami、clear；其余命令通过 /exec 执行",
     "whoami": "you（已接管）",
     "connected": "# 已连接 PTY {id}",
     "wsFailed": "# 无法打开到 Core 的 WebSocket。",
-    "wsFailedHint": "# 请检查：控制台的 origin 在 Core 的允许列表中（BOXAZ_DASHBOARD_URL 或 BOXAZ_ACCESS_ORIGINS），Core 的 BOXAZ_PUBLIC_URL 正确（或设置 NEXT_PUBLIC_BOXAZ_WS），且票据未超过 60 秒。",
+    "wsFailedHint": "# 请检查：控制台的 origin 在 Core 的允许列表中（BOXMES_DASHBOARD_URL 或 BOXMES_ACCESS_ORIGINS），Core 的 BOXMES_PUBLIC_URL 正确（或设置 NEXT_PUBLIC_BOXMES_WS），且票据未超过 60 秒。",
     "lost": "# 终端连接已断开",
     "tookOver": "# 你已接管",
     "released": "# 已将控制权交还智能体",
@@ -1080,13 +1080,13 @@
       "open": "熔断器打开"
     },
     "breakerHelp": {
-      "closed": "正常：Boxaz 照常调用该云厂商",
+      "closed": "正常：Boxmes 照常调用该云厂商",
       "half_open": "正在试探一次调用，看云厂商是否已恢复",
-      "open": "连续失败后暂时跳过；Boxaz 自动切换到下一个云厂商"
+      "open": "连续失败后暂时跳过；Boxmes 自动切换到下一个云厂商"
     },
     "wizard": {
       "title": "连接云厂商",
-      "desc": "选择云厂商并粘贴令牌，Boxaz 检查后再由您设置优先级和费用上限。",
+      "desc": "选择云厂商并粘贴令牌，Boxmes 检查后再由您设置优先级和费用上限。",
       "steps": "步骤",
       "step": {
         "choose": "选择",
@@ -1127,9 +1127,9 @@
     },
     "prefs": {
       "title": "{name} 设置",
-      "desc": "Boxaz 自动租用服务器时使用的优先级和费用上限。",
+      "desc": "Boxmes 自动租用服务器时使用的优先级和费用上限。",
       "enabled": "允许使用",
-      "enabledHint": "关闭后，Boxaz 放置盒子时会跳过该云厂商。",
+      "enabledHint": "关闭后，Boxmes 放置盒子时会跳过该云厂商。",
       "priority": "优先级",
       "priorityHint": "1 = 最先尝试；0 = 默认顺序。",
       "maxHourly": "每台服务器每小时上限 $",
@@ -1144,7 +1144,7 @@
     },
     "health": {
       "title": "云厂商健康状况",
-      "desc": "Core 定期探测每个云厂商的 API，记录延迟、错误和服务器开通时间。连续失败会打开熔断器，Boxaz 随即切换到下一个云厂商。",
+      "desc": "Core 定期探测每个云厂商的 API，记录延迟、错误和服务器开通时间。连续失败会打开熔断器，Boxmes 随即切换到下一个云厂商。",
       "samples": "{n, plural, other {# 个样本}}",
       "hosts": "{n, plural, other {# 台主机}}",
       "priority": "优先级 {n}",
@@ -1167,7 +1167,7 @@
       "check": "立即检查",
       "checked": "已检查 {name}",
       "reset": "重置熔断器",
-      "resetHint": "关闭熔断器，让 Boxaz 立即重新使用该云厂商",
+      "resetHint": "关闭熔断器，让 Boxmes 立即重新使用该云厂商",
       "resetDone": "已重置 {name} 的熔断器",
       "prefs": "设置"
     },
@@ -1212,7 +1212,7 @@
     "title": "WireGuard Mesh（headscale）",
     "desc": "主机和服务盒子通过私有 WireGuard 网络互通；ACL 根据智能体和盒子端口自动生成。",
     "disabled": "Mesh 未开启",
-    "disabledHint": "为 Core 设置 BOXAZ_MESH_URL 和 BOXAZ_MESH_API_KEY 即可开启。",
+    "disabledHint": "为 Core 设置 BOXMES_MESH_URL 和 BOXMES_MESH_API_KEY 即可开启。",
     "server": "服务器",
     "online": "在线节点",
     "hostsJoined": "已加入主机",
@@ -1227,7 +1227,7 @@
     "keyTitle": "创建预授权密钥",
     "keyDesc": "一次性密钥，让主机或盒子以正确的标签加入 Mesh。",
     "target": "用于",
-    "newHost": "新主机（tag:boxaz-host）",
+    "newHost": "新主机（tag:boxmes-host）",
     "hosts": "主机",
     "boxes": "盒子",
     "ttl": "有效期（分钟）",
@@ -1299,7 +1299,7 @@
   },
   "rec": {
     "title": "按需求推荐盒子",
-    "desc": "描述任务，Boxaz 比较预热池、现有资源池、虚拟机和新服务器，并按 6 个可解释的因素排序。",
+    "desc": "描述任务，Boxmes 比较预热池、现有资源池、虚拟机和新服务器，并按 6 个可解释的因素排序。",
     "profile": "工作负载",
     "tip": "提示：",
     "agentKind": "智能体类型",
@@ -1317,7 +1317,7 @@
     "maxLatency": "最大延迟（ms）",
     "arch": "架构",
     "region": "区域",
-    "regionHint": "留空则由 Boxaz 选择",
+    "regionHint": "留空则由 Boxmes 选择",
     "location": "智能体所在地",
     "locationHint": "国家代码（VN）、区域或 lat,lon",
     "publicUrl": "需要公开 URL",
@@ -1446,7 +1446,7 @@
     "tierHelp": {
       "T1": "裸服务器/虚拟机：boxd + Incus，按小时或按月计费",
       "T2": "沙箱 API：boxd 在沙箱内运行并回连 Core，支持终端和快照",
-      "T3": "仅 exec API：网关 shim 代替 boxd 应答，无终端和出站规则；快照为网关保存的 tar 包，提供商支持时有预览 URL，否则通过 Boxaz ingress 或 box 内隧道提供公网 URL"
+      "T3": "仅 exec API：网关 shim 代替 boxd 应答，无终端和出站规则；快照为网关保存的 tar 包，提供商支持时有预览 URL，否则通过 Boxmes ingress 或 box 内隧道提供公网 URL"
     },
     "ver": {
       "live": "实测验证",
@@ -1459,7 +1459,7 @@
       "sdk": "服务商未公布 REST 文档：依据官方 SDK 源码"
     },
     "estPrice": "估算价格",
-    "estPriceHelp": "服务商未公布按秒单价，Boxaz 使用估算值",
+    "estPriceHelp": "服务商未公布按秒单价，Boxmes 使用估算值",
     "cap": {
       "unsupported": "{name}：不支持",
       "boot": "启动 {v}",
@@ -1483,7 +1483,7 @@
       "dialOnly": "该提供商没有 exec API，因此始终以 dial-in（T2）运行；无法使用 shim（T3）。"
     },
     "modeHelp": {
-      "auto": "沙箱可保留后台进程且设置了 BOXAZ_PUBLIC_URL 时用 T2，否则 T3",
+      "auto": "沙箱可保留后台进程且设置了 BOXMES_PUBLIC_URL 时用 T2，否则 T3",
       "dial": "boxd 在沙箱内运行并回连 Core：终端、快照、出站规则齐全",
       "shim": "Core 代替 boxd 调用 exec API：无需公网 URL，功能较少"
     },
@@ -1536,7 +1536,7 @@
       "sample": "粘贴示例",
       "howTitle": "如何添加适配器",
       "how1": "按示例编写 YAML（create/get/delete/exec 路由、认证、能力、价格）。",
-      "how2": "在这里检查，然后把文件保存到 <mono>BOXAZ_SANDBOX_ADAPTERS_DIR</mono> 目录。",
+      "how2": "在这里检查，然后把文件保存到 <mono>BOXMES_SANDBOX_ADAPTERS_DIR</mono> 目录。",
       "how3": "重启 Core，新服务商会出现在沙箱 API 列表中，可直接连接。",
       "required": "必填字段：",
       "invalid": "适配器无效",
@@ -1546,18 +1546,18 @@
       "creds": "凭据"
     },
     "dialOnly": "仅 dial-in",
-    "dialOnlyHelp": "没有 exec API：每个 box 是一个运行 boxd 的服务，boxd 主动连回 core。需要可从互联网访问的 BOXAZ_PUBLIC_URL。",
+    "dialOnlyHelp": "没有 exec API：每个 box 是一个运行 boxd 的服务，boxd 主动连回 core。需要可从互联网访问的 BOXMES_PUBLIC_URL。",
     "freePlan": "免费套餐（$0）"
   },
   "ports": {
     "lifecycle": "唤醒与生命周期",
     "wake": "请求时唤醒",
-    "wakeHint": "访问 Boxaz URL 会唤醒休眠的 box，并在应用就绪前保持请求，然后再响应。",
+    "wakeHint": "访问 Boxmes URL 会唤醒休眠的 box，并在应用就绪前保持请求，然后再响应。",
     "wakeOn": "已开启请求时唤醒",
     "wakeOff": "已关闭请求时唤醒：访问休眠 box 将返回 503",
     "capsTitle": "{provider} 支持的能力",
     "title": "端口",
-    "intro": "每个已开放的端口都有固定的 Boxaz URL：首个请求即唤醒 box，并透传 WebSocket/SSE。设为仅令牌即可安全分享。",
+    "intro": "每个已开放的端口都有固定的 Boxmes URL：首个请求即唤醒 box，并透传 WebSocket/SSE。设为仅令牌即可安全分享。",
     "empty": "尚未开放端口",
     "emptyDesc": "在 box 内于 0.0.0.0:PORT 启动服务，然后在此开放端口。",
     "expose": "开放",
@@ -1566,23 +1566,23 @@
     "requireToken": "需要令牌",
     "nowToken": "端口 {port} 现在需要 URL 令牌",
     "nowPublic": "端口 {port} 已恢复公开",
-    "boxazUrl": "Boxaz URL",
+    "boxmesUrl": "Boxmes URL",
     "providerUrl": "服务商 URL",
-    "previewCaveat": "令牌只保护 Boxaz URL。该端口在服务商处的预览 URL 仍可被任何知道沙箱 ID 的人访问。",
+    "previewCaveat": "令牌只保护 Boxmes URL。该端口在服务商处的预览 URL 仍可被任何知道沙箱 ID 的人访问。",
     "showTokens": "显示令牌",
     "hideTokens": "隐藏令牌",
     "kind": {
       "provider-preview": "服务商预览",
-      "ingress": "Boxaz ingress",
+      "ingress": "Boxmes ingress",
       "tunnel": "隧道",
-      "gateway": "Boxaz 网关",
+      "gateway": "Boxmes 网关",
       "none": "无公网 URL"
     },
     "kindHint": {
       "provider-preview": "服务商自己的预览域名（E2B、Novita、Daytona）。",
-      "ingress": "经由 Boxaz core 和 box 内的 ingress agent 访问。",
+      "ingress": "经由 Boxmes core 和 box 内的 ingress agent 访问。",
       "tunnel": "box 内的 Cloudflare quick tunnel（最后手段）。",
-      "gateway": "端口需要令牌，因此只通过 Boxaz 网关提供。",
+      "gateway": "端口需要令牌，因此只通过 Boxmes 网关提供。",
       "none": "目前互联网无法访问此端口。"
     },
     "access": {
@@ -1595,8 +1595,8 @@
       "memory_pauseHint": "休眠时保留内存和进程；否则唤醒时进程会重启。",
       "wake_on_http_native": "原生 HTTP 唤醒",
       "wake_on_http_nativeHint": "服务商自己的 URL 可唤醒已暂停的 box。",
-      "wake_via_gateway": "经 Boxaz URL 唤醒",
-      "wake_via_gatewayHint": "Boxaz 网关 URL 可唤醒 box。",
+      "wake_via_gateway": "经 Boxmes URL 唤醒",
+      "wake_via_gatewayHint": "Boxmes 网关 URL 可唤醒 box。",
       "fork": "fork",
       "forkHint": "对运行中的 box 原生 fork 或克隆。",
       "inbound_http": "入站 HTTP",
@@ -1652,7 +1652,7 @@
       "restartDesc": "监督进程会停止并重新启动应用；网关流量会等待应用就绪。",
       "restarted": "应用已重启",
       "none": "没有受监督的应用",
-      "noneDesc": "可用 box app set（CLI）、MCP 工具 box_app_set 或 API 的 PUT app 声明：Boxaz 负责运行、崩溃后重启，并在唤醒、恢复或克隆后重新启动。",
+      "noneDesc": "可用 box app set（CLI）、MCP 工具 box_app_set 或 API 的 PUT app 声明：Boxmes 负责运行、崩溃后重启，并在唤醒、恢复或克隆后重新启动。",
       "start": "启动命令",
       "repo": "仓库",
       "install": "安装",
@@ -1679,7 +1679,7 @@
       "refresh": "刷新",
       "noLogs": "暂无输出。"
     },
-    "previewPrivate": "该端口在服务商处的预览 URL 拒绝直接访问（私有沙箱）：只有这个 Boxaz URL 能访问应用。",
+    "previewPrivate": "该端口在服务商处的预览 URL 拒绝直接访问（私有沙箱）：只有这个 Boxmes URL 能访问应用。",
     "nameTitle": "Box 地址",
     "name": "名称",
     "nameHint": "裸名称指向主端口（demo-app.example.com）；其他端口为 名称-标签（demo-app-api.example.com）。使用小写字母、数字和连字符。",
@@ -1704,7 +1704,7 @@
     "modePath": "按路径",
     "modeRelative": "相对路径（无公网 URL）",
     "domain": "网关域名",
-    "domainHint": "裸域名，如 example.com。留空 = 在 BOXAZ_PUBLIC_URL 下按路径。",
+    "domainHint": "裸域名，如 example.com。留空 = 在 BOXMES_PUBLIC_URL 下按路径。",
     "fromEnv": "由环境变量设置",
     "pattern": "Box URL 格式",
     "publicUrl": "公网 URL（core）",

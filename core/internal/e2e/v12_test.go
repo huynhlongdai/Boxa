@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"boxaz/core/internal/client"
-	"boxaz/core/internal/manager"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/objstore"
-	"boxaz/core/internal/store"
+	"boxmes/core/internal/client"
+	"boxmes/core/internal/manager"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/objstore"
+	"boxmes/core/internal/store"
 )
 
 func mustBox(t *testing.T, e *env, c *client.Client, body map[string]any) model.Box {
@@ -69,11 +69,11 @@ func TestSnapshotsInObjectStorage(t *testing.T) {
 	var secs model.List[model.Secret]
 	e.must(ag, "GET", "/secrets", nil, &secs)
 	for _, s := range secs.Items {
-		if strings.HasPrefix(s.Name, "BOXAZ_SYS_") {
+		if strings.HasPrefix(s.Name, "BOXMES_SYS_") {
 			t.Fatal("agent sees system secret")
 		}
 	}
-	if st, _, _ := e.admin.Do(e.ctx, "POST", "/secrets", map[string]any{"name": "BOXAZ_SYS_X", "value": "v"}); st != 400 {
+	if st, _, _ := e.admin.Do(e.ctx, "POST", "/secrets", map[string]any{"name": "BOXMES_SYS_X", "value": "v"}); st != 400 {
 		t.Fatalf("reserved secret name accepted: %d", st)
 	}
 
@@ -143,7 +143,7 @@ func TestEgressPolicy(t *testing.T) {
 		t.Fatalf("egress %+v", b.Egress)
 	}
 	var res model.ExecResult
-	e.must(ag, "POST", "/boxes/"+b.ID+"/exec", map[string]any{"command": "echo $BOXAZ_EGRESS_ALLOW"}, &res)
+	e.must(ag, "POST", "/boxes/"+b.ID+"/exec", map[string]any{"command": "echo $BOXMES_EGRESS_ALLOW"}, &res)
 	if !strings.Contains(res.StdoutTail, "pypi.org") {
 		t.Fatalf("env not exported: %q", res.StdoutTail)
 	}

@@ -15,12 +15,12 @@ import { Field, Input, Textarea } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { BudgetBar, MoneyBudget } from "@/components/boxaz/budget";
-import { CopyButton } from "@/components/boxaz/code-block";
-import { ConfirmButton } from "@/components/boxaz/confirm";
-import { ErrorBox, Empty } from "@/components/boxaz/page";
-import { BoxStatusChip, Mono } from "@/components/boxaz/status";
-import { SnippetViewer, useAgentKinds } from "@/components/boxaz/snippet-viewer";
+import { BudgetBar, MoneyBudget } from "@/components/boxmes/budget";
+import { CopyButton } from "@/components/boxmes/code-block";
+import { ConfirmButton } from "@/components/boxmes/confirm";
+import { ErrorBox, Empty } from "@/components/boxmes/page";
+import { BoxStatusChip, Mono } from "@/components/boxmes/status";
+import { SnippetViewer, useAgentKinds } from "@/components/boxmes/snippet-viewer";
 
 function NewKeyDialog({ agent }: { agent: Agent }) {
   const [open, setOpen] = React.useState(false);

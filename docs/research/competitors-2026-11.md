@@ -1,4 +1,4 @@
-# Boxaz — competitor & feature-gap research (agent sandboxes / dev boxes)
+# Boxmes — competitor & feature-gap research (agent sandboxes / dev boxes)
 
 Researched 26 Nov 2026 (Asia/Bangkok). Every claim carries a source URL. Prices are list prices in USD unless marked, read from the URL shown (vendor pages fetched on 26 Nov 2026 where marked **[fetched]**; others from dated third-party reviews and marked as such). Legend in tables: ✓ = documented, ◐ = partial / beta / enterprise-only, ✗ = documented absent, **?** = not verified in this pass (treat as unknown, not as "no").
 
@@ -18,13 +18,13 @@ Researched 26 Nov 2026 (Asia/Bangkok). Every claim carries a source URL. Prices 
 | **Billing vendors consolidated**: Stripe bought Metronome (Jan 2026), Adyen bought Orb (Jul 2026), Kong bought OpenMeter (Sep 2025); **Lemon Squeezy closing** (no new stores from 16 Nov 2026, stops 31 Mar 2027) | 2025–26 | https://paywithlocus.com/guides/usage-based-billing-software **[fetched]** · https://saasyland.com/blog/polar-vs-stripe-vs-lemon-squeezy |
 | **Hetzner raised cloud prices twice** (1 Apr and 15 Jun 2026; CX/CAX +31–38%, CPX/CCX +113–175%); CX/CAX often sold out | 2026 | https://docs.hetzner.com/general/infrastructure-and-availability/price-adjustment · https://hostingsift.com/blog/is-hetzner-still-cheapest-vps-2026 |
 
-**Direct competitors to Boxaz's "neutral layer" positioning** (important — not just sandbox vendors):
+**Direct competitors to Boxmes's "neutral layer" positioning** (important — not just sandbox vendors):
 - **ComputeSDK** — "one router for sandboxes and Actions", TS SDK + REST + CLI + MCP across ~39 providers, managed compute without vendor keys or BYO keys, fallback order, public weekly benchmarks; Devboxes "coming soon". https://docs.computesdk.com/ · https://www.computesdk.com/llms.txt · https://www.computesdk.com/discover
 - **Crabbox** — orchestrator over 60+ providers incl. Hetzner, AWS, Daytona, E2B, Modal, K8s, plain SSH hosts. https://roboticforce.io/lab/e2b-vs-crabbox
 - **Open Sandbox Router** (capability negotiation, create-time failover, durable sandbox→provider binding) https://bex.co/blog/2026/09/24/open-sandbox-router-one-sandbox-api-e2b-modal-kubernetes ; Cased `sandboxes` lib https://cased.com/blog/2025-10-05-sandboxes ; VibeKit https://blog.logrocket.com/comparing-ai-agent-sandbox-platforms-e2b-modal-daytona-and-more/
-- **Sandscale** (newcomer, Nov 2026) — sells *governance* on every plan: Vault, DLP on prompts/MCP tool calls, human approvals, hash-chained audit log; SSO/roles/audit export on Team ($48/member/mo). Overlaps Boxaz's agent policies/approvals. https://shipyardhq.dev/products/sandscale · https://dev.to/sandscale/sandscale-vs-e2b-how-two-firecracker-sandbox-platforms-differ-1hgi
+- **Sandscale** (newcomer, Nov 2026) — sells *governance* on every plan: Vault, DLP on prompts/MCP tool calls, human approvals, hash-chained audit log; SSO/roles/audit export on Team ($48/member/mo). Overlaps Boxmes's agent policies/approvals. https://shipyardhq.dev/products/sandscale · https://dev.to/sandscale/sandscale-vs-e2b-how-two-firecracker-sandbox-platforms-differ-1hgi
 
-Boxaz differentiators none of them fully cover (keep leaning on these): raw-VPS + Incus as a provider class (real price arbitrage, see §3), per-agent keys/budgets/policies/approvals, A2A, cost ledger + live price feed, VNC/CDP/SFTP/SSH-cert all in one API, i18n dashboard (vi/en/zh/ja).
+Boxmes differentiators none of them fully cover (keep leaning on these): raw-VPS + Incus as a provider class (real price arbitrage, see §3), per-agent keys/budgets/policies/approvals, A2A, cost ledger + live price feed, VNC/CDP/SFTP/SSH-cert all in one API, i18n dashboard (vi/en/zh/ja).
 
 ---
 
@@ -81,7 +81,7 @@ Boxaz differentiators none of them fully cover (keep leaning on these): raw-VPS 
 
 ---
 
-## 2. Prioritized modules/features Boxaz lacks (25)
+## 2. Prioritized modules/features Boxmes lacks (25)
 
 Priority for a **multi-tenant SaaS launch**: P0 = needed before taking money from strangers; P1 = needed to compete in first 3–6 months; P2 = later / enterprise.
 
@@ -89,8 +89,8 @@ Priority for a **multi-tenant SaaS launch**: P0 = needed before taking money fro
 1. **Billing & payments module (wallet + metering export)** — turn the existing cost ledger into a per-workspace prepaid wallet: credits, one-time + auto top-up, invoices, tax via a merchant of record, hard stop or grace at zero. Competitors: Daytona wallet + auto top-up [10b], Steel prepaid credits refuse at zero [50], Tensorlake hard stop [n1], Polar/Orb-style credits. See §4 — **Stripe is not available to Vietnam-registered businesses**, which shapes the choice.
 2. **Plans, tiers & quotas engine** — per-plan caps on concurrent boxes, vCPU/RAM pool, max continuous runtime, creation rate, secrets count; tiers unlocked by verification/top-up. Competitors: E2B plan table [5], Daytona Tier 1–4 by top-up [10c], Blaxel Tier 0–9 by top-up [32], Vercel concurrency/vCPU-rate quotas [28].
 3. **API rate limiting** — per workspace × endpoint limits with `429 + Retry-After`, SDK auto-retry. Competitor: E2B [5], Vercel control-plane quotas [28].
-4. **Spend limits, budgets & alerts at workspace level** — hard monthly cap + threshold notifications (Boxaz has per-agent budgets; need tenant-level). Competitors: E2B Limits page [5], Modal workspace budgets/spend limits [13], Vercel Spend Management [28].
-5. **Abuse / trust & safety for free tier** — card or paid-deposit verification before risky features (public URLs, open egress, large boxes), mining/scan detection, default-restricted egress on low tiers, kill switch per workspace. Competitors: Daytona restricts network on Tiers 1–2 [9]; Steel requires $10 paid credit before proxies/captcha [50]; Fly Free requires card [22]. Critical for Boxaz because public URLs + raw VPS IPs get you abuse reports and provider bans (Hetzner/Contabo).
+4. **Spend limits, budgets & alerts at workspace level** — hard monthly cap + threshold notifications (Boxmes has per-agent budgets; need tenant-level). Competitors: E2B Limits page [5], Modal workspace budgets/spend limits [13], Vercel Spend Management [28].
+5. **Abuse / trust & safety for free tier** — card or paid-deposit verification before risky features (public URLs, open egress, large boxes), mining/scan detection, default-restricted egress on low tiers, kill switch per workspace. Competitors: Daytona restricts network on Tiers 1–2 [9]; Steel requires $10 paid credit before proxies/captcha [50]; Fly Free requires card [22]. Critical for Boxmes because public URLs + raw VPS IPs get you abuse reports and provider bans (Hetzner/Contabo).
 6. **Tenant-facing audit log (+ export)** — who/which API key/agent did what to which box, IP, outcome; filter, export CSV/JSON; ideally hash-chained. Competitors: Daytona audit fields & CLI [9], Sandscale hash-chained [n4], Modal/Northflank Enterprise [13][35].
 7. **Workspace RBAC + scoped API keys** — roles (Owner, Admin, Developer, Viewer, Billing, Auditor) and per-key scopes/expiry, on top of the new invites. Competitors: Daytona role assignments [9], Modal RBAC (Team) [13], Northflank RBAC [35].
 8. **Signed lifecycle webhooks** — box created/started/paused/snapshotted/killed/cost-threshold events, HMAC-signed with retries; complements Telegram/email notifications. Competitors: E2B [5], Daytona [9], Vercel [28].
@@ -104,19 +104,19 @@ Priority for a **multi-tenant SaaS launch**: P0 = needed before taking money fro
 14. **Computer-use action API on top of VNC** — screenshot/click/type/scroll/key endpoints + OpenAI/Anthropic computer-use adapters. Competitors: E2B Desktop [4], Daytona Computer Use [9], Morph desktop [15].
 15. **Git module** — clone with short-lived credentials, branch/commit/push, open PR (GitHub/GitLab app). Competitors: Daytona git ops [9], Upstash Box git→PR [n3], Runloop repo connections [42], Tensorlake hosted Git [n1].
 16. **Observability export** — per-box CPU/RAM/disk metrics API, OTel (OTLP) export of metrics/logs/traces, log sinks. Competitors: E2B metrics + OTel [5], Northflank log sinks [35], Modal real-time metrics [13].
-17. **Regions & data-residency constraints in placement** — `region: eu|us|apac`, "EU-only providers" policy per workspace. Competitors: E2B US/EU/APAC [5], Daytona us/eu + custom [10], Vercel 19 regions [28]. (Natural fit for Boxaz's multi-provider routing.)
-18. **BYO provider account (BYOK/BYOC) with platform fee** — tenant plugs in its own Hetzner/Vultr/E2B/Modal keys; Boxaz bills only an orchestration fee. Benchmarks: Northflank BYOC $0.02083/node vCPU-h [35], Tensorlake BYOC 30%→10% of compute [n1], ComputeSDK "bring your own keys" [n6].
+17. **Regions & data-residency constraints in placement** — `region: eu|us|apac`, "EU-only providers" policy per workspace. Competitors: E2B US/EU/APAC [5], Daytona us/eu + custom [10], Vercel 19 regions [28]. (Natural fit for Boxmes's multi-provider routing.)
+18. **BYO provider account (BYOK/BYOC) with platform fee** — tenant plugs in its own Hetzner/Vultr/E2B/Modal keys; Boxmes bills only an orchestration fee. Benchmarks: Northflank BYOC $0.02083/node vCPU-h [35], Tensorlake BYOC 30%→10% of compute [n1], ComputeSDK "bring your own keys" [n6].
 19. **Compatibility shims (E2B-compatible API / migration importers)** — accept E2B SDK calls & templates so users switch with a base-URL change; import Runloop/Ona refugees. Competitors: Blaxel migration skill [32], E2BGateway [n7]; Runloop/Ona shutdowns create a migration wave now.
 20. **Data lifecycle & compliance basics** — DPA, workspace data export/delete (GDPR), retention settings for logs/snapshots/audit, status page + SLA. Competitors: Fly DPA/BAA [22], Browserbase retention by plan [49], Vercel snapshot retention [28].
 
 ### P2 — later / enterprise
 21. **SSO (SAML/OIDC) + SCIM** — Enterprise tier. Competitors: Daytona [9], Modal [13], Northflank [35], Browserbase Scale [49], Sandscale Team [n4].
 22. **Browser module upgrade** — persistent browser profiles/contexts, session recording/replay, live view + human hand-off, captcha/proxy add-ons on the CDP feature. Competitors: Browserbase [48][49], Steel [50].
-23. **Agent governance extras** — DLP scanning of prompts/MCP tool calls and hash-chained, verifiable audit to differentiate Boxaz's existing policies/approvals. Competitor: Sandscale [n4]; Coder Agent Firewall [45].
+23. **Agent governance extras** — DLP scanning of prompts/MCP tool calls and hash-chained, verifiable audit to differentiate Boxmes's existing policies/approvals. Competitor: Sandscale [n4]; Coder Agent Firewall [45].
 24. **GPU / Windows / macOS box classes via providers** — route to Modal/Daytona/Northflank GPU or Daytona Windows/macOS when requirements ask. Competitors: Daytona [10], Modal [13], Northflank [35].
-25. **Public provider benchmarks & reliability board + startup credits program** — publish Boxaz's provider-health data weekly (marketing + trust), and a credits/promo-code program. Competitors: ComputeSDK weekly benchmarks [n6]; Daytona up to $50k startup credits [10], Fly up to $15k [22], Modal startup/academic credits [13].
+25. **Public provider benchmarks & reliability board + startup credits program** — publish Boxmes's provider-health data weekly (marketing + trust), and a credits/promo-code program. Competitors: ComputeSDK weekly benchmarks [n6]; Daytona up to $50k startup credits [10], Fly up to $15k [22], Modal startup/academic credits [13].
 
-(Also seen, lower value for Boxaz now: cron inside boxes — Upstash Box [n3], Blaxel cron jobs [32]; hosted MCP servers — Blaxel [32]; agent benchmark/eval harness — Runloop [42].)
+(Also seen, lower value for Boxmes now: cron inside boxes — Upstash Box [n3], Blaxel cron jobs [32]; hosted MCP servers — Blaxel [32]; agent benchmark/eval harness — Runloop [42].)
 
 ---
 
@@ -161,13 +161,13 @@ Priority for a **multi-tenant SaaS launch**: P0 = needed before taking money fro
 | Tensorlake (busy) | 0.2000 | |
 | Modal (full request) | 0.2380 | billed on max(request, usage) — idle cheaper |
 
-**Takeaway for Boxaz:** raw VPS + Incus is ~15× cheaper per hour than the per-second sandbox APIs for always-on or long boxes, but sandbox APIs win for short bursts and idle-heavy agents (active-CPU billing at Vercel/Fly Sprites/Blaxel/Modal). The placement engine should price **expected duty cycle**, not just list $/h — and the dashboard can show "you saved X vs E2B" as a marketing hook. Hetzner's 2026 hikes and stock-outs mean provider diversity (Contabo, Netcup, OVH, Vultr) is itself a feature.
+**Takeaway for Boxmes:** raw VPS + Incus is ~15× cheaper per hour than the per-second sandbox APIs for always-on or long boxes, but sandbox APIs win for short bursts and idle-heavy agents (active-CPU billing at Vercel/Fly Sprites/Blaxel/Modal). The placement engine should price **expected duty cycle**, not just list $/h — and the dashboard can show "you saved X vs E2B" as a marketing hook. Hetzner's 2026 hikes and stock-outs mean provider diversity (Contabo, Netcup, OVH, Vultr) is itself a feature.
 
 ### 3c. Free-tier patterns seen
 - **One-time signup credit, no card**: E2B $100, Daytona $200, Blaxel ≤$200, Steel $30 (90-day expiry), Runloop had $50.
 - **Recurring monthly allowance**: Modal $30/mo (card required), Fly $5/mo (card required), Vercel Hobby quotas, Northflank $20/mo, Upstash 5 CPU-h, Freestyle 200 vCPU-h, CodeSandbox 40 VM-h.
 - **Gates that grow with payment**: concurrency/session length by plan (E2B, Vercel) or by cumulative top-up (Daytona tiers, Blaxel tiers); feature unlock after paid deposit (Steel $10).
-- Suggested Boxaz launch shape (judgment call): one-time ~$10–25 credit with **no card but restricted** (small boxes, 1 h max, egress allowlist only, no public URLs), full features after card/first top-up; tiers by cumulative top-up like Daytona/Blaxel.
+- Suggested Boxmes launch shape (judgment call): one-time ~$10–25 credit with **no card but restricted** (small boxes, 1 h max, egress allowlist only, no public URLs), full features after card/first top-up; tiers by cumulative top-up like Daytona/Blaxel.
 
 ---
 
@@ -189,14 +189,14 @@ Priority for a **multi-tenant SaaS launch**: P0 = needed before taking money fro
 | OpenMeter | Kong (Konnect Metering & Billing); OSS Apache-2.0 | 0.4% + $20/M events | metering only OSS |
 | Stigg | independent | free to 5M events/mo | entitlements & real-time credit budgets |
 
-**Merchant-of-record options (relevant because Boxaz's owner is in Vietnam):**
+**Merchant-of-record options (relevant because Boxmes's owner is in Vietnam):**
 - **Stripe does not accept Vietnam-registered businesses** (not on stripe.com/global; workaround = US entity via Stripe Atlas). https://stripe.com/global · https://cdn.finfan.io/en/blogs/how-vietnamese-saas-businesses-receive-foreign-currency-cmw3e8gts001n13uwupr8pci1 · https://getpaidatlas.com/guides/get-paid-from-vietnam
-- **Polar** (MoR, open source) — pays out to Vietnam via Stripe Connect Express; has **event ingestion, meters, metered prices, prepaid credits, customer usage portal, cost insights** — i.e. a near drop-in for Boxaz's usage model. Fees: 5% + 50¢ (or $20/mo + 3.8% + 40¢), +1.5% non-US cards. https://polar.sh/docs/merchant-of-record/supported-countries · https://polar.sh/docs/features/usage-based-billing/introduction · https://polar.sh/docs/features/usage-based-billing/credits · https://migratefromlemonsqueezy.com/lemon-squeezy-alternative-vietnam
+- **Polar** (MoR, open source) — pays out to Vietnam via Stripe Connect Express; has **event ingestion, meters, metered prices, prepaid credits, customer usage portal, cost insights** — i.e. a near drop-in for Boxmes's usage model. Fees: 5% + 50¢ (or $20/mo + 3.8% + 40¢), +1.5% non-US cards. https://polar.sh/docs/merchant-of-record/supported-countries · https://polar.sh/docs/features/usage-based-billing/introduction · https://polar.sh/docs/features/usage-based-billing/credits · https://migratefromlemonsqueezy.com/lemon-squeezy-alternative-vietnam
 - **Paddle** — accepts Vietnam sellers (not on blocklist), 5% + 50¢; usage-based billing is **early-access beta** (usage-events/meters API). https://developer.paddle.com/api-reference/usage-events/ · https://getpaidatlas.com/guides/get-paid-from-vietnam
 - Dodo Payments, Creem also accept Vietnam sellers; **avoid Lemon Squeezy** (closing). https://okaytoship.com/learn/payment-providers-by-seller-country
 
-**Recommendation for Boxaz (judgment, not a sourced fact):**
-1. Keep the **source of truth in-house**: Boxaz's cost ledger already records per-box cost; add an immutable `usage_events` table (workspace, agent, box, provider, metric, qty, unit_cost, sell_price, idempotency key) and a per-workspace **credit balance ledger** (grants, top-ups, debits, expiries). Enforce quotas/hard-stop from this ledger in real time — no external engine does that fast enough for box kill decisions.
+**Recommendation for Boxmes (judgment, not a sourced fact):**
+1. Keep the **source of truth in-house**: Boxmes's cost ledger already records per-box cost; add an immutable `usage_events` table (workspace, agent, box, provider, metric, qty, unit_cost, sell_price, idempotency key) and a per-workspace **credit balance ledger** (grants, top-ups, debits, expiries). Enforce quotas/hard-stop from this ledger in real time — no external engine does that fast enough for box kill decisions.
 2. Use a **MoR for collection & tax**: Polar first (Vietnam payouts + native meters/credits + open source), Paddle as fallback; or form a US/SG entity later and move to Stripe Billing credits + Meters (and Metronome if contracts get complex).
 3. Sell **credit packs + auto top-up** (Daytona/Steel pattern) rather than post-paid invoicing at launch — limits fraud exposure on raw VPS spend you prepay to Hetzner/Contabo.
 4. Price = provider cost × margin with a floor per box-hour, shown transparently next to "same box on E2B/Daytona" for the marketing angle.

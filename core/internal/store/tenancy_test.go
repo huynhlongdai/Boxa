@@ -14,7 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 
-	"boxaz/core/internal/model"
+	"boxmes/core/internal/model"
 )
 
 func openSQLite(t *testing.T) *SQL {

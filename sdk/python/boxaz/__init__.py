@@ -1,16 +1,16 @@
-"""Boxaz Python SDK — cheap disposable Linux boxes for AI agents.
+"""Deprecated compatibility shim: the SDK was renamed ``boxaz`` → ``boxmes``.
 
-    from boxaz import Boxaz, as_openai_tools, handle_tool_call
-    bx = Boxaz()  # BOXAZ_URL, BOXAZ_API_KEY, BOXAZ_LANG
+``import boxaz`` keeps working (with a DeprecationWarning) and exposes the old
+class names as aliases of the new ones. New code: ``from boxmes import Boxmes``.
 """
 
-from ._client import AsyncBoxaz, Boxaz, BoxazError
-from .tools import ahandle_tool_call, as_anthropic_tools, as_gemini_tools, as_openai_tools, handle_tool_call
-from . import types
+import warnings as _warnings
 
-__version__ = "1.1.0"
+from boxmes import *  # noqa: F401,F403
+from boxmes import AsyncBoxmes, Boxmes, BoxmesError, __version__, types  # noqa: F401
 
-__all__ = [
-    "Boxaz", "AsyncBoxaz", "BoxazError", "as_openai_tools", "as_anthropic_tools", "as_gemini_tools",
-    "handle_tool_call", "ahandle_tool_call", "types", "__version__",
-]
+_warnings.warn("the 'boxaz' package is deprecated; use 'boxmes' (Boxaz → Boxmes)", DeprecationWarning, stacklevel=2)
+
+Boxaz = Boxmes
+AsyncBoxaz = AsyncBoxmes
+BoxazError = BoxmesError

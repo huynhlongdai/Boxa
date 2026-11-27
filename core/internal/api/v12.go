@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"boxaz/core/internal/manager"
+	"boxmes/core/internal/manager"
 )
 
 func (s *Server) getStorage(w http.ResponseWriter, r *http.Request) {

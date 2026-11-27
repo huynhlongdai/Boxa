@@ -27,7 +27,7 @@ import (
 // one YAML file of HTTP templates — create/get/delete/exec (+ optional
 // pause/resume/stop/start/fork/files/preview) — with auth, JSON paths,
 // capability and price metadata. Built-ins are embedded; more can be dropped
-// into BOXAZ_SANDBOX_ADAPTERS_DIR without rebuilding core.
+// into BOXMES_SANDBOX_ADAPTERS_DIR without rebuilding core.
 //
 // Templates: {{cred.token}} {{id}} {{vars.x}} {{spec.cpu}} {{spec.ram_mb}}
 // {{spec.ram_gb}} {{spec.disk_gb}} {{spec.template}} {{spec.region}}
@@ -146,7 +146,7 @@ func NewYAMLDriver(s YSpec, c *http.Client, base string) *YAMLDriver {
 	return &YAMLDriver{S: s, h: newHTTP(c), base: base, vars: map[string]map[string]string{}}
 }
 
-// BuiltinYAML loads the embedded adapters plus BOXAZ_SANDBOX_ADAPTERS_DIR.
+// BuiltinYAML loads the embedded adapters plus BOXMES_SANDBOX_ADAPTERS_DIR.
 func BuiltinYAML(c *http.Client) ([]*YAMLDriver, error) {
 	var out []*YAMLDriver
 	var errs []string
@@ -160,7 +160,7 @@ func BuiltinYAML(c *http.Client) ([]*YAMLDriver, error) {
 		}
 		out = append(out, NewYAMLDriver(*s, c, ""))
 	}
-	if dir := os.Getenv("BOXAZ_SANDBOX_ADAPTERS_DIR"); dir != "" {
+	if dir := os.Getenv("BOXMES_SANDBOX_ADAPTERS_DIR"); dir != "" {
 		files, _ := filepath.Glob(filepath.Join(dir, "*.yaml"))
 		for _, f := range files {
 			b, err := os.ReadFile(f)

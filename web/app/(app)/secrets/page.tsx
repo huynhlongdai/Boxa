@@ -12,9 +12,9 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { ConfirmButton } from "@/components/boxaz/confirm";
-import { Empty, ErrorBox, LoadingRows, PageHeader } from "@/components/boxaz/page";
-import { Mono } from "@/components/boxaz/status";
+import { ConfirmButton } from "@/components/boxmes/confirm";
+import { Empty, ErrorBox, LoadingRows, PageHeader } from "@/components/boxmes/page";
+import { Mono } from "@/components/boxmes/status";
 
 function AddSecret({ agents }: { agents: Agent[] }) {
   const [open, setOpen] = React.useState(false);

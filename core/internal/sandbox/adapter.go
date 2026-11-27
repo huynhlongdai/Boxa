@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/provider"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/provider"
 )
 
 // Provider is a provider.Provider backed by a sandbox Driver.
@@ -117,7 +117,7 @@ func (a *adapter) Create(ctx context.Context, token string, req provider.CreateR
 	}
 	if info.DialOnly {
 		if req.Bootstrap == "" {
-			return provider.Handle{}, model.EH(model.ErrInvalid, "This provider has no exec API: boxes run only in dial mode (set BOXAZ_PUBLIC_URL).", "%s is dial-only and got no bootstrap", a.info.Name)
+			return provider.Handle{}, model.EH(model.ErrInvalid, "This provider has no exec API: boxes run only in dial mode (set BOXMES_PUBLIC_URL).", "%s is dial-only and got no bootstrap", a.info.Name)
 		}
 		spec.Boot = req.Bootstrap
 	}
@@ -143,7 +143,7 @@ func (a *adapter) Create(ctx context.Context, token string, req provider.CreateR
 	if req.Bootstrap != "" && !info.DialOnly {
 		res, err := a.d.Exec(ctx, c, sb.ID, ExecRequest{Command: req.Bootstrap, TimeoutS: 180})
 		if err == nil && res.ExitCode != 0 {
-			err = model.EH(model.ErrProviderFailed, "The sandbox could not download or start boxd; check BOXAZ_PUBLIC_URL / BOXAZ_BOXD_URL are reachable from the internet.", "%s bootstrap exit %d: %s", a.info.Name, res.ExitCode, trim(res.Stderr+res.Stdout, 300))
+			err = model.EH(model.ErrProviderFailed, "The sandbox could not download or start boxd; check BOXMES_PUBLIC_URL / BOXMES_BOXD_URL are reachable from the internet.", "%s bootstrap exit %d: %s", a.info.Name, res.ExitCode, trim(res.Stderr+res.Stdout, 300))
 		}
 		if err != nil {
 			cleanup()

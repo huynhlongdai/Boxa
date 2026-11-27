@@ -10,15 +10,15 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MoneyBudget, BudgetBar } from "@/components/boxaz/budget";
-import { ErrorBox, PageHeader } from "@/components/boxaz/page";
+import { MoneyBudget, BudgetBar } from "@/components/boxmes/budget";
+import { ErrorBox, PageHeader } from "@/components/boxmes/page";
 import { cn } from "@/lib/utils";
 import { LocaleGrid } from "@/components/locale-switcher";
 import { LOCALES, LOCALE_NATIVE } from "@/i18n/config";
-import { NotifySettingsCard } from "@/components/boxaz/notify-settings";
-import { StorageSettingsCard } from "@/components/boxaz/storage-settings";
-import { GatewaySettingsCard } from "@/components/boxaz/gateway-settings";
-import { SshKeysCard } from "@/components/boxaz/access";
+import { NotifySettingsCard } from "@/components/boxmes/notify-settings";
+import { StorageSettingsCard } from "@/components/boxmes/storage-settings";
+import { GatewaySettingsCard } from "@/components/boxmes/gateway-settings";
+import { SshKeysCard } from "@/components/boxmes/access";
 
 function Form({ initial }: { initial: Settings }) {
   const [s, setS] = React.useState<Settings>(initial);

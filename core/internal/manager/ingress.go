@@ -8,9 +8,9 @@ import (
 	"net/url"
 	"strings"
 
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/proto"
-	"boxaz/core/internal/store"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/proto"
+	"boxmes/core/internal/store"
 )
 
 // Ingress (spec M9 / v0.3 §4): Caddy terminates TLS for <slug>-<ip>.sslip.io

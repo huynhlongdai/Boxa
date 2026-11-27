@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"boxaz/core/internal/model"
+	"boxmes/core/internal/model"
 )
 
 // Option kinds.

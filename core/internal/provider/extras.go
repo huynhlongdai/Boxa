@@ -12,7 +12,7 @@ import (
 	"regexp"
 	"strings"
 
-	"boxaz/core/internal/model"
+	"boxmes/core/internal/model"
 )
 
 // Region is a provider location.
@@ -37,12 +37,12 @@ type Regioner interface {
 	Regions(ctx context.Context, token string) ([]Region, error)
 }
 
-// Lister lists the servers Boxaz created at the provider.
+// Lister lists the servers Boxmes created at the provider.
 type Lister interface {
 	List(ctx context.Context, token string) ([]Server, error)
 }
 
-// EnvTokens maps provider id → env variables read by boxaz-core at startup.
+// EnvTokens maps provider id → env variables read by boxmes-core at startup.
 // Multi-part credentials (Contabo) are joined into the provider's token format.
 var EnvTokens = map[string][]string{
 	"hetzner":      {"HETZNER_TOKEN"},

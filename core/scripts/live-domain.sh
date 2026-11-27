@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Live v1.8 test: the Boxaz gateway on a real domain (host-based URLs
+# Live v1.8 test: the Boxmes gateway on a real domain (host-based URLs
 # https://<key>-<port>.<domain> (alias since v1.9; readable https://<name>.<domain>) behind a Cloudflare Tunnel, see
 # deploy/cloudflare-tunnel) and private provider previews.
 #
@@ -18,10 +18,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 : "${ENV_FILE:?set ENV_FILE (the gateway env file used by up.sh)}"
 set -a; . "$ENV_FILE"; set +a
-ADDR=${BOXAZ_ADDR:-:8080}
-export BOXAZ_URL=http://127.0.0.1:${ADDR##*:}
-ADMIN=$BOXAZ_ADMIN_KEY
-DOMAIN=$BOXAZ_GATEWAY_DOMAIN
+ADDR=${BOXMES_ADDR:-:8080}
+export BOXMES_URL=http://127.0.0.1:${ADDR##*:}
+ADMIN=$BOXMES_ADMIN_KEY
+DOMAIN=$BOXMES_GATEWAY_DOMAIN
 PROVIDERS=${PROVIDERS:-e2b prized novita}
 REPO=${DEPLOY_REPO:-https://github.com/heroku/node-js-sample}
 WORK=$(mktemp -d /tmp/sbx-domain.XXXXXX)
@@ -30,7 +30,7 @@ DOH=${DOH:-https://1.1.1.1/dns-query}
 pass() { printf '  PASS %s\n' "$*"; }
 note() { printf '  NOTE %s\n' "$*"; }
 fail() { printf '  FAIL %s\n' "$*"; exit 1; }
-api() { local m=$1 p=$2; shift 2; curl -sS -X "$m" "$BOXAZ_URL/v1$p" -H "Authorization: Bearer ${KEY:-$ADMIN}" -H 'Content-Type: application/json' "$@"; }
+api() { local m=$1 p=$2; shift 2; curl -sS -X "$m" "$BOXMES_URL/v1$p" -H "Authorization: Bearer ${KEY:-$ADMIN}" -H 'Content-Type: application/json' "$@"; }
 ms() { date +%s%3N; }
 declare -A T
 rec() { T[$PROV.$1]=$2; printf '    ⏱ %-22s %s\n' "$1" "$2"; }
@@ -66,7 +66,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-[ "$(code "$BOXAZ_PUBLIC_URL/v1/health")" = 200 ] && pass "core reachable from the internet at $BOXAZ_PUBLIC_URL (TLS verified)" || fail "core not reachable at $BOXAZ_PUBLIC_URL"
+[ "$(code "$BOXMES_PUBLIC_URL/v1/health")" = 200 ] && pass "core reachable from the internet at $BOXMES_PUBLIC_URL (TLS verified)" || fail "core not reachable at $BOXMES_PUBLIC_URL"
 api GET "/gateway?check=1" | jq -c '{mode,url_pattern,private_previews,check:.check.ok}' | sed 's/^/    gateway: /'
 for p in $PROVIDERS; do [ "$(plist $p)" = "[]" ] || fail "$p already has live sandboxes: $(plist $p)"; done
 SPEC=$(jq -n --arg r "$REPO" '{repo:$r, install:"npm install --omit=dev --no-audit --no-fund --loglevel=error", start:"node index.js", port:8000, ready:{http:"/"}, restart:"always", backoff_max_s:5}')

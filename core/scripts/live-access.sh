@@ -2,7 +2,7 @@
 # Live test v1.10 (box access P0) on the real domain behind the Cloudflare
 # Tunnel (deploy/cloudflare-tunnel/up.sh). Per provider (default: e2b prized),
 # one sandbox at a time:
-#   web terminal through wss://<name>.<domain>/.boxaz/terminal with a ticket →
+#   web terminal through wss://<name>.<domain>/.boxmes/terminal with a ticket →
 #   drop → reattach (ring-buffer replay) → `box forward` to python http.server
 #   :9000 → curl via localhost → OpenSSH `box ssh` (ProxyCommand box ssh-proxy
 #   %h through <name>.<domain>) running uname -a → ssh -L forward → down →
@@ -10,17 +10,17 @@
 #
 #   ENV_FILE=…/gateway.env [PROVIDERS="e2b prized"] scripts/live-access.sh
 #
-# The CLI talks to the public URL (BOXAZ_URL=$BOXAZ_PUBLIC_URL), so tickets
+# The CLI talks to the public URL (BOXMES_URL=$BOXMES_PUBLIC_URL), so tickets
 # and every socket go through Cloudflare. A watchdog deletes the provider's
 # managed sandboxes after WATCHDOG_S (280 s); the exit trap downs every box.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 : "${ENV_FILE:?set ENV_FILE (the gateway env file used by up.sh)}"
 set -a; . "$ENV_FILE"; set +a
-ADDR=${BOXAZ_ADDR:-:8080}
+ADDR=${BOXMES_ADDR:-:8080}
 LOCAL=http://127.0.0.1:${ADDR##*:}
-ADMIN=$BOXAZ_ADMIN_KEY
-DOMAIN=$BOXAZ_GATEWAY_DOMAIN
+ADMIN=$BOXMES_ADMIN_KEY
+DOMAIN=$BOXMES_GATEWAY_DOMAIN
 PROVIDERS=${PROVIDERS:-e2b prized}
 WORK=$(mktemp -d /tmp/sbx-access.XXXXXX); mkdir -p "$WORK/home"
 BIN=$(pwd)/bin
@@ -52,7 +52,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-[ "$(curl -s -o /dev/null -w '%{http_code}' "$BOXAZ_PUBLIC_URL/v1/health")" = 200 ] && pass "core reachable at $BOXAZ_PUBLIC_URL" || { echo "core not reachable"; exit 1; }
+[ "$(curl -s -o /dev/null -w '%{http_code}' "$BOXMES_PUBLIC_URL/v1/health")" = 200 ] && pass "core reachable at $BOXMES_PUBLIC_URL" || { echo "core not reachable"; exit 1; }
 for p in $PROVIDERS; do [ "$(plist $p)" = "[]" ] || { echo "$p already has live sandboxes: $(plist $p)"; exit 1; }; done
 which ssh >/dev/null && echo "    OpenSSH: $(ssh -V 2>&1)"
 
@@ -60,7 +60,7 @@ for PROV in $PROVIDERS; do
   echo "== $PROV"
   AGENT=$(api POST /agents -d "$(jq -nc --arg n "access-$PROV-$(date +%s)" --arg p "$PROV" '{name:$n,kind:"claude-code",budget_day_usd:1,policy:{providers:[$p]}}')" | jq -r .id)
   AKEY=$(api POST /keys -d "{\"agent_id\":\"$AGENT\",\"name\":\"access-live\"}" | jq -r .key)
-  export BOXAZ_URL=$BOXAZ_PUBLIC_URL BOXAZ_API_KEY=$AKEY
+  export BOXMES_URL=$BOXMES_PUBLIC_URL BOXMES_API_KEY=$AKEY
   ( sleep "${WATCHDOG_S:-280}"; echo "  WATCHDOG: deleting every managed $PROV sandbox"; pkillall $PROV ) & WATCHDOG=$!
   T0=$(ms)
   B=$(KEY=$AKEY api POST /boxes -d "{\"template\":\"base\",\"slug\":\"acc-$PROV\",\"lifecycle\":\"session\",\"requirements\":{\"isolation\":\"sandbox\",\"cpu\":1,\"ram_mb\":512,\"disk_gb\":5,\"duration_hours\":0.1}}")
@@ -74,7 +74,7 @@ for PROV in $PROVIDERS; do
   # 1. web terminal through the domain with a ticket
   TK=$("$BIN/box" ticket "$BOX" terminal --json)
   URL=$(echo "$TK" | jq -r .url)
-  [[ $URL == wss://$NAME.$DOMAIN/.boxaz/terminal* ]] && pass "ticket url on the box host: ${URL%%ticket=*}ticket=bxa_…" || note "ticket url $URL"
+  [[ $URL == wss://$NAME.$DOMAIN/.boxmes/terminal* ]] && pass "ticket url on the box host: ${URL%%ticket=*}ticket=bxa_…" || note "ticket url $URL"
   T0=$(ms)
   if $WSC "$URL&proto=2&cols=100&rows=30" --send 'echo T-$((6*7)); uname -a\n' --until T-42 --timeout 90 >"$WORK/t1.out" 2>"$WORK/t1.ctl"; then
     pass "terminal via ticket through wss://$NAME.$DOMAIN: first output in $(($(ms)-T0)) ms (includes starting the in-box agent)"
@@ -95,7 +95,7 @@ for PROV in $PROVIDERS; do
   C2=$(curl -s -o /dev/null -w '%{http_code} %{time_total}' --max-time 30 http://127.0.0.1:19000/)
   [ "$C" = 200 ] && pass "box forward $NAME 9000 → curl http://127.0.0.1:19000/ → 200 (first $((T1-T0)) ms, warm ${C2#* }s)" || note "forward: $C / $(cat "$WORK/fwd.log" | tail -3)"
   kill $FWD 2>/dev/null; wait $FWD 2>/dev/null
-  # 4. OpenSSH through ProxyCommand box ssh-proxy %h (wss://<name>.<domain>/.boxaz/ssh)
+  # 4. OpenSSH through ProxyCommand box ssh-proxy %h (wss://<name>.<domain>/.boxmes/ssh)
   T0=$(ms)
   O=$(HOME=$WORK/home "$BIN/box" ssh "$NAME" -o BatchMode=yes -- 'uname -a; echo ssh-ok-$((6*7))' </dev/null 2>&1)
   [[ $O == *ssh-ok-42* ]] && pass "ssh (OpenSSH, ProxyCommand through $NAME.$DOMAIN) uname -a in $(($(ms)-T0)) ms: $(echo "$O" | head -1 | cut -c1-90)" || note "ssh: $O"

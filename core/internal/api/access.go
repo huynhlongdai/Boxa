@@ -6,7 +6,7 @@ package api
 // key in the Authorization header — never an API key in the URL, never the
 // dashboard cookie — and check Origin against the allowlist. They are served
 // on core (/v1/boxes/{id}/{terminal,tcp,ssh}) and on every box host
-// (wss://<name>.<domain>/.boxaz/{terminal,tcp,ssh}).
+// (wss://<name>.<domain>/.boxmes/{terminal,tcp,ssh}).
 
 import (
 	"context"
@@ -21,9 +21,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 
-	"boxaz/core/internal/manager"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/wsconn"
+	"boxmes/core/internal/manager"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/wsconn"
 )
 
 // accessUpgrader: Origin is checked before the upgrade (OriginAllowed).
@@ -72,7 +72,7 @@ func (s *Server) issueSSHCert(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 201, c)
 }
 
-// accessHost serves /.boxaz/{terminal,tcp,ssh} on a box host.
+// accessHost serves /.boxmes/{terminal,tcp,ssh} on a box host.
 func (s *Server) accessHost(w http.ResponseWriter, r *http.Request, seg string) {
 	b, err := s.M.BoxForAccessHost(r.Context(), seg)
 	if err != nil {
@@ -83,14 +83,14 @@ func (s *Server) accessHost(w http.ResponseWriter, r *http.Request, seg string) 
 		return
 	}
 	switch strings.TrimSuffix(r.URL.Path, "/") {
-	case "/.boxaz/terminal":
+	case "/.boxmes/terminal":
 		s.accessTerminal(w, r, b)
-	case "/.boxaz/tcp":
+	case "/.boxmes/tcp":
 		s.accessTCP(w, r, b)
-	case "/.boxaz/ssh":
+	case "/.boxmes/ssh":
 		s.accessSSH(w, r, b)
 	default:
-		writeErr(w, r, model.EH(model.ErrNotFound, "Use /.boxaz/terminal, /.boxaz/tcp?port=N, /.boxaz/ssh, /.boxaz/cdp, /.boxaz/vnc or /.boxaz/desktop.", "no access endpoint %s", r.URL.Path))
+		writeErr(w, r, model.EH(model.ErrNotFound, "Use /.boxmes/terminal, /.boxmes/tcp?port=N, /.boxmes/ssh, /.boxmes/cdp, /.boxmes/vnc or /.boxmes/desktop.", "no access endpoint %s", r.URL.Path))
 	}
 }
 
@@ -102,11 +102,11 @@ type accessCaller struct {
 }
 
 // accessAuth authenticates an access WebSocket before the upgrade. hostBox is
-// the box of the host (/.boxaz/ paths), nil on core paths ({id}).
+// the box of the host (/.boxmes/ paths), nil on core paths ({id}).
 func (s *Server) accessAuth(w http.ResponseWriter, r *http.Request, hostBox *model.Box, purpose string, port int) (*accessCaller, bool) {
 	ctx := r.Context()
 	if !s.M.OriginAllowed(r, s.CORSOrigins) {
-		writeErr(w, r, model.EH(model.ErrPolicyDenied, "Open the terminal from the Boxaz dashboard, or add the origin to BOXAZ_ACCESS_ORIGINS.", "origin %s may not open box access sockets", r.Header.Get("Origin")))
+		writeErr(w, r, model.EH(model.ErrPolicyDenied, "Open the terminal from the Boxmes dashboard, or add the origin to BOXMES_ACCESS_ORIGINS.", "origin %s may not open box access sockets", r.Header.Get("Origin")))
 		return nil, false
 	}
 	tok := strings.TrimSpace(r.URL.Query().Get("ticket"))
@@ -155,7 +155,7 @@ func (s *Server) accessAuth(w http.ResponseWriter, r *http.Request, hostBox *mod
 		}
 		return &accessCaller{box: b, p: p}, true
 	}
-	w.Header().Set("WWW-Authenticate", `Bearer realm="boxaz"`)
+	w.Header().Set("WWW-Authenticate", `Bearer realm="boxmes"`)
 	msg := model.EH(model.ErrUnauthorized, "Get a single-use ticket (POST /v1/boxes/{id}/tickets) and pass ?ticket=, or send the API key in the Authorization header.", "this socket needs an access ticket or an Authorization header")
 	if r.URL.Query().Get("token") != "" {
 		msg = model.EH(model.ErrUnauthorized, "Get a single-use ticket (POST /v1/boxes/{id}/tickets) and pass ?ticket=, or send the API key in the Authorization header.", "API keys are not accepted in URLs")
@@ -380,7 +380,7 @@ func (s *Server) accessTerminal(w http.ResponseWriter, r *http.Request, hostBox 
 		case m := <-h.Viewer.Ctl:
 			sendJSON(m)
 			if m["type"] == "exit" && !v2 {
-				send(websocket.TextMessage, []byte("\r\n[boxaz] session ended\r\n"))
+				send(websocket.TextMessage, []byte("\r\n[boxmes] session ended\r\n"))
 			}
 		case <-h.Viewer.Done:
 		flush:
@@ -392,7 +392,7 @@ func (s *Server) accessTerminal(w http.ResponseWriter, r *http.Request, hostBox 
 				case m := <-h.Viewer.Ctl:
 					sendJSON(m)
 					if m["type"] == "exit" && !v2 {
-						send(websocket.TextMessage, []byte("\r\n[boxaz] session ended\r\n"))
+						send(websocket.TextMessage, []byte("\r\n[boxmes] session ended\r\n"))
 					}
 					continue
 				default:

@@ -1,7 +1,7 @@
 package manager
 
-// v1.7 Boxaz gateway: one stable URL per box+port (<public>/x/<key>-<port>/,
-// or <key>-<port>.<BOXAZ_GATEWAY_DOMAIN>) for every provider. The HTTP side
+// v1.7 Boxmes gateway: one stable URL per box+port (<public>/x/<key>-<port>/,
+// or <key>-<port>.<BOXMES_GATEWAY_DOMAIN>) for every provider. The HTTP side
 // lives in internal/api/gateway.go; this file resolves where a request goes
 // and wakes sleeping boxes:
 //
@@ -24,8 +24,8 @@ import (
 	"sync"
 	"time"
 
-	"boxaz/core/internal/hostlink"
-	"boxaz/core/internal/model"
+	"boxmes/core/internal/hostlink"
+	"boxmes/core/internal/model"
 )
 
 type gatewayState struct {
@@ -71,7 +71,7 @@ type WakePolicy struct {
 	WakeOnProbes bool
 }
 
-// WakePolicy reads settings (zero = defaults) and BOXAZ_WAKE_HOLD.
+// WakePolicy reads settings (zero = defaults) and BOXMES_WAKE_HOLD.
 func (m *Manager) WakePolicy(ctx context.Context) WakePolicy {
 	w := m.Settings(ctx).Wake
 	p := WakePolicy{Hold: 10 * time.Second, RetryAfterS: 5, WakeOnProbes: w.WakeOnProbes}
@@ -87,10 +87,10 @@ func (m *Manager) WakePolicy(ctx context.Context) WakePolicy {
 	return p
 }
 
-// GatewayURL is the stable Boxaz URL of a box port (v1.9 readable form):
+// GatewayURL is the stable Boxmes URL of a box port (v1.9 readable form):
 // https://<name>.<domain>/ for the primary port, https://<name>-<label>.<domain>/
 // for the others; <public>/x/<name>[-<label>]/ without a gateway domain, or
-// the core-relative /x/… path without BOXAZ_PUBLIC_URL. A box that has no
+// the core-relative /x/… path without BOXMES_PUBLIC_URL. A box that has no
 // name yet falls back to the <key>-<port> alias.
 func (m *Manager) GatewayURL(b *model.Box, port int) string {
 	if hl := hostLabel(b, port); hl != "" {
@@ -221,7 +221,7 @@ func (m *Manager) GatewayUpstream(ctx context.Context, b *model.Box, port int) (
 		if virtual {
 			// T3 without previews: (re)start the in-box ingress agent
 			if ok, why := CoreLooksPublic(m.Cfg.PublicURL); !ok && !(m.Cfg.AssumePublicURL && m.Cfg.PublicURL != "") {
-				return nil, model.EH(model.ErrProviderFailed, "Set BOXAZ_PUBLIC_URL to an internet-reachable URL of core so the sandbox can dial in, or use a provider with preview URLs.", "the gateway cannot reach this sandbox: %s", why)
+				return nil, model.EH(model.ErrProviderFailed, "Set BOXMES_PUBLIC_URL to an internet-reachable URL of core so the sandbox can dial in, or use a provider with preview URLs.", "the gateway cannot reach this sandbox: %s", why)
 			}
 			l := m.exposeLock(b.ID)
 			if l.TryLock() {
@@ -249,7 +249,7 @@ var probePaths = map[string]bool{"/healthz": true, "/health": true, "/_health": 
 // IsProbe reports whether a request looks like a bot / HEAD / health probe,
 // which by default does not wake a sleeping box.
 func IsProbe(r *http.Request, path string) bool {
-	if r.Method == http.MethodHead || r.Method == http.MethodOptions || r.Header.Get("X-Boxaz-No-Wake") != "" {
+	if r.Method == http.MethodHead || r.Method == http.MethodOptions || r.Header.Get("X-Boxmes-No-Wake") != "" || r.Header.Get("X-Boxaz-No-Wake") != "" {
 		return true
 	}
 	if probePaths[path] {

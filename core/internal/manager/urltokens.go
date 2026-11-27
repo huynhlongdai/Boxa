@@ -1,6 +1,6 @@
 package manager
 
-// v1.7 scoped URL tokens: issued by Boxaz for one port of one box, with an
+// v1.7 scoped URL tokens: issued by Boxmes for one port of one box, with an
 // expiry, revocable, checked by the gateway on every request. Provider-wide
 // tokens (sandbox traffic tokens etc.) are never handed out; the gateway is
 // the only thing that talks to the provider.
@@ -14,11 +14,11 @@ import (
 	"strings"
 	"time"
 
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/secret"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/secret"
 )
 
-// URLTokenPrefix marks Boxaz URL tokens (lets the gateway tell them apart
+// URLTokenPrefix marks Boxmes URL tokens (lets the gateway tell them apart
 // from an app's own Authorization header or ?token= parameter).
 const URLTokenPrefix = "bxt_"
 

@@ -1,7 +1,7 @@
 package manager
 
 // v1.10 durable web terminal: a session id per PTY, the PTY kept alive for
-// BOXAZ_TERMINAL_DETACH_TTL after the last WebSocket drops, an output ring
+// BOXMES_TERMINAL_DETACH_TTL after the last WebSocket drops, an output ring
 // buffer replayed on (re)attach, several viewers with one controller, and
 // list / kill. Sessions live in core (the PTY runs in the box through
 // proc.open, or the legacy pty.open of older boxd), so they survive a
@@ -16,10 +16,10 @@ import (
 	"sync"
 	"time"
 
-	"boxaz/core/internal/hostlink"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/proto"
-	"boxaz/core/internal/secret"
+	"boxmes/core/internal/hostlink"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/proto"
+	"boxmes/core/internal/secret"
 )
 
 const (

@@ -10,13 +10,13 @@ import (
 	"sync"
 	"time"
 
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/secret"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/secret"
 )
 
 // Contabo API v1 adapter (https://api.contabo.com). Auth is OAuth2 password
 // grant: client id/secret + API user/password (Customer Control Panel → API).
-// The Boxaz token is JSON {"client_id","client_secret","api_user","api_password"}
+// The Boxmes token is JSON {"client_id","client_secret","api_user","api_password"}
 // or the four values joined by ":" (env CONTABO_CLIENT_ID, CONTABO_CLIENT_SECRET,
 // CONTABO_API_USER, CONTABO_API_PASSWORD).
 //

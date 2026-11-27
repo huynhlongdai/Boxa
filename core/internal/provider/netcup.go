@@ -9,17 +9,17 @@ import (
 	"sync"
 	"time"
 
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/secret"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/secret"
 )
 
 // netcup adapter for the SCP REST API (https://www.servercontrolpanel.de/scp-core/api/v1,
-// OpenID Connect, client "scp"). The Boxaz token is an SCP refresh token
+// OpenID Connect, client "scp"). The Boxmes token is an SCP refresh token
 // (env NETCUP_REFRESH_TOKEN), exchanged for short-lived access tokens.
 //
 // netcup cannot order servers over the API (orders go through the CCP and
 // bill monthly). Create therefore CLAIMS a pre-ordered spare server — one
-// whose nickname starts with "mgr-spare" (legacy "boxa-spare" is still claimed) — reinstalls Ubuntu with the Boxaz
+// whose nickname starts with "mgr-spare" (legacy "boxa-spare" is still claimed) — reinstalls Ubuntu with the Boxmes
 // cloud-init and renames it; Destroy powers it off and returns it to the
 // spare pool (cancel the contract in the CCP to stop paying).
 // Prices come from a static catalog (confidence "unverified").
@@ -214,12 +214,12 @@ func (n *Netcup) imageFlavour(ctx context.Context, token, ref string) (int64, er
 	return 0, model.E(model.ErrProviderFailed, "netcup image %q not offered for server %s", n.ImageName, ref)
 }
 
-// legacySparePrefix: spare servers nicknamed before the Boxaz rename (provider-visible,
+// legacySparePrefix: spare servers nicknamed before the Boxmes rename (provider-visible,
 // so new nicknames use the neutral "mgr-spare").
 const legacySparePrefix = "boxa-spare"
 
 // Create claims a spare server (nickname prefix mgr-spare or legacy boxa-spare, SKU match when the
-// template name is known) and reinstalls it with the Boxaz cloud-init.
+// template name is known) and reinstalls it with the Boxmes cloud-init.
 func (n *Netcup) Create(ctx context.Context, token string, req CreateRequest) (Handle, error) {
 	ss, err := n.servers(ctx, token)
 	if err != nil {
@@ -238,7 +238,7 @@ func (n *Netcup) Create(ctx context.Context, token string, req CreateRequest) (H
 		break
 	}
 	if pick == nil {
-		return Handle{}, model.EH(model.ErrNoCapacity, "Order the server in the netcup CCP and set its nickname to mgr-spare-1; Boxaz claims spare servers.", "no spare netcup server (nickname %s*) matches %s", n.SparePrefix, req.SKU)
+		return Handle{}, model.EH(model.ErrNoCapacity, "Order the server in the netcup CCP and set its nickname to mgr-spare-1; Boxmes claims spare servers.", "no spare netcup server (nickname %s*) matches %s", n.SparePrefix, req.SKU)
 	}
 	ref := strconv.FormatInt(pick.ID, 10)
 	flavour, err := n.imageFlavour(ctx, token, ref)

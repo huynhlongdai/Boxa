@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ErrorBox } from "@/components/boxaz/page";
+import { ErrorBox } from "@/components/boxmes/page";
 
 const TIMEZONES = ["Asia/Ho_Chi_Minh", "Asia/Singapore", "Asia/Shanghai", "Asia/Tokyo", "Europe/Berlin", "America/New_York", "UTC"];
 
@@ -84,7 +84,7 @@ function NotifyForm({ initial }: { initial: NotifyView }) {
           <Field label={t("smtpPass")} hint={initial.has_smtp_password ? t("secretStored") : undefined}>
             <Input type="password" autoComplete="new-password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder={initial.has_smtp_password ? "••••••••" : ""} />
           </Field>
-          <Field label={t("smtpFrom")} className="md:col-span-2"><Input value={smtp.from} onChange={(e) => setSmtp({ from: e.target.value })} placeholder="Boxaz <boxaz@example.com>" /></Field>
+          <Field label={t("smtpFrom")} className="md:col-span-2"><Input value={smtp.from} onChange={(e) => setSmtp({ from: e.target.value })} placeholder="Boxmes <boxmes@example.com>" /></Field>
         </section>
 
         <section className="grid gap-4 md:grid-cols-2">

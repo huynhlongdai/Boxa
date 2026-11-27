@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"boxaz/core/internal/model"
+	"boxmes/core/internal/model"
 )
 
 func TestResolveProfilesAndKinds(t *testing.T) {

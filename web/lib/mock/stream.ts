@@ -15,7 +15,7 @@ export function mockStream(signal: AbortSignal): ReadableStream<Uint8Array> {
           /* stream đã đóng */
         }
       };
-      controller.enqueue(enc.encode(`retry: 3000\n: boxaz mock stream\n\n`));
+      controller.enqueue(enc.encode(`retry: 3000\n: boxmes mock stream\n\n`));
       send("overview.updated", overview(store()));
       timer = setInterval(() => {
         const s = store();

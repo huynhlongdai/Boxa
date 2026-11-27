@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Live public-URL fallback test on Prized (no provider preview host), through
-# boxaz-core as an agent would use it:
+# boxmes-core as an agent would use it:
 #   box up (T3 shim, port 8000) → clone heroku/node-js-sample, npm install,
 #   start on :8000 → GET /ports → curl the public URL from outside (200 +
 #   "Hello World!") → sleep → wake → restart the app if the process died →
 #   re-check the URL → down → Prized lists no managed sandbox.
 #   PRIZED_API_KEY=… scripts/live-publicurl.sh                 (MODE=tunnel)
 #   MODE=ingress PRIZED_API_KEY=… scripts/live-publicurl.sh
-# tunnel:  BOXAZ_PUBLIC_URL unset → ingress skipped → in-box cloudflared quick tunnel.
+# tunnel:  BOXMES_PUBLIC_URL unset → ingress skipped → in-box cloudflared quick tunnel.
 # ingress: core itself is exposed through a local cloudflared quick tunnel and
-#          that URL becomes BOXAZ_PUBLIC_URL → in-box `boxd ingress` agent dials
+#          that URL becomes BOXMES_PUBLIC_URL → in-box `boxd ingress` agent dials
 #          core → URL <public>/x/<key>-<port>/. Needs cloudflared on PATH (or
 #          CLOUDFLARED=…) and linux boxd binaries for the sandbox (built here).
 # Budget: one sandbox, watchdog deletes every managed sandbox after WATCHDOG_S (280 s).
@@ -25,13 +25,13 @@ REPO=${DEPLOY_REPO:-https://github.com/heroku/node-js-sample}
 RESULTS=${RESULTS:-$WORK/results.json}
 PAPI=https://api.prized.dev/api/v1
 CLOUDFLARED=${CLOUDFLARED:-cloudflared}
-export BOXAZ_URL=http://127.0.0.1:$PORT
+export BOXMES_URL=http://127.0.0.1:$PORT
 : "${PRIZED_API_KEY:?set PRIZED_API_KEY}"
 
 pass() { printf '  PASS %s\n' "$*"; }
 note() { printf '  NOTE %s\n' "$*"; }
 fail() { printf '  FAIL %s\n' "$*"; echo "--- core.log"; tail -40 "$WORK/core.log"; exit 1; }
-api() { local m=$1 p=$2; shift 2; curl -sS -X "$m" "$BOXAZ_URL/v1$p" -H "Authorization: Bearer ${KEY:-$ADMIN}" -H 'Content-Type: application/json' "$@"; }
+api() { local m=$1 p=$2; shift 2; curl -sS -X "$m" "$BOXMES_URL/v1$p" -H "Authorization: Bearer ${KEY:-$ADMIN}" -H 'Content-Type: application/json' "$@"; }
 papi() { curl -sS -H "Authorization: Bearer $PRIZED_API_KEY" "$@"; }
 live() { papi "$PAPI/sandboxes" | jq -c '[.sandboxes[]|select(.state!="deleting" and .state!="deleted")]'; }
 ms() { date +%s%3N; }
@@ -64,19 +64,19 @@ if [ "$MODE" = ingress ]; then
   "$CLOUDFLARED" tunnel --no-autoupdate --url "http://127.0.0.1:$PORT" >"$WORK/cf.log" 2>&1 & CF_PID=$!
   for i in $(seq 60); do PUB=$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' "$WORK/cf.log" | head -1 || true); [ -n "$PUB" ] && break; sleep 0.5; done
   [ -n "$PUB" ] || fail "local cloudflared gave no URL: $(tail -5 "$WORK/cf.log")"
-  rec core_tunnel $(($(ms)-T0)); echo "    BOXAZ_PUBLIC_URL=$PUB"
+  rec core_tunnel $(($(ms)-T0)); echo "    BOXMES_PUBLIC_URL=$PUB"
 fi
 
-env -u E2B_API_KEY -u NOVITA_API_KEY BOXAZ_DATA_DIR=$WORK/data BOXAZ_ADMIN_KEY=$ADMIN BOXAZ_ADDR=127.0.0.1:$PORT \
-BOXAZ_AUTO_SANDBOX=1 BOXAZ_PRICE_FEED=off BOXAZ_CLIENT_LOCATION=VN BOXAZ_PUBLIC_URL=$PUB BOXAZ_DIST_DIR=$WORK/dist \
-  "$BIN/boxaz-core" >"$WORK/core.log" 2>&1 & CORE_PID=$!
-for i in $(seq 50); do curl -sf "$BOXAZ_URL/v1/health" >/dev/null && break; sleep 0.1; done
-curl -sf "$BOXAZ_URL/v1/health" >/dev/null || fail "core did not start"
+env -u E2B_API_KEY -u NOVITA_API_KEY BOXMES_DATA_DIR=$WORK/data BOXMES_ADMIN_KEY=$ADMIN BOXMES_ADDR=127.0.0.1:$PORT \
+BOXMES_AUTO_SANDBOX=1 BOXMES_PRICE_FEED=off BOXMES_CLIENT_LOCATION=VN BOXMES_PUBLIC_URL=$PUB BOXMES_DIST_DIR=$WORK/dist \
+  "$BIN/boxmes-core" >"$WORK/core.log" 2>&1 & CORE_PID=$!
+for i in $(seq 50); do curl -sf "$BOXMES_URL/v1/health" >/dev/null && break; sleep 0.1; done
+curl -sf "$BOXMES_URL/v1/health" >/dev/null || fail "core did not start"
 if [ -n "$PUB" ]; then for i in $(seq 40); do [ "$(get "$PUB/v1/health")" = 200 ] && break; sleep 1; done
   [ "$(get "$PUB/v1/health")" = 200 ] && pass "core reachable from the internet at $PUB" || fail "core not reachable via $PUB"; fi
 AGENT=$(api POST /agents -d '{"name":"purl","kind":"claude-code","budget_day_usd":1}' | jq -r .id)
-export BOXAZ_API_KEY=$(api POST /keys -d "{\"agent_id\":\"$AGENT\",\"name\":\"purl\"}" | jq -r .key)
-AKEY=$BOXAZ_API_KEY
+export BOXMES_API_KEY=$(api POST /keys -d "{\"agent_id\":\"$AGENT\",\"name\":\"purl\"}" | jq -r .key)
+AKEY=$BOXMES_API_KEY
 api PUT /providers/prized/token -d "{\"token\":\"$PRIZED_API_KEY\"}" | jq -e .connected >/dev/null && pass "prized connected" || fail connect
 api PUT /providers/prized/prefs -d '{"sandbox_mode":"shim"}' | jq -e '.sandbox_mode=="shim"' >/dev/null || fail prefs
 

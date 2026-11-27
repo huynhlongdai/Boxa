@@ -136,7 +136,7 @@
     "history": "Lịch sử box",
     "noBoxes": "Agent chưa tạo box nào",
     "connect": "Kết nối agent",
-    "connectDesc": "Đoạn cấu hình theo transport — dán vào agent cùng biến BOXAZ_API_KEY."
+    "connectDesc": "Đoạn cấu hình theo transport — dán vào agent cùng biến BOXMES_API_KEY."
   },
   "agents": {
     "title": "Agents",
@@ -159,8 +159,8 @@
     "missingKeyHint": "Dán API key admin (bx_live_…).",
     "invalidKey": "API key không hợp lệ hoặc không có quyền admin",
     "invalidKeyHint": "Tạo key scope admin bằng `box keys create --admin`.",
-    "coreUnreachable": "Không kết nối được Boxaz Core",
-    "coreUnreachableHint": "Kiểm tra BOXAZ_API ({url}) hoặc bật BOXAZ_MOCK=1.",
+    "coreUnreachable": "Không kết nối được Boxmes Core",
+    "coreUnreachableHint": "Kiểm tra BOXMES_API ({url}) hoặc bật BOXMES_MOCK=1.",
     "tryNext": "Thử tiếp:"
   },
   "approvals": {
@@ -430,14 +430,14 @@
     "billingPool": "pool · tháng",
     "billingBurst": "burst · giờ",
     "pickAgentFirst": "Chọn agent để báo giá theo chính sách của agent.",
-    "descNeed": "Mô tả box cần gì, Boxaz xếp hạng các phương án theo giá, tốc độ và độ tin cậy.",
+    "descNeed": "Mô tả box cần gì, Boxmes xếp hạng các phương án theo giá, tốc độ và độ tin cậy.",
     "mode": "Cách tạo",
     "modeNeed": "Theo nhu cầu",
     "modeManual": "Tự chọn cấu hình"
   },
   "developers": {
     "title": "Cho agent",
-    "desc": "Mọi thứ một agent cần để tự kết nối Boxaz: tài liệu máy đọc được, schema tool, lệnh mẫu và bảng mã lỗi.",
+    "desc": "Mọi thứ một agent cần để tự kết nối Boxmes: tài liệu máy đọc được, schema tool, lệnh mẫu và bảng mã lỗi.",
     "baseUrl": "URL gốc của Core",
     "noAuth": "Không cần key",
     "needsKey": "Cần key",
@@ -453,9 +453,9 @@
       "mcp": "MCP server card",
       "mcpDesc": "/.well-known/mcp.json: transport (HTTP, stdio), xác thực, danh sách tool.",
       "a2a": "A2A agent card",
-      "a2aDesc": "/.well-known/agent.json: cho agent khác giao việc cho Boxaz qua /a2a.",
+      "a2aDesc": "/.well-known/agent.json: cho agent khác giao việc cho Boxmes qua /a2a.",
       "mcpEndpoint": "MCP endpoint",
-      "mcpEndpointDesc": "Streamable HTTP, header Authorization: Bearer $BOXAZ_API_KEY."
+      "mcpEndpointDesc": "Streamable HTTP, header Authorization: Bearer $BOXMES_API_KEY."
     },
     "preview": "Xem trước",
     "hidePreview": "Ẩn",
@@ -470,9 +470,9 @@
     "quickstart": "Bắt đầu nhanh (curl)",
     "quickstartDesc": "Báo giá → tạo box → chạy lệnh → đợi job → xem log → xoá. Thay BOX_ID, JOB_ID, LOG_ID bằng giá trị trả về.",
     "sdk": "SDK & CLI",
-    "sdkDesc": "Cài một lần, dùng biến BOXAZ_URL và BOXAZ_API_KEY.",
+    "sdkDesc": "Cài một lần, dùng biến BOXMES_URL và BOXMES_API_KEY.",
     "sdkNote": "Tên gói SDK là dự kiến — kiểm tra lại khi Core phát hành.",
-    "cliFromSource": "CLI box (từ mã nguồn boxaz/core)",
+    "cliFromSource": "CLI box (từ mã nguồn boxmes/core)",
     "errors": "Mã lỗi",
     "errorsDesc": "Agent đọc <mono>code</mono> (không bao giờ đổi) và làm theo <mono>hint</mono>; <mono>message</mono>/<mono>hint</mono> dịch theo Accept-Language; tôn trọng <mono>retry_after_s</mono> nếu có.",
     "colCode": "Code",
@@ -495,7 +495,7 @@
       "NOT_FOUND": "Không có box/job/log/… với ID đó.",
       "NOT_FOUNDHint": "Gọi box_list (hoặc list tương ứng) để lấy ID đúng.",
       "UNAUTHORIZED": "Thiếu key hoặc key đã bị thu hồi.",
-      "UNAUTHORIZEDHint": "Kiểm tra biến BOXAZ_API_KEY; đừng thử lại liên tục.",
+      "UNAUTHORIZEDHint": "Kiểm tra biến BOXMES_API_KEY; đừng thử lại liên tục.",
       "INVALID": "Tham số hoặc box.yaml sai.",
       "INVALIDHint": "Sửa theo message (thường nêu trường/dòng lỗi) rồi gửi lại.",
       "RATE_LIMITED": "Gọi quá nhanh.",
@@ -504,7 +504,7 @@
       "INTERNALHint": "Thử lại một lần; nếu vẫn lỗi, dừng và báo người vận hành.",
       "NO_CAPACITYHint": "Giảm spec, đợi retry_after_s rồi thử lại, hoặc gọi box_quote xem phương án khác."
     },
-    "a2a": "A2A: giao việc cho Boxaz",
+    "a2a": "A2A: giao việc cho Boxmes",
     "a2aDesc": "Agent khác gửi JSON-RPC tới <mono>/a2a</mono>: text part là lệnh (kèm <mono>metadata.box_id</mono>), data part <mono>tool</mono> + <mono>arguments</mono> để gọi bất kỳ tool nào. Task id của lệnh chính là job id.",
     "a2aColMethod": "Method",
     "a2aColDoes": "Tác dụng",
@@ -587,7 +587,7 @@
     "chainPool": "Pool đang có",
     "tokenHint": {
       "contabo": "Dán client_id:client_secret:api_user:api_password (hoặc JSON 4 trường) từ trang API của Contabo.",
-      "netcup": "Dán refresh token SCP (client scp). Đặt nickname server dự phòng là boxaz-spare-1, Boxaz sẽ nhận và cài lại.",
+      "netcup": "Dán refresh token SCP (client scp). Đặt nickname server dự phòng là boxmes-spare-1, Boxmes sẽ nhận và cài lại.",
       "digitalocean": "Personal access token có quyền đọc và ghi.",
       "hetzner": "API token Read & Write của project Hetzner Cloud.",
       "vultr": "API key có quyền manage_servers."
@@ -645,12 +645,12 @@
   "locale": {
     "label": "Ngôn ngữ",
     "dashboard": "Ngôn ngữ giao diện",
-    "dashboardHint": "Lưu trong cookie boxaz_locale của trình duyệt này. Lỗi từ Core cũng trả về theo ngôn ngữ này.",
+    "dashboardHint": "Lưu trong cookie boxmes_locale của trình duyệt này. Lỗi từ Core cũng trả về theo ngôn ngữ này.",
     "notify": "Ngôn ngữ thông báo & lỗi API mặc định",
     "notifyHint": "Dùng cho Telegram, email và agent không gửi Accept-Language."
   },
   "login": {
-    "title": "Đăng nhập Boxaz",
+    "title": "Đăng nhập Boxmes",
     "subtitle": "Dùng API key có scope admin",
     "keyLabel": "API key admin",
     "keyHint": "Tạo bằng <mono>box keys create --admin</mono>. Key được lưu trong cookie httpOnly, không nằm trong JavaScript.",
@@ -726,7 +726,7 @@
     "toOverview": "Về Tổng quan",
     "viewAgent": "Xem agent",
     "waiting": "Đợi agent gọi lệnh đầu tiên…",
-    "waitingDesc": "Dán đoạn cấu hình vào <mono>{name}</mono> rồi yêu cầu nó chạy <mono>box_list</mono> hoặc tạo một box. Màn hình sẽ tự chuyển khi Boxaz nhận được lệnh."
+    "waitingDesc": "Dán đoạn cấu hình vào <mono>{name}</mono> rồi yêu cầu nó chạy <mono>box_list</mono> hoặc tạo một box. Màn hình sẽ tự chuyển khi Boxmes nhận được lệnh."
   },
   "overview": {
     "title": "Tổng quan",
@@ -857,7 +857,7 @@
     },
     "confidence": {
       "verified": "Đã kiểm chứng",
-      "verifiedHint": "Boxaz đã tự kiểm thử offer này",
+      "verifiedHint": "Boxmes đã tự kiểm thử offer này",
       "unverified": "Chưa kiểm chứng",
       "unverifiedHint": "Lấy từ battleships, chưa self-test",
       "stock_limited": "Hạn chế hàng",
@@ -878,13 +878,13 @@
   },
   "terminal": {
     "promptUser": "anh",
-    "mockHeader": "# Boxaz terminal (MOCK) · {id} · {where}",
+    "mockHeader": "# Boxmes terminal (MOCK) · {id} · {where}",
     "mockWatching": "# Đang xem agent {agent}. Chọn “Điều khiển” để gõ lệnh.",
     "mockHelp": "Lệnh mock: ls [path], cat [file], pwd, whoami, clear, mọi lệnh khác gửi qua /exec",
     "whoami": "anh (đang chiếm quyền)",
     "connected": "# Đã kết nối PTY {id}",
     "wsFailed": "# Không mở được WebSocket tới Core.",
-    "wsFailedHint": "# Kiểm tra: origin của dashboard có trong allowlist của Core (BOXAZ_DASHBOARD_URL hoặc BOXAZ_ACCESS_ORIGINS), Core có BOXAZ_PUBLIC_URL đúng (hoặc đặt NEXT_PUBLIC_BOXAZ_WS), và ticket chưa quá 60 giây.",
+    "wsFailedHint": "# Kiểm tra: origin của dashboard có trong allowlist của Core (BOXMES_DASHBOARD_URL hoặc BOXMES_ACCESS_ORIGINS), Core có BOXMES_PUBLIC_URL đúng (hoặc đặt NEXT_PUBLIC_BOXMES_WS), và ticket chưa quá 60 giây.",
     "lost": "# Mất kết nối terminal",
     "tookOver": "# Anh đã chiếm quyền",
     "released": "# Đã trả quyền cho agent",
@@ -1080,13 +1080,13 @@
       "open": "Cầu dao mở"
     },
     "breakerHelp": {
-      "closed": "Hoạt động bình thường, Boxaz gọi provider này như thường lệ",
+      "closed": "Hoạt động bình thường, Boxmes gọi provider này như thường lệ",
       "half_open": "Đang thử lại một lệnh để xem provider đã ổn chưa",
-      "open": "Tạm bỏ qua provider này sau nhiều lỗi liên tiếp; Boxaz tự chuyển sang provider kế tiếp"
+      "open": "Tạm bỏ qua provider này sau nhiều lỗi liên tiếp; Boxmes tự chuyển sang provider kế tiếp"
     },
     "wizard": {
       "title": "Kết nối provider",
-      "desc": "Chọn nhà cung cấp, dán token, Boxaz kiểm tra rồi cho anh đặt ưu tiên và trần chi phí.",
+      "desc": "Chọn nhà cung cấp, dán token, Boxmes kiểm tra rồi cho anh đặt ưu tiên và trần chi phí.",
       "steps": "Các bước",
       "step": {
         "choose": "Chọn",
@@ -1127,9 +1127,9 @@
     },
     "prefs": {
       "title": "Thiết lập {name}",
-      "desc": "Ưu tiên và trần chi phí áp dụng khi Boxaz tự thuê server.",
+      "desc": "Ưu tiên và trần chi phí áp dụng khi Boxmes tự thuê server.",
       "enabled": "Cho phép dùng",
-      "enabledHint": "Tắt để Boxaz bỏ qua provider này khi chọn chỗ đặt box.",
+      "enabledHint": "Tắt để Boxmes bỏ qua provider này khi chọn chỗ đặt box.",
       "priority": "Thứ tự ưu tiên",
       "priorityHint": "1 = thử trước; 0 = theo chuỗi mặc định.",
       "maxHourly": "Trần $/giờ mỗi server",
@@ -1144,7 +1144,7 @@
     },
     "health": {
       "title": "Sức khỏe provider",
-      "desc": "Core gọi thử API của từng provider định kỳ và ghi lại độ trễ, lỗi và thời gian dựng server. Lỗi liên tiếp sẽ mở cầu dao để Boxaz chuyển sang provider kế tiếp.",
+      "desc": "Core gọi thử API của từng provider định kỳ và ghi lại độ trễ, lỗi và thời gian dựng server. Lỗi liên tiếp sẽ mở cầu dao để Boxmes chuyển sang provider kế tiếp.",
       "samples": "{n, plural, other {# mẫu}}",
       "hosts": "{n, plural, other {# host}}",
       "priority": "ưu tiên {n}",
@@ -1167,7 +1167,7 @@
       "check": "Kiểm tra ngay",
       "checked": "Đã kiểm tra {name}",
       "reset": "Đặt lại cầu dao",
-      "resetHint": "Đóng cầu dao để Boxaz dùng lại provider này ngay",
+      "resetHint": "Đóng cầu dao để Boxmes dùng lại provider này ngay",
       "resetDone": "Đã đặt lại cầu dao của {name}",
       "prefs": "Thiết lập"
     },
@@ -1212,7 +1212,7 @@
     "title": "Mesh WireGuard (headscale)",
     "desc": "Host và box dịch vụ nối với nhau qua mạng riêng WireGuard; ACL sinh tự động theo agent và cổng của box.",
     "disabled": "Mesh đang tắt",
-    "disabledHint": "Đặt BOXAZ_MESH_URL và BOXAZ_MESH_API_KEY cho Core để bật mesh.",
+    "disabledHint": "Đặt BOXMES_MESH_URL và BOXMES_MESH_API_KEY cho Core để bật mesh.",
     "server": "Máy chủ",
     "online": "Node trực tuyến",
     "hostsJoined": "Host đã tham gia",
@@ -1227,7 +1227,7 @@
     "keyTitle": "Tạo pre-auth key",
     "keyDesc": "Key dùng một lần để một host hoặc box tham gia mesh với đúng tag.",
     "target": "Dành cho",
-    "newHost": "Host mới (tag:boxaz-host)",
+    "newHost": "Host mới (tag:boxmes-host)",
     "hosts": "Host",
     "boxes": "Box",
     "ttl": "Hiệu lực (phút)",
@@ -1299,7 +1299,7 @@
   },
   "rec": {
     "title": "Gợi ý box theo nhu cầu",
-    "desc": "Mô tả việc cần làm, Boxaz so sánh warm pool, pool sẵn có, VM và server thuê mới rồi xếp hạng theo 6 yếu tố có giải thích.",
+    "desc": "Mô tả việc cần làm, Boxmes so sánh warm pool, pool sẵn có, VM và server thuê mới rồi xếp hạng theo 6 yếu tố có giải thích.",
     "profile": "Loại công việc",
     "tip": "Mẹo:",
     "agentKind": "Loại agent",
@@ -1317,7 +1317,7 @@
     "maxLatency": "Độ trễ tối đa (ms)",
     "arch": "Kiến trúc",
     "region": "Region",
-    "regionHint": "Để trống để Boxaz tự chọn",
+    "regionHint": "Để trống để Boxmes tự chọn",
     "location": "Agent chạy ở đâu",
     "locationHint": "Mã nước (VN), region hoặc lat,lon",
     "publicUrl": "Cần URL công khai",
@@ -1446,7 +1446,7 @@
     "tierHelp": {
       "T1": "Server/VM thô: boxd + Incus, tính theo giờ hoặc tháng",
       "T2": "Sandbox API: boxd chạy trong sandbox và dial-in về Core, đủ terminal/snapshot",
-      "T3": "Chỉ exec API: shim ở gateway trả lời thay boxd, không có terminal/egress; snapshot là tarball lưu ở gateway, có URL preview nếu provider hỗ trợ, không thì URL công khai qua ingress của Boxaz hoặc tunnel trong box"
+      "T3": "Chỉ exec API: shim ở gateway trả lời thay boxd, không có terminal/egress; snapshot là tarball lưu ở gateway, có URL preview nếu provider hỗ trợ, không thì URL công khai qua ingress của Boxmes hoặc tunnel trong box"
     },
     "ver": {
       "live": "Đã chạy thật",
@@ -1459,7 +1459,7 @@
       "sdk": "Provider không công bố REST: đọc từ mã nguồn SDK chính thức"
     },
     "estPrice": "Giá ước tính",
-    "estPriceHelp": "Provider không công bố đơn giá theo giây; Boxaz dùng giá ước tính",
+    "estPriceHelp": "Provider không công bố đơn giá theo giây; Boxmes dùng giá ước tính",
     "cap": {
       "unsupported": "{name}: không hỗ trợ",
       "boot": "Boot {v}",
@@ -1483,7 +1483,7 @@
       "dialOnly": "Provider này không có API exec nên luôn chạy dial-in (T2); không chạy được shim (T3)."
     },
     "modeHelp": {
-      "auto": "T2 khi sandbox giữ được tiến trình nền và có BOXAZ_PUBLIC_URL, không thì T3",
+      "auto": "T2 khi sandbox giữ được tiến trình nền và có BOXMES_PUBLIC_URL, không thì T3",
       "dial": "boxd chạy trong sandbox rồi gọi về Core: đủ terminal, snapshot, egress",
       "shim": "Core gọi exec API thay boxd: không cần URL công khai, ít tính năng hơn"
     },
@@ -1536,7 +1536,7 @@
       "sample": "Dán mẫu",
       "howTitle": "Cách thêm adapter",
       "how1": "Viết YAML theo mẫu (route create/get/delete/exec, auth, capability, giá).",
-      "how2": "Kiểm tra ở đây, rồi lưu file vào thư mục <mono>BOXAZ_SANDBOX_ADAPTERS_DIR</mono>.",
+      "how2": "Kiểm tra ở đây, rồi lưu file vào thư mục <mono>BOXMES_SANDBOX_ADAPTERS_DIR</mono>.",
       "how3": "Khởi động lại Core, provider mới hiện trong danh sách Sandbox API để kết nối.",
       "required": "Trường bắt buộc:",
       "invalid": "Adapter chưa hợp lệ",
@@ -1546,18 +1546,18 @@
       "creds": "Credential"
     },
     "dialOnly": "Chỉ dial-in",
-    "dialOnlyHelp": "Không có API exec: mỗi box là một service chạy boxd, boxd gọi ra core. Cần BOXAZ_PUBLIC_URL truy cập được từ Internet.",
+    "dialOnlyHelp": "Không có API exec: mỗi box là một service chạy boxd, boxd gọi ra core. Cần BOXMES_PUBLIC_URL truy cập được từ Internet.",
     "freePlan": "Gói free ($0)"
   },
   "ports": {
     "lifecycle": "Đánh thức & vòng đời",
     "wake": "Đánh thức khi có request",
-    "wakeHint": "Request vào URL Boxaz sẽ đánh thức box đang ngủ, giữ request đến khi app sẵn sàng rồi mới trả lời.",
+    "wakeHint": "Request vào URL Boxmes sẽ đánh thức box đang ngủ, giữ request đến khi app sẵn sàng rồi mới trả lời.",
     "wakeOn": "Đã bật đánh thức khi có request",
     "wakeOff": "Đã tắt đánh thức: request tới box đang ngủ nhận 503",
     "capsTitle": "{provider} hỗ trợ gì",
     "title": "Port",
-    "intro": "Mỗi port đã mở có một URL Boxaz cố định: đánh thức box ở request đầu tiên và chuyển thẳng WebSocket/SSE. Bật chế độ token để chia sẻ an toàn.",
+    "intro": "Mỗi port đã mở có một URL Boxmes cố định: đánh thức box ở request đầu tiên và chuyển thẳng WebSocket/SSE. Bật chế độ token để chia sẻ an toàn.",
     "empty": "Chưa mở port nào",
     "emptyDesc": "Chạy server trên 0.0.0.0:PORT trong box rồi mở port ở đây.",
     "expose": "Mở port",
@@ -1566,23 +1566,23 @@
     "requireToken": "Bắt buộc token",
     "nowToken": "Port {port} giờ cần URL token",
     "nowPublic": "Port {port} công khai trở lại",
-    "boxazUrl": "URL Boxaz",
+    "boxmesUrl": "URL Boxmes",
     "providerUrl": "URL provider",
-    "previewCaveat": "Token chỉ bảo vệ URL Boxaz. URL preview riêng của provider cho port này vẫn truy cập được tại provider với bất kỳ ai biết sandbox id.",
+    "previewCaveat": "Token chỉ bảo vệ URL Boxmes. URL preview riêng của provider cho port này vẫn truy cập được tại provider với bất kỳ ai biết sandbox id.",
     "showTokens": "Xem token",
     "hideTokens": "Ẩn token",
     "kind": {
       "provider-preview": "preview của provider",
-      "ingress": "ingress Boxaz",
+      "ingress": "ingress Boxmes",
       "tunnel": "tunnel",
-      "gateway": "gateway Boxaz",
+      "gateway": "gateway Boxmes",
       "none": "chưa có URL công khai"
     },
     "kindHint": {
       "provider-preview": "Host preview riêng của provider (E2B, Novita, Daytona).",
-      "ingress": "Đi qua Boxaz core và ingress agent trong box.",
+      "ingress": "Đi qua Boxmes core và ingress agent trong box.",
       "tunnel": "Cloudflare quick tunnel chạy trong box (phương án cuối).",
-      "gateway": "Chỉ cấp qua gateway Boxaz vì port này cần token.",
+      "gateway": "Chỉ cấp qua gateway Boxmes vì port này cần token.",
       "none": "Chưa có đường nào từ internet tới port này."
     },
     "access": {
@@ -1595,8 +1595,8 @@
       "memory_pauseHint": "Ngủ vẫn giữ bộ nhớ và tiến trình; nếu không, tiến trình khởi động lại khi thức.",
       "wake_on_http_native": "tự thức qua HTTP",
       "wake_on_http_nativeHint": "URL riêng của provider đánh thức box đang tạm dừng.",
-      "wake_via_gateway": "thức qua URL Boxaz",
-      "wake_via_gatewayHint": "URL gateway Boxaz đánh thức box.",
+      "wake_via_gateway": "thức qua URL Boxmes",
+      "wake_via_gatewayHint": "URL gateway Boxmes đánh thức box.",
       "fork": "fork",
       "forkHint": "Fork hoặc clone gốc của box đang chạy.",
       "inbound_http": "HTTP vào",
@@ -1652,7 +1652,7 @@
       "restartDesc": "Supervisor dừng app rồi chạy lại; traffic qua gateway chờ đến khi app sẵn sàng.",
       "restarted": "Đã khởi động lại app",
       "none": "Chưa có app được giám sát",
-      "noneDesc": "Khai báo bằng box app set (CLI), tool MCP box_app_set hoặc PUT app qua API: Boxaz chạy app, tự khởi động lại khi crash và chạy lại sau khi thức, restore hoặc clone.",
+      "noneDesc": "Khai báo bằng box app set (CLI), tool MCP box_app_set hoặc PUT app qua API: Boxmes chạy app, tự khởi động lại khi crash và chạy lại sau khi thức, restore hoặc clone.",
       "start": "Lệnh start",
       "repo": "Repo",
       "install": "Cài đặt",
@@ -1679,7 +1679,7 @@
       "refresh": "Tải lại",
       "noLogs": "Chưa có output."
     },
-    "previewPrivate": "URL preview riêng của provider cho port này từ chối truy cập thẳng (sandbox private): chỉ URL Boxaz này vào được app.",
+    "previewPrivate": "URL preview riêng của provider cho port này từ chối truy cập thẳng (sandbox private): chỉ URL Boxmes này vào được app.",
     "nameTitle": "Địa chỉ box",
     "name": "Tên",
     "nameHint": "Tên trần trỏ vào port chính (demo-app.example.com); các port khác là tên-nhãn (demo-app-api.example.com). Chữ thường, chữ số và dấu gạch ngang.",
@@ -1704,7 +1704,7 @@
     "modePath": "theo đường dẫn",
     "modeRelative": "tương đối (chưa có URL công khai)",
     "domain": "Gateway domain",
-    "domainHint": "Domain trần, vd. example.com. Để trống = URL theo đường dẫn dưới BOXAZ_PUBLIC_URL.",
+    "domainHint": "Domain trần, vd. example.com. Để trống = URL theo đường dẫn dưới BOXMES_PUBLIC_URL.",
     "fromEnv": "đặt bằng env",
     "pattern": "Mẫu URL box",
     "publicUrl": "URL công khai (core)",

@@ -7,13 +7,13 @@ import (
 	"log"
 	"time"
 
-	"boxaz/core/internal/events"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/proto"
-	"boxaz/core/internal/provider"
-	"boxaz/core/internal/sandbox"
-	"boxaz/core/internal/secret"
-	"boxaz/core/internal/store"
+	"boxmes/core/internal/events"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/proto"
+	"boxmes/core/internal/provider"
+	"boxmes/core/internal/sandbox"
+	"boxmes/core/internal/secret"
+	"boxmes/core/internal/store"
 )
 
 type hostAuth struct {
@@ -235,7 +235,7 @@ func (m *Manager) CreateHost(ctx context.Context, p *Principal, provID, sku, reg
 		return m.createSandboxHost(ctx, p, sp, token, sku, region)
 	}
 	if m.Cfg.PublicURL == "" {
-		return nil, model.EH(model.ErrInvalid, "Set BOXAZ_PUBLIC_URL to the https URL where boxd can reach core.", "BOXAZ_PUBLIC_URL is not configured")
+		return nil, model.EH(model.ErrInvalid, "Set BOXMES_PUBLIC_URL to the https URL where boxd can reach core.", "BOXMES_PUBLIC_URL is not configured")
 	}
 	offers, _ := m.Store.ListOffers(ctx, provID)
 	var off *model.Offer

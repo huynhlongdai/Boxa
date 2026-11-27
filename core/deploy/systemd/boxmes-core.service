@@ -1,0 +1,20 @@
+[Unit]
+Description=Boxmes core (control plane)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=boxmes
+Group=boxmes
+EnvironmentFile=/etc/boxmes/core.env
+ExecStart=/usr/local/bin/boxmes-core
+WorkingDirectory=/var/lib/boxmes
+Restart=always
+RestartSec=3
+LimitNOFILE=65536
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/boxmes
+
+[Install]
+WantedBy=multi-user.target

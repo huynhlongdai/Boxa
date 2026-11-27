@@ -20,14 +20,14 @@ import (
 	"syscall"
 	"time"
 
-	"boxaz/core/internal/proto"
+	"boxmes/core/internal/proto"
 )
 
 // LocalDriver runs each box as a directory under Root. Commands run via bash
 // with the box's work dir as cwd, in their own process group, with ulimits
 // and timeouts. It provides NO real isolation: dev and tests only.
 //
-// Layout: <root>/boxes/<id>/{work,memory,AGENTS.md,.boxaz.json}
+// Layout: <root>/boxes/<id>/{work,memory,AGENTS.md,.boxmes.json}
 // Path mapping for the file API: "/work/x" or "x" → work/x, "/memory/x" → memory/x,
 // "/AGENTS.md" → AGENTS.md. Paths cannot escape the box dir.
 type LocalDriver struct {
@@ -63,18 +63,34 @@ func (d *LocalDriver) Name() string { return "local" }
 func (d *LocalDriver) dir(id string) string { return filepath.Join(d.Root, "boxes", filepath.Base(id)) }
 
 const (
-	metaFile       = ".boxaz.json"
-	legacyMetaFile = ".boxa.json" // compat: pre-rename boxes
+	metaFile = ".boxmes.json"
 )
 
-func isMetaFile(n string) bool { return n == metaFile || n == legacyMetaFile }
+// legacyMetaFiles: compat, boxes created before the renames (Boxaz, Boxa), newest first.
+var legacyMetaFiles = []string{".boxaz.json", ".boxa.json"}
+
+func isMetaFile(n string) bool {
+	if n == metaFile {
+		return true
+	}
+	for _, l := range legacyMetaFiles {
+		if n == l {
+			return true
+		}
+	}
+	return false
+}
 
 func (d *LocalDriver) meta(id string) (*localMeta, error) {
 	b, err := os.ReadFile(filepath.Join(d.dir(id), metaFile))
 	if err != nil {
-		// Boxes created before the Boxaz rename keep their metadata in the
+		// Boxes created before the Boxmes rename keep their metadata in the
 		// legacy file; read it (the next save writes the new name).
-		b, err = os.ReadFile(filepath.Join(d.dir(id), legacyMetaFile))
+		for _, l := range legacyMetaFiles {
+			if b, err = os.ReadFile(filepath.Join(d.dir(id), l)); err == nil {
+				break
+			}
+		}
 	}
 	if err != nil {
 		return nil, boxErr("NOT_FOUND", "box not on this host: "+id)

@@ -136,7 +136,7 @@
     "history": "Box history",
     "noBoxes": "This agent hasn't created any boxes",
     "connect": "Connect the agent",
-    "connectDesc": "Config per transport — paste it into the agent along with BOXAZ_API_KEY."
+    "connectDesc": "Config per transport — paste it into the agent along with BOXMES_API_KEY."
   },
   "agents": {
     "title": "Agents",
@@ -159,8 +159,8 @@
     "missingKeyHint": "Paste an admin API key (bx_live_…).",
     "invalidKey": "The API key is invalid or lacks admin scope",
     "invalidKeyHint": "Create an admin-scope key with `box keys create --admin`.",
-    "coreUnreachable": "Can't reach Boxaz Core",
-    "coreUnreachableHint": "Check BOXAZ_API ({url}) or set BOXAZ_MOCK=1.",
+    "coreUnreachable": "Can't reach Boxmes Core",
+    "coreUnreachableHint": "Check BOXMES_API ({url}) or set BOXMES_MOCK=1.",
     "tryNext": "Try next:"
   },
   "approvals": {
@@ -430,14 +430,14 @@
     "billingPool": "pool · monthly",
     "billingBurst": "burst · hourly",
     "pickAgentFirst": "Pick an agent to quote against its policy.",
-    "descNeed": "Describe what the box needs; Boxaz ranks the options by price, speed and reliability.",
+    "descNeed": "Describe what the box needs; Boxmes ranks the options by price, speed and reliability.",
     "mode": "How to create",
     "modeNeed": "By need",
     "modeManual": "Manual spec"
   },
   "developers": {
     "title": "For agents",
-    "desc": "Everything an agent needs to connect to Boxaz on its own: machine-readable docs, tool schemas, sample calls and the error table.",
+    "desc": "Everything an agent needs to connect to Boxmes on its own: machine-readable docs, tool schemas, sample calls and the error table.",
     "baseUrl": "Core base URL",
     "noAuth": "No key needed",
     "needsKey": "Key required",
@@ -453,9 +453,9 @@
       "mcp": "MCP server card",
       "mcpDesc": "/.well-known/mcp.json: transports (HTTP, stdio), auth, tool list.",
       "a2a": "A2A agent card",
-      "a2aDesc": "/.well-known/agent.json: lets other agents hand tasks to Boxaz via /a2a.",
+      "a2aDesc": "/.well-known/agent.json: lets other agents hand tasks to Boxmes via /a2a.",
       "mcpEndpoint": "MCP endpoint",
-      "mcpEndpointDesc": "Streamable HTTP, header Authorization: Bearer $BOXAZ_API_KEY."
+      "mcpEndpointDesc": "Streamable HTTP, header Authorization: Bearer $BOXMES_API_KEY."
     },
     "preview": "Preview",
     "hidePreview": "Hide",
@@ -470,9 +470,9 @@
     "quickstart": "Quick start (curl)",
     "quickstartDesc": "Quote → create → run → wait for the job → read the log → delete. Replace BOX_ID, JOB_ID, LOG_ID with returned values.",
     "sdk": "SDKs & CLI",
-    "sdkDesc": "Install once; configure with BOXAZ_URL and BOXAZ_API_KEY.",
+    "sdkDesc": "Install once; configure with BOXMES_URL and BOXMES_API_KEY.",
     "sdkNote": "SDK package names are provisional — confirm when Core publishes them.",
-    "cliFromSource": "box CLI (from boxaz/core source)",
+    "cliFromSource": "box CLI (from boxmes/core source)",
     "errors": "Error codes",
     "errorsDesc": "Agents read <mono>code</mono> (never changes) and follow <mono>hint</mono>; <mono>message</mono>/<mono>hint</mono> are localized via Accept-Language; honor <mono>retry_after_s</mono> when present.",
     "colCode": "Code",
@@ -495,7 +495,7 @@
       "NOT_FOUND": "No box/job/log/… with that ID.",
       "NOT_FOUNDHint": "Call box_list (or the matching list) to get the right ID.",
       "UNAUTHORIZED": "Missing or revoked key.",
-      "UNAUTHORIZEDHint": "Check BOXAZ_API_KEY; don't retry in a loop.",
+      "UNAUTHORIZEDHint": "Check BOXMES_API_KEY; don't retry in a loop.",
       "INVALID": "Bad parameters or box.yaml.",
       "INVALIDHint": "Fix what the message points to (usually a field or line) and resend.",
       "RATE_LIMITED": "Too many requests.",
@@ -504,7 +504,7 @@
       "INTERNALHint": "Retry once; if it persists, stop and tell the operator.",
       "NO_CAPACITYHint": "Lower the spec, wait retry_after_s and retry, or call box_quote for alternatives."
     },
-    "a2a": "A2A: hand tasks to Boxaz",
+    "a2a": "A2A: hand tasks to Boxmes",
     "a2aDesc": "Other agents send JSON-RPC to <mono>/a2a</mono>: a text part is a command (with <mono>metadata.box_id</mono>), a data part with <mono>tool</mono> + <mono>arguments</mono> calls any tool. A command's task id is its job id.",
     "a2aColMethod": "Method",
     "a2aColDoes": "What it does",
@@ -587,7 +587,7 @@
     "chainPool": "Existing pool",
     "tokenHint": {
       "contabo": "Paste client_id:client_secret:api_user:api_password (or the 4-field JSON) from Contabo's API page.",
-      "netcup": "Paste an SCP refresh token (client scp). Name spare servers boxaz-spare-1; Boxaz claims and reinstalls them.",
+      "netcup": "Paste an SCP refresh token (client scp). Name spare servers boxmes-spare-1; Boxmes claims and reinstalls them.",
       "digitalocean": "Personal access token with read and write scope.",
       "hetzner": "Read & Write API token of the Hetzner Cloud project.",
       "vultr": "API key with the manage_servers permission."
@@ -645,12 +645,12 @@
   "locale": {
     "label": "Language",
     "dashboard": "Dashboard language",
-    "dashboardHint": "Stored in this browser's boxaz_locale cookie. Errors from Core come back in this language too.",
+    "dashboardHint": "Stored in this browser's boxmes_locale cookie. Errors from Core come back in this language too.",
     "notify": "Default language for notifications & API errors",
     "notifyHint": "Used for Telegram, email and agents that send no Accept-Language."
   },
   "login": {
-    "title": "Sign in to Boxaz",
+    "title": "Sign in to Boxmes",
     "subtitle": "Use an API key with admin scope",
     "keyLabel": "Admin API key",
     "keyHint": "Create one with <mono>box keys create --admin</mono>. The key lives in an httpOnly cookie, never in JavaScript.",
@@ -726,7 +726,7 @@
     "toOverview": "Go to Overview",
     "viewAgent": "View agent",
     "waiting": "Waiting for the agent's first call…",
-    "waitingDesc": "Paste the config into <mono>{name}</mono>, then ask it to run <mono>box_list</mono> or create a box. This screen moves on when Boxaz receives the call."
+    "waitingDesc": "Paste the config into <mono>{name}</mono>, then ask it to run <mono>box_list</mono> or create a box. This screen moves on when Boxmes receives the call."
   },
   "overview": {
     "title": "Overview",
@@ -857,7 +857,7 @@
     },
     "confidence": {
       "verified": "Verified",
-      "verifiedHint": "Boxaz self-tested this offer",
+      "verifiedHint": "Boxmes self-tested this offer",
       "unverified": "Unverified",
       "unverifiedHint": "From battleships, not self-tested yet",
       "stock_limited": "Limited stock",
@@ -878,13 +878,13 @@
   },
   "terminal": {
     "promptUser": "you",
-    "mockHeader": "# Boxaz terminal (MOCK) · {id} · {where}",
+    "mockHeader": "# Boxmes terminal (MOCK) · {id} · {where}",
     "mockWatching": "# Watching agent {agent}. Pick “Control” to type commands.",
     "mockHelp": "Mock commands: ls [path], cat [file], pwd, whoami, clear; anything else goes through /exec",
     "whoami": "you (in control)",
     "connected": "# Connected to PTY {id}",
     "wsFailed": "# Couldn't open a WebSocket to Core.",
-    "wsFailedHint": "# Check: the dashboard origin is in Core's allowlist (BOXAZ_DASHBOARD_URL or BOXAZ_ACCESS_ORIGINS), Core has the right BOXAZ_PUBLIC_URL (or set NEXT_PUBLIC_BOXAZ_WS), and the ticket is under 60 seconds old.",
+    "wsFailedHint": "# Check: the dashboard origin is in Core's allowlist (BOXMES_DASHBOARD_URL or BOXMES_ACCESS_ORIGINS), Core has the right BOXMES_PUBLIC_URL (or set NEXT_PUBLIC_BOXMES_WS), and the ticket is under 60 seconds old.",
     "lost": "# Terminal disconnected",
     "tookOver": "# You took over",
     "released": "# Control returned to the agent",
@@ -1080,13 +1080,13 @@
       "open": "Breaker open"
     },
     "breakerHelp": {
-      "closed": "Normal: Boxaz calls this provider as usual",
+      "closed": "Normal: Boxmes calls this provider as usual",
       "half_open": "Trying one call to see whether the provider has recovered",
-      "open": "Skipped after repeated failures; Boxaz fails over to the next provider"
+      "open": "Skipped after repeated failures; Boxmes fails over to the next provider"
     },
     "wizard": {
       "title": "Connect a provider",
-      "desc": "Pick a provider, paste a token; Boxaz checks it, then you set priority and cost caps.",
+      "desc": "Pick a provider, paste a token; Boxmes checks it, then you set priority and cost caps.",
       "steps": "Steps",
       "step": {
         "choose": "Choose",
@@ -1127,9 +1127,9 @@
     },
     "prefs": {
       "title": "{name} settings",
-      "desc": "Priority and cost caps used when Boxaz rents servers on its own.",
+      "desc": "Priority and cost caps used when Boxmes rents servers on its own.",
       "enabled": "Allow use",
-      "enabledHint": "Turn off to make Boxaz skip this provider when placing boxes.",
+      "enabledHint": "Turn off to make Boxmes skip this provider when placing boxes.",
       "priority": "Priority",
       "priorityHint": "1 = try first; 0 = default chain order.",
       "maxHourly": "Max $/hour per server",
@@ -1144,7 +1144,7 @@
     },
     "health": {
       "title": "Provider health",
-      "desc": "Core probes each provider API on a schedule and records latency, errors and server provisioning time. Repeated failures open the breaker so Boxaz fails over to the next provider.",
+      "desc": "Core probes each provider API on a schedule and records latency, errors and server provisioning time. Repeated failures open the breaker so Boxmes fails over to the next provider.",
       "samples": "{n, plural, one {# sample} other {# samples}}",
       "hosts": "{n, plural, one {# host} other {# hosts}}",
       "priority": "priority {n}",
@@ -1167,7 +1167,7 @@
       "check": "Check now",
       "checked": "{name} checked",
       "reset": "Reset breaker",
-      "resetHint": "Close the breaker so Boxaz uses this provider again right away",
+      "resetHint": "Close the breaker so Boxmes uses this provider again right away",
       "resetDone": "{name} breaker reset",
       "prefs": "Settings"
     },
@@ -1212,7 +1212,7 @@
     "title": "WireGuard mesh (headscale)",
     "desc": "Hosts and service boxes reach each other over a private WireGuard network; ACLs are generated from agents and box ports.",
     "disabled": "Mesh is off",
-    "disabledHint": "Set BOXAZ_MESH_URL and BOXAZ_MESH_API_KEY for Core to turn it on.",
+    "disabledHint": "Set BOXMES_MESH_URL and BOXMES_MESH_API_KEY for Core to turn it on.",
     "server": "Server",
     "online": "Nodes online",
     "hostsJoined": "Hosts joined",
@@ -1227,7 +1227,7 @@
     "keyTitle": "Create a pre-auth key",
     "keyDesc": "A one-time key that lets a host or box join the mesh with the right tags.",
     "target": "For",
-    "newHost": "New host (tag:boxaz-host)",
+    "newHost": "New host (tag:boxmes-host)",
     "hosts": "Hosts",
     "boxes": "Boxes",
     "ttl": "Valid for (minutes)",
@@ -1299,7 +1299,7 @@
   },
   "rec": {
     "title": "Recommend a box",
-    "desc": "Describe the job; Boxaz compares the warm pool, existing pool hosts, VMs and new servers, then ranks them on six explained factors.",
+    "desc": "Describe the job; Boxmes compares the warm pool, existing pool hosts, VMs and new servers, then ranks them on six explained factors.",
     "profile": "Workload",
     "tip": "Tip:",
     "agentKind": "Agent kind",
@@ -1317,7 +1317,7 @@
     "maxLatency": "Max latency (ms)",
     "arch": "Architecture",
     "region": "Region",
-    "regionHint": "Leave empty to let Boxaz choose",
+    "regionHint": "Leave empty to let Boxmes choose",
     "location": "Where the agent runs",
     "locationHint": "Country code (VN), region or lat,lon",
     "publicUrl": "Needs a public URL",
@@ -1446,7 +1446,7 @@
     "tierHelp": {
       "T1": "Raw server/VM: boxd + Incus, billed hourly or monthly",
       "T2": "Sandbox API: boxd runs inside the sandbox and dials in to Core; full terminal and snapshots",
-      "T3": "Exec-only API: a gateway shim answers for boxd; no terminal or egress rules; snapshots are tarballs kept by the gateway, preview URLs where the provider has them, otherwise a public URL via Boxaz ingress or an in-box tunnel"
+      "T3": "Exec-only API: a gateway shim answers for boxd; no terminal or egress rules; snapshots are tarballs kept by the gateway, preview URLs where the provider has them, otherwise a public URL via Boxmes ingress or an in-box tunnel"
     },
     "ver": {
       "live": "Live-verified",
@@ -1459,7 +1459,7 @@
       "sdk": "No published REST reference: read from the official SDK source"
     },
     "estPrice": "Estimated price",
-    "estPriceHelp": "The provider does not publish per-second unit rates; Boxaz uses an estimate",
+    "estPriceHelp": "The provider does not publish per-second unit rates; Boxmes uses an estimate",
     "cap": {
       "unsupported": "{name}: not supported",
       "boot": "Boot {v}",
@@ -1483,7 +1483,7 @@
       "dialOnly": "This provider has no exec API, so it always runs dial-in (T2); shim (T3) is not possible."
     },
     "modeHelp": {
-      "auto": "T2 when the sandbox keeps background processes and BOXAZ_PUBLIC_URL is set, else T3",
+      "auto": "T2 when the sandbox keeps background processes and BOXMES_PUBLIC_URL is set, else T3",
       "dial": "boxd runs in the sandbox and calls Core: terminal, snapshots, egress",
       "shim": "Core calls the exec API instead of boxd: no public URL needed, fewer features"
     },
@@ -1536,7 +1536,7 @@
       "sample": "Paste sample",
       "howTitle": "How to add an adapter",
       "how1": "Write the YAML from the sample (create/get/delete/exec routes, auth, capabilities, prices).",
-      "how2": "Lint it here, then save the file into <mono>BOXAZ_SANDBOX_ADAPTERS_DIR</mono>.",
+      "how2": "Lint it here, then save the file into <mono>BOXMES_SANDBOX_ADAPTERS_DIR</mono>.",
       "how3": "Restart Core; the new provider appears under Sandbox API, ready to connect.",
       "required": "Required keys:",
       "invalid": "Adapter is not valid",
@@ -1546,18 +1546,18 @@
       "creds": "Credentials"
     },
     "dialOnly": "Dial-in only",
-    "dialOnlyHelp": "No exec API: each box is a service running boxd, which dials out to core. Needs BOXAZ_PUBLIC_URL reachable from the internet.",
+    "dialOnlyHelp": "No exec API: each box is a service running boxd, which dials out to core. Needs BOXMES_PUBLIC_URL reachable from the internet.",
     "freePlan": "Free plan ($0)"
   },
   "ports": {
     "lifecycle": "Wake & lifecycle",
     "wake": "Wake on request",
-    "wakeHint": "A request to the Boxaz URL wakes a sleeping box, holds the request until the app is ready, then answers it.",
+    "wakeHint": "A request to the Boxmes URL wakes a sleeping box, holds the request until the app is ready, then answers it.",
     "wakeOn": "Wake on request is on",
     "wakeOff": "Wake on request is off: requests to a sleeping box get 503",
     "capsTitle": "What {provider} supports",
     "title": "Ports",
-    "intro": "Each exposed port gets a stable Boxaz URL that wakes the box on the first request and passes WebSocket/SSE through. Make it token-only to share it safely.",
+    "intro": "Each exposed port gets a stable Boxmes URL that wakes the box on the first request and passes WebSocket/SSE through. Make it token-only to share it safely.",
     "empty": "No exposed ports",
     "emptyDesc": "Start a server on 0.0.0.0:PORT in the box, then expose the port here.",
     "expose": "Expose",
@@ -1566,23 +1566,23 @@
     "requireToken": "Require token",
     "nowToken": "Port {port} now needs a URL token",
     "nowPublic": "Port {port} is public again",
-    "boxazUrl": "Boxaz URL",
+    "boxmesUrl": "Boxmes URL",
     "providerUrl": "Provider URL",
-    "previewCaveat": "The token protects the Boxaz URL only. The provider's own preview URL for this port still answers at the provider for anyone who knows the sandbox id.",
+    "previewCaveat": "The token protects the Boxmes URL only. The provider's own preview URL for this port still answers at the provider for anyone who knows the sandbox id.",
     "showTokens": "Show tokens",
     "hideTokens": "Hide tokens",
     "kind": {
       "provider-preview": "provider preview",
-      "ingress": "Boxaz ingress",
+      "ingress": "Boxmes ingress",
       "tunnel": "tunnel",
-      "gateway": "Boxaz gateway",
+      "gateway": "Boxmes gateway",
       "none": "no public URL"
     },
     "kindHint": {
       "provider-preview": "The provider's own preview host (E2B, Novita, Daytona).",
-      "ingress": "Reached through Boxaz core and the in-box ingress agent.",
+      "ingress": "Reached through Boxmes core and the in-box ingress agent.",
       "tunnel": "An in-box Cloudflare quick tunnel (last resort).",
-      "gateway": "Only handed out through the Boxaz gateway because the port needs a token.",
+      "gateway": "Only handed out through the Boxmes gateway because the port needs a token.",
       "none": "Nothing reaches this port from the internet yet."
     },
     "access": {
@@ -1595,8 +1595,8 @@
       "memory_pauseHint": "Sleep keeps memory and processes; otherwise processes restart on wake.",
       "wake_on_http_native": "native wake on HTTP",
       "wake_on_http_nativeHint": "The provider's own URL wakes a paused box.",
-      "wake_via_gateway": "wake via Boxaz URL",
-      "wake_via_gatewayHint": "The Boxaz gateway URL wakes the box.",
+      "wake_via_gateway": "wake via Boxmes URL",
+      "wake_via_gatewayHint": "The Boxmes gateway URL wakes the box.",
       "fork": "fork",
       "forkHint": "Native fork or clone of a live box.",
       "inbound_http": "inbound HTTP",
@@ -1652,7 +1652,7 @@
       "restartDesc": "The supervisor stops the app and starts it again; gateway traffic waits until it is ready.",
       "restarted": "App restarted",
       "none": "No supervised app",
-      "noneDesc": "Declare one with box app set (CLI), the box_app_set MCP tool or PUT app in the API: Boxaz runs it, restarts it on crash and starts it again after wake, restore or clone.",
+      "noneDesc": "Declare one with box app set (CLI), the box_app_set MCP tool or PUT app in the API: Boxmes runs it, restarts it on crash and starts it again after wake, restore or clone.",
       "start": "Start",
       "repo": "Repo",
       "install": "Install",
@@ -1679,7 +1679,7 @@
       "refresh": "Refresh",
       "noLogs": "No output yet."
     },
-    "previewPrivate": "The provider's own preview URL for this port refuses direct traffic (private sandbox): only this Boxaz URL reaches the app.",
+    "previewPrivate": "The provider's own preview URL for this port refuses direct traffic (private sandbox): only this Boxmes URL reaches the app.",
     "nameTitle": "Box address",
     "name": "Name",
     "nameHint": "The bare name serves the primary port (demo-app.example.com); other ports get name-label (demo-app-api.example.com). Lowercase letters, digits and hyphens.",
@@ -1704,7 +1704,7 @@
     "modePath": "path-based",
     "modeRelative": "relative (no public URL)",
     "domain": "Gateway domain",
-    "domainHint": "Bare domain, e.g. example.com. Empty = path-based URLs under BOXAZ_PUBLIC_URL.",
+    "domainHint": "Bare domain, e.g. example.com. Empty = path-based URLs under BOXMES_PUBLIC_URL.",
     "fromEnv": "set by env",
     "pattern": "Box URL pattern",
     "publicUrl": "Public URL (core)",

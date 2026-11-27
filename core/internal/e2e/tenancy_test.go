@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"boxaz/core/internal/manager"
+	"boxmes/core/internal/manager"
 )
 
 type mailbox struct {
@@ -132,7 +132,7 @@ func TestTenancyAuth(t *testing.T) {
 	}
 	items := inv["items"].([]any)
 	code := items[0].(map[string]any)["code"].(string)
-	if !strings.HasPrefix(code, "BOXAZ-") {
+	if !strings.HasPrefix(code, "BOXMES-") {
 		t.Fatalf("code %q", code)
 	}
 	// bad code

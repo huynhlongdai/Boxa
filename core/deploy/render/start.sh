@@ -3,10 +3,10 @@
 # ephemeral on free), start cloudflared
 # (restarted if it exits) when TUNNEL_TOKEN is set, then run core as user app.
 set -eu
-DATA=${BOXAZ_DATA_DIR:-/data}
+DATA=${BOXMES_DATA_DIR:-/data}
 mkdir -p "$DATA" && chown -R app:app "$DATA"
-# Render routes to $PORT; the tunnel ingress points at localhost:<BOXAZ_ADDR port>.
-export BOXAZ_ADDR="${BOXAZ_ADDR:-:${PORT:-8091}}"
+# Render routes to $PORT; the tunnel ingress points at localhost:<BOXMES_ADDR port>.
+export BOXMES_ADDR="${BOXMES_ADDR:-:${PORT:-8091}}"
 if [ -n "${TUNNEL_TOKEN:-}" ]; then
   (
     while :; do
@@ -21,4 +21,4 @@ fi
 if [ -n "${RENDER_EXTERNAL_URL:-}" ] && [ "${KEEPALIVE_S:-600}" != 0 ]; then
   ( sleep 60; while :; do curl -fsS -o /dev/null --max-time 20 "$RENDER_EXTERNAL_URL/v1/health" || true; sleep "${KEEPALIVE_S:-600}"; done ) &
 fi
-exec env -u TUNNEL_TOKEN su-exec app /usr/local/bin/boxaz-core
+exec env -u TUNNEL_TOKEN su-exec app /usr/local/bin/boxmes-core

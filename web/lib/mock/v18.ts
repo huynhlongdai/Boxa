@@ -5,19 +5,19 @@ import type { MockState } from "./seed";
 
 type Res = { status: number; body: unknown };
 
-export const MOCK_GATEWAY_DOMAIN = "boxaz.dev";
+export const MOCK_GATEWAY_DOMAIN = "boxmes.dev";
 const RESERVED = ["admin", "api", "app", "assets", "auth", "autoconfig", "autodiscover", "blog", "cdn", "console", "core", "dashboard", "dl", "docs", "ftp", "git", "grafana", "gw", "hark", "help", "imap", "login", "mail", "mcp", "metrics", "mx", "ns", "ns1", "ns2", "pop", "pop3", "portal", "smtp", "sso", "static", "status", "support", "webmail", "ws", "www"];
 
 const PROVIDERS: GatewayInfo["providers"] = [
-  { provider: "daytona", preview_host: true, private_preview: false, note: "preview host is public at the provider: anyone with the sandbox id can reach a port directly, even when its Boxaz URL needs a token" },
+  { provider: "daytona", preview_host: true, private_preview: false, note: "preview host is public at the provider: anyone with the sandbox id can reach a port directly, even when its Boxmes URL needs a token" },
   { provider: "e2b", preview_host: true, private_preview: true, note: "preview host refuses requests without the sandbox traffic token when the sandbox is created private; the gateway adds it upstream" },
   { provider: "novita", preview_host: true, private_preview: true, note: "preview host refuses requests without the sandbox traffic token when the sandbox is created private; the gateway adds it upstream" },
-  { provider: "prized", preview_host: false, private_preview: false, note: "no provider preview host: traffic reaches the box only through the Boxaz gateway (boxd / ingress agent)" },
+  { provider: "prized", preview_host: false, private_preview: false, note: "no provider preview host: traffic reaches the box only through the Boxmes gateway (boxd / ingress agent)" },
 ];
 
 export function gatewayInfo(s: MockState, check: boolean): GatewayInfo {
   const g = s.settings.gateway ?? { domain: "", provider_preview: "" };
-  const domain = g.domain || MOCK_GATEWAY_DOMAIN; // mock: như đặt BOXAZ_GATEWAY_DOMAIN
+  const domain = g.domain || MOCK_GATEWAY_DOMAIN; // mock: như đặt BOXMES_GATEWAY_DOMAIN
   const mode = (g.provider_preview || "auto") as ProviderPreviewMode;
   return {
     mode: "host", domain, domain_source: g.domain ? "settings" : "env", public_url: `https://gw.${domain}`,

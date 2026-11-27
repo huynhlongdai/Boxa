@@ -183,7 +183,7 @@ func RepoDir(repo string) string {
 
 // ---- URL tokens ----
 
-// URLToken is a Boxaz-issued token for one port of one box (value shown once).
+// URLToken is a Boxmes-issued token for one port of one box (value shown once).
 type URLToken struct {
 	ID        string     `json:"id"`
 	BoxID     string     `json:"box_id"`
@@ -202,7 +202,7 @@ type URLToken struct {
 // Port access modes.
 const (
 	AccessPublic = "public" // anyone with the gateway URL (the URL key is unguessable)
-	AccessToken  = "token"  // a Boxaz URL token is required
+	AccessToken  = "token"  // a Boxmes URL token is required
 )
 
 // WakeOn reports the per-box wake_on_request setting (default on).

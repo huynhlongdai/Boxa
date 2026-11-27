@@ -21,9 +21,9 @@ import (
 	"sync"
 	"time"
 
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/secret"
-	"boxaz/core/internal/store"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/secret"
+	"boxmes/core/internal/store"
 )
 
 type nameState struct {
@@ -375,7 +375,7 @@ func (m *Manager) claimExplicitName(ctx context.Context, b *model.Box, want stri
 		return e
 	}
 	if c := nameClash(idx, name, b.PortLabels); c != "" {
-		e := model.EH(model.ErrInvalid, "Pick another name, or let Boxaz add a word suffix by leaving it out.", "box name %q is taken (%s is in use)", name, c)
+		e := model.EH(model.ErrInvalid, "Pick another name, or let Boxmes add a word suffix by leaving it out.", "box name %q is taken (%s is in use)", name, c)
 		e.Next = []string{fmt.Sprintf("box url %s --name %s", b.ID, freeName(idx, name, b.PortLabels))}
 		return e
 	}

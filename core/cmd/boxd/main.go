@@ -1,9 +1,9 @@
-// boxd: Boxaz host agent. Dials OUT to core over WebSocket and runs boxes via
+// boxd: Boxmes host agent. Dials OUT to core over WebSocket and runs boxes via
 // the incus driver (production) or the local driver (dev/tests).
 package main
 
 import (
-	"boxaz/core/internal/envcompat"
+	"boxmes/core/internal/envcompat"
 	"context"
 	"fmt"
 	"log"
@@ -16,8 +16,8 @@ import (
 	"syscall"
 	"time"
 
-	"boxaz/core/internal/boxd"
-	"boxaz/core/internal/manager"
+	"boxmes/core/internal/boxd"
+	"boxmes/core/internal/manager"
 )
 
 func env(k, def string) string {

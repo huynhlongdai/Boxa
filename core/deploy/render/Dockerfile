@@ -8,7 +8,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/boxaz-core ./cmd/boxaz-core \
+RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/boxmes-core ./cmd/boxmes-core \
  && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/box ./cmd/box \
  && for a in amd64 arm64; do CGO_ENABLED=0 GOOS=linux GOARCH=$a go build -trimpath -ldflags "-s -w" -o /out/dist/boxd-linux-$a ./cmd/boxd; done
 
@@ -20,9 +20,9 @@ RUN apk add --no-cache ca-certificates curl su-exec tini \
  && if [ "$CLOUDFLARED_VERSION" = latest ]; then u=https://github.com/cloudflare/cloudflared/releases/latest/download; else u=https://github.com/cloudflare/cloudflared/releases/download/$CLOUDFLARED_VERSION; fi \
  && curl -fsSL -o /usr/local/bin/cloudflared "$u/cloudflared-linux-${TARGETARCH:-amd64}" \
  && chmod +x /usr/local/bin/cloudflared && /usr/local/bin/cloudflared --version
-COPY --from=build /out/boxaz-core /out/box /usr/local/bin/
+COPY --from=build /out/boxmes-core /out/box /usr/local/bin/
 COPY --from=build /out/dist /opt/app/dist
 COPY deploy/render/start.sh /usr/local/bin/start.sh
-ENV BOXAZ_DATA_DIR=/data BOXAZ_ADDR=:8091 PORT=8091 BOXAZ_DIST_DIR=/opt/app/dist
+ENV BOXMES_DATA_DIR=/data BOXMES_ADDR=:8091 PORT=8091 BOXMES_DIST_DIR=/opt/app/dist
 EXPOSE 8091
 ENTRYPOINT ["/sbin/tini", "--", "/bin/sh", "/usr/local/bin/start.sh"]

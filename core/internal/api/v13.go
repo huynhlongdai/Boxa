@@ -11,8 +11,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"boxaz/core/internal/manager"
-	"boxaz/core/internal/model"
+	"boxmes/core/internal/manager"
+	"boxmes/core/internal/model"
 )
 
 func (s *Server) routesV13(r chi.Router) {
@@ -53,7 +53,7 @@ func nextForError(code string) []string {
 	case model.ErrNotFound:
 		return []string{"box_list()  # find the right id or slug", "box_ensure(name=<name>)  # get-or-create by name"}
 	case model.ErrProviderFailed:
-		return []string{"box_recommend(<same needs>)  # Boxaz already fails over; check other options", "retry after retry_after_s"}
+		return []string{"box_recommend(<same needs>)  # Boxmes already fails over; check other options", "retry after retry_after_s"}
 	case model.ErrPolicyDenied:
 		return []string{"box_quote(<smaller spec>)", "ask the operator to change the agent policy or quotas"}
 	case model.ErrTimeout:

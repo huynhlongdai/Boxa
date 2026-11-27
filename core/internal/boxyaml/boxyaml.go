@@ -12,8 +12,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"boxaz/core/internal/egress"
-	"boxaz/core/internal/model"
+	"boxmes/core/internal/egress"
+	"boxmes/core/internal/model"
 )
 
 // Request is the normalized create-box request (same shape as POST /boxes body).

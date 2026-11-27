@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/provider"
-	"boxaz/core/internal/store"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/provider"
+	"boxmes/core/internal/store"
 )
 
 // reap runs every 30s (spec M11):

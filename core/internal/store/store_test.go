@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"boxaz/core/internal/model"
+	"boxmes/core/internal/model"
 )
 
 func TestSQLiteRoundTrip(t *testing.T) {

@@ -28,7 +28,7 @@ import (
 type Policy struct {
 	Allow         []string `json:"allow"`
 	DenyByDefault bool     `json:"deny_by_default"`
-	// BlockMetadata (v1.11, set by core unless BOXAZ_EGRESS_ALLOW_METADATA=1)
+	// BlockMetadata (v1.11, set by core unless BOXMES_EGRESS_ALLOW_METADATA=1)
 	// drops cloud metadata addresses even when nothing else is restricted.
 	BlockMetadata bool `json:"block_metadata,omitempty"`
 }
@@ -291,7 +291,7 @@ func Resolve(ctx context.Context, p Policy, res Resolver) (targets []Target, has
 
 // ACLName is the Incus network ACL name for a container.
 func ACLName(container string) string {
-	n := "boxaz-eg-" + trimCPrefix(container)
+	n := "boxmes-eg-" + trimCPrefix(container)
 	if len(n) > 63 {
 		n = n[:63]
 	}
@@ -359,7 +359,7 @@ func desc(s string) string {
 
 // NftTable is the nftables table name for a container.
 func NftTable(container string) string {
-	return "boxaz_eg_" + strings.NewReplacer("-", "_").Replace(trimCPrefix(container))
+	return "boxmes_eg_" + strings.NewReplacer("-", "_").Replace(trimCPrefix(container))
 }
 
 // NftScript renders an `nft -f -` script that filters forwarded traffic from
@@ -427,8 +427,10 @@ func NftScript(container string, srcIPs []string, p Policy, targets []Target, al
 
 // trimCPrefix strips the container prefix (current or pre-rename legacy).
 func trimCPrefix(c string) string {
-	if strings.HasPrefix(c, "boxaz-") {
-		return strings.TrimPrefix(c, "boxaz-")
+	for _, p := range []string{"boxmes-", "boxaz-", "boxa-"} { // compat: pre-rename containers (Boxaz, Boxa)
+		if strings.HasPrefix(c, p) {
+			return strings.TrimPrefix(c, p)
+		}
 	}
-	return strings.TrimPrefix(c, "boxa-") // compat: pre-rename containers
+	return c
 }

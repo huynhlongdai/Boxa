@@ -11,17 +11,17 @@
 #
 #   ENV_FILE=…/gateway.env [PROVIDERS="e2b prized"] scripts/live-access-p1.sh
 #
-# The CLI talks to the public URL (BOXAZ_URL=$BOXAZ_PUBLIC_URL), so tickets
+# The CLI talks to the public URL (BOXMES_URL=$BOXMES_PUBLIC_URL), so tickets
 # and every socket go through Cloudflare. A watchdog deletes the provider's
 # managed sandboxes after WATCHDOG_S (280 s); the exit trap downs every box.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 : "${ENV_FILE:?set ENV_FILE (the gateway env file used by up.sh)}"
 set -a; . "$ENV_FILE"; set +a
-ADDR=${BOXAZ_ADDR:-:8080}
+ADDR=${BOXMES_ADDR:-:8080}
 LOCAL=http://127.0.0.1:${ADDR##*:}
-ADMIN=$BOXAZ_ADMIN_KEY
-DOMAIN=$BOXAZ_GATEWAY_DOMAIN
+ADMIN=$BOXMES_ADMIN_KEY
+DOMAIN=$BOXMES_GATEWAY_DOMAIN
 PROVIDERS=${PROVIDERS:-e2b prized}
 WORK=$(mktemp -d /tmp/sbx-access-p1.XXXXXX); mkdir -p "$WORK/home"
 BIN=$(pwd)/bin
@@ -54,7 +54,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-[ "$(curl -s -o /dev/null -w '%{http_code}' "$BOXAZ_PUBLIC_URL/v1/health")" = 200 ] && pass "core reachable at $BOXAZ_PUBLIC_URL" || { echo "core not reachable"; exit 1; }
+[ "$(curl -s -o /dev/null -w '%{http_code}' "$BOXMES_PUBLIC_URL/v1/health")" = 200 ] && pass "core reachable at $BOXMES_PUBLIC_URL" || { echo "core not reachable"; exit 1; }
 for p in $PROVIDERS; do [ "$(plist $p)" = "[]" ] || { echo "$p already has live sandboxes: $(plist $p)"; exit 1; }; done
 which ssh >/dev/null && echo "    OpenSSH: $(ssh -V 2>&1)"
 
@@ -62,7 +62,7 @@ for PROV in $PROVIDERS; do
   echo "== $PROV"
   AGENT=$(api POST /agents -d "$(jq -nc --arg n "p1-$PROV-$(date +%s)" --arg p "$PROV" '{name:$n,kind:"claude-code",budget_day_usd:1,policy:{providers:[$p]}}')" | jq -r .id)
   AKEY=$(api POST /keys -d "{\"agent_id\":\"$AGENT\",\"name\":\"p1-live\"}" | jq -r .key)
-  export BOXAZ_URL=$BOXAZ_PUBLIC_URL BOXAZ_API_KEY=$AKEY
+  export BOXMES_URL=$BOXMES_PUBLIC_URL BOXMES_API_KEY=$AKEY
   ( sleep "${WATCHDOG_S:-340}"; echo "  WATCHDOG: deleting every managed $PROV sandbox"; pkillall $PROV ) & WATCHDOG=$!
   T0=$(ms)
   B=$(KEY=$AKEY api POST /boxes -d "{\"template\":\"base\",\"slug\":\"p1-$PROV\",\"lifecycle\":\"session\",\"requirements\":{\"isolation\":\"sandbox\",\"cpu\":${CPU:-1},\"ram_mb\":${RAM_MB:-512},\"disk_gb\":5,\"duration_hours\":0.1}}")
@@ -80,18 +80,18 @@ for PROV in $PROVIDERS; do
   cmp -s "$WORK/up.bin" "$WORK/down.bin" && pass "box sftp put 1 MB in $((T1-T0)) ms, get in $((T2-T1)) ms (byte-identical)" || note "sftp: $O"
   if command -v sftp >/dev/null; then
     "$BIN/box" ssh-config "$NAME" >/dev/null 2>&1; HOME=$WORK/home "$BIN/box" ssh-config >/dev/null 2>&1
-    KH=$WORK/home/.boxaz/known_hosts
-    SSHO=(-o "ProxyCommand=$BIN/box ssh-proxy %h" -o HostKeyAlias=boxaz-ssh -o "UserKnownHostsFile=$KH" -o BatchMode=yes -o LogLevel=ERROR)
+    KH=$WORK/home/.boxmes/known_hosts
+    SSHO=(-o "ProxyCommand=$BIN/box ssh-proxy %h" -o HostKeyAlias=boxmes-ssh -o "UserKnownHostsFile=$KH" -o BatchMode=yes -o LogLevel=ERROR)
     echo "put $WORK/up.bin /tmp/p1-openssh.bin" > "$WORK/b"
-    T0=$(ms); HOME=$WORK/home sftp "${SSHO[@]}" -b "$WORK/b" "boxaz@$NAME.$DOMAIN" >/dev/null 2>"$WORK/sftp.err"; T1=$(ms)
-    HOME=$WORK/home scp "${SSHO[@]}" -q "boxaz@$NAME.$DOMAIN:/tmp/p1-openssh.bin" "$WORK/scp.bin" 2>>"$WORK/sftp.err"; T2=$(ms)
+    T0=$(ms); HOME=$WORK/home sftp "${SSHO[@]}" -b "$WORK/b" "boxmes@$NAME.$DOMAIN" >/dev/null 2>"$WORK/sftp.err"; T1=$(ms)
+    HOME=$WORK/home scp "${SSHO[@]}" -q "boxmes@$NAME.$DOMAIN:/tmp/p1-openssh.bin" "$WORK/scp.bin" 2>>"$WORK/sftp.err"; T2=$(ms)
     cmp -s "$WORK/up.bin" "$WORK/scp.bin" && pass "OpenSSH sftp put ($((T1-T0)) ms) + scp get ($((T2-T1)) ms) through $NAME.$DOMAIN" || note "openssh sftp/scp: $(tail -3 "$WORK/sftp.err")"
     # 2. short-lived certificate, no API key in the ssh process
     HOME=$WORK/home "$BIN/box" ssh-cert "$BOX" --ttl 15m --json > "$WORK/cert.json" 2>&1
     CID=$(jq -r .id "$WORK/cert.json"); CUSER=$(jq -r .user "$WORK/cert.json")
-    CERTO=(-i "$WORK/home/.boxaz/id_ed25519" -o "CertificateFile=$WORK/home/.boxaz/id_ed25519-cert.pub" -o IdentitiesOnly=yes -o "ProxyCommand=env -u BOXAZ_API_KEY $BIN/box ssh-proxy --anon %h" -o HostKeyAlias=boxaz-ssh -o "UserKnownHostsFile=$KH" -o BatchMode=yes -o LogLevel=ERROR)
+    CERTO=(-i "$WORK/home/.boxmes/id_ed25519" -o "CertificateFile=$WORK/home/.boxmes/id_ed25519-cert.pub" -o IdentitiesOnly=yes -o "ProxyCommand=env -u BOXMES_API_KEY $BIN/box ssh-proxy --anon %h" -o HostKeyAlias=boxmes-ssh -o "UserKnownHostsFile=$KH" -o BatchMode=yes -o LogLevel=ERROR)
     T0=$(ms); O=$(HOME=$WORK/home ssh "${CERTO[@]}" "$CUSER@$NAME.$DOMAIN" 'echo cert-$((6*7)); uname -sm' </dev/null 2>&1)
-    [[ $O == *cert-42* ]] && pass "OpenSSH with a 15 min certificate through wss://$NAME.$DOMAIN/.boxaz/ssh (no ticket, no API key) in $(($(ms)-T0)) ms: $(echo "$O" | tail -1)" || note "cert ssh: $O"
+    [[ $O == *cert-42* ]] && pass "OpenSSH with a 15 min certificate through wss://$NAME.$DOMAIN/.boxmes/ssh (no ticket, no API key) in $(($(ms)-T0)) ms: $(echo "$O" | tail -1)" || note "cert ssh: $O"
     KEY=$AKEY api DELETE "/boxes/$BOX/tickets/$CID" >/dev/null
     if HOME=$WORK/home ssh "${CERTO[@]}" "$CUSER@$NAME.$DOMAIN" true </dev/null >/dev/null 2>&1; then note "revoked certificate still accepted"; else pass "revoked certificate refused"; fi
   fi
@@ -103,7 +103,7 @@ for PROV in $PROVIDERS; do
     pass "box browser (first start: $(jq -r '.source' "$WORK/br.json"), $(jq -r '.version.Browser' "$WORK/br.json"), headless=$(jq -r .headless "$WORK/br.json")) in $((T1-T0)) ms; endpoint ${CDP%%ticket=*}ticket=bxa_…"
     CDPH=$(jq -r .http_url "$WORK/br.json")
     WSD=$(curl -sS --max-time 30 "${CDPH%%\?*}/json/version/?${CDPH#*\?}" | jq -r .webSocketDebuggerUrl)
-    [[ $WSD == wss://$NAME.$DOMAIN/.boxaz/cdp/devtools/browser/* ]] && pass "/json/version via https://$NAME.$DOMAIN rewritten to wss://$NAME.$DOMAIN/.boxaz/cdp/devtools/browser/…" || note "json/version: $WSD"
+    [[ $WSD == wss://$NAME.$DOMAIN/.boxmes/cdp/devtools/browser/* ]] && pass "/json/version via https://$NAME.$DOMAIN rewritten to wss://$NAME.$DOMAIN/.boxmes/cdp/devtools/browser/…" || note "json/version: $WSD"
     O=$($PROBE cdp "$CDP" --navigate https://example.com/ --expect-blocked http://169.254.169.254/latest/meta-data/ 2>&1)
     if echo "$O" | jq -e '.title == "Example Domain" and .metadata_blocked' >/dev/null 2>&1; then pass "CDP Browser.getVersion ($(echo "$O" | jq -r .getversion_ms) ms) + navigate example.com → title \"$(echo "$O" | jq -r .title)\" ($(echo "$O" | jq -r .navigate_ms) ms); metadata blocked: $(echo "$O" | jq -c .blocked_nav)"
     else note "cdp: $O"; KEY=$AKEY api POST /boxes/$BOX/exec -d '{"command":"free -m | sed -n 2p; ps -eo rss,args | grep -i chrom | head -5 | cut -c1-150; tail -5 ${TMPDIR:-/tmp}/.bx-access/browser.log; sudo -n dmesg 2>/dev/null | grep -i -E \"oom|killed\" | tail -3","timeout_s":30}' | jq -r .stdout_tail | sed 's/^/    diag: /'; fi
@@ -116,11 +116,11 @@ for PROV in $PROVIDERS; do
   if [[ $VNC == wss://* ]]; then
     pass "box desktop first start $(jq -r '"\(.width)x\(.height) \(.vnc_server) wm=\(.wm)"' "$WORK/dt.json") in $((T1-T0)) ms"
     O=$($PROBE vnc "$VNC" 2>&1)
-    echo "$O" | jq -e '.version | startswith("RFB 003.00")' >/dev/null && pass "VNC through wss://$NAME.$DOMAIN/.boxaz/vnc: $(echo "$O" | jq -r .version) (handshake $(echo "$O" | jq -r .handshake_ms) ms) + framebuffer update $(echo "$O" | jq -c '{width,height,update_rects,update_pixels,update_ms}')" || note "vnc: $O"
+    echo "$O" | jq -e '.version | startswith("RFB 003.00")' >/dev/null && pass "VNC through wss://$NAME.$DOMAIN/.boxmes/vnc: $(echo "$O" | jq -r .version) (handshake $(echo "$O" | jq -r .handshake_ms) ms) + framebuffer update $(echo "$O" | jq -c '{width,height,update_rects,update_pixels,update_ms}')" || note "vnc: $O"
     T0=$(ms); "$BIN/box" desktop "$BOX" --json > "$WORK/dt2.json" 2>&1; pass "box desktop warm in $(($(ms)-T0)) ms (browser on desktop: $(jq -r .browser_on_desktop "$WORK/dt2.json"))"
     "$BIN/box" desktop "$BOX" --share --ttl 5m --json > "$WORK/sh.json"
-    SURL=$(jq -r .url "$WORK/sh.json"); SSOCK=$(echo "$SURL" | sed 's#^https://#wss://#; s#/.boxaz/desktop?#/.boxaz/vnc?#')
-    [[ $SURL == https://$NAME.$DOMAIN/.boxaz/desktop?share=bxs_* ]] && pass "share link https://$NAME.$DOMAIN/.boxaz/desktop?share=bxs_… (view_only=$(jq -r .view_only "$WORK/sh.json"))" || note "share url $SURL"
+    SURL=$(jq -r .url "$WORK/sh.json"); SSOCK=$(echo "$SURL" | sed 's#^https://#wss://#; s#/.boxmes/desktop?#/.boxmes/vnc?#')
+    [[ $SURL == https://$NAME.$DOMAIN/.boxmes/desktop?share=bxs_* ]] && pass "share link https://$NAME.$DOMAIN/.boxmes/desktop?share=bxs_… (view_only=$(jq -r .view_only "$WORK/sh.json"))" || note "share url $SURL"
     [ "$($PROBE http "$SURL" | jq -r .status)" = 200 ] && pass "share page 200" || note "share page $($PROBE http "$SURL")"
     O=$($PROBE vnc "$SSOCK" --input 2>&1); echo "$O" | jq -e .ok >/dev/null && pass "share viewer RFB + framebuffer update (view-only)" || note "share vnc: $O"
     T0=$(ms); "$BIN/box" desktop "$BOX" --revoke-shares >/dev/null

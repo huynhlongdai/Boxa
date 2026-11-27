@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"boxaz/core/internal/boxd"
-	"boxaz/core/internal/proto"
-	"boxaz/core/internal/secret"
+	"boxmes/core/internal/boxd"
+	"boxmes/core/internal/proto"
+	"boxmes/core/internal/secret"
 )
 
 // Shim is the gateway-side "boxd-shim" for T3 (exec-only) sandboxes: it
@@ -38,7 +38,7 @@ type Shim struct {
 
 // shimLogKeep bounds the full-output logs a shim keeps for box_logs: the
 // provider answers exec with the whole output, so the gateway keeps it
-// (lost when boxaz-core restarts).
+// (lost when boxmes-core restarts).
 const shimLogKeep = 16
 
 // NewShim builds a shim for one sandbox.
@@ -71,7 +71,7 @@ func encodeOut(res any, out any) error {
 	return json.Unmarshal(b, out)
 }
 
-// boxPath maps a Boxaz path (/work/x, x, /memory/x, /AGENTS.md) into the sandbox.
+// boxPath maps a Boxmes path (/work/x, x, /memory/x, /AGENTS.md) into the sandbox.
 func (s *Shim) boxPath(p string) string {
 	p = strings.TrimSpace(p)
 	switch {

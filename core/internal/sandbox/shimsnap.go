@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"boxaz/core/internal/proto"
+	"boxmes/core/internal/proto"
 )
 
 // T3 snapshots: the shim tars the box layout (<workdir>/{work,memory,AGENTS.md},

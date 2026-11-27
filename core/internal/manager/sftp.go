@@ -11,8 +11,8 @@ package manager
 //
 // Reads fetch the file once into a temporary file on core (random access for
 // pipelined clients); writes collect into a temporary file and are uploaded
-// when the client closes the handle. BOXAZ_SFTP=core forces the core server
-// (tests), BOXAZ_SFTP=box disables it.
+// when the client closes the handle. BOXMES_SFTP=core forces the core server
+// (tests), BOXMES_SFTP=box disables it.
 
 import (
 	"bytes"
@@ -30,8 +30,8 @@ import (
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 
-	"boxaz/core/internal/hostlink"
-	"boxaz/core/internal/proto"
+	"boxmes/core/internal/hostlink"
+	"boxmes/core/internal/proto"
 )
 
 // sftpServerPaths are where distributions install OpenSSH's sftp-server.
@@ -71,7 +71,7 @@ func boxRun(ctx context.Context, peer *hostlink.Peer, boxID, command string, env
 	return eb.String(), code, nil
 }
 
-// sftpMode is BOXAZ_SFTP: auto (default) | core | box.
+// sftpMode is BOXMES_SFTP: auto (default) | core | box.
 func (m *Manager) sftpMode() string {
 	switch v := strings.ToLower(strings.TrimSpace(m.Cfg.SFTPMode)); v {
 	case "core", "box":
@@ -86,7 +86,7 @@ func (m *Manager) serveSFTP(ctx context.Context, boxID string, peer *hostlink.Pe
 	var out bytes.Buffer
 	_, _, err := boxRun(ctx, peer, boxID, sftpProbe, nil, nil, &out)
 	if err != nil {
-		fmt.Fprintf(ch.Stderr(), "boxaz: sftp: %v\r\n", err)
+		fmt.Fprintf(ch.Stderr(), "boxmes: sftp: %v\r\n", err)
 		return 255
 	}
 	info := map[string]string{}
@@ -100,7 +100,7 @@ func (m *Manager) serveSFTP(ctx context.Context, boxID string, peer *hostlink.Pe
 		return m.sftpViaBox(ctx, boxID, peer, ch, info["server"])
 	}
 	if mode == "box" {
-		fmt.Fprintf(ch.Stderr(), "boxaz: this box has no sftp-server and BOXAZ_SFTP=box\r\n")
+		fmt.Fprintf(ch.Stderr(), "boxmes: this box has no sftp-server and BOXMES_SFTP=box\r\n")
 		return 127
 	}
 	start := info["home"]
@@ -125,7 +125,7 @@ func (m *Manager) sftpViaBox(ctx context.Context, boxID string, peer *hostlink.P
 	pr, err := peer.OpenProc(cctx, proto.ProcOpenParams{BoxID: boxID, Command: "exec " + shQuote(server)})
 	cancel()
 	if err != nil {
-		fmt.Fprintf(ch.Stderr(), "boxaz: sftp: %v\r\n", err)
+		fmt.Fprintf(ch.Stderr(), "boxmes: sftp: %v\r\n", err)
 		return 255
 	}
 	go func() {

@@ -2,7 +2,7 @@
 // Bám theo core/internal/api/access_p1.go + manager/{browser,desktop,sshcert}.go.
 // WebSocket CDP / RFB không giả lập được qua route Next: UI hiện màn hình mô phỏng + ghi chú mock,
 // còn trạng thái, ticket, share link, chứng chỉ là mock thật (giữ trong bộ nhớ).
-import type { AccessTicket, Box, BoxazEvent, BrowserSession, BrowserState, DesktopSession, DesktopShare, DesktopState, ErrorCode, SshCert } from "../types";
+import type { AccessTicket, Box, BoxmesEvent, BrowserSession, BrowserState, DesktopSession, DesktopShare, DesktopState, ErrorCode, SshCert } from "../types";
 import { MOCK_GATEWAY_DOMAIN } from "./v18";
 import { mockRecordTicket, mockRevokeTicketRecord } from "./v110";
 import type { MockState } from "./seed";
@@ -12,7 +12,7 @@ export interface V111Ctx {
   ok: (body: unknown, status?: number) => Res;
   err: (status: number, code: ErrorCode, key: string, params?: Record<string, string | number>) => Res;
   hydrateBox: (b: MockState["boxes"][number]) => Box;
-  pushEvent: (e: Partial<BoxazEvent>) => unknown;
+  pushEvent: (e: Partial<BoxmesEvent>) => unknown;
 }
 
 const CDP_PORT = 9222;
@@ -20,14 +20,14 @@ const VNC_PORT = 5900;
 const BROWSER_IDLE_S = 600;
 const DESKTOP_IDLE_S = 900;
 const MAX_CERT_TTL_S = 43200;
-const CORE = "api.boxaz.dev";
-const USER_CA = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMockBoxazUserCertificateAuthorityForDashboardOnly boxaz-user-ca";
-const KNOWN = "boxaz-ssh ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBoxazMockGatewayHostKeyOnlyForTheDashboardDemo";
+const CORE = "api.boxmes.dev";
+const USER_CA = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMockBoxmesUserCertificateAuthorityForDashboardOnly boxmes-user-ca";
+const KNOWN = "boxmes-ssh ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBoxmesMockGatewayHostKeyOnlyForTheDashboardDemo";
 const KEY_RE = /^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)|sk-ssh-ed25519@openssh\.com|sk-ecdsa-sha2-nistp256@openssh\.com)\s+([A-Za-z0-9+/]{20,}={0,3})(\s+.*)?$/;
 
 interface Addon { browser: boolean; headless: boolean; browserEver: boolean; desktop: boolean; desktopEver: boolean; width: number; height: number }
 interface V111State { addons: Record<string, Addon>; shares: Record<string, (DesktopShare & { _raw: string })[]>; seq: number }
-type G = typeof globalThis & { __boxazV111?: V111State };
+type G = typeof globalThis & { __boxmesV111?: V111State };
 
 const iso = (ms: number) => new Date(ms).toISOString();
 const hex = (n: number) => Array.from({ length: n }, () => Math.floor(Math.random() * 16).toString(16)).join("");
@@ -47,8 +47,8 @@ function seed(): V111State {
 }
 function st(): V111State {
   const g = globalThis as G;
-  if (!g.__boxazV111) g.__boxazV111 = seed();
-  return g.__boxazV111;
+  if (!g.__boxmesV111) g.__boxmesV111 = seed();
+  return g.__boxmesV111;
 }
 function addon(s: V111State, id: string): Addon {
   return (s.addons[id] ??= { browser: false, headless: true, browserEver: false, desktop: false, desktopEver: false, width: 1280, height: 800 });
@@ -128,9 +128,9 @@ export function handleV111(ms: MockState, ctx: V111Ctx, M: string, segs: string[
       id: t.id, box_id: b.id, certificate: `${certType} AAAAIHNzaC1lZDI1NTE5LWNlcnQtdjAxQG9wZW5zc2guY29tMockCertificate${hex(48)} ${name}`,
       serial: Math.floor(Math.random() * 2 ** 52), principals, valid_after: iso(now - 60_000), valid_before: iso(now + ttl * 1000), fingerprint: fp, host, user: name,
       proxy_command: "box ssh-proxy --anon %h", known_hosts: KNOWN, user_ca: USER_CA,
-      command: `ssh -o CertificateFile=<key>-cert.pub -i <key> -o ProxyCommand='box ssh-proxy --anon %h' -o HostKeyAlias=boxaz-ssh ${name}@${host}`,
-      direct_command: `ssh -p 2222 -o CertificateFile=<key>-cert.pub -i <key> ${name}@ssh.boxaz.dev`,
-      config: `Host ${host}\n  HostName ${host}\n  User ${name}\n  ProxyCommand box ssh-proxy --anon %h\n  CertificateFile ~/.ssh/boxaz-${name}-cert.pub\n  IdentityFile ~/.ssh/id_ed25519\n  HostKeyAlias boxaz-ssh\n  UserKnownHostsFile ~/.boxaz/known_hosts\n`,
+      command: `ssh -o CertificateFile=<key>-cert.pub -i <key> -o ProxyCommand='box ssh-proxy --anon %h' -o HostKeyAlias=boxmes-ssh ${name}@${host}`,
+      direct_command: `ssh -p 2222 -o CertificateFile=<key>-cert.pub -i <key> ${name}@ssh.boxmes.dev`,
+      config: `Host ${host}\n  HostName ${host}\n  User ${name}\n  ProxyCommand box ssh-proxy --anon %h\n  CertificateFile ~/.ssh/boxmes-${name}-cert.pub\n  IdentityFile ~/.ssh/id_ed25519\n  HostKeyAlias boxmes-ssh\n  UserKnownHostsFile ~/.boxmes/known_hosts\n`,
     };
     ctx.pushEvent({ actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "box.ticket", message: `SSH certificate ${t.id} issued for ${fp} (valid until ${cert.valid_before})`, cost_usd: null });
     return ctx.ok(cert, 201);
@@ -163,7 +163,7 @@ export function handleV111(ms: MockState, ctx: V111Ctx, M: string, segs: string[
       a.browserEver = true;
       a.headless = Boolean(body.headless) || !a.desktop;
       const { raw, t } = ticketRec(b, "cdp", ttl);
-      const q = `/.boxaz/cdp?ticket=${raw}`;
+      const q = `/.boxmes/cdp?ticket=${raw}`;
       const out: BrowserSession = {
         ...browserState(s, b), started, ...(started ? { start_ms: first ? 17400 : 2100 + Math.round(Math.random() * 600) } : {}), clients: 0,
         cdp_url: `wss://${host}${q}`, http_url: `https://${host}${q}`, core_url: `wss://${CORE}/v1/boxes/${b.id}/cdp?ticket=${raw}`, ticket_id: t.id, expires_at: t.expires_at,
@@ -200,7 +200,7 @@ export function handleV111(ms: MockState, ctx: V111Ctx, M: string, segs: string[
       const { raw, t } = ticketRec(b, "vnc", ttl, { redeemed_at: iso(Date.now() + 400), live: 1 });
       const out: DesktopSession = {
         ...desktopState(s, b), started, ...(started ? { start_ms: first ? 6600 : 900 + Math.round(Math.random() * 400) } : {}),
-        vnc_url: `wss://${host}/.boxaz/vnc?ticket=${raw}${viewOnly ? "&view_only=1" : ""}`, viewer_url: `https://${host}/.boxaz/desktop?ticket=${raw}${viewOnly ? "&view_only=1" : ""}`,
+        vnc_url: `wss://${host}/.boxmes/vnc?ticket=${raw}${viewOnly ? "&view_only=1" : ""}`, viewer_url: `https://${host}/.boxmes/desktop?ticket=${raw}${viewOnly ? "&view_only=1" : ""}`,
         core_url: `wss://${CORE}/v1/boxes/${b.id}/vnc?ticket=${raw}`, ticket_id: t.id, view_only: viewOnly, expires_at: t.expires_at,
       };
       if (started) ctx.pushEvent({ actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "box.desktop", message: `desktop started ${a.width}x${a.height} in ${out.start_ms} ms`, cost_usd: null });
@@ -225,7 +225,7 @@ export function handleV111(ms: MockState, ctx: V111Ctx, M: string, segs: string[
       list.push(sh);
       mockRecordTicket({ id: sh.id, box_id: b.id, purpose: "vnc_share", prefix: sh.prefix, expires_at: sh.expires_at, created_at: sh.created_at, actor: "user:anh" });
       ctx.pushEvent({ actor: "user:anh", box_id: b.id, agent_id: b.agent_id, type: "box.ticket", message: `desktop share ${sh.prefix}… (${viewOnly ? "view-only" : "interactive"}) until ${sh.expires_at}`, cost_usd: null });
-      return ctx.ok({ ...pubShare(sh), url: `https://${host}/.boxaz/desktop?share=${raw}` }, 201);
+      return ctx.ok({ ...pubShare(sh), url: `https://${host}/.boxmes/desktop?share=${raw}` }, 201);
     }
     if (r4 && M === "DELETE") {
       const hit = list.filter((x) => r4 === "all" || x.id === r4);
@@ -251,12 +251,12 @@ export function accessP1(ctx: V111Ctx, b: MockState["boxes"][number], info: Reco
   if (a.browser) live.cdp = 1;
   if (a.desktop) { const v = activeShares(s, b.id).reduce((n, x) => n + x.viewers, 0); if (v) live.vnc = v; }
   info.live = live;
-  info.cdp = { url: `wss://${host}/.boxaz/cdp?ticket={ticket}`, core_url: `wss://${CORE}/v1/boxes/${b.id}/cdp?ticket={ticket}`, start: `POST /v1/boxes/${b.id}/browser`, running: a.browser && b.status === "running", clients: a.browser ? 1 : 0 };
-  info.desktop = { url: `wss://${host}/.boxaz/vnc?ticket={ticket}`, core_url: `wss://${CORE}/v1/boxes/${b.id}/vnc?ticket={ticket}`, page: `https://${host}/.boxaz/desktop?ticket={ticket}`, start: `POST /v1/boxes/${b.id}/desktop`, running: a.desktop && b.status === "running", clients: live.vnc ?? 0 };
+  info.cdp = { url: `wss://${host}/.boxmes/cdp?ticket={ticket}`, core_url: `wss://${CORE}/v1/boxes/${b.id}/cdp?ticket={ticket}`, start: `POST /v1/boxes/${b.id}/browser`, running: a.browser && b.status === "running", clients: a.browser ? 1 : 0 };
+  info.desktop = { url: `wss://${host}/.boxmes/vnc?ticket={ticket}`, core_url: `wss://${CORE}/v1/boxes/${b.id}/vnc?ticket={ticket}`, page: `https://${host}/.boxmes/desktop?ticket={ticket}`, start: `POST /v1/boxes/${b.id}/desktop`, running: a.desktop && b.status === "running", clients: live.vnc ?? 0 };
   const c = (info.commands ?? {}) as Record<string, string>;
   Object.assign(c, {
     ssh_cert: `box ssh-cert ${name} --ttl 12h`, sftp: `box sftp ${name} put ./file.txt /tmp/`,
-    scp: `scp -o ProxyCommand='box ssh-proxy %h' -o HostKeyAlias=boxaz-ssh ./file.txt boxaz@${host}:/tmp/`,
+    scp: `scp -o ProxyCommand='box ssh-proxy %h' -o HostKeyAlias=boxmes-ssh ./file.txt boxmes@${host}:/tmp/`,
     browser: `box browser ${name}`, desktop: `box desktop ${name}`, desktop_share: `box desktop ${name} --share --ttl 1h`,
   });
   info.commands = c;

@@ -17,12 +17,12 @@ import (
 	"testing"
 	"time"
 
-	"boxaz/core/internal/boxd"
-	"boxaz/core/internal/manager"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/sandbox"
-	"boxaz/core/internal/selector"
-	"boxaz/core/internal/store"
+	"boxmes/core/internal/boxd"
+	"boxmes/core/internal/manager"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/sandbox"
+	"boxmes/core/internal/selector"
+	"boxmes/core/internal/store"
 )
 
 // fakeSandbox is a sandbox provider whose "sandboxes" are directories on this

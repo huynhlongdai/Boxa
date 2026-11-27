@@ -99,7 +99,7 @@ func NewE2B(c *http.Client, apiBase string) *E2B {
 	d := &E2B{h: newHTTP(c), apiBase: orStr(apiBase, "https://api.e2b.app"), domain: "e2b.app", keyHeader: "X-API-Key",
 		idHeader: "E2b-Sandbox-Id", portHeader: "E2b-Sandbox-Port", fork: true, privTraffic: true, meta: map[string]e2bSandbox{}}
 	d.info = Info{ID: "e2b", Name: "E2B", Tier: "T2", Adapter: "native", Verification: VerifiedLive,
-		VerifiedNote: "Full lifecycle verified live on the Hobby plan on 2026-10-27 (template base = 2 vCPU / 512 MB / 22 GB root fs, 20 GB free, envd 0.10.0): create ~0.2 s, create→first exec ~0.35 s, exec ~30-90 ms, 200k-line exec ~0.14 s, file put/get ~25-45 ms, pause ~0.15 s, resume ~0.18 s, fork ~0.5-0.7 s, delete ~55 ms; also boxaz-core box up/exec/down end to end. Control plane per e2b-dev/infra spec/openapi.yml, exec via envd Connect RPC process.Process/Start. Deploy test through boxaz-core (scripts/live-deploy.sh, 2026-10-27): git clone + npm install of heroku/node-js-sample ~3 s; preview URL https://<port>-<id>.e2b.app is public (first 200 in ~0.14 s, 502 while paused); box sleep = pause ~0.19 s, wake = resume ~0.17 s with the app process and files intact; idle sleep after idle_minutes; T3 snapshot ~0.26 s, restore ~0.14 s, fork onto a new sandbox ~0.56 s, clone via native fork ~1.8 s (running process cloned, URL serves at once).",
+		VerifiedNote: "Full lifecycle verified live on the Hobby plan on 2026-10-27 (template base = 2 vCPU / 512 MB / 22 GB root fs, 20 GB free, envd 0.10.0): create ~0.2 s, create→first exec ~0.35 s, exec ~30-90 ms, 200k-line exec ~0.14 s, file put/get ~25-45 ms, pause ~0.15 s, resume ~0.18 s, fork ~0.5-0.7 s, delete ~55 ms; also boxmes-core box up/exec/down end to end. Control plane per e2b-dev/infra spec/openapi.yml, exec via envd Connect RPC process.Process/Start. Deploy test through boxmes-core (scripts/live-deploy.sh, 2026-10-27): git clone + npm install of heroku/node-js-sample ~3 s; preview URL https://<port>-<id>.e2b.app is public (first 200 in ~0.14 s, 502 while paused); box sleep = pause ~0.19 s, wake = resume ~0.17 s with the app process and files intact; idle sleep after idle_minutes; T3 snapshot ~0.26 s, restore ~0.14 s, fork onto a new sandbox ~0.56 s, clone via native fork ~1.8 s (running process cloned, URL serves at once).",
 		Docs:         "https://e2b.dev/docs", Website: "https://e2b.dev", Initials: "E2", Color: "#ff8800",
 		Caps:    Capabilities{Background: true, Pause: true, Fork: true, Ports: true, PTY: true, Files: true, BootMS: 400, MaxLifetimeS: 24 * 3600, MaxCPU: 8, MaxRAMMB: 8192, Isolation: "microvm"},
 		Pricing: Pricing{CPUSecond: 0.000014, GBSecond: 0.0000045, Source: "https://e2b.dev/pricing", Confidence: "docs", Note: "per second while running; Hobby/Pro plans; sandbox resources come from the template"},
@@ -119,7 +119,7 @@ func NewNovita(c *http.Client, apiBase string) *E2B {
 	d.apiBase, d.domain, d.keyHeader, d.idHeader, d.portHeader, d.fork = apiBase, "us-phx-1.sandbox.novita.ai", "X-API-KEY", "Novita-Sandbox-Id", "Novita-Sandbox-Port", false
 	d.regionDom = map[string]string{"us-phx-1": "us-phx-1.sandbox.novita.ai", "us-virginia-1": "sandbox.novita.ai"}
 	d.info = Info{ID: "novita", Name: "Novita Sandbox", Tier: "T2", Adapter: "native", Verification: VerifiedLive,
-		VerifiedNote: "E2B-compatible. Verified live in us-phx-1 on 2026-10-27 (template base = 2 vCPU / 512 MB / 22 GB root fs, 20 GB free, envd 0.5.12, no envd access token): create ~0.3 s, create→first exec ~0.27 s, exec ~150-170 ms, 200k-line exec ~0.47 s, file put/get ~150 ms, delete ~0.1 s. Pause ~0.3 s / resume ~0.15 s / exec after resume ~80 ms (state reaches paused). Through boxaz-core (scripts/live-novita.sh, shim): box up ~0.9 s, exec 84-133 ms, MCP 83 ms, 200k-line compaction keeps exit 7, box down ~0.1 s. No fork API. Paths/headers (X-API-KEY, api.<domain>, envd 49983) from the novita-sandbox SDK 2.1.1. Deploy test through boxaz-core (scripts/live-deploy.sh, 2026-10-27): clone + npm install ~3 s; preview URL https://<port>-<id>.us-phx-1.sandbox.novita.ai is public with no traffic token (502 while paused); sleep = pause ~0.77 s, wake = resume ~0.21 s with process and files intact; T3 snapshot ~0.78 s, restore ~0.44 s, fork ~1.2 s, clone (snapshot → new sandbox) ~1.6 s (files cloned, app must be restarted).",
+		VerifiedNote: "E2B-compatible. Verified live in us-phx-1 on 2026-10-27 (template base = 2 vCPU / 512 MB / 22 GB root fs, 20 GB free, envd 0.5.12, no envd access token): create ~0.3 s, create→first exec ~0.27 s, exec ~150-170 ms, 200k-line exec ~0.47 s, file put/get ~150 ms, delete ~0.1 s. Pause ~0.3 s / resume ~0.15 s / exec after resume ~80 ms (state reaches paused). Through boxmes-core (scripts/live-novita.sh, shim): box up ~0.9 s, exec 84-133 ms, MCP 83 ms, 200k-line compaction keeps exit 7, box down ~0.1 s. No fork API. Paths/headers (X-API-KEY, api.<domain>, envd 49983) from the novita-sandbox SDK 2.1.1. Deploy test through boxmes-core (scripts/live-deploy.sh, 2026-10-27): clone + npm install ~3 s; preview URL https://<port>-<id>.us-phx-1.sandbox.novita.ai is public with no traffic token (502 while paused); sleep = pause ~0.77 s, wake = resume ~0.21 s with process and files intact; T3 snapshot ~0.78 s, restore ~0.44 s, fork ~1.2 s, clone (snapshot → new sandbox) ~1.6 s (files cloned, app must be restarted).",
 		Docs:         "https://docs.novita.ai/guides/sandbox-overview", Website: "https://novita.ai", Initials: "NV", Color: "#23d57c",
 		Caps:    Capabilities{Background: true, Pause: true, Ports: true, PTY: true, Files: true, BootMS: 600, MaxLifetimeS: 4 * 3600, MaxCPU: 8, MaxRAMMB: 8192, Isolation: "microvm"},
 		Pricing: Pricing{CPUSecond: 0.0000098, GBSecond: 0.0000032, Source: "https://docs.novita.ai/guides/sandbox-pricing", Confidence: "docs", Note: "per second for CPU and RAM while running; 20 GB ephemeral disk included"},
@@ -204,7 +204,7 @@ func (d *E2B) Create(ctx context.Context, c Cred, s Spec) (*Sandbox, error) {
 		body["envVars"] = s.Env
 	}
 	// v1.8: the preview host refuses requests without the sandbox's traffic
-	// access token (create-only option); the Boxaz gateway adds it upstream.
+	// access token (create-only option); the Boxmes gateway adds it upstream.
 	if s.PrivateTraffic && d.privTraffic {
 		body["network"] = map[string]any{"allowPublicTraffic": false}
 		// Novita refuses a private sandbox unless envd access is secured
@@ -214,10 +214,10 @@ func (d *E2B) Create(ctx context.Context, c Cred, s Spec) (*Sandbox, error) {
 	}
 	// v1.7 native wake: paused sandboxes resume on their own when traffic
 	// reaches the preview host (lifecycle onTimeout=pause + autoResume).
-	// BOXAZ_NATIVE_AUTORESUME=0 turns it off; an API that rejects the field
+	// BOXMES_NATIVE_AUTORESUME=0 turns it off; an API that rejects the field
 	// gets the plain body (once, then never again for this driver).
 	d.mu.Lock()
-	auto := !d.noAutoResume && os.Getenv("BOXAZ_NATIVE_AUTORESUME") != "0"
+	auto := !d.noAutoResume && os.Getenv("BOXMES_NATIVE_AUTORESUME") != "0"
 	d.mu.Unlock()
 	if auto {
 		body["autoPause"] = true

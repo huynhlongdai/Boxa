@@ -16,12 +16,12 @@ import (
 	"sync"
 	"time"
 
-	"boxaz/core/internal/egress"
-	"boxaz/core/internal/proto"
+	"boxmes/core/internal/egress"
+	"boxmes/core/internal/proto"
 )
 
 // IncusDriver shells out to the `incus` CLI. Each box is an unprivileged
-// system container named boxaz-<id>. Untested in the Boxaz CI sandbox (no Incus);
+// system container named boxmes-<id>. Untested in the Boxmes CI sandbox (no Incus);
 // every command is built with explicit args (no shell interpolation on the host).
 type IncusDriver struct {
 	Bin        string // default "incus"
@@ -58,12 +58,24 @@ func (d *IncusDriver) Name() string { return "incus" }
 var incusNameRe = regexp.MustCompile(`[^a-z0-9-]`)
 
 // cname converts a box id (box_xxx) to a valid Incus instance name.
-// Container names. Containers created before the Boxaz rename are named with
+// Container names. Containers created before the Boxmes rename are named with
 // the legacy prefix; List remembers them so cname keeps resolving them.
 const (
-	cPrefix       = "boxaz-"
-	cLegacyPrefix = "boxa-" // compat: pre-rename containers
+	cPrefix = "boxmes-"
 )
+
+// cLegacyPrefixes: compat, containers created before the renames (Boxaz, Boxa).
+var cLegacyPrefixes = []string{"boxaz-", "boxa-"}
+
+// legacyContainerID returns the box id of a legacy container name.
+func legacyContainerID(name string) (string, bool) {
+	for _, p := range cLegacyPrefixes {
+		if strings.HasPrefix(name, p+"box-") {
+			return strings.Replace(strings.TrimPrefix(name, p), "-", "_", 1), true
+		}
+	}
+	return "", false
+}
 
 var legacyCNames sync.Map // id -> legacy container name
 
@@ -152,7 +164,7 @@ func (d *IncusDriver) Create(ctx context.Context, p proto.CreateParams) error {
 		return err
 	}
 	if h := CacheHost(); h != "" { // v1.3: shared apt cache on the host
-		_ = d.Write(ctx, p.BoxID, "/etc/apt/apt.conf.d/01boxaz-cache", []byte(AptProxyConf(h)))
+		_ = d.Write(ctx, p.BoxID, "/etc/apt/apt.conf.d/01boxmes-cache", []byte(AptProxyConf(h)))
 	}
 	if p.AgentsMD != "" {
 		if err := d.Write(ctx, p.BoxID, "/AGENTS.md", []byte(p.AgentsMD)); err != nil {
@@ -231,8 +243,7 @@ func (d *IncusDriver) List(ctx context.Context) ([]string, error) {
 		l = strings.TrimSpace(l)
 		if strings.HasPrefix(l, cPrefix+"box-") {
 			ids = append(ids, "box_"+strings.TrimPrefix(l, cPrefix+"box-"))
-		} else if strings.HasPrefix(l, cLegacyPrefix+"box-") {
-			id := "box_" + strings.TrimPrefix(l, cLegacyPrefix+"box-")
+		} else if id, ok := legacyContainerID(l); ok {
 			legacyCNames.Store(id, l)
 			ids = append(ids, id)
 		}
@@ -283,7 +294,7 @@ func (d *IncusDriver) Run(ctx context.Context, id string, p proto.ExecParams, st
 // sh runs a small helper command in the box and returns stdout.
 func (d *IncusDriver) sh(ctx context.Context, id string, script string, args ...string) (string, int, error) {
 	var out, errb bytes.Buffer
-	full := append([]string{"exec", cname(id), "--", "bash", "-c", script, "boxaz"}, args...)
+	full := append([]string{"exec", cname(id), "--", "bash", "-c", script, "boxmes"}, args...)
 	err := d.run(ctx, nil, &out, &errb, full...)
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
@@ -342,7 +353,7 @@ func (d *IncusDriver) Read(ctx context.Context, id, path string) ([]byte, bool, 
 
 func (d *IncusDriver) Write(ctx context.Context, id, path string, data []byte) error {
 	path = normPath(path)
-	tmp, err := os.CreateTemp("", "boxaz-push-*")
+	tmp, err := os.CreateTemp("", "boxmes-push-*")
 	if err != nil {
 		return err
 	}
@@ -656,7 +667,7 @@ func (d *IncusDriver) Features(ctx context.Context) []string {
 	return f
 }
 
-// Usage reads memory and CPU counters of every boxaz container (incus list).
+// Usage reads memory and CPU counters of every boxmes container (incus list).
 func (d *IncusDriver) Usage(ctx context.Context) map[string]proto.BoxUsage {
 	out, err := d.incus(ctx, "list", "--format", "json")
 	if err != nil {
@@ -693,10 +704,12 @@ func (d *IncusDriver) Usage(ctx context.Context) map[string]proto.BoxUsage {
 		switch {
 		case strings.HasPrefix(c.Name, cPrefix):
 			id = strings.Replace(strings.TrimPrefix(c.Name, cPrefix), "-", "_", 1) // inverse of cname
-		case strings.HasPrefix(c.Name, cLegacyPrefix+"box-"):
-			id = strings.Replace(strings.TrimPrefix(c.Name, cLegacyPrefix), "-", "_", 1)
 		default:
-			continue
+			lid, ok := legacyContainerID(c.Name)
+			if !ok {
+				continue
+			}
+			id = lid
 		}
 
 		u := proto.BoxUsage{RAMMB: float64(int(c.State.Memory.Usage/(1<<20)*10)) / 10}

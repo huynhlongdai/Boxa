@@ -13,6 +13,6 @@ export async function GET() {
     mock,
     authed: mock || Boolean(key),
     key_prefix: key ? `${key.slice(0, 12)}…` : null,
-    ws_base: process.env.NEXT_PUBLIC_BOXAZ_WS || null,
+    ws_base: process.env.NEXT_PUBLIC_BOXMES_WS || null,
   });
 }

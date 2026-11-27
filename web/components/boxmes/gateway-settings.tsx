@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Mono } from "@/components/boxaz/status";
+import { Mono } from "@/components/boxmes/status";
 
 export function GatewaySettingsCard({ value, onChange }: { value: GatewaySettings; onChange: (v: GatewaySettings) => void }) {
   const t = useTranslations("gateway");
@@ -30,11 +30,11 @@ export function GatewaySettingsCard({ value, onChange }: { value: GatewaySetting
         <CardDescription>{t("desc")}</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4 md:grid-cols-2">
-        <Field label={t("domain")} hint={domainEnv ? `${t("fromEnv")}: BOXAZ_GATEWAY_DOMAIN` : t("domainHint")}>
+        <Field label={t("domain")} hint={domainEnv ? `${t("fromEnv")}: BOXMES_GATEWAY_DOMAIN` : t("domainHint")}>
           <Input value={domainEnv ? g?.domain ?? "" : value.domain} disabled={domainEnv} placeholder="example.com" className="font-mono"
             onChange={(e) => onChange({ ...value, domain: e.target.value.trim().toLowerCase() })} data-testid="gateway-domain" />
         </Field>
-        <Field label={t("previewMode")} hint={previewEnv ? `${t("fromEnv")}: BOXAZ_PROVIDER_PREVIEW` : t("previewHint")}>
+        <Field label={t("previewMode")} hint={previewEnv ? `${t("fromEnv")}: BOXMES_PROVIDER_PREVIEW` : t("previewHint")}>
           <Select value={previewEnv ? g?.provider_preview ?? "auto" : value.provider_preview || "auto"} disabled={previewEnv}
             onChange={(e) => onChange({ ...value, provider_preview: e.target.value as ProviderPreviewMode })}>
             <option value="auto">{t("pmAuto")}</option>

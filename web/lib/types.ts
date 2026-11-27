@@ -169,7 +169,7 @@ export interface Job {
   finished_at: string | null;
 }
 
-export interface BoxazEvent {
+export interface BoxmesEvent {
   id: string;
   ts: string;
   actor: string;
@@ -274,7 +274,7 @@ export interface CostsResponse extends List<LedgerEntry> {
   };
 }
 
-// GET /costs/suggestions → { items: Suggestion[] } (shape theo boxaz/core manager.Suggestion)
+// GET /costs/suggestions → { items: Suggestion[] } (shape theo boxmes/core manager.Suggestion)
 export interface Suggestion {
   kind: string;
   title: string;
@@ -371,7 +371,7 @@ export interface Settings {
   features: { gpu: boolean };
   /** v1.1: ngôn ngữ mặc định cho thông báo (Telegram/email) và lỗi API. */
   locale?: string;
-  /** v1.8: gateway domain (URL box <key>-<port>.<domain>) + chính sách preview của provider. Env BOXAZ_GATEWAY_DOMAIN / BOXAZ_PROVIDER_PREVIEW thắng. */
+  /** v1.8: gateway domain (URL box <key>-<port>.<domain>) + chính sách preview của provider. Env BOXMES_GATEWAY_DOMAIN / BOXMES_PROVIDER_PREVIEW thắng. */
   gateway?: GatewaySettings;
 }
 
@@ -450,7 +450,7 @@ export interface QuoteBody {
 export type ToolFormat = "openai" | "anthropic" | "gemini" | "mcp";
 
 // ---- Các shape admin chưa được contract mô tả chi tiết (giả định, cần core xác nhận) ----
-// (shape theo boxaz/core; contract v1 chỉ mô tả sơ lược)
+// (shape theo boxmes/core; contract v1 chỉ mô tả sơ lược)
 export interface AdminSystem {
   version: string;
   uptime_s: number;
@@ -584,7 +584,7 @@ export interface StorageTestResult {
 }
 
 // ---------------- v1.3: provider manager, recommend, speed, mesh ----------------
-// Shape bám theo boxaz/core/internal (manager/provmgr.go, recommend.go, agent13.go, warmpool.go, speed.go, mesh.go).
+// Shape bám theo boxmes/core/internal (manager/provmgr.go, recommend.go, agent13.go, warmpool.go, speed.go, mesh.go).
 
 /** Requirements: "box cần gì" (POST /recommend, POST /boxes {requirements}). Bỏ trống = dùng mặc định của profile. */
 export interface Requirements {
@@ -994,7 +994,7 @@ export interface MeshKeyResult {
 }
 
 // ---------------- v1.4: Sandbox API providers (T2/T3) ----------------
-// Shape bám theo boxaz/core/internal/sandbox/sandbox.go (Info) + manager/sandbox14.go (SandboxProviderView) + api/v14.go (lint).
+// Shape bám theo boxmes/core/internal/sandbox/sandbox.go (Info) + manager/sandbox14.go (SandboxProviderView) + api/v14.go (lint).
 
 export type SandboxMode = "auto" | "dial" | "shim";
 export type Verification = "live-verified" | "docs-verified" | "sdk-source";
@@ -1050,7 +1050,7 @@ export interface SandboxInfo {
   env_vars: string[];
   notes: string[];
   from_usd_h: number;
-  /** Không có API exec (Render): luôn T2 dial-in, boxd là lệnh khởi động của service, core cần BOXAZ_PUBLIC_URL. */
+  /** Không có API exec (Render): luôn T2 dial-in, boxd là lệnh khởi động của service, core cần BOXMES_PUBLIC_URL. */
   dial_only?: boolean;
   /** Provider có thể khởi động lại instance với filesystem mới; boxd vào lại bằng token của host. */
   ephemeral_restart?: boolean;

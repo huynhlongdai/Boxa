@@ -7,8 +7,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"boxaz/core/internal/egress"
-	"boxaz/core/internal/proto"
+	"boxmes/core/internal/egress"
+	"boxmes/core/internal/proto"
 )
 
 // EgressApplier is implemented by drivers that can restrict outbound traffic.
@@ -16,10 +16,10 @@ type EgressApplier interface {
 	ApplyEgress(ctx context.Context, p proto.EgressParams) (proto.EgressResult, error)
 }
 
-const localEgressWarning = "local driver has no network isolation: the egress allowlist is NOT enforced (exported as BOXAZ_EGRESS_ALLOW for tools that honour it); use the incus driver in production"
+const localEgressWarning = "local driver has no network isolation: the egress allowlist is NOT enforced (exported as BOXMES_EGRESS_ALLOW for tools that honour it); use the incus driver in production"
 
 // ApplyEgress on the local driver is best effort: the policy is exported to
-// the box environment (BOXAZ_EGRESS_ALLOW, BOXAZ_EGRESS_ENFORCED=0) and the
+// the box environment (BOXMES_EGRESS_ALLOW, BOXMES_EGRESS_ENFORCED=0) and the
 // result says clearly that nothing is enforced.
 func (d *LocalDriver) ApplyEgress(ctx context.Context, p proto.EgressParams) (proto.EgressResult, error) {
 	d.mu.Lock()
@@ -33,11 +33,11 @@ func (d *LocalDriver) ApplyEgress(ctx context.Context, p proto.EgressParams) (pr
 	}
 	pol := egress.Policy{Allow: p.Allow, DenyByDefault: p.DenyByDefault}
 	if pol.Active() {
-		m.Env["BOXAZ_EGRESS_ALLOW"] = strings.Join(p.Allow, ",")
-		m.Env["BOXAZ_EGRESS_ENFORCED"] = "0"
+		m.Env["BOXMES_EGRESS_ALLOW"] = strings.Join(p.Allow, ",")
+		m.Env["BOXMES_EGRESS_ENFORCED"] = "0"
 	} else {
-		delete(m.Env, "BOXAZ_EGRESS_ALLOW")
-		delete(m.Env, "BOXAZ_EGRESS_ENFORCED")
+		delete(m.Env, "BOXMES_EGRESS_ALLOW")
+		delete(m.Env, "BOXMES_EGRESS_ENFORCED")
 	}
 	if err := d.saveMeta(m); err != nil {
 		return proto.EgressResult{}, err

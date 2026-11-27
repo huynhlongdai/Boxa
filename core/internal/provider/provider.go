@@ -16,7 +16,7 @@ import (
 	"text/template"
 	"time"
 
-	"boxaz/core/internal/model"
+	"boxmes/core/internal/model"
 )
 
 // CreateRequest asks a provider for a new host.
@@ -160,7 +160,7 @@ func (*Local) Status(ctx context.Context, token, ref string) (string, error) { r
 
 // Stub is a provider known to the price feed but without an adapter yet.
 // (DigitalOcean, Contabo and netcup have real adapters since v1.2; Stub stays
-// for feed-only providers added through BOXAZ_PRICE_FEED_PROVIDERS.)
+// for feed-only providers added through BOXMES_PRICE_FEED_PROVIDERS.)
 type Stub struct{ id, name string }
 
 func (s *Stub) ID() string        { return s.id }

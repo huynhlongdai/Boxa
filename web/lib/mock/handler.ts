@@ -1,6 +1,6 @@
-// Bộ xử lý MOCK MODE: mô phỏng Boxaz Core theo contract v1, trạng thái giữ trong bộ nhớ.
+// Bộ xử lý MOCK MODE: mô phỏng Boxmes Core theo contract v1, trạng thái giữ trong bộ nhớ.
 import { parseDocument } from "yaml";
-import type { RecommendOption, Agent, AgentKind, ApiKey, Approval, Box, BoxazEvent, Delivery, ErrorCode, Host, LedgerEntry, NotifySettings, NotifyView, Overview, ProviderRegion, Quote, QuoteOption, Settings, Snapshot, StorageView, Template } from "../types";
+import type { RecommendOption, Agent, AgentKind, ApiKey, Approval, Box, BoxmesEvent, Delivery, ErrorCode, Host, LedgerEntry, NotifySettings, NotifyView, Overview, ProviderRegion, Quote, QuoteOption, Settings, Snapshot, StorageView, Template } from "../types";
 import { NOTIFY_EVENTS } from "../types";
 import type { Locale } from "@/i18n/config";
 import { FALLBACK_KINDS } from "../agent-kinds";
@@ -14,12 +14,12 @@ import { handleV110 } from "./v110";
 import { accessP1, handleV111 } from "./v111";
 import { handleV17, hydrateV17 } from "./v17";
 
-type G = typeof globalThis & { __boxazMock?: MockState };
+type G = typeof globalThis & { __boxmesMock?: MockState };
 
 export function store(): MockState {
   const g = globalThis as G;
-  if (!g.__boxazMock) g.__boxazMock = makeSeed();
-  return g.__boxazMock;
+  if (!g.__boxmesMock) g.__boxmesMock = makeSeed();
+  return g.__boxmesMock;
 }
 
 export interface MockResponse {
@@ -32,7 +32,7 @@ export interface MockResponse {
 const ok = (body: unknown, status = 200): MockResponse => ({ status, body });
 // Ngôn ngữ của request đang xử lý (handleMock chạy đồng bộ nên an toàn).
 let L: Locale = "vi";
-const DOCS = "https://boxaz.dev/docs/errors";
+const DOCS = "https://boxmes.dev/docs/errors";
 /** Lỗi theo contract v1.1: message + hint dịch theo Accept-Language, code không đổi, kèm docs_url (+ retry_after_s nếu có). */
 /** v1.3: error.next — lệnh gợi ý thường gỡ được lỗi (giống nextForError ở core/internal/api/v13.go). */
 const NEXT: Partial<Record<ErrorCode, string[]>> = {
@@ -40,7 +40,7 @@ const NEXT: Partial<Record<ErrorCode, string[]>> = {
   BUDGET_EXCEEDED: ["box_cost()  # see spend vs budget", "box_list(status=\"running\")  # then box_sleep / box_down unused boxes"],
   BOX_SLEEPING: ["box_sleep(box_id=<id>, wake=true)", "box_ensure(name=<name>)  # wakes or recreates"],
   NOT_FOUND: ["box_list()  # find the right id or slug", "box_ensure(name=<name>)  # get-or-create by name"],
-  PROVIDER_FAILED: ["box_recommend(<same needs>)  # Boxaz already fails over; check other options", "retry after retry_after_s"],
+  PROVIDER_FAILED: ["box_recommend(<same needs>)  # Boxmes already fails over; check other options", "retry after retry_after_s"],
   POLICY_DENIED: ["box_quote(<smaller spec>)", "ask the operator to change the agent policy or quotas"],
   TIMEOUT: ["box_exec(..., async=true) then box_job(job_id, wait_s=30)"],
   INVALID: ["GET /v1/openapi.json or box_templates() / GET /v1/profiles for valid values"],
@@ -68,8 +68,8 @@ function nextId(s: MockState, prefix: string) {
   return `${prefix}_${s.seq.toString(16)}${Math.random().toString(16).slice(2, 6)}`;
 }
 
-function pushEvent(s: MockState, e: Omit<BoxazEvent, "id" | "ts"> & { ts?: string }) {
-  const evt: BoxazEvent = { id: nextId(s, "evt"), ts: e.ts ?? iso(Date.now()), ...e } as BoxazEvent;
+function pushEvent(s: MockState, e: Omit<BoxmesEvent, "id" | "ts"> & { ts?: string }) {
+  const evt: BoxmesEvent = { id: nextId(s, "evt"), ts: e.ts ?? iso(Date.now()), ...e } as BoxmesEvent;
   s.events.push(evt);
   return evt;
 }
@@ -455,7 +455,7 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
   // ---- v1.11: browser (CDP), desktop (VNC) + share link, SSH certificate ----
   const v111ctx = {
     ok, err: (st: number, code: ErrorCode, key: string, params?: Record<string, string | number>) => err(st, code, key, params),
-    hydrateBox: (b: MockState["boxes"][number]) => hydrateBox(s, b), pushEvent: (e: Partial<BoxazEvent>) => pushEvent(s, e as Omit<BoxazEvent, "id" | "ts">),
+    hydrateBox: (b: MockState["boxes"][number]) => hydrateBox(s, b), pushEvent: (e: Partial<BoxmesEvent>) => pushEvent(s, e as Omit<BoxmesEvent, "id" | "ts">),
   };
   const v111 = handleV111(s, v111ctx, M, segs, body);
   if (v111) return v111;
@@ -463,7 +463,7 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
   // ---- v1.10: ticket truy cập, terminal bền, access, forward-ports, SSH keys ----
   const v110 = handleV110(s, {
     ok, err: (st, code, key, params) => err(st, code, key, params),
-    hydrateBox: (b) => hydrateBox(s, b), pushEvent: (e) => pushEvent(s, e as Omit<BoxazEvent, "id" | "ts">),
+    hydrateBox: (b) => hydrateBox(s, b), pushEvent: (e) => pushEvent(s, e as Omit<BoxmesEvent, "id" | "ts">),
   }, M, segs, body);
   if (v110) {
     if (r2 === "access" && M === "GET" && v110.status === 200) {
@@ -476,7 +476,7 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
   // ---- v1.7: ports/gateway, URL token, wake_on_request, app supervisor, capabilities ----
   const v17 = handleV17(s, {
     ok, list, err: (st, code, key, params) => err(st, code, key, params),
-    hydrateBox: (b) => hydrateBox(s, b), pushEvent: (e) => pushEvent(s, e as Omit<BoxazEvent, "id" | "ts">),
+    hydrateBox: (b) => hydrateBox(s, b), pushEvent: (e) => pushEvent(s, e as Omit<BoxmesEvent, "id" | "ts">),
   }, M, segs, q, body);
   if (v17) return v17;
 
@@ -484,7 +484,7 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
   const v13 = handleV13(s, {
     L, ok, list, err: (st, code, key, params) => err(st, code, key, params),
     hydrateBox: (b) => hydrateBox(s, b), createBox: (b) => createBox(s, b), nextId: (p) => nextId(s, p),
-    pushEvent: (e) => pushEvent(s, e as Omit<BoxazEvent, "id" | "ts">), regions: PROVIDER_REGIONS,
+    pushEvent: (e) => pushEvent(s, e as Omit<BoxmesEvent, "id" | "ts">), regions: PROVIDER_REGIONS,
   }, M, segs, q, body);
   if (v13) return v13;
 
@@ -597,7 +597,7 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
         const fs = Object.keys(s.files[b.id] ?? {});
         return ok({
           files_changed: running ? fs.filter((f) => f.startsWith("/work")).slice(0, 3) : [],
-          processes: running ? [{ pid: 412, cmd: b.template.includes("browser") ? "chromium --headless=new" : b.template === "node" ? "node server.js" : "python main.py" }, { pid: 88, cmd: "boxd --dial gw.boxaz" }] : [],
+          processes: running ? [{ pid: 412, cmd: b.template.includes("browser") ? "chromium --headless=new" : b.template === "node" ? "node server.js" : "python main.py" }, { pid: 88, cmd: "boxd --dial gw.boxmes" }] : [],
           ports: running ? b.ports : [],
           since: b.last_active_at ?? b.created_at,
         });
@@ -731,7 +731,7 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
   if (r0 === "costs.csv") {
     const rows = filterLedger(s, q);
     const csv = ["id,ts,agent,box,provider,kind,amount_usd,note", ...rows.map((l) => [l.id, l.ts, s.agents.find((a) => a.id === l.agent_id)?.name ?? l.agent_id, s.boxes.find((b) => b.id === l.box_id)?.slug ?? l.box_id, l.provider, l.kind, l.amount_usd.toFixed(4), l.note].map(csvEscape).join(","))].join("\n");
-    return { status: 200, body: csv + "\n", contentType: "text/csv; charset=utf-8", headers: { "Content-Disposition": `attachment; filename="boxaz-costs-${new Date().toISOString().slice(0, 10)}.csv"` } };
+    return { status: 200, body: csv + "\n", contentType: "text/csv; charset=utf-8", headers: { "Content-Disposition": `attachment; filename="boxmes-costs-${new Date().toISOString().slice(0, 10)}.csv"` } };
   }
   if (r0 === "costs") {
     if (r1 === "suggestions")
@@ -976,7 +976,7 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
       return ok({
         version: "0.1.0-mock",
         db: "postgres",
-        public_url: "https://boxaz.example.com",
+        public_url: "https://boxmes.example.com",
         auto_burst: true,
         uptime_s: Math.round((Date.now() - s.started_at) / 1000) + 3 * 86400,
         components: [

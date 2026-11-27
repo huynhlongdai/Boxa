@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"boxaz/core/internal/boxd"
-	"boxaz/core/internal/proto"
+	"boxmes/core/internal/boxd"
+	"boxmes/core/internal/proto"
 )
 
 func TestJSONPathAndTemplates(t *testing.T) {

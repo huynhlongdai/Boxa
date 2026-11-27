@@ -20,8 +20,8 @@ import (
 
 	"github.com/creack/pty"
 
-	"boxaz/core/internal/hostlink"
-	"boxaz/core/internal/proto"
+	"boxmes/core/internal/hostlink"
+	"boxmes/core/internal/proto"
 )
 
 // ProcCmder is implemented by drivers that can build an arbitrary command

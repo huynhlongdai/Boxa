@@ -1,8 +1,8 @@
 package manager
 
 // v1.11 desktop: Xvfb + a light window manager + x11vnc in the box (127.0.0.1
-// only), RFB streamed over WSS by core (/.boxaz/vnc) and viewed with noVNC
-// served by core (/.boxaz/desktop). View-only is enforced by core, which drops
+// only), RFB streamed over WSS by core (/.boxmes/vnc) and viewed with noVNC
+// served by core (/.boxmes/desktop). View-only is enforced by core, which drops
 // input messages from the viewer. Share links (InstaBox-style streamUrl) are
 // reusable view-only tokens with a TTL (60 s … 24 h); revoking them closes
 // every viewer within a second and the link answers 410 from then on.
@@ -16,9 +16,9 @@ import (
 	"strings"
 	"time"
 
-	"boxaz/core/internal/hostlink"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/secret"
+	"boxmes/core/internal/hostlink"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/secret"
 )
 
 // ShareTokenPrefix marks desktop share tokens (bxs_<box id>_<40 hex>).
@@ -115,7 +115,7 @@ func (m *Manager) rfbAnswers(ctx context.Context, peer *hostlink.Peer, boxID str
 }
 
 func (m *Manager) stopDesktopLocked(ctx context.Context, a *boxAddons, b *model.Box, peer *hostlink.Peer, why string) error {
-	m.closeKind(b.ID, "vnc", "[boxaz] desktop stopped")
+	m.closeKind(b.ID, "vnc", "[boxmes] desktop stopped")
 	_, err := m.addonScript(ctx, peer, b.ID, desktopStop, nil)
 	a.desktopUp = false
 	if err == nil {
@@ -135,8 +135,8 @@ type DesktopInput struct {
 // DesktopSession is the POST answer.
 type DesktopSession struct {
 	*DesktopState
-	VNCURL    string    `json:"vnc_url"`    // wss://<name>.<domain>/.boxaz/vnc?ticket=… (RFB over binary frames)
-	ViewerURL string    `json:"viewer_url"` // https://<name>.<domain>/.boxaz/desktop?ticket=… (noVNC page)
+	VNCURL    string    `json:"vnc_url"`    // wss://<name>.<domain>/.boxmes/vnc?ticket=… (RFB over binary frames)
+	ViewerURL string    `json:"viewer_url"` // https://<name>.<domain>/.boxmes/desktop?ticket=… (noVNC page)
 	CoreURL   string    `json:"core_url"`
 	TicketID  string    `json:"ticket_id"`
 	ViewOnly  bool      `json:"view_only"`
@@ -175,7 +175,7 @@ func (m *Manager) desktopPageURL(ctx context.Context, b *model.Box, param, token
 		if strings.HasPrefix(m.Cfg.PublicURL, "http://") {
 			scheme = "http://"
 		}
-		return scheme + b.Subdomain + "." + d + "/.boxaz/desktop?" + param + "=" + token
+		return scheme + b.Subdomain + "." + d + "/.boxmes/desktop?" + param + "=" + token
 	}
 	return strings.TrimRight(m.Cfg.PublicURL, "/") + "/v1/boxes/" + b.ID + "/desktop/view?" + param + "=" + token
 }
@@ -218,7 +218,7 @@ func (m *Manager) StopDesktop(ctx context.Context, p *Principal, ref string) (ma
 	}
 	peer, ok := m.linkPeer(b)
 	if b.Status != model.StatusRunning || !ok {
-		m.closeKind(b.ID, "vnc", "[boxaz] desktop stopped")
+		m.closeKind(b.ID, "vnc", "[boxmes] desktop stopped")
 		return map[string]any{"box_id": b.ID, "stopped": false, "note": "box is not running"}, nil
 	}
 	a := m.addonsOf(b.ID)
@@ -369,7 +369,7 @@ func (m *Manager) RevokeShares(ctx context.Context, p *Principal, ref, id string
 	}
 	closed := 0
 	for _, t := range hit {
-		closed += m.closeTicketConns(t.ID, "[boxaz] share link revoked")
+		closed += m.closeTicketConns(t.ID, "[boxmes] share link revoked")
 	}
 	if len(hit) > 0 {
 		m.Emit(ctx, p.Actor(), b.ID, b.AgentID, "box.desktop", fmt.Sprintf("%d share link(s) revoked, %d viewer(s) disconnected", len(hit), closed), nil)

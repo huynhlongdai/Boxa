@@ -8,15 +8,15 @@ import (
 	"strings"
 	"time"
 
-	"boxaz/core/internal/boxd"
-	"boxaz/core/internal/boxyaml"
-	"boxaz/core/internal/hostlink"
-	"boxaz/core/internal/i18n"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/proto"
-	"boxaz/core/internal/provider"
-	"boxaz/core/internal/secret"
-	"boxaz/core/internal/store"
+	"boxmes/core/internal/boxd"
+	"boxmes/core/internal/boxyaml"
+	"boxmes/core/internal/hostlink"
+	"boxmes/core/internal/i18n"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/proto"
+	"boxmes/core/internal/provider"
+	"boxmes/core/internal/secret"
+	"boxmes/core/internal/store"
 )
 
 const maxProvisionAttempts = 3 // first try + 2 retries (spec M3)
@@ -33,7 +33,7 @@ func (m *Manager) CreateBox(ctx context.Context, p *Principal, req boxyaml.Reque
 		if msg == "" {
 			msg = "maintenance mode"
 		}
-		return nil, false, model.EH(model.ErrPolicyDenied, "Boxaz is in maintenance; retry later.", "%s", msg)
+		return nil, false, model.EH(model.ErrPolicyDenied, "Boxmes is in maintenance; retry later.", "%s", msg)
 	}
 	origYAML := req.YAML
 	if req.YAML != "" {
@@ -467,7 +467,7 @@ func (m *Manager) boxURL(ctx context.Context, b *model.Box, h *model.Host) strin
 	if h != nil && h.Billing == "sandbox" {
 		// sandbox boxes are reached through the provider's preview host
 		// (E2B https://<port>-<id>.e2b.app, Novita …sandbox.novita.ai);
-		// a private preview host (v1.8) only through the Boxaz gateway
+		// a private preview host (v1.8) only through the Boxmes gateway
 		if h.PrivateTraffic {
 			return m.GatewayURL(b, b.Ports[0])
 		}
@@ -493,7 +493,7 @@ func (m *Manager) boxURL(ctx context.Context, b *model.Box, h *model.Host) strin
 		u = "https://" + b.Slug + ".box." + s.BaseDomain + "/"
 	}
 	if s.URLTokenProtect {
-		u += "?boxaz_token=" + m.URLToken(b.ID)
+		u += "?boxmes_token=" + m.URLToken(b.ID)
 	}
 	return u
 }
@@ -987,7 +987,7 @@ func (m *Manager) Sleep(ctx context.Context, p *Principal, id string) (*model.Bo
 
 func (m *Manager) sleepBox(ctx context.Context, b *model.Box, actor, why string) (*model.Box, error) {
 	if b.Status == model.StatusRunning {
-		m.closeAccess(b.ID, "[boxaz] box is going to sleep") // v1.10: terminals, ssh, tcp streams
+		m.closeAccess(b.ID, "[boxmes] box is going to sleep") // v1.10: terminals, ssh, tcp streams
 	}
 	lock := m.boxLock(b.ID)
 	lock.Lock()
@@ -1147,7 +1147,7 @@ func (m *Manager) terminateBox(ctx context.Context, b *model.Box, actor, why str
 	if b.Status == model.StatusTerminated {
 		return m.decorateBox(ctx, b), nil
 	}
-	m.closeAccess(b.ID, "[boxaz] box was deleted")
+	m.closeAccess(b.ID, "[boxmes] box was deleted")
 	lock := m.boxLock(b.ID)
 	if !lock.TryLock() {
 		// provisioning holds the lock; mark terminated and let provision see it

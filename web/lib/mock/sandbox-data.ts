@@ -1,4 +1,4 @@
-// Sinh từ GET /v1/sandbox/providers của boxaz-core v1.4 (adapter metadata, capability, giá theo giây, mức xác minh).
+// Sinh từ GET /v1/sandbox/providers của boxmes-core v1.4 (adapter metadata, capability, giá theo giây, mức xác minh).
 // Chỉ phần tĩnh; trạng thái (connected, mode, health…) do lib/mock/v14.ts tính.
 import type { SandboxInfo } from "../types";
 
@@ -95,7 +95,7 @@ export const SANDBOX_INFO: SandboxInfo[] = [
    "BOXDSH_ORG"
   ],
   "notes": [
-   "Persistent VMs with a public HTTPS domain; Boxaz creates them isolated (no peers) and deletes them when the box ends."
+   "Persistent VMs with a public HTTPS domain; Boxmes creates them isolated (no peers) and deletes them when the box ends."
   ],
   "from_usd_h": 0.0614
  },
@@ -105,7 +105,7 @@ export const SANDBOX_INFO: SandboxInfo[] = [
   "tier": "T2",
   "adapter": "native",
   "verification": "live-verified",
-  "verified_note": "Full lifecycle verified live on the free tier on 2026-10-27: create (wait=running) ~3.8 s, exec ~50-200 ms, file put/get, pause/resume, fork, delete; also boxaz-core box up/exec/down end to end. Deploy test 2026-10-27: no preview URL (ports report kind none), sleep/wake ~0.3 s, T3 snapshot ~0.32 s, restore ~0.79 s, clone via native fork ~1.2 s.",
+  "verified_note": "Full lifecycle verified live on the free tier on 2026-10-27: create (wait=running) ~3.8 s, exec ~50-200 ms, file put/get, pause/resume, fork, delete; also boxmes-core box up/exec/down end to end. Deploy test 2026-10-27: no preview URL (ports report kind none), sleep/wake ~0.3 s, T3 snapshot ~0.32 s, restore ~0.79 s, clone via native fork ~1.2 s.",
   "docs": "https://prized.dev/docs/sandboxes-api",
   "website": "https://prized.dev/sandboxes",
   "initials": "PZ",
@@ -191,7 +191,7 @@ export const SANDBOX_INFO: SandboxInfo[] = [
    "PRIZED_API_KEY"
   ],
   "notes": [
-   "No inbound ports: boxd dials out, so this is fine for Boxaz.",
+   "No inbound ports: boxd dials out, so this is fine for Boxmes.",
    "Free tier: up to 10 sandboxes, each 2 vCPU / 4 GB and 60 min of running in all; it draws on the free credit at sandbox rates.",
    "No preview URLs or inbound ports for sandboxes yet; exec output keeps the first 4 MiB per stream."
   ],
@@ -301,7 +301,7 @@ export const SANDBOX_INFO: SandboxInfo[] = [
   "tier": "T2",
   "adapter": "native",
   "verification": "live-verified",
-  "verified_note": "E2B-compatible. Verified live in us-phx-1 on 2026-10-27 (template base = 2 vCPU / 512 MB / 22 GB root fs, 20 GB free, envd 0.5.12, no envd access token): create ~0.3 s, create→first exec ~0.27 s, exec ~150-170 ms, 200k-line exec ~0.47 s, file put/get ~150 ms, delete ~0.1 s. Pause ~0.3 s / resume ~0.15 s / exec after resume ~80 ms (state reaches paused). Through boxaz-core (scripts/live-novita.sh, shim): box up ~0.9 s, exec 84-133 ms, MCP 83 ms, 200k-line compaction keeps exit 7, box down ~0.1 s. No fork API. Paths/headers (X-API-KEY, api.<domain>, envd 49983) from the novita-sandbox SDK 2.1.1. Deploy test through boxaz-core (scripts/live-deploy.sh, 2026-10-27): clone + npm install ~3 s; preview URL https://<port>-<id>.us-phx-1.sandbox.novita.ai is public with no traffic token (502 while paused); sleep = pause ~0.77 s, wake = resume ~0.21 s with process and files intact; T3 snapshot ~0.78 s, restore ~0.44 s, fork ~1.2 s, clone (snapshot → new sandbox) ~1.6 s (files cloned, app must be restarted).",
+  "verified_note": "E2B-compatible. Verified live in us-phx-1 on 2026-10-27 (template base = 2 vCPU / 512 MB / 22 GB root fs, 20 GB free, envd 0.5.12, no envd access token): create ~0.3 s, create→first exec ~0.27 s, exec ~150-170 ms, 200k-line exec ~0.47 s, file put/get ~150 ms, delete ~0.1 s. Pause ~0.3 s / resume ~0.15 s / exec after resume ~80 ms (state reaches paused). Through boxmes-core (scripts/live-novita.sh, shim): box up ~0.9 s, exec 84-133 ms, MCP 83 ms, 200k-line compaction keeps exit 7, box down ~0.1 s. No fork API. Paths/headers (X-API-KEY, api.<domain>, envd 49983) from the novita-sandbox SDK 2.1.1. Deploy test through boxmes-core (scripts/live-deploy.sh, 2026-10-27): clone + npm install ~3 s; preview URL https://<port>-<id>.us-phx-1.sandbox.novita.ai is public with no traffic token (502 while paused); sleep = pause ~0.77 s, wake = resume ~0.21 s with process and files intact; T3 snapshot ~0.78 s, restore ~0.44 s, fork ~1.2 s, clone (snapshot → new sandbox) ~1.6 s (files cloned, app must be restarted).",
   "docs": "https://docs.novita.ai/guides/sandbox-overview",
   "website": "https://novita.ai",
   "initials": "NV",
@@ -384,7 +384,7 @@ export const SANDBOX_INFO: SandboxInfo[] = [
   "tier": "T2",
   "adapter": "native",
   "verification": "live-verified",
-  "verified_note": "Full lifecycle verified live on the Hobby plan on 2026-10-27 (template base = 2 vCPU / 512 MB / 22 GB root fs, 20 GB free, envd 0.10.0): create ~0.2 s, create→first exec ~0.35 s, exec ~30-90 ms, 200k-line exec ~0.14 s, file put/get ~25-45 ms, pause ~0.15 s, resume ~0.18 s, fork ~0.5-0.7 s, delete ~55 ms; also boxaz-core box up/exec/down end to end. Control plane per e2b-dev/infra spec/openapi.yml, exec via envd Connect RPC process.Process/Start. Deploy test through boxaz-core (scripts/live-deploy.sh, 2026-10-27): git clone + npm install of heroku/node-js-sample ~3 s; preview URL https://<port>-<id>.e2b.app is public (first 200 in ~0.14 s, 502 while paused); box sleep = pause ~0.19 s, wake = resume ~0.17 s with the app process and files intact; idle sleep after idle_minutes; T3 snapshot ~0.26 s, restore ~0.14 s, fork onto a new sandbox ~0.56 s, clone via native fork ~1.8 s (running process cloned, URL serves at once).",
+  "verified_note": "Full lifecycle verified live on the Hobby plan on 2026-10-27 (template base = 2 vCPU / 512 MB / 22 GB root fs, 20 GB free, envd 0.10.0): create ~0.2 s, create→first exec ~0.35 s, exec ~30-90 ms, 200k-line exec ~0.14 s, file put/get ~25-45 ms, pause ~0.15 s, resume ~0.18 s, fork ~0.5-0.7 s, delete ~55 ms; also boxmes-core box up/exec/down end to end. Control plane per e2b-dev/infra spec/openapi.yml, exec via envd Connect RPC process.Process/Start. Deploy test through boxmes-core (scripts/live-deploy.sh, 2026-10-27): git clone + npm install of heroku/node-js-sample ~3 s; preview URL https://<port>-<id>.e2b.app is public (first 200 in ~0.14 s, 502 while paused); box sleep = pause ~0.19 s, wake = resume ~0.17 s with the app process and files intact; idle sleep after idle_minutes; T3 snapshot ~0.26 s, restore ~0.14 s, fork onto a new sandbox ~0.56 s, clone via native fork ~1.8 s (running process cloned, URL serves at once).",
   "docs": "https://e2b.dev/docs",
   "website": "https://e2b.dev",
   "initials": "E2",
@@ -651,12 +651,12 @@ export const SANDBOX_INFO: SandboxInfo[] = [
    "RENDER_DISK_GB"
   ],
   "notes": [
-   "No exec API: each box is a Render web service running boxd, which dials out to core (needs BOXAZ_PUBLIC_URL reachable from the internet).",
-   "Public preview: https://<service>.onrender.com serves in-box port 8000 (credential field preview_port); other ports go through the Boxaz gateway.",
+   "No exec API: each box is a Render web service running boxd, which dials out to core (needs BOXMES_PUBLIC_URL reachable from the internet).",
+   "Public preview: https://<service>.onrender.com serves in-box port 8000 (credential field preview_port); other ports go through the Boxmes gateway.",
    "Free plan: 0.1 CPU / 512 MB, spins down after 15 min without inbound traffic (boxd pings its own URL to stay up while the box exists), ~1 min cold start, local files lost on spin-down or restart.",
    "Paid instance types need a payment method on the Render workspace (API answers 402). A persistent disk (disk_gb, $0.25/GB-month) keeps the box's files across restarts.",
    "The ephemeral disk size is not documented by Render; the catalog assumes 20 GB (estimate).",
-   "Sleep keeps the service running (boxd stops the box's processes); delete removes the service. No provider snapshot or fork; Boxaz snapshots are boxd tarballs."
+   "Sleep keeps the service running (boxd stops the box's processes); delete removes the service. No provider snapshot or fork; Boxmes snapshots are boxd tarballs."
   ],
   "dial_only": true,
   "ephemeral_restart": true,

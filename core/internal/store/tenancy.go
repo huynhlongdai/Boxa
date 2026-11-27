@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"boxaz/core/internal/model"
+	"boxmes/core/internal/model"
 )
 
 // ErrInviteUnavailable: code unknown, expired, exhausted or already redeemed by this user.

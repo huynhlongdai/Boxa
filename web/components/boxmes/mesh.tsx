@@ -101,7 +101,7 @@ export function MeshView() {
         <Card className="mb-6 border-dashed p-4 text-[13px]" data-mesh-disabled>
           <p className="flex items-center gap-1.5 font-medium"><WifiOff className="size-4 text-muted-foreground" /> {t("disabled")}</p>
           <p className="mt-1 text-muted-foreground">{data.hint || t("disabledHint")}</p>
-          <CodeBlock className="mt-3" language="bash" code={"BOXAZ_MESH_URL=https://mesh.example.com\nBOXAZ_MESH_API_KEY=…   # headscale apikeys create\nBOXAZ_MESH_USER=boxaz"} />
+          <CodeBlock className="mt-3" language="bash" code={"BOXMES_MESH_URL=https://mesh.example.com\nBOXMES_MESH_API_KEY=…   # headscale apikeys create\nBOXMES_MESH_USER=boxmes"} />
         </Card>
       ) : (
         <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">

@@ -1,13 +1,13 @@
 package api
 
-// A2A (Agent2Agent) JSON-RPC task API at POST /a2a, mapped onto Boxaz:
+// A2A (Agent2Agent) JSON-RPC task API at POST /a2a, mapped onto Boxmes:
 //
 //   message/send   (alias tasks/send)          → run a command (async job) or a tool
 //   message/stream (alias tasks/sendSubscribe) → same, streamed as SSE
 //   tasks/get, tasks/cancel, tasks/resubscribe
 //
 // A message is turned into work like this:
-//   - a data part {"tool": "box_up", "arguments": {...}} calls that Boxaz tool
+//   - a data part {"tool": "box_up", "arguments": {...}} calls that Boxmes tool
 //     (any of /v1/tools) and completes immediately with its JSON result;
 //   - a data part {"box_id": "...", "command": "...", "cwd"?, "timeout_s"?}, or
 //     a text part (the command) with metadata.box_id, starts an async exec
@@ -22,10 +22,10 @@ import (
 	"strings"
 	"time"
 
-	"boxaz/core/internal/manager"
-	"boxaz/core/internal/mcp"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/secret"
+	"boxmes/core/internal/manager"
+	"boxmes/core/internal/mcp"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/secret"
 )
 
 const (

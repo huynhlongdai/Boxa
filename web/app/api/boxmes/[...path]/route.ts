@@ -1,13 +1,13 @@
-// Proxy: trình duyệt → /api/boxaz/<path> → Boxaz Core (<BOXAZ_API>/<path>), gắn Bearer key từ cookie httpOnly.
-// Tiền tố đặc biệt "_root/": /api/boxaz/_root/llms.txt → <gốc Core>/llms.txt (bỏ /v1) cho các endpoint discovery v1.1.
-// Accept-Language: lấy theo cookie boxaz_locale (ngôn ngữ dashboard) để lỗi từ Core trả về đúng ngôn ngữ; không có cookie thì
+// Proxy: trình duyệt → /api/boxmes/<path> → Boxmes Core (<BOXMES_API>/<path>), gắn Bearer key từ cookie httpOnly.
+// Tiền tố đặc biệt "_root/": /api/boxmes/_root/llms.txt → <gốc Core>/llms.txt (bỏ /v1) cho các endpoint discovery v1.1.
+// Accept-Language: lấy theo cookie boxmes_locale (ngôn ngữ dashboard) để lỗi từ Core trả về đúng ngôn ngữ; không có cookie thì
 // chuyển nguyên header của trình duyệt.
 // Ở MOCK MODE, trả dữ liệu giả lập từ lib/mock theo đúng contract.
 import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
 import { getTranslations } from "next-intl/server";
 import { sessionKey, coreBase, isMock } from "@/lib/server/config";
-import { LEGACY_LOCALE_COOKIE, LOCALE_COOKIE, normalizeLocale, resolveLocale } from "@/i18n/config";
+import { localeCookie, normalizeLocale, resolveLocale } from "@/i18n/config";
 import { handleMock } from "@/lib/mock/handler";
 import { mockAppLogStream, mockStream } from "@/lib/mock/stream";
 
@@ -37,7 +37,7 @@ async function handle(req: NextRequest, ctx: Ctx) {
   const jar = await cookies();
   const key = sessionKey(jar);
   const mock = await isMock();
-  const cookieLocale = normalizeLocale((jar.get(LOCALE_COOKIE)?.value ?? jar.get(LEGACY_LOCALE_COOKIE)?.value));
+  const cookieLocale = normalizeLocale(localeCookie(jar));
   const browserLang = req.headers.get("accept-language");
   const locale = resolveLocale(cookieLocale, browserLang);
   const acceptLanguage = cookieLocale ? `${cookieLocale}, en;q=0.5` : browserLang || locale;
@@ -45,14 +45,14 @@ async function handle(req: NextRequest, ctx: Ctx) {
   if (mock) {
     if (segs[0] === "stream") {
       return new Response(mockStream(req.signal), {
-        headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive", "X-Boxaz-Mock": "1" },
+        headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive", "X-Boxmes-Mock": "1" },
       });
     }
     if (req.method === "GET" && isAppLogFollow(segs, search)) {
       const st = mockAppLogStream(segs[1], req.signal);
       if (st) {
         return new Response(st, {
-          headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive", "X-Accel-Buffering": "no", "X-Boxaz-Mock": "1" },
+          headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive", "X-Accel-Buffering": "no", "X-Boxmes-Mock": "1" },
         });
       }
     }
@@ -64,9 +64,9 @@ async function handle(req: NextRequest, ctx: Ctx) {
         body = {};
       }
     }
-    const apiBase = process.env.NEXT_PUBLIC_BOXAZ_API || "http://localhost:8080/v1";
+    const apiBase = process.env.NEXT_PUBLIC_BOXMES_API || "http://localhost:8080/v1";
     const r = handleMock(req.method, segs, search, body, apiBase, locale);
-    const extra = { "X-Boxaz-Mock": "1", "Content-Language": locale, Vary: "Accept-Language, Cookie", ...r.headers };
+    const extra = { "X-Boxmes-Mock": "1", "Content-Language": locale, Vary: "Accept-Language, Cookie", ...r.headers };
     if (typeof r.body === "string") {
       return new Response(r.body, { status: r.status, headers: { "Content-Type": r.contentType ?? "text/plain; charset=utf-8", ...extra } });
     }

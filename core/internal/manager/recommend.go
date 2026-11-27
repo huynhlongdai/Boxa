@@ -13,12 +13,12 @@ import (
 	"strings"
 	"time"
 
-	"boxaz/core/internal/boxyaml"
-	"boxaz/core/internal/egress"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/provider"
-	"boxaz/core/internal/sandbox"
-	"boxaz/core/internal/selector"
+	"boxmes/core/internal/boxyaml"
+	"boxmes/core/internal/egress"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/provider"
+	"boxmes/core/internal/sandbox"
+	"boxmes/core/internal/selector"
 )
 
 // RecommendInput is POST /recommend.

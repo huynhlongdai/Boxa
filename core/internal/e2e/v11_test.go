@@ -10,9 +10,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"boxaz/core/internal/api"
-	"boxaz/core/internal/client"
-	"boxaz/core/internal/model"
+	"boxmes/core/internal/api"
+	"boxmes/core/internal/client"
+	"boxmes/core/internal/model"
 )
 
 func get(t *testing.T, url string, hdr map[string]string) (int, string, http.Header) {
@@ -80,7 +80,7 @@ func TestDiscoveryAndI18n(t *testing.T) {
 	e := setup(t)
 	u := e.srv.URL
 	st, en, _ := get(t, u+"/llms.txt", nil)
-	if st != 200 || !strings.HasPrefix(en, "# Boxaz\n\n> ") || !strings.Contains(en, "box_exec_batch") {
+	if st != 200 || !strings.HasPrefix(en, "# Boxmes\n\n> ") || !strings.Contains(en, "box_exec_batch") {
 		t.Fatalf("llms.txt: %d %.300s", st, en)
 	}
 	_, vi, _ := get(t, u+"/llms.txt", map[string]string{"Accept-Language": "vi-VN,vi;q=0.9"})
@@ -201,7 +201,7 @@ func TestV11Boxes(t *testing.T) {
 	// AGENTS.md in the agent's locale (vi).
 	var f map[string]any
 	e.must(ag, "GET", "/boxes/"+id+"/files?path=/AGENTS.md", nil, &f)
-	if c := f["content"].(string); !strings.Contains(c, "Bạn đang làm việc trong một **box Boxaz**") || !strings.Contains(c, "box_exec_batch") {
+	if c := f["content"].(string); !strings.Contains(c, "Bạn đang làm việc trong một **box Boxmes**") || !strings.Contains(c, "box_exec_batch") {
 		t.Fatalf("AGENTS.md: %.400s", c)
 	}
 
@@ -348,10 +348,10 @@ func TestV11Boxes(t *testing.T) {
 		t.Fatalf("mcp tools: %+v", m)
 	}
 	m = mcpCall("zh", `{"jsonrpc":"2.0","id":2,"method":"prompts/get","params":{"name":"cost-review"}}`)
-	if b, _ := json.Marshal(m); !strings.Contains(string(b), "检查我的 Boxaz 花费") {
+	if b, _ := json.Marshal(m); !strings.Contains(string(b), "检查我的 Boxmes 花费") {
 		t.Fatalf("mcp prompt zh: %s", b)
 	}
-	m = mcpCall("", `{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"boxaz://box/`+fid+`/file/work/state.txt"}}`)
+	m = mcpCall("", `{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"boxmes://box/`+fid+`/file/work/state.txt"}}`)
 	if b, _ := json.Marshal(m); !strings.Contains(string(b), `"text":"fork\n"`) {
 		t.Fatalf("mcp resource: %s", b)
 	}

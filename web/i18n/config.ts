@@ -2,9 +2,21 @@
 export const LOCALES = ["vi", "en", "zh", "ja"] as const;
 export type Locale = (typeof LOCALES)[number];
 export const DEFAULT_LOCALE: Locale = "vi";
-export const LOCALE_COOKIE = "boxaz_locale";
-/** Tên cookie trước khi đổi tên Boxa → Boxaz; vẫn đọc để không mất lựa chọn ngôn ngữ cũ. */
-export const LEGACY_LOCALE_COOKIE = "boxa_locale";
+export const LOCALE_COOKIE = "boxmes_locale";
+/**
+ * Tên cookie trước các lần đổi tên (Boxaz → Boxmes, rồi Boxa → Boxaz), mới nhất trước;
+ * vẫn đọc để không mất lựa chọn ngôn ngữ cũ.
+ */
+export const LEGACY_LOCALE_COOKIES = ["boxaz_locale", "boxa_locale"] as const;
+
+/** Đọc cookie ngôn ngữ: boxmes_locale → boxaz_locale → boxa_locale. */
+export function localeCookie(jar: { get(name: string): { value: string } | undefined }): string | undefined {
+  for (const name of [LOCALE_COOKIE, ...LEGACY_LOCALE_COOKIES]) {
+    const v = jar.get(name)?.value;
+    if (v) return v;
+  }
+  return undefined;
+}
 export const TIME_ZONE = "Asia/Ho_Chi_Minh";
 
 /** Thẻ BCP 47 đầy đủ cho Intl (số, tiền, ngày). */
@@ -43,7 +55,7 @@ export function pickFromAcceptLanguage(header: string | null | undefined): Local
   return null;
 }
 
-/** Cookie `boxaz_locale` > Accept-Language > mặc định (vi). */
+/** Cookie `boxmes_locale` (hoặc tên cũ) > Accept-Language > mặc định (vi). */
 export function resolveLocale(cookie: string | null | undefined, acceptLanguage: string | null | undefined): Locale {
   return normalizeLocale(cookie) ?? pickFromAcceptLanguage(acceptLanguage) ?? DEFAULT_LOCALE;
 }

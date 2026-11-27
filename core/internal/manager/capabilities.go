@@ -2,15 +2,15 @@ package manager
 
 // v1.7 lifecycle capability matrix per provider (research item 5): what sleep
 // keeps, whether the provider's own URL wakes a paused box, native fork,
-// inbound HTTP and the continuous runtime cap. The Boxaz gateway wakes boxes
+// inbound HTTP and the continuous runtime cap. The Boxmes gateway wakes boxes
 // on every provider, so wake_via_gateway is always true.
 
 import (
 	"context"
 	"sort"
 
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/sandbox"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/sandbox"
 )
 
 var knownLifecycle = map[string]model.LifecycleCaps{
@@ -35,7 +35,7 @@ func (m *Manager) LifecycleFor(id string) model.LifecycleCaps {
 				c = model.LifecycleCaps{MemoryPause: caps.Pause, Fork: caps.Fork, InboundHTTP: caps.Ports, MaxRuntimeS: caps.MaxLifetimeS, Note: "derived from the adapter's capabilities"}
 			} else {
 				// VPS / local hosts: incus containers stop on sleep (processes
-				// restart on wake), CoW clone on the host, ports via Boxaz ingress
+				// restart on wake), CoW clone on the host, ports via Boxmes ingress
 				c = model.LifecycleCaps{Fork: true, InboundHTTP: true, Note: "pool host: sleep stops the container (the supervised app restarts on wake); clone is copy-on-write on the host"}
 			}
 		}

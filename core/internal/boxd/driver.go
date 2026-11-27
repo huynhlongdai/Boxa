@@ -9,7 +9,7 @@ import (
 	"os/exec"
 	"time"
 
-	"boxaz/core/internal/proto"
+	"boxmes/core/internal/proto"
 )
 
 // Driver isolates one box runtime.

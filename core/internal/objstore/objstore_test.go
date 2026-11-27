@@ -33,8 +33,8 @@ func TestClientAgainstFake(t *testing.T) {
 	fake := NewFake("AK", "SK", "auto")
 	srv := httptest.NewServer(fake)
 	defer srv.Close()
-	c := New(Config{Provider: "r2", Endpoint: srv.URL, Bucket: "snaps", Prefix: "/boxaz/", AccessKeyID: "AK", SecretAccessKey: "SK"}, srv.Client())
-	if c.Cfg.Region != "auto" || c.Key("a b.tgz") != "boxaz/a b.tgz" {
+	c := New(Config{Provider: "r2", Endpoint: srv.URL, Bucket: "snaps", Prefix: "/boxmes/", AccessKeyID: "AK", SecretAccessKey: "SK"}, srv.Client())
+	if c.Cfg.Region != "auto" || c.Key("a b.tgz") != "boxmes/a b.tgz" {
 		t.Fatalf("defaults %+v", c.Cfg)
 	}
 	ctx := context.Background()
@@ -44,13 +44,13 @@ func TestClientAgainstFake(t *testing.T) {
 	if err := c.Put(ctx, c.Key("snap 1.tar.gz"), []byte("hello")); err != nil {
 		t.Fatal(err)
 	}
-	if b, ok := fake.Get("snaps/boxaz/snap 1.tar.gz"); !ok || string(b) != "hello" {
+	if b, ok := fake.Get("snaps/boxmes/snap 1.tar.gz"); !ok || string(b) != "hello" {
 		t.Fatalf("stored %q %v", b, ok)
 	}
 	if n, err := c.Head(ctx, c.Key("snap 1.tar.gz")); err != nil || n != 5 {
 		t.Fatalf("head %d %v", n, err)
 	}
-	objs, err := c.List(ctx, "boxaz/")
+	objs, err := c.List(ctx, "boxmes/")
 	if err != nil || len(objs) != 1 || objs[0].Size != 5 {
 		t.Fatalf("list %+v %v", objs, err)
 	}
@@ -86,10 +86,10 @@ func TestClientAgainstFake(t *testing.T) {
 	if err := c.Delete(ctx, c.Key("p.tgz")); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := fake.Get("snaps/boxaz/p.tgz"); ok {
+	if _, ok := fake.Get("snaps/boxmes/p.tgz"); ok {
 		t.Fatal("not deleted")
 	}
-	if k, ok := c.KeyFromURI(c.URI("boxaz/x")); !ok || k != "boxaz/x" {
+	if k, ok := c.KeyFromURI(c.URI("boxmes/x")); !ok || k != "boxmes/x" {
 		t.Fatal("uri roundtrip")
 	}
 	b2 := Config{Provider: "b2", Endpoint: "s3.us-west-004.backblazeb2.com"}

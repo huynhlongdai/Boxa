@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"boxaz/core/internal/model"
+	"boxmes/core/internal/model"
 )
 
 const DefaultBaseURL = "https://battleships.dev"
@@ -20,8 +20,8 @@ const DefaultBaseURL = "https://battleships.dev"
 // DefaultAllowlist is the set of battleships provider ids we import.
 var DefaultAllowlist = []string{"hetzner-cloud", "vultr", "contabo", "netcup", "digitalocean"}
 
-// BoxazID maps a battleships id to the Boxaz provider id.
-func BoxazID(bsID string) string {
+// BoxmesID maps a battleships id to the Boxmes provider id.
+func BoxmesID(bsID string) string {
 	switch bsID {
 	case "hetzner-cloud":
 		return "hetzner"
@@ -86,7 +86,7 @@ func (f *Fetcher) get(ctx context.Context, url string, out any) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", "boxaz-core/0.1 (+price feed)")
+	req.Header.Set("User-Agent", "boxmes-core/0.1 (+price feed)")
 	c := f.HTTP
 	if c == nil {
 		c = &http.Client{Timeout: 30 * time.Second}
@@ -129,13 +129,13 @@ func (f *Fetcher) Fetch(ctx context.Context) ([]Result, error) {
 		u := base + "/data/providers/" + id + ".json"
 		if idxErr == nil {
 			if _, ok := urls[id]; !ok {
-				out = append(out, Result{BattleshipsID: id, Provider: BoxazID(id), Err: fmt.Errorf("provider %q not in battleships index", id)})
+				out = append(out, Result{BattleshipsID: id, Provider: BoxmesID(id), Err: fmt.Errorf("provider %q not in battleships index", id)})
 				continue
 			}
 		}
 		var pf providerFile
 		if err := f.get(ctx, u, &pf); err != nil {
-			out = append(out, Result{BattleshipsID: id, Provider: BoxazID(id), Err: err})
+			out = append(out, Result{BattleshipsID: id, Provider: BoxmesID(id), Err: err})
 			continue
 		}
 		out = append(out, Convert(id, &pf, time.Now().UTC()))
@@ -166,7 +166,7 @@ func ParseProvider(bsID string, raw []byte, now time.Time) (Result, error) {
 
 // Convert maps battleships modes × sizes × regions to offers.
 func Convert(bsID string, pf *providerFile, now time.Time) Result {
-	r := Result{BattleshipsID: bsID, Provider: BoxazID(bsID), Capabilities: pf.FeaturesResolved}
+	r := Result{BattleshipsID: bsID, Provider: BoxmesID(bsID), Capabilities: pf.FeaturesResolved}
 	if r.Capabilities == nil {
 		r.Capabilities = map[string]any{}
 	}

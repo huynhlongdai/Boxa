@@ -17,10 +17,10 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/notify"
-	"boxaz/core/internal/secret"
-	"boxaz/core/internal/store"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/notify"
+	"boxmes/core/internal/secret"
+	"boxmes/core/internal/store"
 )
 
 const (
@@ -339,7 +339,7 @@ func (m *Manager) Login(ctx context.Context, in LoginInput, ci ClientInfo) (*Aut
 	return m.newSession(ctx, u, "", ci)
 }
 
-var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("boxaz-dummy-password"), bcrypt.DefaultCost)
+var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("boxmes-dummy-password"), bcrypt.DefaultCost)
 
 func (m *Manager) Logout(ctx context.Context, p *Principal, all bool) error {
 	if err := requireUser(p); err != nil {
@@ -519,7 +519,7 @@ func (m *Manager) sendVerify(ctx context.Context, u *model.User) {
 	}
 	link := m.dashboardLink("/verify-email", tok)
 	m.sendMail(ctx, u.Email, "Confirm your email",
-		"Confirm your Boxaz email address by opening this link (valid 48 hours):\n\n"+link+"\n\nIf you did not sign up, ignore this email.\n")
+		"Confirm your Boxmes email address by opening this link (valid 48 hours):\n\n"+link+"\n\nIf you did not sign up, ignore this email.\n")
 }
 
 func (m *Manager) ResendVerify(ctx context.Context, p *Principal) error {
@@ -559,7 +559,7 @@ func (m *Manager) ForgotPassword(ctx context.Context, email string) {
 	}
 	link := m.dashboardLink("/reset-password", tok)
 	m.sendMail(ctx, u.Email, "Reset your password",
-		"Someone asked to reset the password of your Boxaz account. Open this link within 1 hour to choose a new one:\n\n"+link+"\n\nIf it was not you, ignore this email; your password stays the same.\n")
+		"Someone asked to reset the password of your Boxmes account. Open this link within 1 hour to choose a new one:\n\n"+link+"\n\nIf it was not you, ignore this email; your password stays the same.\n")
 }
 
 type ResetPasswordInput struct {
@@ -601,7 +601,7 @@ func (m *Manager) mailConfigured(ctx context.Context) bool {
 // sendMail uses Config.Mailer, else the SMTP server from settings.notify.
 // Without SMTP the message is logged so a self-hosted operator can copy the link.
 func (m *Manager) sendMail(ctx context.Context, to, subject, body string) {
-	subject = "[Boxaz] " + subject
+	subject = "[Boxmes] " + subject
 	if m.Cfg.Mailer != nil {
 		if err := m.Cfg.Mailer(ctx, to, subject, body); err != nil {
 			log.Printf("mail to %s failed: %v", to, err)
@@ -761,7 +761,7 @@ var inviteAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 func newInviteCode() string {
 	r := secret.RandHex(8)
 	var b strings.Builder
-	b.WriteString("BOXAZ-")
+	b.WriteString("BOXMES-")
 	for i := 0; i < 8; i++ {
 		var v int
 		fmt.Sscanf(r[i*2:i*2+2], "%02x", &v)
@@ -839,7 +839,7 @@ func (m *Manager) mailInvite(ctx context.Context, to string, c *model.InviteCode
 	link := m.dashboardLink("/signup", "")
 	link = strings.TrimSuffix(link, "?token=") + "?invite=" + c.Code
 	m.sendMail(ctx, to, "Your invite",
-		"You are invited to Boxaz. Sign up with this invite code:\n\n    "+c.Code+"\n\n"+link+"\n")
+		"You are invited to Boxmes. Sign up with this invite code:\n\n    "+c.Code+"\n\n"+link+"\n")
 }
 
 func (m *Manager) ListInvites(ctx context.Context, p *Principal) ([]*InviteView, error) {

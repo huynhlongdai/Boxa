@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"boxaz/core/internal/proto"
+	"boxmes/core/internal/proto"
 )
 
 // Proc is the core end of a process opened with proc.open.

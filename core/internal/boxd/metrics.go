@@ -9,7 +9,7 @@ import (
 	"strings"
 	"syscall"
 
-	"boxaz/core/internal/proto"
+	"boxmes/core/internal/proto"
 )
 
 // hostCapacity reads CPU count, RAM (MB) and disk (GB) of the filesystem holding dir.

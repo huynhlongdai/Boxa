@@ -1,4 +1,4 @@
-"""Typed shapes of the Boxaz API (docs/api-contract-v1.md, v1.1).
+"""Typed shapes of the Boxmes API (docs/api-contract-v1.md, v1.1).
 
 All are ``TypedDict`` with ``total=False`` so new server fields never break
 clients; required contract fields are documented on each class.

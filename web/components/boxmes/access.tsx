@@ -16,10 +16,10 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { CodeBlock, CopyButton } from "@/components/boxaz/code-block";
-import { ConfirmButton } from "@/components/boxaz/confirm";
-import { Empty, ErrorBox, LoadingRows } from "@/components/boxaz/page";
-import { Mono } from "@/components/boxaz/status";
+import { CodeBlock, CopyButton } from "@/components/boxmes/code-block";
+import { ConfirmButton } from "@/components/boxmes/confirm";
+import { Empty, ErrorBox, LoadingRows } from "@/components/boxmes/page";
+import { Mono } from "@/components/boxmes/status";
 
 const SSH_INTERNAL_PORT = 2222;
 const LINK_KEYS: Record<string, "boxd" | "agent" | "agentOnDemand" | "none"> = { boxd: "boxd", agent: "agent", "agent-on-demand": "agentOnDemand", none: "none" };
@@ -92,7 +92,7 @@ function SshConfigCard({ info }: { info: AccessInfo }) {
           <p className="text-xs text-muted-foreground">{t("hostKey")}</p>
           <Mono className="break-all">{info.ssh.host_key_fingerprint || "—"}</Mono>
         </div>
-        {info.ssh.known_hosts && <CodeBlock code={info.ssh.known_hosts.trim()} language="~/.boxaz/known_hosts" maxHeight={120} />}
+        {info.ssh.known_hosts && <CodeBlock code={info.ssh.known_hosts.trim()} language="~/.boxmes/known_hosts" maxHeight={120} />}
         <p className="text-xs text-muted-foreground">{t("features", { features: info.ssh.features })}</p>
       </CardContent>
     </Card>
@@ -231,7 +231,7 @@ function SshCertCard({ box, info }: { box: Box; info: AccessInfo }) {
   const [ttl, setTtl] = React.useState<number>(3600);
   const [cert, setCert] = React.useState<SshCert | null>(null);
   const name = info.name || box.slug;
-  const keyFile = `~/.ssh/boxaz-${name}-cert.pub`;
+  const keyFile = `~/.ssh/boxmes-${name}-cert.pub`;
   const ok = PUBKEY_RE.test(pub.trim());
   const cmd = cert ? cert.command.replace("<key>-cert.pub", keyFile).replace("-i <key>", "-i ~/.ssh/id_ed25519") : "";
   return (
@@ -284,8 +284,8 @@ function SshCertCard({ box, info }: { box: Box; info: AccessInfo }) {
 function SftpCard({ box, info }: { box: Box; info: AccessInfo }) {
   const t = useTranslations("access");
   const name = info.name || box.slug;
-  const host = info.host || `${name}.boxaz`;
-  const proxy = `-o ProxyCommand='box ssh-proxy %h' -o HostKeyAlias=boxaz-ssh`;
+  const host = info.host || `${name}.boxmes`;
+  const proxy = `-o ProxyCommand='box ssh-proxy %h' -o HostKeyAlias=boxmes-ssh`;
   return (
     <Card data-testid="access-sftp">
       <CardHeader>
@@ -296,9 +296,9 @@ function SftpCard({ box, info }: { box: Box; info: AccessInfo }) {
         <Cmd label={t("sftpPut")} cmd={`box sftp ${name} put ./file.txt /tmp/file.txt`} testid="access-cmd-sftp" />
         <Cmd label={t("sftpGet")} cmd={`box sftp ${name} get /tmp/file.txt ./file.txt`} />
         <Cmd label={t("sftpLs")} cmd={`box sftp ${name} ls /tmp`} />
-        <Cmd label={t("sftpOpenSsh")} cmd={`sftp ${proxy} boxaz@${host}`} />
-        <Cmd label={t("scp")} cmd={info.commands.scp || `scp ${proxy} ./file.txt boxaz@${host}:/tmp/`} />
-        <Cmd label={t("scpCert")} cmd={`scp -o CertificateFile=~/.ssh/boxaz-${name}-cert.pub -o ProxyCommand='box ssh-proxy --anon %h' -o HostKeyAlias=boxaz-ssh ./file.txt ${name}@${host}:/tmp/`} />
+        <Cmd label={t("sftpOpenSsh")} cmd={`sftp ${proxy} boxmes@${host}`} />
+        <Cmd label={t("scp")} cmd={info.commands.scp || `scp ${proxy} ./file.txt boxmes@${host}:/tmp/`} />
+        <Cmd label={t("scpCert")} cmd={`scp -o CertificateFile=~/.ssh/boxmes-${name}-cert.pub -o ProxyCommand='box ssh-proxy --anon %h' -o HostKeyAlias=boxmes-ssh ./file.txt ${name}@${host}:/tmp/`} />
         <p className="text-xs text-muted-foreground">{t("sftpHint")}</p>
       </CardContent>
     </Card>

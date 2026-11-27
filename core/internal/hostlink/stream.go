@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"boxaz/core/internal/proto"
+	"boxmes/core/internal/proto"
 )
 
 // streamChunk bounds one tcp.data frame.
@@ -235,7 +235,7 @@ func (c *StreamConn) Close() error {
 
 type streamAddr string
 
-func (a streamAddr) Network() string { return "boxaz-stream" }
+func (a streamAddr) Network() string { return "boxmes-stream" }
 func (a streamAddr) String() string  { return string(a) }
 
 func (c *StreamConn) LocalAddr() net.Addr  { return streamAddr("local:" + c.id) }

@@ -23,24 +23,24 @@ import (
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 
-	"boxaz/core/internal/client"
-	"boxaz/core/internal/manager"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/wsconn"
+	"boxmes/core/internal/client"
+	"boxmes/core/internal/manager"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/wsconn"
 )
 
-// dialSSHAnon opens the SSH WebSocket without a ticket: wss://<host>/.boxaz/ssh
+// dialSSHAnon opens the SSH WebSocket without a ticket: wss://<host>/.boxmes/ssh
 // for a gateway host, else core's /v1/boxes/<ref>/ssh.
 func dialSSHAnon(ctx context.Context, c *client.Client, host string) (*wsconn.Conn, error) {
 	host = strings.ToLower(strings.TrimSpace(host))
 	ref := boxRefFromHost(host)
 	var urls []string
-	if strings.Contains(host, ".") && !strings.HasSuffix(host, ".boxaz") && os.Getenv("BOXAZ_ACCESS_VIA") != "core" {
+	if strings.Contains(host, ".") && !strings.HasSuffix(host, ".boxmes") && !strings.HasSuffix(host, ".boxaz") && os.Getenv("BOXMES_ACCESS_VIA") != "core" {
 		scheme := "wss://"
 		if strings.HasPrefix(c.BaseURL, "http://") && strings.Contains(c.BaseURL, host) {
 			scheme = "ws://"
 		}
-		urls = append(urls, scheme+host+"/.boxaz/ssh")
+		urls = append(urls, scheme+host+"/.boxmes/ssh")
 	}
 	base := c.BaseURL
 	switch {
@@ -67,9 +67,9 @@ func dialSSHAnon(ctx context.Context, c *client.Client, host string) (*wsconn.Co
 	return nil, last
 }
 
-// ensureBoxazKey returns ~/.boxaz/id_ed25519 (created on first use) and its public key line.
-func ensureBoxazKey() (string, string, error) {
-	dir := boxazDir()
+// ensureBoxmesKey returns ~/.boxmes/id_ed25519 (created on first use) and its public key line.
+func ensureBoxmesKey() (string, string, error) {
+	dir := boxmesDir()
 	os.MkdirAll(dir, 0o700)
 	p := filepath.Join(dir, "id_ed25519")
 	if pub, err := os.ReadFile(p + ".pub"); err == nil {
@@ -105,7 +105,7 @@ func issueCert(ctx context.Context, c *client.Client, box, pub string, ttl time.
 // box ssh-cert <box> [--key file.pub] [--ttl 1h] [--out file] [--json]
 func cmdSSHCert(ctx context.Context, c *client.Client, args []string) error {
 	fs := flag.NewFlagSet("ssh-cert", flag.ContinueOnError)
-	keyPath := fs.String("key", "", "public key to certify (default ~/.boxaz/id_ed25519.pub, created when missing)")
+	keyPath := fs.String("key", "", "public key to certify (default ~/.boxmes/id_ed25519.pub, created when missing)")
 	ttl := fs.Duration("ttl", time.Hour, "certificate lifetime (≤ 12h)")
 	out := fs.String("out", "", "where to write the certificate (default <key>-cert.pub)")
 	asJSON := fs.Bool("json", false, "print the full response as JSON")
@@ -117,7 +117,7 @@ func cmdSSHCert(ctx context.Context, c *client.Client, args []string) error {
 	}
 	var priv, pub string
 	if *keyPath == "" {
-		p, line, err := ensureBoxazKey()
+		p, line, err := ensureBoxmesKey()
 		if err != nil {
 			return err
 		}
@@ -150,7 +150,7 @@ func cmdSSHCert(ctx context.Context, c *client.Client, args []string) error {
 	}
 	fmt.Printf("certificate %s for %s (principals %s), valid until %s\n  saved to %s\n", cert.ID, cert.BoxID, strings.Join(cert.Principals, ","), cert.ValidBefore.Local().Format(time.RFC3339), dst)
 	cmd := strings.NewReplacer("<key>-cert.pub", dst, "<key>", priv, "box ssh-proxy", selfPath()+" ssh-proxy").Replace(cert.Command)
-	cmd = strings.Replace(cmd, "-o HostKeyAlias=", "-o UserKnownHostsFile="+filepath.Join(boxazDir(), "known_hosts")+" -o HostKeyAlias=", 1)
+	cmd = strings.Replace(cmd, "-o HostKeyAlias=", "-o UserKnownHostsFile="+filepath.Join(boxmesDir(), "known_hosts")+" -o HostKeyAlias=", 1)
 	fmt.Printf("  ssh: %s\n", cmd)
 	if cert.Direct != "" {
 		fmt.Printf("  direct: %s\n", strings.NewReplacer("<key>-cert.pub", dst, "<key>", priv).Replace(cert.Direct))
@@ -162,11 +162,11 @@ func cmdSSHCert(ctx context.Context, c *client.Client, args []string) error {
 // certConfigBlock issues certificates for hosts and renders Host entries that
 // authenticate with them (no API key needed by ssh: box ssh-proxy --anon).
 func certConfigBlock(ctx context.Context, c *client.Client, names []string, domain string, ttl time.Duration) (string, error) {
-	priv, pub, err := ensureBoxazKey()
+	priv, pub, err := ensureBoxmesKey()
 	if err != nil {
 		return "", err
 	}
-	certDir := filepath.Join(boxazDir(), "certs")
+	certDir := filepath.Join(boxmesDir(), "certs")
 	os.MkdirAll(certDir, 0o700)
 	var b strings.Builder
 	for _, n := range names {
@@ -174,7 +174,7 @@ func certConfigBlock(ctx context.Context, c *client.Client, names []string, doma
 		if err != nil {
 			return "", fmt.Errorf("%s: %w", n, err)
 		}
-		host := n + ".boxaz"
+		host := n + ".boxmes"
 		if domain != "" {
 			host = n + "." + domain
 		}
@@ -182,7 +182,7 @@ func certConfigBlock(ctx context.Context, c *client.Client, names []string, doma
 		if err := os.WriteFile(cf, []byte(cert.Certificate+"\n"), 0o644); err != nil {
 			return "", err
 		}
-		fmt.Fprintf(&b, "Host %s\n  HostName %s\n  User %s\n  IdentityFile %s\n  CertificateFile %s\n  IdentitiesOnly yes\n  ProxyCommand %s ssh-proxy --anon %%h\n  HostKeyAlias %s\n  UserKnownHostsFile ~/.boxaz/known_hosts\n  ServerAliveInterval 25\n  # certificate %s valid until %s\n\n",
+		fmt.Fprintf(&b, "Host %s\n  HostName %s\n  User %s\n  IdentityFile %s\n  CertificateFile %s\n  IdentitiesOnly yes\n  ProxyCommand %s ssh-proxy --anon %%h\n  HostKeyAlias %s\n  UserKnownHostsFile ~/.boxmes/known_hosts\n  ServerAliveInterval 25\n  # certificate %s valid until %s\n\n",
 			host, host, cert.User, priv, cf, selfPath(), manager.SSHHostKeyAlias, cert.ID, cert.ValidBefore.Local().Format(time.RFC3339))
 	}
 	return b.String(), nil
@@ -204,7 +204,7 @@ func sftpClient(ctx context.Context, c *client.Client, box string) (*sftp.Client
 	if err != nil {
 		return nil, nil, err
 	}
-	sc, chans, reqs, err := ssh.NewClientConn(ws, box, &ssh.ClientConfig{User: "boxaz", HostKeyCallback: ssh.FixedHostKey(pk), Timeout: 100 * time.Second})
+	sc, chans, reqs, err := ssh.NewClientConn(ws, box, &ssh.ClientConfig{User: "boxmes", HostKeyCallback: ssh.FixedHostKey(pk), Timeout: 100 * time.Second})
 	if err != nil {
 		return nil, nil, err
 	}

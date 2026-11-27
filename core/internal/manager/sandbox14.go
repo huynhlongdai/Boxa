@@ -17,11 +17,11 @@ import (
 	"strings"
 	"time"
 
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/provider"
-	"boxaz/core/internal/sandbox"
-	"boxaz/core/internal/secret"
-	"boxaz/core/internal/selector"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/provider"
+	"boxmes/core/internal/sandbox"
+	"boxmes/core/internal/secret"
+	"boxmes/core/internal/selector"
 )
 
 const sandboxSeedSource = "sandbox-pricing"
@@ -108,7 +108,7 @@ func (m *Manager) createSandboxHost(ctx context.Context, p *Principal, sp sandbo
 	info := sp.Info()
 	mode := m.sandboxMode(ctx, info)
 	if mode == "dial" && m.Cfg.PublicURL == "" {
-		return nil, model.EH(model.ErrInvalid, "Set BOXAZ_PUBLIC_URL (reachable from the internet) or switch the provider to sandbox_mode=shim.", "T2 sandboxes need BOXAZ_PUBLIC_URL so boxd can dial in")
+		return nil, model.EH(model.ErrInvalid, "Set BOXMES_PUBLIC_URL (reachable from the internet) or switch the provider to sandbox_mode=shim.", "T2 sandboxes need BOXMES_PUBLIC_URL so boxd can dial in")
 	}
 	if region == "" && len(info.Regions) > 0 {
 		region = info.Regions[0].ID
@@ -130,7 +130,7 @@ func (m *Manager) createSandboxHost(ctx context.Context, p *Principal, sp sandbo
 	}
 	req := provider.CreateRequest{Name: sandbox.NamePrefix + h.ID[5:], SKU: sku, Region: region, Labels: sandbox.ManagedLabels(h.ID[5:])}
 	// v1.8: refuse public traffic at the provider's preview host when the
-	// gateway is the way in (BOXAZ_PROVIDER_PREVIEW / settings.gateway)
+	// gateway is the way in (BOXMES_PROVIDER_PREVIEW / settings.gateway)
 	if info.Caps.Ports && m.wantPrivatePreview(ctx) && m.privatePreviewSupported(info.ID) {
 		req.PrivateTraffic = true
 	}
@@ -179,8 +179,8 @@ func (m *Manager) createSandboxHost(ctx context.Context, p *Principal, sp sandbo
 }
 
 // autoPlace reports whether box_up may rent this kind without approval:
-// burst servers need BOXAZ_AUTO_BURST; sandboxes also run with
-// BOXAZ_AUTO_SANDBOX (per-second billing, destroyed with their box).
+// burst servers need BOXMES_AUTO_BURST; sandboxes also run with
+// BOXMES_AUTO_SANDBOX (per-second billing, destroyed with their box).
 func (m *Manager) autoPlace(kind string) bool {
 	if kind == selector.KindSandbox {
 		return m.Cfg.AutoBurst || m.Cfg.AutoSandbox
@@ -230,7 +230,7 @@ func (m *Manager) decorateSandboxOption(ctx context.Context, o *selector.Option,
 		o.MaxLifetimeH = model.Round4(float64(info.Caps.MaxLifetimeS) / 3600)
 	}
 	if info.DialOnly && m.Cfg.PublicURL == "" && o.Blocked == "" {
-		o.Blocked = "needs BOXAZ_PUBLIC_URL: this provider has no exec API, boxd must dial in"
+		o.Blocked = "needs BOXMES_PUBLIC_URL: this provider has no exec API, boxd must dial in"
 	}
 	note := fmt.Sprintf("%s sandbox (%s, %s): per-second billing", info.Name, info.Caps.Isolation, o.Tier)
 	if o.Tier == "T3" {
@@ -285,7 +285,7 @@ func (m *Manager) SandboxProviders(ctx context.Context, p *Principal) ([]Sandbox
 			v.Blocked = why
 		}
 		if info.DialOnly && m.Cfg.PublicURL == "" {
-			v.Blocked = "needs BOXAZ_PUBLIC_URL (no exec API: boxd must dial in)"
+			v.Blocked = "needs BOXMES_PUBLIC_URL (no exec API: boxd must dial in)"
 		}
 		v.Usable = v.Blocked == ""
 		for i, z := range info.Sizes {

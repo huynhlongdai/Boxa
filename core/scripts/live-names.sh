@@ -14,10 +14,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 : "${ENV_FILE:?set ENV_FILE (the gateway env file used by up.sh)}"
 set -a; . "$ENV_FILE"; set +a
-ADDR=${BOXAZ_ADDR:-:8080}
-export BOXAZ_URL=http://127.0.0.1:${ADDR##*:}
-ADMIN=$BOXAZ_ADMIN_KEY
-DOMAIN=$BOXAZ_GATEWAY_DOMAIN
+ADDR=${BOXMES_ADDR:-:8080}
+export BOXMES_URL=http://127.0.0.1:${ADDR##*:}
+ADMIN=$BOXMES_ADMIN_KEY
+DOMAIN=$BOXMES_GATEWAY_DOMAIN
 NAME=${BOX_NAME:-demo-app}
 REPO=${DEPLOY_REPO:-https://github.com/heroku/node-js-sample}
 WORK=$(mktemp -d /tmp/sbx-names.XXXXXX)
@@ -26,7 +26,7 @@ DOH=${DOH:-https://1.1.1.1/dns-query}
 pass() { printf '  PASS %s\n' "$*"; }
 note() { printf '  NOTE %s\n' "$*"; }
 fail() { printf '  FAIL %s\n' "$*"; exit 1; }
-api() { local m=$1 p=$2; shift 2; curl -sS -X "$m" "$BOXAZ_URL/v1$p" -H "Authorization: Bearer ${KEY:-$ADMIN}" -H 'Content-Type: application/json' "$@"; }
+api() { local m=$1 p=$2; shift 2; curl -sS -X "$m" "$BOXMES_URL/v1$p" -H "Authorization: Bearer ${KEY:-$ADMIN}" -H 'Content-Type: application/json' "$@"; }
 ms() { date +%s%3N; }
 out() { curl -s -o "$WORK/body" -w '%{http_code} %{ssl_verify_result} %{time_total}' --doh-url "$DOH" --max-time ${3:-30} ${2:+-H "$2"} "$1" || echo "000 - -"; }
 code() { out "$@" | cut -d' ' -f1; }
@@ -43,7 +43,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-[ "$(code "$BOXAZ_PUBLIC_URL/v1/health")" = 200 ] && pass "core reachable at $BOXAZ_PUBLIC_URL" || fail "core not reachable at $BOXAZ_PUBLIC_URL"
+[ "$(code "$BOXMES_PUBLIC_URL/v1/health")" = 200 ] && pass "core reachable at $BOXMES_PUBLIC_URL" || fail "core not reachable at $BOXMES_PUBLIC_URL"
 api GET /gateway | jq -c '{mode,url_pattern,label_pattern,alias_pattern}' | sed 's/^/    gateway: /'
 [ "$(plist)" = "[]" ] || fail "E2B already has live sandboxes: $(plist)"
 AGENT=$(api POST /agents -d "$(jq -nc --arg n "names-$(date +%s)" '{name:$n,kind:"claude-code",budget_day_usd:1,policy:{providers:["e2b"]}}')" | jq -r .id)

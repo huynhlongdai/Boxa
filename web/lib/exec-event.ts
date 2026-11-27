@@ -1,4 +1,4 @@
-import type { BoxazEvent } from "./types";
+import type { BoxmesEvent } from "./types";
 
 export interface ExecInfo {
   exit_code: number;
@@ -17,7 +17,7 @@ type EvData = { exit_code?: number; duration_ms?: number; command?: string; time
  * v1.1: chi tiết có cấu trúc nằm ở `data` ({exit_code, tokens_saved, log_id…}) hoặc trường phẳng `tokens_saved` / `log_id`;
  * vẫn đọc được đuôi " tokens_saved=<n> log=<id>" trong message (bản Core cũ / mock).
  */
-export function parseExecEvent(e: BoxazEvent & { data?: EvData | null }): ExecInfo | null {
+export function parseExecEvent(e: BoxmesEvent & { data?: EvData | null }): ExecInfo | null {
   if (e.type !== "box.exec" && e.type !== "exec") return null;
   const d: EvData = e.data ?? {};
   const m = e.message.match(/^(TIMEOUT )?exit=(-?\d+) (\d+)ms: ([\s\S]*)$/);

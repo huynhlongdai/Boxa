@@ -8,7 +8,7 @@ import { Box as BoxIcon, Command as CmdIcon, Languages, LogOut, MoreHorizontal, 
 import { NAV, isActive } from "./nav";
 import { usePalette } from "./command-palette";
 import { useLive } from "./live";
-import { Dot } from "./boxaz/status";
+import { Dot } from "./boxmes/status";
 import { SheetContent } from "./ui/dialog";
 import { LocaleGrid, LocaleSelect } from "./locale-switcher";
 import { useApi } from "@/lib/hooks";
@@ -23,7 +23,7 @@ function Logo({ compact }: { compact?: boolean }) {
       <span className="grid size-7 place-items-center rounded-md bg-primary/15 text-primary">
         <BoxIcon className="size-4" />
       </span>
-      {!compact && <span className="text-[15px]">Boxaz</span>}
+      {!compact && <span className="text-[15px]">Boxmes</span>}
     </Link>
   );
 }

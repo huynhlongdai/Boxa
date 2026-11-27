@@ -25,10 +25,10 @@ import (
 	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/ssh"
 
-	"boxaz/core/internal/client"
-	"boxaz/core/internal/manager"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/wsconn"
+	"boxmes/core/internal/client"
+	"boxmes/core/internal/manager"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/wsconn"
 )
 
 const accessUsage = `  box access <box>                             (how to reach the box: forward, ssh, terminal)
@@ -61,7 +61,7 @@ func createTicket(ctx context.Context, c *client.Client, box string, in manager.
 	return &t, nil
 }
 
-// ticketURLs lists where to use a ticket: the box host, core, then BOXAZ_URL.
+// ticketURLs lists where to use a ticket: the box host, core, then BOXMES_URL.
 func ticketURLs(c *client.Client, t *model.AccessTicket, kind, query string) []string {
 	var out []string
 	add := func(u string) {
@@ -75,7 +75,7 @@ func ticketURLs(c *client.Client, t *model.AccessTicket, kind, query string) []s
 		}
 		out = append(out, u)
 	}
-	if os.Getenv("BOXAZ_ACCESS_VIA") != "core" {
+	if os.Getenv("BOXMES_ACCESS_VIA") != "core" {
 		add(t.URL)
 	}
 	add(t.CoreURL)
@@ -322,9 +322,22 @@ func cmdSSHProxy(ctx context.Context, c *client.Client, args []string) error {
 	return nil
 }
 
-func boxazDir() string {
+// boxmesDir is ~/.boxmes, or the pre-rename ~/.boxaz when only that one
+// exists (keys, certificates and known_hosts written by an older CLI).
+func boxmesDir() string {
 	h, _ := os.UserHomeDir()
-	return filepath.Join(h, ".boxaz")
+	cur := filepath.Join(h, ".boxmes")
+	if _, err := os.Stat(cur); err != nil {
+		if legacy := filepath.Join(h, ".boxaz"); dirExists(legacy) {
+			return legacy
+		}
+	}
+	return cur
+}
+
+func dirExists(p string) bool {
+	fi, err := os.Stat(p)
+	return err == nil && fi.IsDir()
 }
 
 type sshInfoResp struct {
@@ -335,13 +348,13 @@ type sshInfoResp struct {
 	Domain      string `json:"domain"`
 }
 
-// writeKnownHosts stores the gateway host key in ~/.boxaz/known_hosts.
+// writeKnownHosts stores the gateway host key in ~/.boxmes/known_hosts.
 func writeKnownHosts(ctx context.Context, c *client.Client) (*sshInfoResp, string, error) {
 	var info sshInfoResp
 	if err := c.JSON(ctx, "GET", "/ssh", nil, &info); err != nil {
 		return nil, "", err
 	}
-	dir := boxazDir()
+	dir := boxmesDir()
 	os.MkdirAll(dir, 0o700)
 	p := filepath.Join(dir, "known_hosts")
 	if err := os.WriteFile(p, []byte(info.KnownHosts+"\n"), 0o600); err != nil {
@@ -375,16 +388,16 @@ func cmdSSH(ctx context.Context, c *client.Client, args []string) error {
 			break
 		}
 	}
-	if sshBin, err := exec.LookPath("ssh"); err == nil && os.Getenv("BOXAZ_SSH_BUILTIN") == "" {
+	if sshBin, err := exec.LookPath("ssh"); err == nil && os.Getenv("BOXMES_SSH_BUILTIN") == "" {
 		// user options first: for -o, OpenSSH keeps the first value it sees
 		argv := append([]string{"ssh"}, rest...)
 		argv = append(argv, "-o", "ProxyCommand="+selfPath()+" ssh-proxy %h", "-o", "HostKeyAlias="+manager.SSHHostKeyAlias,
 			"-o", "UserKnownHostsFile="+kh, "-o", "ServerAliveInterval=25", "-o", "LogLevel=ERROR")
-		argv = append(argv, "boxaz@"+box)
+		argv = append(argv, "boxmes@"+box)
 		argv = append(argv, cmd...)
 		return syscall.Exec(sshBin, argv, os.Environ())
 	}
-	// no OpenSSH client (or BOXAZ_SSH_BUILTIN=1): built-in Go client — commands,
+	// no OpenSSH client (or BOXMES_SSH_BUILTIN=1): built-in Go client — commands,
 	// -L [bind:]lport:host:rport forwards and -N; no interactive shell.
 	var fwds []string
 	noCmd := false
@@ -425,7 +438,7 @@ func sshRunBuiltin(ctx context.Context, c *client.Client, box, command string, f
 	if err != nil {
 		return 0, err
 	}
-	sc, chans, reqs, err := ssh.NewClientConn(ws, box, &ssh.ClientConfig{User: "boxaz", HostKeyCallback: ssh.FixedHostKey(pk), Timeout: 100 * time.Second})
+	sc, chans, reqs, err := ssh.NewClientConn(ws, box, &ssh.ClientConfig{User: "boxmes", HostKeyCallback: ssh.FixedHostKey(pk), Timeout: 100 * time.Second})
 	if err != nil {
 		return 0, err
 	}
@@ -492,13 +505,13 @@ func sshRunBuiltin(ctx context.Context, c *client.Client, box, command string, f
 	return 0, nil
 }
 
-const sshCfgBegin = "# >>> boxaz ssh-config (managed by `box ssh-config --write`) >>>"
-const sshCfgEnd = "# <<< boxaz ssh-config <<<"
+const sshCfgBegin = "# >>> boxmes ssh-config (managed by `box ssh-config --write`) >>>"
+const sshCfgEnd = "# <<< boxmes ssh-config <<<"
 
 func cmdSSHConfig(ctx context.Context, c *client.Client, args []string) error {
 	fs := flag.NewFlagSet("ssh-config", flag.ContinueOnError)
-	write := fs.Bool("write", false, "write the block into ~/.ssh/config (replacing an older Boxaz block)")
-	useCert := fs.Bool("cert", false, "authenticate with short-lived certificates (~/.boxaz/id_ed25519; no API key needed by ssh)")
+	write := fs.Bool("write", false, "write the block into ~/.ssh/config (replacing an older Boxmes block)")
+	useCert := fs.Bool("cert", false, "authenticate with short-lived certificates (~/.boxmes/id_ed25519; no API key needed by ssh)")
 	certTTL := fs.Duration("ttl", 12*time.Hour, "--cert: certificate lifetime (≤ 12h)")
 	if err := fs.Parse(reorder(fs, args)); err != nil {
 		return err
@@ -526,7 +539,7 @@ func cmdSSHConfig(ctx context.Context, c *client.Client, args []string) error {
 		if info.Domain != "" {
 			hosts = append(hosts, n+"."+info.Domain)
 		} else {
-			hosts = append(hosts, n+".boxaz")
+			hosts = append(hosts, n+".boxmes")
 		}
 	}
 	proxy := selfPath() + " ssh-proxy %h"

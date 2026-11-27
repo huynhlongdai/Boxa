@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/provider"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/provider"
 )
 
 // renderMock is a minimal api.render.com/v1 (shapes from the OpenAPI spec).

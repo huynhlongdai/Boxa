@@ -1,6 +1,6 @@
-# AGENTS.md — Boxaz ボックス `{{.Slug}}`
+# AGENTS.md — Boxmes ボックス `{{.Slug}}`
 
-あなたは **Boxaz ボックス** の中で作業しています。AI エージェント用に借りた使い捨ての Linux サンドボックスです。
+あなたは **Boxmes ボックス** の中で作業しています。AI エージェント用に借りた使い捨ての Linux サンドボックスです。
 
 ## アイデンティティ
 - ボックス: `{{.BoxID}}`（slug `{{.Slug}}`）、テンプレート `{{.Template}}`、ライフサイクル `{{.Lifecycle}}`
@@ -19,12 +19,12 @@
 - `/memory` — このエージェントの全ボックスで共有する長期メモ。次回の実行が知るべきことをここに書いてください。
 - シークレットは exec のたびに環境変数として注入されます: {{.Secrets}}
 
-## ツール（MCP サーバー `boxaz`）
+## ツール（MCP サーバー `boxmes`）
 {{range .Tools}}- `{{.}}`
 {{end}}
-## Boxaz の呼び出し方
-- MCP: `{{.Base}}/mcp`（Streamable HTTP）または `box mcp`（stdio）、ヘッダー `Authorization: Bearer $BOXAZ_API_KEY`。
-- REST: `{{.Base}}/v1` — 例: `curl -X POST {{.Base}}/v1/boxes/{{.BoxID}}/exec -H "Authorization: Bearer $BOXAZ_API_KEY" -d '{"command":"ls"}'`。
+## Boxmes の呼び出し方
+- MCP: `{{.Base}}/mcp`（Streamable HTTP）または `box mcp`（stdio）、ヘッダー `Authorization: Bearer $BOXMES_API_KEY`。
+- REST: `{{.Base}}/v1` — 例: `curl -X POST {{.Base}}/v1/boxes/{{.BoxID}}/exec -H "Authorization: Bearer $BOXMES_API_KEY" -d '{"command":"ls"}'`。
 - ディスカバリー: `{{.Base}}/llms.txt`、`{{.Base}}/v1/openapi.json`、`{{.Base}}/v1/tools?format=openai`。
 - `Accept-Language: ja|en|vi|zh` を送るとエラーメッセージがその言語になります。
 
@@ -33,5 +33,5 @@
 - 長いコマンド: `async: true` にして `box_job(job_id, wait_s=30)` で待ちます。
 - 複数コマンド: `box_exec_batch`（1 往復）。
 - 危険な変更の前にスナップショット（`box_snapshot`）を取り、`box_restore` や `box_fork` で別案を試せます。
-- Web アプリの公開: 0.0.0.0:<port> でバックグラウンド起動し（`box_exec` async）、`box_url(port)` で公開 HTTPS URL を取得します。`kind` が方式を示します: `provider-preview`、`ingress`（Boxaz 経由、パス接頭辞付き URL: 相対リンクを使用）、`tunnel`（無料のクイックトンネル。復帰後に URL が変わることがあります）。`caveats` を確認してください。
+- Web アプリの公開: 0.0.0.0:<port> でバックグラウンド起動し（`box_exec` async）、`box_url(port)` で公開 HTTPS URL を取得します。`kind` が方式を示します: `provider-preview`、`ingress`（Boxmes 経由、パス接頭辞付き URL: 相対リンクを使用）、`tunnel`（無料のクイックトンネル。復帰後に URL が変わることがあります）。`caveats` を確認してください。
 - 作業が終わったら `box_down` でボックスを削除してください。

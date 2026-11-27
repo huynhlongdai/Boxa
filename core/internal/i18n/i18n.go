@@ -1,4 +1,4 @@
-// Package i18n localizes every agent- and operator-facing text Boxaz emits:
+// Package i18n localizes every agent- and operator-facing text Boxmes emits:
 // API error message+hint, snippet comments, AGENTS.md, llms.txt intro, MCP
 // prompts and next-call hints. Supported locales: en (default for the API),
 // vi, zh, ja. The catalog is embedded JSON (catalog/<locale>.json):

@@ -12,8 +12,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"boxaz/core/internal/manager"
-	"boxaz/core/internal/model"
+	"boxmes/core/internal/manager"
+	"boxmes/core/internal/model"
 )
 
 func (s *Server) routesV17(r chi.Router) {

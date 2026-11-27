@@ -1,6 +1,6 @@
-# AGENTS.md — Boxaz box `{{.Slug}}`
+# AGENTS.md — Boxmes box `{{.Slug}}`
 
-You are working inside a **Boxaz box**: a disposable Linux sandbox rented for an AI agent.
+You are working inside a **Boxmes box**: a disposable Linux sandbox rented for an AI agent.
 
 ## Identity
 - Box: `{{.BoxID}}` (slug `{{.Slug}}`), template `{{.Template}}`, lifecycle `{{.Lifecycle}}`
@@ -19,12 +19,12 @@ You are working inside a **Boxaz box**: a disposable Linux sandbox rented for an
 - `/memory` — long-term notes shared by all boxes of this agent. Write what future runs should know here.
 - Secrets are injected as environment variables on each exec: {{.Secrets}}
 
-## Tools (MCP server `boxaz`)
+## Tools (MCP server `boxmes`)
 {{range .Tools}}- `{{.}}`
 {{end}}
-## Calling Boxaz
-- MCP: `{{.Base}}/mcp` (Streamable HTTP) or `box mcp` (stdio), header `Authorization: Bearer $BOXAZ_API_KEY`.
-- REST: `{{.Base}}/v1` — e.g. `curl -X POST {{.Base}}/v1/boxes/{{.BoxID}}/exec -H "Authorization: Bearer $BOXAZ_API_KEY" -d '{"command":"ls"}'`.
+## Calling Boxmes
+- MCP: `{{.Base}}/mcp` (Streamable HTTP) or `box mcp` (stdio), header `Authorization: Bearer $BOXMES_API_KEY`.
+- REST: `{{.Base}}/v1` — e.g. `curl -X POST {{.Base}}/v1/boxes/{{.BoxID}}/exec -H "Authorization: Bearer $BOXMES_API_KEY" -d '{"command":"ls"}'`.
 - Discovery: `{{.Base}}/llms.txt`, `{{.Base}}/v1/openapi.json`, `{{.Base}}/v1/tools?format=openai`.
 - Send `Accept-Language: en|vi|zh|ja` to get error messages in your language.
 
@@ -33,5 +33,5 @@ You are working inside a **Boxaz box**: a disposable Linux sandbox rented for an
 - Long commands: `async: true`, then `box_job(job_id, wait_s=30)`.
 - Several commands: `box_exec_batch` (one round-trip).
 - Snapshot before risky changes (`box_snapshot`), then `box_restore` or `box_fork` to try alternatives.
-- Serving a web app: start it on 0.0.0.0:<port> in the background (`box_exec` async), then `box_url(port)` returns its public HTTPS URL. Its `kind` says how: `provider-preview`, `ingress` (through Boxaz, path-prefixed: use relative links) or `tunnel` (free quick tunnel; the URL can change after a wake); read `caveats`.
+- Serving a web app: start it on 0.0.0.0:<port> in the background (`box_exec` async), then `box_url(port)` returns its public HTTPS URL. Its `kind` says how: `provider-preview`, `ingress` (through Boxmes, path-prefixed: use relative links) or `tunnel` (free quick tunnel; the URL can change after a wake); read `caveats`.
 - Delete the box with `box_down` when you are done.

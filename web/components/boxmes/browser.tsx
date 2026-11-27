@@ -15,10 +15,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, Select } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { CodeBlock, CopyButton } from "@/components/boxaz/code-block";
-import { ConfirmButton } from "@/components/boxaz/confirm";
-import { ErrorBox, LoadingRows } from "@/components/boxaz/page";
-import { Dot, Mono } from "@/components/boxaz/status";
+import { CodeBlock, CopyButton } from "@/components/boxmes/code-block";
+import { ConfirmButton } from "@/components/boxmes/confirm";
+import { ErrorBox, LoadingRows } from "@/components/boxmes/page";
+import { Dot, Mono } from "@/components/boxmes/status";
 
 const TTLS = [900, 3600, 4 * 3600, 86400] as const;
 const LANGS = ["playwright", "playwrightPy", "puppeteer", "sdkPy", "sdkTs", "curl", "cli"] as const;
@@ -34,11 +34,11 @@ export function cdpSnippet(lang: Lang, name: string, url: string | null, httpUrl
     case "puppeteer":
       return { language: "node · puppeteer", code: `import puppeteer from "puppeteer-core";\n\nconst browser = await puppeteer.connect({ browserWSEndpoint: ${JSON.stringify(u)} });\nconst page = await browser.newPage();\nawait page.goto("https://example.com");\nconsole.log(await page.title());\nbrowser.disconnect();` };
     case "sdkPy":
-      return { language: "python · boxaz", code: `from boxaz import Boxaz\nfrom playwright.sync_api import sync_playwright\n\nbx = Boxaz()  # BOXAZ_API_KEY\nwith sync_playwright() as p:\n    browser = bx.connect_playwright(p, ${JSON.stringify(name)})\n    page = browser.contexts[0].new_page()\n    page.goto("https://example.com")\n    print(page.title())` };
+      return { language: "python · boxmes", code: `from boxmes import Boxmes\nfrom playwright.sync_api import sync_playwright\n\nbx = Boxmes()  # BOXMES_API_KEY\nwith sync_playwright() as p:\n    browser = bx.connect_playwright(p, ${JSON.stringify(name)})\n    page = browser.contexts[0].new_page()\n    page.goto("https://example.com")\n    print(page.title())` };
     case "sdkTs":
-      return { language: "node · @boxaz/sdk", code: `import { Boxaz } from "@boxaz/sdk";\nimport { chromium } from "playwright";\n\nconst bx = new Boxaz(); // BOXAZ_API_KEY\nconst browser = await chromium.connectOverCDP(await bx.cdpUrl(${JSON.stringify(name)}));\nconst page = await browser.contexts()[0].newPage();\nawait page.goto("https://example.com");` };
+      return { language: "node · @boxmes/sdk", code: `import { Boxmes } from "@boxmes/sdk";\nimport { chromium } from "playwright";\n\nconst bx = new Boxmes(); // BOXMES_API_KEY\nconst browser = await chromium.connectOverCDP(await bx.cdpUrl(${JSON.stringify(name)}));\nconst page = await browser.contexts()[0].newPage();\nawait page.goto("https://example.com");` };
     case "curl":
-      return { language: "shell", code: `curl -s ${JSON.stringify((httpUrl ?? "<http_url>").replace("/.boxaz/cdp?", "/.boxaz/cdp/json/version?"))}` };
+      return { language: "shell", code: `curl -s ${JSON.stringify((httpUrl ?? "<http_url>").replace("/.boxmes/cdp?", "/.boxmes/cdp/json/version?"))}` };
     case "cli":
       return { language: "shell", code: `box browser ${name}            # CDP URL (1 h)\nbox browser ${name} --ttl 4h --json\nbox browser ${name} --status\nbox browser ${name} --stop` };
   }

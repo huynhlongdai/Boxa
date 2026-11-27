@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"boxaz/core/internal/model"
+	"boxmes/core/internal/model"
 )
 
 // Render is the render.com driver (REST API https://api.render.com/v1,
@@ -87,12 +87,12 @@ func NewRender(c *http.Client, base string) *Render {
 		},
 		EnvVars: []string{"RENDER_API_KEY", "RENDER_OWNER_ID", "RENDER_AGENT_IMAGE", "RENDER_DISK_GB"},
 		Notes: []string{
-			"No exec API: each box is a Render web service running boxd, which dials out to core (needs BOXAZ_PUBLIC_URL reachable from the internet).",
-			"Public preview: https://<service>.onrender.com serves in-box port 8000 (credential field preview_port); other ports go through the Boxaz gateway.",
+			"No exec API: each box is a Render web service running boxd, which dials out to core (needs BOXMES_PUBLIC_URL reachable from the internet).",
+			"Public preview: https://<service>.onrender.com serves in-box port 8000 (credential field preview_port); other ports go through the Boxmes gateway.",
 			"Free plan: 0.1 CPU / 512 MB, spins down after 15 min without inbound traffic (boxd pings its own URL to stay up while the box exists), ~1 min cold start, local files lost on spin-down or restart.",
 			"Paid instance types need a payment method on the Render workspace (API answers 402). A persistent disk (disk_gb, $0.25/GB-month) keeps the box's files across restarts.",
 			"The ephemeral disk size is not documented by Render; the catalog assumes 20 GB (estimate).",
-			"Sleep keeps the service running (boxd stops the box's processes); delete removes the service. No provider snapshot or fork; Boxaz snapshots are boxd tarballs.",
+			"Sleep keeps the service running (boxd stops the box's processes); delete removes the service. No provider snapshot or fork; Boxmes snapshots are boxd tarballs.",
 		},
 		DialOnly: true, EphemeralRestart: true,
 	}
@@ -212,7 +212,7 @@ var renderDeployStates = map[string]string{"live": StateRunning, "build_failed":
 
 func (r *Render) Create(ctx context.Context, c Cred, s Spec) (*Sandbox, error) {
 	if strings.TrimSpace(s.Boot) == "" {
-		return nil, model.EH(model.ErrInvalid, "This provider has no exec API: boxes run only in dial mode (set BOXAZ_PUBLIC_URL).", "render: create needs the boxd start command")
+		return nil, model.EH(model.ErrInvalid, "This provider has no exec API: boxes run only in dial mode (set BOXMES_PUBLIC_URL).", "render: create needs the boxd start command")
 	}
 	owner, err := r.owner(ctx, c)
 	if err != nil {
@@ -315,7 +315,7 @@ func (r *Render) Delete(ctx context.Context, c Cred, id string) error {
 // instance; SSH needs a paid plan and an SSH key). Everything runs through
 // boxd, which the provider starts itself.
 func (r *Render) Exec(ctx context.Context, c Cred, id string, req ExecRequest) (*ExecResult, error) {
-	return nil, model.EH(model.ErrInvalid, "This provider has no exec API: boxes run only in dial mode (set BOXAZ_PUBLIC_URL).", "render has no exec API (service %s)", id)
+	return nil, model.EH(model.ErrInvalid, "This provider has no exec API: boxes run only in dial mode (set BOXMES_PUBLIC_URL).", "render has no exec API (service %s)", id)
 }
 
 // Stop suspends the service (instance stopped, files lost unless a disk is

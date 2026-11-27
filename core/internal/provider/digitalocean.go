@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"boxaz/core/internal/model"
+	"boxmes/core/internal/model"
 )
 
 // DigitalOcean API v2 adapter (https://docs.digitalocean.com/reference/api/).

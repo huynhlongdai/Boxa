@@ -15,7 +15,7 @@ import { Select } from "@/components/ui/input";
 import { CodeBlock } from "./code-block";
 import { toastError } from "@/lib/error-toast";
 
-const PUBLIC_API = process.env.NEXT_PUBLIC_BOXAZ_API || "http://localhost:8080/v1";
+const PUBLIC_API = process.env.NEXT_PUBLIC_BOXMES_API || "http://localhost:8080/v1";
 
 /** Danh sách kind: GET /agent-kinds, rơi về danh sách dự phòng khi Core chưa có. */
 export function useAgentKinds(): { kinds: AgentKindInfo[]; fromCore: boolean; loading: boolean } {

@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "boxaz"
+name = "boxmes"
 version = "1.1.0"
-description = "Python SDK for Boxaz: cheap disposable Linux boxes for AI agents"
+description = "Python SDK for Boxmes: cheap disposable Linux boxes for AI agents"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "Proprietary" }
@@ -16,7 +16,7 @@ httpx = ["httpx>=0.24"]
 test = ["pytest>=7"]
 
 [tool.setuptools]
-packages = ["boxaz", "boxa"]  # boxa: deprecated compat shim
+packages = ["boxmes", "boxaz", "boxa"]  # boxaz, boxa: deprecated compat shims
 
 [tool.setuptools.package-data]
-boxaz = ["py.typed"]
+boxmes = ["py.typed"]

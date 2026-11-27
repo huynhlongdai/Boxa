@@ -22,10 +22,10 @@ import (
 	"testing"
 	"time"
 
-	"boxaz/core/internal/boxd"
-	"boxaz/core/internal/manager"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/sandbox"
+	"boxmes/core/internal/boxd"
+	"boxmes/core/internal/manager"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/sandbox"
 )
 
 type renderAPI struct {
@@ -164,7 +164,7 @@ func TestRenderDialOnlyProvider(t *testing.T) {
 	var sp2 model.List[manager.SandboxProviderView]
 	e.must(ag, "GET", "/sandbox/providers", nil, &sp2)
 	for _, v := range sp2.Items {
-		if v.ID == "render" && (v.Mode != "dial" || !strings.Contains(v.Blocked, "BOXAZ_PUBLIC_URL")) {
+		if v.ID == "render" && (v.Mode != "dial" || !strings.Contains(v.Blocked, "BOXMES_PUBLIC_URL")) {
 			t.Fatalf("no public URL: %+v", v)
 		}
 	}

@@ -1,5 +1,5 @@
 "use client";
-// v1.7: tab Ports của box — Boxaz gateway URL theo port, quyền truy cập (public / token), URL token (tạo / liệt kê / thu hồi),
+// v1.7: tab Ports của box — Boxmes gateway URL theo port, quyền truy cập (public / token), URL token (tạo / liệt kê / thu hồi),
 // wake_on_request, trạng thái app do supervisor chạy (restart + log SSE) và capability lifecycle của provider.
 // v1.9: URL dễ đọc — tên box (https://<name>.<domain>/ → port chính), nhãn port (<name>-<label>), alias cũ <key>-<port>.
 import * as React from "react";
@@ -18,10 +18,10 @@ import { Field, Input, Select } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { CopyButton } from "@/components/boxaz/code-block";
-import { ConfirmButton } from "@/components/boxaz/confirm";
-import { Empty, ErrorBox, LoadingRows } from "@/components/boxaz/page";
-import { Mono } from "@/components/boxaz/status";
+import { CopyButton } from "@/components/boxmes/code-block";
+import { ConfirmButton } from "@/components/boxmes/confirm";
+import { Empty, ErrorBox, LoadingRows } from "@/components/boxmes/page";
+import { Mono } from "@/components/boxmes/status";
 
 const KINDS = ["provider-preview", "ingress", "tunnel", "gateway", "none"] as const;
 const STATES = ["cloning", "installing", "starting", "ready", "backoff", "exited", "stopped", "sleeping", "none"] as const;
@@ -253,7 +253,7 @@ function PortRow({ box, pv, inbound }: { box: Box; pv: PortView; inbound: boolea
       )}
       <div className="mt-2 flex flex-col gap-1.5 text-[13px]">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="w-28 shrink-0 text-muted-foreground">{t("boxazUrl")}</span>
+          <span className="w-28 shrink-0 text-muted-foreground">{t("boxmesUrl")}</span>
           {gw ? (
             <>
               <a href={gw} target="_blank" rel="noreferrer" className="min-w-0 break-all text-primary hover:underline"><Mono>{gw}</Mono></a>

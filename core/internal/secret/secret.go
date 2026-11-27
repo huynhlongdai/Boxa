@@ -1,4 +1,4 @@
-// Package secret provides AES-256-GCM encryption at rest (key from BOXAZ_MASTER_KEY),
+// Package secret provides AES-256-GCM encryption at rest (key from BOXMES_MASTER_KEY),
 // random ids/tokens and key hashing.
 package secret
 
@@ -36,7 +36,7 @@ func New(master string) (*Box, error) {
 	return &Box{aead: a}, nil
 }
 
-// LoadOrCreateMaster returns BOXAZ_MASTER_KEY or a key persisted at path (created 0600).
+// LoadOrCreateMaster returns BOXMES_MASTER_KEY or a key persisted at path (created 0600).
 func LoadOrCreateMaster(env, path string) (string, bool, error) {
 	if env != "" {
 		return env, false, nil
@@ -78,7 +78,7 @@ func (b *Box) Open(enc string) (string, error) {
 	}
 	pt, err := b.aead.Open(nil, raw[:ns], raw[ns:], nil)
 	if err != nil {
-		return "", errors.New("decrypt failed (wrong BOXAZ_MASTER_KEY?)")
+		return "", errors.New("decrypt failed (wrong BOXMES_MASTER_KEY?)")
 	}
 	return string(pt), nil
 }

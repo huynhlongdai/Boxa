@@ -14,12 +14,12 @@ import (
 	"sync"
 	"time"
 
-	"boxaz/core/internal/agentkit"
-	"boxaz/core/internal/boxyaml"
-	"boxaz/core/internal/manager"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/proto"
-	"boxaz/core/internal/provider"
+	"boxmes/core/internal/agentkit"
+	"boxmes/core/internal/boxyaml"
+	"boxmes/core/internal/manager"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/proto"
+	"boxmes/core/internal/provider"
 )
 
 type param struct {
@@ -164,11 +164,11 @@ var ops = []op{
 	{Method: "POST", Path: "/v1/boxes/{id}/grep", Summary: "Regex search", Tag: "files", Req: grepReq{}, Resp: proto.GrepResult{}, Params: []param{idP}},
 	{Method: "GET", Path: "/v1/boxes/{id}/observe", Summary: "Changes since last observe (structured diff + summary)", Tag: "files", Resp: manager.ObserveView{}, Params: []param{idP}},
 	{Method: "GET", Path: "/v1/boxes/{id}/events", Summary: "Box event timeline", Tag: "boxes", Resp: model.Event{}, List: true, Params: []param{idP}},
-	{Method: "GET", Path: "/v1/boxes/{id}/terminal", Summary: "Durable interactive PTY (WebSocket; also wss://<name>.<domain>/.boxaz/terminal)", Tag: "access", Status: 101,
+	{Method: "GET", Path: "/v1/boxes/{id}/terminal", Summary: "Durable interactive PTY (WebSocket; also wss://<name>.<domain>/.boxmes/terminal)", Tag: "access", Status: 101,
 		Params: []param{idP, qp("ticket", "string", "single-use access ticket bxa_… (purpose terminal); native clients may send the API key as Authorization: Bearer instead. API keys in the URL are refused."),
 			qp("session", "string", "session id to reattach (output ring buffer replayed); empty or new = new session"), qp("cols", "integer", "columns"), qp("rows", "integer", "rows"),
 			qp("mode", "string", "control (default) | view"), qp("proto", "integer", "2 = binary PTY frames + JSON control frames {type: session|control|viewers|exit|ping}")},
-		Desc: "The PTY survives a dropped socket for BOXAZ_TERMINAL_DETACH_TTL (default 10 min); several viewers may attach, one holds control (input + resize). Opening a terminal wakes a sleeping box. Origin must be the dashboard / an allowed origin."},
+		Desc: "The PTY survives a dropped socket for BOXMES_TERMINAL_DETACH_TTL (default 10 min); several viewers may attach, one holds control (input + resize). Opening a terminal wakes a sleeping box. Origin must be the dashboard / an allowed origin."},
 	{Method: "GET", Path: "/v1/boxes/{id}/yaml", Summary: "box.yaml the box was created from", Tag: "boxes", Resp: boxYAMLResp{}, Params: []param{idP}},
 	{Method: "POST", Path: "/v1/quote", Summary: "Dry-run placement + price for a spec (no box created)", Tag: "boxes", Req: boxyaml.Request{}, Resp: manager.QuoteResult{}},
 	{Method: "GET", Path: "/v1/jobs/{id}", Summary: "Async job (long-poll with ?wait=)", Tag: "exec", Resp: model.Job{}, Params: []param{{"id", "path", "string", "job id", true}, qp("wait", "integer", "seconds to wait for completion (max 60)")}},
@@ -235,7 +235,7 @@ var ops = []op{
 	// v2 tenancy: accounts and sessions
 	{Method: "GET", Path: "/v1/auth/config", Summary: "Sign-up mode and auth options", Tag: "auth", NoAuth: true},
 	{Method: "POST", Path: "/v1/auth/signup", Summary: "Create an account (+ personal workspace) and a session", Tag: "auth", NoAuth: true, Req: manager.SignupInput{}, Resp: manager.AuthResult{}, Status: 201,
-		Desc: "The first account becomes platform admin and owns the default workspace. BOXAZ_SIGNUP_MODE=invite (default) needs invite_code; closed sends everyone to the waitlist."},
+		Desc: "The first account becomes platform admin and owns the default workspace. BOXMES_SIGNUP_MODE=invite (default) needs invite_code; closed sends everyone to the waitlist."},
 	{Method: "POST", Path: "/v1/auth/login", Summary: "Email + password login; returns a bxs_ session token", Tag: "auth", NoAuth: true, Req: manager.LoginInput{}, Resp: manager.AuthResult{}},
 	{Method: "POST", Path: "/v1/auth/verify-email", Summary: "Confirm an email with the token from the link", Tag: "auth", NoAuth: true, Req: verifyTokenReq{}},
 	{Method: "POST", Path: "/v1/auth/password/forgot", Summary: "Mail a password reset link (always 202)", Tag: "auth", NoAuth: true, Req: emailReq{}, Status: 202},
@@ -265,12 +265,12 @@ var ops = []op{
 	// v1.3: smart providers, need-based selection, speed, agent support, mesh
 	{Method: "GET", Path: "/v1/profiles", Summary: "Workload profiles + per-agent-kind defaults", Tag: "discovery", NoAuth: true},
 	{Method: "POST", Path: "/v1/recommend", Summary: "Rank placement options for requirements (price, ETA, score, reasons)", Tag: "selection", Req: manager.RecommendInput{}, Resp: manager.RecommendResult{},
-		Desc: "Options: warm (pre-started container), pool (container on a pool host), vm (Incus VM), burst (new provider server), sandbox (v1.4 T2/T3 sandbox API, per-second; requires approval until the provider is connected and BOXAZ_AUTO_SANDBOX or BOXAZ_AUTO_BURST is on). Nothing is created."},
+		Desc: "Options: warm (pre-started container), pool (container on a pool host), vm (Incus VM), burst (new provider server), sandbox (v1.4 T2/T3 sandbox API, per-second; requires approval until the provider is connected and BOXMES_AUTO_SANDBOX or BOXMES_AUTO_BURST is on). Nothing is created."},
 	{Method: "POST", Path: "/v1/boxes/ensure", Summary: "Get-or-create a box by name (idempotent)", Tag: "boxes", Req: manager.EnsureInput{}, Resp: manager.EnsureResult{}, Status: 200,
 		Desc: "200 when an existing box is returned (action reused|woken, with resume), 201 when created."},
 	{Method: "GET", Path: "/v1/boxes/{id}/resume", Summary: "Wake if needed and summarise recent state (execs, jobs, files, ports)", Tag: "boxes", Resp: manager.ResumeInfo{}, Params: []param{idP}},
 	{Method: "POST", Path: "/v1/boxes/{id}/clone", Summary: "Clone a live box (copy-on-write on pool hosts; provider-native fork or snapshot → new sandbox for sandbox boxes)", Tag: "boxes", Req: manager.CloneInput{}, Resp: model.Box{}, Status: 201, Params: []param{idP}},
-	{Method: "GET", Path: "/v1/boxes/{id}/ports", Summary: "Public URL of every exposed port: provider preview → Boxaz ingress → in-box tunnel (kind, public, caveats)", Tag: "boxes", Resp: manager.PortsResult{}, Params: []param{idP}},
+	{Method: "GET", Path: "/v1/boxes/{id}/ports", Summary: "Public URL of every exposed port: provider preview → Boxmes ingress → in-box tunnel (kind, public, caveats)", Tag: "boxes", Resp: manager.PortsResult{}, Params: []param{idP}},
 	{Method: "POST", Path: "/v1/boxes/{id}/ports", Summary: "Expose a port of a live box and get its public URL (optional label → https://<name>-<label>.<domain>/)", Tag: "boxes", Req: manager.ExposeInput{}, Resp: manager.PortsResult{}, Params: []param{idP}},
 	{Method: "GET", Path: "/v1/boxes/{id}/rightsize", Summary: "Right-sizing suggestion from observed usage", Tag: "costs", Resp: manager.RightSize{}, Params: []param{idP}},
 	{Method: "GET", Path: "/v1/rightsize", Summary: "Right-sizing suggestions for all running boxes", Tag: "costs", Resp: manager.RightSize{}, List: true},
@@ -303,23 +303,23 @@ var ops = []op{
 	{Method: "PUT", Path: "/v1/boxes/{id}/ports/{port}", Summary: "Set a port's access (public | token) and/or its URL label (<name>-<label>.<domain>)", Tag: "urls", Req: manager.PortAccessInput{}, Resp: manager.PortView{}, Params: []param{idP, portP}},
 	{Method: "GET", Path: "/v1/boxes/{id}/ports/{port}/tokens", Summary: "List the port's URL tokens (values are never returned)", Tag: "urls", Resp: manager.URLTokenList{}, Params: []param{idP, portP}},
 	{Method: "POST", Path: "/v1/boxes/{id}/ports/{port}/tokens", Summary: "Issue a scoped URL token for this box+port (expiring, revocable)", Tag: "urls", Req: manager.CreateURLTokenInput{}, Resp: model.URLToken{}, Status: 201, Params: []param{idP, portP},
-		Desc: "The token (bxt_…) is returned once with a ready-to-share `url` (gateway URL + ?token=). The gateway accepts it as Authorization: Bearer, X-Boxaz-Token, ?token= (exchanged for an HttpOnly cookie, then redirected without it) or that cookie, and strips it before the request reaches the app. private (default true) switches the port to access=token. Provider-wide tokens are never handed out."},
+		Desc: "The token (bxt_…) is returned once with a ready-to-share `url` (gateway URL + ?token=). The gateway accepts it as Authorization: Bearer, X-Boxmes-Token, ?token= (exchanged for an HttpOnly cookie, then redirected without it) or that cookie, and strips it before the request reaches the app. private (default true) switches the port to access=token. Provider-wide tokens are never handed out."},
 	{Method: "DELETE", Path: "/v1/boxes/{id}/ports/{port}/tokens/{token_id}", Summary: "Revoke a URL token (effective immediately)", Tag: "urls", Resp: model.URLToken{}, Params: []param{idP, portP, {"token_id", "path", "string", "token id (utok_…)", true}}},
 	{Method: "GET", Path: "/v1/capabilities", Summary: "Lifecycle capability flags per provider (memory_pause, wake_on_http_native, wake_via_gateway, fork, inbound_http, max_runtime, private_preview)", Tag: "infra", Resp: manager.CapabilityRow{}, List: true},
 	// v1.8: gateway on a real domain + private provider previews
-	{Method: "GET", Path: "/v1/gateway", Summary: "Gateway domain, box URL pattern, reserved subdomains, provider-preview policy (?check=1 probes BOXAZ_PUBLIC_URL)", Tag: "infra", Resp: manager.GatewayInfo{}},
+	{Method: "GET", Path: "/v1/gateway", Summary: "Gateway domain, box URL pattern, reserved subdomains, provider-preview policy (?check=1 probes BOXMES_PUBLIC_URL)", Tag: "infra", Resp: manager.GatewayInfo{}},
 	// v1.10: box access (tickets, TCP stream, SSH gateway, durable terminal)
 	{Method: "GET", Path: "/v1/boxes/{id}/access", Summary: "How to reach the box beyond HTTP: box forward / ssh / ssh-config commands, WebSocket endpoints, allowed TCP ports, terminal sessions, SSH host key", Tag: "access", Resp: manager.AccessInfo{}, Params: []param{idP}},
 	{Method: "POST", Path: "/v1/boxes/{id}/tickets", Summary: "Issue an access ticket (terminal | tcp | ssh | cdp | vnc)", Tag: "access", Req: manager.CreateTicketInput{}, Resp: model.AccessTicket{}, Status: 201, Params: []param{idP},
-		Desc: "The ticket (bxa_…) is returned once with `url` (wss://<name>.<domain>/.boxaz/<purpose>?…&ticket=) and `core_url`. It must be redeemed before expires_at (ttl_s, default 60, 10 … 86400), works once, and binds the connection it opens: revoking it closes that session. purpose tcp needs port (exposed ports, the forward allowlist and 22; allow=true adds the port); purpose ssh also returns `command` for the direct listener (ssh <ticket>@ssh.<domain>) when BOXAZ_SSH_ADDR is set. v1.11: purpose cdp (reusable until expires_at, default 1 h) and vnc (view_only drops the viewer's input)."},
+		Desc: "The ticket (bxa_…) is returned once with `url` (wss://<name>.<domain>/.boxmes/<purpose>?…&ticket=) and `core_url`. It must be redeemed before expires_at (ttl_s, default 60, 10 … 86400), works once, and binds the connection it opens: revoking it closes that session. purpose tcp needs port (exposed ports, the forward allowlist and 22; allow=true adds the port); purpose ssh also returns `command` for the direct listener (ssh <ticket>@ssh.<domain>) when BOXMES_SSH_ADDR is set. v1.11: purpose cdp (reusable until expires_at, default 1 h) and vnc (view_only drops the viewer's input)."},
 	{Method: "GET", Path: "/v1/boxes/{id}/tickets", Summary: "List the box's access tickets (values never returned; live = bound sessions)", Tag: "access", Resp: model.AccessTicket{}, List: true, Params: []param{idP}},
 	{Method: "DELETE", Path: "/v1/boxes/{id}/tickets/{tid}", Summary: "Revoke a ticket (all = every ticket) and close its sessions", Tag: "access", Params: []param{idP, {"tid", "path", "string", "ticket id (tkt_…) or all", true}}},
-	{Method: "GET", Path: "/v1/boxes/{id}/tcp", Summary: "Raw TCP stream to an in-box port over WebSocket (binary frames; also wss://<name>.<domain>/.boxaz/tcp)", Tag: "access", Status: 101,
+	{Method: "GET", Path: "/v1/boxes/{id}/tcp", Summary: "Raw TCP stream to an in-box port over WebSocket (binary frames; also wss://<name>.<domain>/.boxmes/tcp)", Tag: "access", Status: 101,
 		Params: []param{idP, qp("port", "integer", "in-box port (exposed, forward allowlist, or 22)"), qp("ticket", "string", "access ticket (purpose tcp, same port); or Authorization: Bearer <API key>")},
 		Desc: "Used by `box forward <box> <remote-port> [local-port]` (Postgres, Redis, gRPC…). Server pings every 25 s (Cloudflare idle timeout). Wakes a sleeping box; on exec-only sandboxes the in-box agent is started on demand."},
-	{Method: "GET", Path: "/v1/boxes/{id}/ssh", Summary: "SSH protocol over WebSocket to core's SSH gateway (also wss://<name>.<domain>/.boxaz/ssh)", Tag: "access", Status: 101,
+	{Method: "GET", Path: "/v1/boxes/{id}/ssh", Summary: "SSH protocol over WebSocket to core's SSH gateway (also wss://<name>.<domain>/.boxmes/ssh)", Tag: "access", Status: 101,
 		Params: []param{idP, qp("ticket", "string", "access ticket (purpose ssh); or Authorization: Bearer <API key>; or neither: then SSH auth needs a core-signed certificate (POST /v1/ssh/certs) or a registered key of the box owner")},
-		Desc: "ProxyCommand transport: `ssh -o ProxyCommand='box ssh-proxy %h' boxaz@<name>.<domain>`. No sshd in the box: shell, exec, pty, env, window-change, signals, sftp / scp (the box's sftp-server, else served by core) and direct-tcpip (ssh -L, VS Code / Cursor Remote-SSH) run over the box link. -R, agent and X11 forwarding are refused."},
+		Desc: "ProxyCommand transport: `ssh -o ProxyCommand='box ssh-proxy %h' boxmes@<name>.<domain>`. No sshd in the box: shell, exec, pty, env, window-change, signals, sftp / scp (the box's sftp-server, else served by core) and direct-tcpip (ssh -L, VS Code / Cursor Remote-SSH) run over the box link. -R, agent and X11 forwarding are refused."},
 	{Method: "POST", Path: "/v1/boxes/{id}/forward-ports", Summary: "Add an in-box port to the TCP forward allowlist ({port}); returns allowed_ports", Tag: "access", Params: []param{idP}},
 	{Method: "GET", Path: "/v1/boxes/{id}/terminals", Summary: "List the box's durable terminal sessions", Tag: "access", Resp: model.TerminalSession{}, List: true, Params: []param{idP}},
 	{Method: "DELETE", Path: "/v1/boxes/{id}/terminals/{sid}", Summary: "Kill a terminal session (all = every session)", Tag: "access", Params: []param{idP, {"sid", "path", "string", "session id (term_…) or all", true}}},
@@ -329,29 +329,29 @@ var ops = []op{
 	{Method: "DELETE", Path: "/v1/ssh/keys/{kid}", Summary: "Delete a registered SSH key", Tag: "access", Params: []param{{"kid", "path", "string", "key id (sshk_…)", true}}},
 	// v1.11: access P1 — SFTP always, SSH certificates, browser (CDP), desktop (VNC), share links
 	{Method: "POST", Path: "/v1/ssh/certs", Summary: "Sign a short-lived SSH user certificate for one box (≤ 12 h; revocable as a ticket)", Tag: "access", Req: manager.SSHCertInput{}, Resp: manager.SSHCert{}, Status: 201,
-		Desc: "Core's user CA signs public_key for the box (principals = box id, name, slug; permit-pty, permit-port-forwarding). The certificate authenticates without an API key: over wss://<name>.<domain>/.boxaz/ssh with no ticket (`box ssh-proxy --anon %h`) and on the direct listener (`ssh -p 2222 <name>@ssh.<domain>`). Recorded as a ticket of purpose ssh_cert: DELETE /v1/boxes/{id}/tickets/{id} refuses it and closes its sessions. user_ca is the CA line (TrustedUserCAKeys for a box's own sshd)."},
+		Desc: "Core's user CA signs public_key for the box (principals = box id, name, slug; permit-pty, permit-port-forwarding). The certificate authenticates without an API key: over wss://<name>.<domain>/.boxmes/ssh with no ticket (`box ssh-proxy --anon %h`) and on the direct listener (`ssh -p 2222 <name>@ssh.<domain>`). Recorded as a ticket of purpose ssh_cert: DELETE /v1/boxes/{id}/tickets/{id} refuses it and closes its sessions. user_ca is the CA line (TrustedUserCAKeys for a box's own sshd)."},
 	{Method: "GET", Path: "/v1/boxes/{id}/browser", Summary: "Status of the box's browser (does not wake the box or start it)", Tag: "access", Resp: manager.BrowserState{}, Params: []param{idP}},
 	{Method: "POST", Path: "/v1/boxes/{id}/browser", Summary: "Start (or reuse) Chromium in the box and get a CDP endpoint (connectOverCDP / puppeteer.connect)", Tag: "access", Req: manager.BrowserInput{}, Resp: manager.BrowserSession{}, Status: 201, Params: []param{idP},
-		Desc: "Wakes the box, finds an installed Chromium / Chrome / Playwright browser or installs one (apt on Debian, npx playwright, Chrome for Testing on x86_64; BOXAZ_BROWSER_INSTALL=off disables), starts it on 127.0.0.1:9222 with a persistent profile (~/.local/share/bx-browser) and returns cdp_url = wss://<name>.<domain>/.boxaz/cdp?ticket=… (reusable until expires_at; ttl_s default 3600, ≤ 86400; revoke with DELETE /v1/boxes/{id}/tickets/{ticket_id}). http_url works with connectOverCDP(\"https://…\") (/json/version is rewritten). Headless unless the desktop runs (then visible on it). Stops after BOXAZ_BROWSER_IDLE (10 min) without clients. Navigations to cloud metadata addresses are rewritten to an unresolvable host."},
+		Desc: "Wakes the box, finds an installed Chromium / Chrome / Playwright browser or installs one (apt on Debian, npx playwright, Chrome for Testing on x86_64; BOXMES_BROWSER_INSTALL=off disables), starts it on 127.0.0.1:9222 with a persistent profile (~/.local/share/bx-browser) and returns cdp_url = wss://<name>.<domain>/.boxmes/cdp?ticket=… (reusable until expires_at; ttl_s default 3600, ≤ 86400; revoke with DELETE /v1/boxes/{id}/tickets/{ticket_id}). http_url works with connectOverCDP(\"https://…\") (/json/version is rewritten). Headless unless the desktop runs (then visible on it). Stops after BOXMES_BROWSER_IDLE (10 min) without clients. Navigations to cloud metadata addresses are rewritten to an unresolvable host."},
 	{Method: "DELETE", Path: "/v1/boxes/{id}/browser", Summary: "Stop the box's browser and close CDP clients", Tag: "access", Params: []param{idP}},
-	{Method: "GET", Path: "/v1/boxes/{id}/cdp", Summary: "CDP endpoint of the box's browser (WebSocket, or GET = /json/version; also wss://<name>.<domain>/.boxaz/cdp)", Tag: "access", Status: 101,
+	{Method: "GET", Path: "/v1/boxes/{id}/cdp", Summary: "CDP endpoint of the box's browser (WebSocket, or GET = /json/version; also wss://<name>.<domain>/.boxmes/cdp)", Tag: "access", Status: 101,
 		Params: []param{idP, qp("ticket", "string", "access ticket (purpose cdp, reusable until it expires); or Authorization: Bearer <API key>")},
 		Desc: "WebSocket: spliced onto the browser's /devtools/browser/<id> socket. Subpaths: /json/version, /json/list, /json/new?<url> (debugger URLs rewritten to this endpoint with the ticket), /devtools/page/<id> (WebSocket). Starts the browser when it is not running."},
 	{Method: "GET", Path: "/v1/boxes/{id}/cdp/*", Summary: "CDP HTTP endpoints (/json/version, /json/list, /json/new) and page sockets (/devtools/page/<id>)", Tag: "access", Params: []param{idP, qp("ticket", "string", "access ticket (purpose cdp)")}},
 	{Method: "GET", Path: "/v1/boxes/{id}/desktop", Summary: "Status of the box's desktop (does not wake the box or start it)", Tag: "access", Resp: manager.DesktopState{}, Params: []param{idP}},
 	{Method: "POST", Path: "/v1/boxes/{id}/desktop", Summary: "Start the desktop (Xvfb + window manager + x11vnc) and get a single-use viewer", Tag: "access", Req: manager.DesktopInput{}, Resp: manager.DesktopSession{}, Status: 201, Params: []param{idP},
-		Desc: "Installs Xvfb + x11vnc + openbox when missing (apt/apk/dnf with root or sudo), binds VNC to 127.0.0.1:5900, and returns viewer_url (noVNC page served by core, https://<name>.<domain>/.boxaz/desktop?ticket=…) and vnc_url (RFB over wss://…/.boxaz/vnc?ticket=…). view_only=true makes core drop the viewer's input. Stops after BOXAZ_DESKTOP_IDLE (15 min) without viewers. A browser started for CDP while the desktop runs is visible on it."},
+		Desc: "Installs Xvfb + x11vnc + openbox when missing (apt/apk/dnf with root or sudo), binds VNC to 127.0.0.1:5900, and returns viewer_url (noVNC page served by core, https://<name>.<domain>/.boxmes/desktop?ticket=…) and vnc_url (RFB over wss://…/.boxmes/vnc?ticket=…). view_only=true makes core drop the viewer's input. Stops after BOXMES_DESKTOP_IDLE (15 min) without viewers. A browser started for CDP while the desktop runs is visible on it."},
 	{Method: "DELETE", Path: "/v1/boxes/{id}/desktop", Summary: "Stop the desktop and disconnect viewers", Tag: "access", Params: []param{idP}},
-	{Method: "GET", Path: "/v1/boxes/{id}/vnc", Summary: "RFB over WebSocket to the box's desktop (also wss://<name>.<domain>/.boxaz/vnc)", Tag: "access", Status: 101,
+	{Method: "GET", Path: "/v1/boxes/{id}/vnc", Summary: "RFB over WebSocket to the box's desktop (also wss://<name>.<domain>/.boxmes/vnc)", Tag: "access", Status: 101,
 		Params: []param{idP, qp("ticket", "string", "access ticket (purpose vnc); or Authorization: Bearer <API key>"), qp("share", "string", "share link token (bxs_…), view-only unless created with view_only=false")},
 		Desc: "Binary frames carry RFB (noVNC, any websockify-style client). View-only tickets and share links: KeyEvent, PointerEvent, ClientCutText, SetDesktopSize and QEMU key events are dropped by core; ClientInit is always shared. Starts the desktop when it is not running."},
-	{Method: "GET", Path: "/v1/boxes/{id}/desktop/view", Summary: "noVNC viewer page for a ticket or a share link (also https://<name>.<domain>/.boxaz/desktop)", Tag: "access",
+	{Method: "GET", Path: "/v1/boxes/{id}/desktop/view", Summary: "noVNC viewer page for a ticket or a share link (also https://<name>.<domain>/.boxmes/desktop)", Tag: "access",
 		Params: []param{idP, qp("ticket", "string", "vnc ticket (redeemed by the page's socket)"), qp("share", "string", "share link token")},
 		Desc: "200 HTML (noVNC vendored and served by core, no CDN; CSP with nonce, Referrer-Policy no-referrer); 401 unknown link, 410 revoked or expired. Share pages may be iframed anywhere (frame-ancestors *); ticket pages only by the dashboard origins."},
 	{Method: "GET", Path: "/v1/boxes/{id}/desktop/shares", Summary: "List the desktop share links (tokens never returned; viewers = connected now)", Tag: "access", Resp: manager.DesktopShare{}, List: true, Params: []param{idP}},
 	{Method: "POST", Path: "/v1/boxes/{id}/desktop/shares", Summary: "Create a desktop share link (view-only by default, TTL 60 s … 24 h, reusable, iframe-able)", Tag: "access", Req: manager.ShareInput{}, Resp: manager.DesktopShare{}, Status: 201, Params: []param{idP}},
 	{Method: "DELETE", Path: "/v1/boxes/{id}/desktop/shares/{sid}", Summary: "Revoke a share link (all = every link); viewers are disconnected within a second, the link then answers 410", Tag: "access", Params: []param{idP, {"sid", "path", "string", "share id (shr_…) or all", true}}},
-	{Method: "GET", Path: "/v1/novnc", Summary: "noVNC static files (MPL-2.0, vendored; also /.boxaz/novnc/ on box hosts)", Tag: "access"},
+	{Method: "GET", Path: "/v1/novnc", Summary: "noVNC static files (MPL-2.0, vendored; also /.boxmes/novnc/ on box hosts)", Tag: "access"},
 	// v1.4: sandbox provider tier
 	{Method: "GET", Path: "/v1/sandbox/providers", Summary: "Sandbox API providers (T2/T3): capabilities, per-second prices, regions, verification level, connection state", Tag: "infra", Resp: manager.SandboxProviderView{}, List: true,
 		Desc: "Connect one with PUT /v1/providers/{id}/token (multi-field credentials as a JSON object string, e.g. {\"token\":\"…\",\"project_id\":\"…\"}). mode=dial: boxd runs inside the sandbox (T2); mode=shim: exec-only gateway shim (T3)."},
@@ -390,9 +390,9 @@ func schemaName(t reflect.Type) string {
 		return "CreateBoxRequest"
 	case t == reflect.TypeOf(model.APIError{}):
 		return "Error"
-	case t.PkgPath() == "boxaz/core/internal/agentkit":
+	case t.PkgPath() == "boxmes/core/internal/agentkit":
 		return "Agent" + n
-	case t.PkgPath() == "boxaz/core/internal/proto":
+	case t.PkgPath() == "boxmes/core/internal/proto":
 		return n
 	case n == "":
 		return "Object"
@@ -565,14 +565,14 @@ func buildOpenAPI() map[string]any {
 	return map[string]any{
 		"openapi":           "3.1.0",
 		"jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
-		"info": map[string]any{"title": "Boxaz API", "version": manager.Version,
+		"info": map[string]any{"title": "Boxmes API", "version": manager.Version,
 			"description": "Cheap disposable Linux boxes for AI agents. MCP at /mcp, tools at /v1/tools, llms.txt at /llms.txt. Errors: {error:{code,message,hint,retry_after_s?,docs_url?}}; send Accept-Language (vi|en|zh|ja) to localize message/hint.",
 			"license":     map[string]any{"name": "Proprietary"}},
 		"servers":    []any{map[string]any{"url": "/"}},
 		"security":   []any{map[string]any{"bearer": []string{}}},
 		"tags":       []any{},
 		"paths":      paths,
-		"components": map[string]any{"schemas": g.defs, "securitySchemes": map[string]any{"bearer": map[string]any{"type": "http", "scheme": "bearer", "description": "Boxaz API key (bx_agent_… or bx_admin_…)"}}},
+		"components": map[string]any{"schemas": g.defs, "securitySchemes": map[string]any{"bearer": map[string]any{"type": "http", "scheme": "bearer", "description": "Boxmes API key (bx_agent_… or bx_admin_…)"}}},
 	}
 }
 
@@ -583,7 +583,7 @@ func (s *Server) openapi(w http.ResponseWriter, r *http.Request) {
 	for k, v := range OpenAPI() {
 		doc[k] = v
 	}
-	doc["servers"] = []any{map[string]any{"url": s.publicBase(r), "description": "this Boxaz core"}}
+	doc["servers"] = []any{map[string]any{"url": s.publicBase(r), "description": "this Boxmes core"}}
 	writeJSON(w, 200, doc)
 }
 

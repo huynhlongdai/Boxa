@@ -3,10 +3,10 @@
 # ingress comes from the Cloudflare API). Foreground by default; DETACH=1
 # starts it in the background (setsid nohup) and writes $PID_FILE.
 set -euo pipefail
-TOKEN_FILE=${TOKEN_FILE:-$HOME/.config/boxaz/tunnel-token}
+TOKEN_FILE=${TOKEN_FILE:-$HOME/.config/boxmes/tunnel-token}
 CLOUDFLARED=${CLOUDFLARED:-$(command -v cloudflared || echo cloudflared)}
-LOG=${LOG:-/tmp/boxaz-cloudflared.log}
-PID_FILE=${PID_FILE:-/tmp/boxaz-cloudflared.pid}
+LOG=${LOG:-/tmp/boxmes-cloudflared.log}
+PID_FILE=${PID_FILE:-/tmp/boxmes-cloudflared.pid}
 [ -s "$TOKEN_FILE" ] || { echo "no tunnel token at $TOKEN_FILE (run setup.sh)" >&2; exit 1; }
 export TUNNEL_TOKEN="$(cat "$TOKEN_FILE")" # env, not argv: keeps the token out of ps
 args=(tunnel --no-autoupdate --metrics 127.0.0.1:0 run)

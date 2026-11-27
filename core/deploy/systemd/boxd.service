@@ -1,5 +1,5 @@
 [Unit]
-Description=Boxaz host agent (boxd) — dials out to core, runs boxes in Incus
+Description=Boxmes host agent (boxd) — dials out to core, runs boxes in Incus
 After=network-online.target incus.service
 Wants=network-online.target
 

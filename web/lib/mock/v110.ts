@@ -2,7 +2,7 @@
 // GET /boxes/{id}/access, forward-ports, GET /ssh + /ssh/keys. Bám theo core/internal/api/access.go + manager/access.go.
 // WebSocket terminal không giả lập được qua route Next (không upgrade): UI dùng shell mô phỏng và hiện ghi chú mock.
 // Ở mock, tạo ticket terminal coi như đã đổi (redeem) ngay: không có session_id → mở session mới; có → gắn lại session đó.
-import type { AccessInfo, AccessTicket, Box, BoxazEvent, ErrorCode, SshKey, TerminalSession } from "../types";
+import type { AccessInfo, AccessTicket, Box, BoxmesEvent, ErrorCode, SshKey, TerminalSession } from "../types";
 import { MOCK_GATEWAY_DOMAIN } from "./v18";
 import type { MockState } from "./seed";
 
@@ -11,15 +11,15 @@ export interface V110Ctx {
   ok: (body: unknown, status?: number) => Res;
   err: (status: number, code: ErrorCode, key: string, params?: Record<string, string | number>) => Res;
   hydrateBox: (b: MockState["boxes"][number]) => Box;
-  pushEvent: (e: Partial<BoxazEvent>) => unknown;
+  pushEvent: (e: Partial<BoxmesEvent>) => unknown;
 }
 
 const DETACH_TTL_S = 600;
 const BUFFER = 256 << 10;
 const SSH_INTERNAL_PORT = 2222;
 const FP = "SHA256:q3Vb9yJx0mZr4Kd2T1pWcE8nH6sLaG5uF7oRiY0Bv2M";
-const KNOWN = `boxaz-ssh ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBoxazMockGatewayHostKeyOnlyForTheDashboardDemo`;
-const CORE_WS = "wss://api.boxaz.dev";
+const KNOWN = `boxmes-ssh ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBoxmesMockGatewayHostKeyOnlyForTheDashboardDemo`;
+const CORE_WS = "wss://api.boxmes.dev";
 
 interface V110State {
   tickets: Record<string, AccessTicket[]>;
@@ -27,7 +27,7 @@ interface V110State {
   keys: SshKey[];
   seq: number;
 }
-type G = typeof globalThis & { __boxazV110?: V110State };
+type G = typeof globalThis & { __boxmesV110?: V110State };
 
 const iso = (ms: number) => new Date(ms).toISOString();
 const hex = (n: number) => Array.from({ length: n }, () => Math.floor(Math.random() * 16).toString(16)).join("");
@@ -57,15 +57,15 @@ function seed(): V110State {
       ],
     },
     keys: [
-      { id: "sshk_01", name: "anh@macbook", public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK3m0ckLaptopKeyForBoxazDashboardDemoOnly anh@macbook", fingerprint: "SHA256:Zt8mWq2LxP0vR6yN4cB1eH9sK3aD7fG5jU2oI8nM0Qw", created_at: iso(now - 6 * 86400_000) },
+      { id: "sshk_01", name: "anh@macbook", public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK3m0ckLaptopKeyForBoxmesDashboardDemoOnly anh@macbook", fingerprint: "SHA256:Zt8mWq2LxP0vR6yN4cB1eH9sK3aD7fG5jU2oI8nM0Qw", created_at: iso(now - 6 * 86400_000) },
     ],
   };
 }
 
 function st(): V110State {
   const g = globalThis as G;
-  if (!g.__boxazV110) g.__boxazV110 = seed();
-  return g.__boxazV110;
+  if (!g.__boxmesV110) g.__boxmesV110 = seed();
+  return g.__boxmesV110;
 }
 
 function nameOf(ctx: V110Ctx, b: MockState["boxes"][number]) {
@@ -78,7 +78,7 @@ export function forwardPortsOf(b: Box): number[] {
 }
 
 function urls(ctx: V110Ctx, b: MockState["boxes"][number], kind: string, q = "") {
-  return { url: `wss://${nameOf(ctx, b)}.${MOCK_GATEWAY_DOMAIN}/.boxaz/${kind}${q}`, core_url: `${CORE_WS}/v1/boxes/${b.id}/${kind}${q}` };
+  return { url: `wss://${nameOf(ctx, b)}.${MOCK_GATEWAY_DOMAIN}/.boxmes/${kind}${q}`, core_url: `${CORE_WS}/v1/boxes/${b.id}/${kind}${q}` };
 }
 
 function liveTerms(s: V110State, boxId: string) {
@@ -108,20 +108,20 @@ function access(ctx: V110Ctx, s: V110State, b: MockState["boxes"][number]): Acce
   const ntcp = (s.tickets[b.id] ?? []).filter((t) => t.purpose === "tcp" && t.live && !t.revoked_at).length;
   if (ntcp) live.tcp = ntcp;
   const exec = b.provider === "upstash-box";
-  const config = `Host ${host}\n  HostName ${host}\n  User boxaz\n  ProxyCommand box ssh-proxy %h\n  HostKeyAlias boxaz-ssh\n  UserKnownHostsFile ~/.boxaz/known_hosts\n  ServerAliveInterval 25\n\n`;
+  const config = `Host ${host}\n  HostName ${host}\n  User boxmes\n  ProxyCommand box ssh-proxy %h\n  HostKeyAlias boxmes-ssh\n  UserKnownHostsFile ~/.boxmes/known_hosts\n  ServerAliveInterval 25\n\n`;
   return {
     box_id: b.id, name, host, link: exec ? "none" : b.provider === "e2b" ? "boxd" : "boxd", live,
     tcp: { ...tcp, allowed_ports: forwardPortsOf(hb), auth: "?ticket=bxa_… (purpose tcp, same port) or Authorization: Bearer <API key>" },
     terminal: { ...term, detach_ttl_s: DETACH_TTL_S, sessions: terms },
     ssh: {
-      ...ssh, host, proxy_command: "box ssh-proxy %h", command: `box ssh ${name}`, config, known_hosts: KNOWN, host_key_fingerprint: FP, direct: "ssh.boxaz.dev:2222",
+      ...ssh, host, proxy_command: "box ssh-proxy %h", command: `box ssh ${name}`, config, known_hosts: KNOWN, host_key_fingerprint: FP, direct: "ssh.boxmes.dev:2222",
       features: "shell, exec, pty, env, window-change, signals, local port forwarding (ssh -L, VS Code / Cursor Remote-SSH), sftp when the box has an sftp-server; no -R / agent / X11 forwarding",
     },
     commands: {
       forward: `box forward ${name} <remote-port> [local-port]`, ssh: `box ssh ${name}`, ssh_exec: `box ssh ${name} -- uname -a`, ssh_config: "box ssh-config --write",
-      ssh_proxy: `ssh -o ProxyCommand='box ssh-proxy %h' -o HostKeyAlias=boxaz-ssh boxaz@${host}`, ssh_direct: `ssh -p 2222 $(box ticket ${name} ssh)@ssh.boxaz.dev`,
+      ssh_proxy: `ssh -o ProxyCommand='box ssh-proxy %h' -o HostKeyAlias=boxmes-ssh boxmes@${host}`, ssh_direct: `ssh -p 2222 $(box ticket ${name} ssh)@ssh.boxmes.dev`,
     },
-    notes: exec ? ["exec-only sandbox and core is not reachable from it (BOXAZ_PUBLIC_URL): terminal, forward and ssh need the in-box agent to dial in"] : undefined,
+    notes: exec ? ["exec-only sandbox and core is not reachable from it (BOXMES_PUBLIC_URL): terminal, forward and ssh need the in-box agent to dial in"] : undefined,
     tickets: `POST /v1/boxes/${b.id}/tickets {purpose: terminal|tcp|ssh, port?, ttl_s?}`,
   };
 }
@@ -146,7 +146,7 @@ export function handleV110(ms: MockState, ctx: V110Ctx, M: string, segs: string[
 
   // ---- /ssh, /ssh/keys ----
   if (r0 === "ssh") {
-    if (!r1 && M === "GET") return ctx.ok({ known_hosts: KNOWN, host_key_fingerprint: FP, host_key_alias: "boxaz-ssh", direct: "ssh.boxaz.dev:2222", proxy_command: "box ssh-proxy %h", domain: MOCK_GATEWAY_DOMAIN });
+    if (!r1 && M === "GET") return ctx.ok({ known_hosts: KNOWN, host_key_fingerprint: FP, host_key_alias: "boxmes-ssh", direct: "ssh.boxmes.dev:2222", proxy_command: "box ssh-proxy %h", domain: MOCK_GATEWAY_DOMAIN });
     if (r1 !== "keys") return null;
     if (!r2 && M === "GET") return ctx.ok({ items: s.keys });
     if (!r2 && M === "POST") {
@@ -277,7 +277,7 @@ export function handleV110(ms: MockState, ctx: V110Ctx, M: string, segs: string[
     const q = purpose === "tcp" ? `?port=${port}` : purpose === "terminal" && body.session_id ? `?session=${encodeURIComponent(String(body.session_id))}` : "";
     const u = urls(ctx, b, purpose, q);
     const out: AccessTicket = { ...t, ticket: raw, url: `${u.url}${q ? "&" : "?"}ticket=${raw}`, core_url: u.core_url };
-    if (purpose === "ssh") out.command = `ssh -p 2222 ${raw}@ssh.boxaz.dev`;
+    if (purpose === "ssh") out.command = `ssh -p 2222 ${raw}@ssh.boxmes.dev`;
     return ctx.ok(out, 201);
   }
   return null;

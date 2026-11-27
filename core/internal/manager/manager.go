@@ -1,10 +1,10 @@
-// Package manager is Boxaz core's business logic: box lifecycle (M3),
+// Package manager is Boxmes core's business logic: box lifecycle (M3),
 // scheduler (M4), provider orchestration (M5), reaper (M11), budget/ledger
 // (M12), price feed (M13), secrets (M10), templates (M14), audit (M15).
 package manager
 
 import (
-	"boxaz/core/internal/i18n"
+	"boxmes/core/internal/i18n"
 	"context"
 	"errors"
 	"fmt"
@@ -14,34 +14,34 @@ import (
 	"sync"
 	"time"
 
-	"boxaz/core/internal/boxyaml"
-	"boxaz/core/internal/events"
-	"boxaz/core/internal/hostlink"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/objstore"
-	"boxaz/core/internal/pricefeed"
-	"boxaz/core/internal/proto"
-	"boxaz/core/internal/provhealth"
-	"boxaz/core/internal/provider"
-	"boxaz/core/internal/secret"
-	"boxaz/core/internal/store"
+	"boxmes/core/internal/boxyaml"
+	"boxmes/core/internal/events"
+	"boxmes/core/internal/hostlink"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/objstore"
+	"boxmes/core/internal/pricefeed"
+	"boxmes/core/internal/proto"
+	"boxmes/core/internal/provhealth"
+	"boxmes/core/internal/provider"
+	"boxmes/core/internal/secret"
+	"boxmes/core/internal/store"
 )
 
 const Version = "0.1.0"
 
-// Config is read from env by cmd/boxaz-core.
+// Config is read from env by cmd/boxmes-core.
 type Config struct {
 	PublicURL     string // external base URL of core, e.g. https://core-1-2-3-4.sslip.io
-	DisableTunnel bool   // BOXAZ_DISABLE_TUNNEL: no in-box quick-tunnel fallback for public URLs
-	// AssumePublicURL (BOXAZ_INGRESS_ASSUME_PUBLIC) tries the ingress fallback
+	DisableTunnel bool   // BOXMES_DISABLE_TUNNEL: no in-box quick-tunnel fallback for public URLs
+	// AssumePublicURL (BOXMES_INGRESS_ASSUME_PUBLIC) tries the ingress fallback
 	// even when PublicURL looks private (e.g. sandboxes reach it over a VPN).
 	AssumePublicURL bool
-	// v1.7 gateway: BOXAZ_WAKE_HOLD (default 10 s, settings.wake.hold_s wins)
-	// and BOXAZ_GATEWAY_DOMAIN (host-based gateway URLs <key>-<port>.<domain>,
+	// v1.7 gateway: BOXMES_WAKE_HOLD (default 10 s, settings.wake.hold_s wins)
+	// and BOXMES_GATEWAY_DOMAIN (host-based gateway URLs <key>-<port>.<domain>,
 	// needs wildcard DNS + TLS pointing at core).
 	WakeHold      time.Duration
 	GatewayDomain string
-	// v1.8: BOXAZ_PROVIDER_PREVIEW = auto | private | public (see
+	// v1.8: BOXMES_PROVIDER_PREVIEW = auto | private | public (see
 	// model.GatewaySettings); "" = settings.gateway.provider_preview.
 	ProviderPreview string
 	// PublicURLProbe checks a fresh tunnel URL from core (nil = real HTTP GET; tests stub it).
@@ -64,10 +64,10 @@ type Config struct {
 	CreateWait         time.Duration
 	URLKey             string           // HMAC key for box URL tokens (defaults to a random per-process key)
 	ProviderChain      []string         // burst fallback order (default hetzner, vultr, digitalocean, contabo, netcup, then the sandbox chain)
-	AutoSandbox        bool             // v1.4: box_up may create sandboxes without approval (BOXAZ_AUTO_SANDBOX)
+	AutoSandbox        bool             // v1.4: box_up may create sandboxes without approval (BOXMES_AUTO_SANDBOX)
 	SandboxMode        string           // v1.4: auto | dial (T2) | shim (T3) default for sandbox providers
 	SandboxEmptyAfter  time.Duration    // v1.4: destroy an empty sandbox host after this (default 1 min)
-	SnapshotDir        string           // T3 sandbox snapshots (gateway tarballs); default $BOXAZ_DATA_DIR/snapshots
+	SnapshotDir        string           // T3 sandbox snapshots (gateway tarballs); default $BOXMES_DATA_DIR/snapshots
 	ObjectStore        *objstore.Config // snapshot storage from env (nil = settings/local)
 	TelegramAPI        string           // override https://api.telegram.org (tests)
 	// v1.3
@@ -79,23 +79,23 @@ type Config struct {
 	Mesh              MeshConfig    // optional headscale mesh
 	HostCacheIP       string        // BOXD_CACHE_HOST written into new hosts' cloud-init (deploy/caches.sh on each host)
 	// v1.10 access
-	DashboardURL      string        // BOXAZ_DASHBOARD_URL: origin allowed to open terminal / tcp / ssh WebSockets
-	AccessOrigins     []string      // BOXAZ_ACCESS_ORIGINS: more allowed origins (comma separated)
-	TerminalDetachTTL time.Duration // BOXAZ_TERMINAL_DETACH_TTL: keep a detached terminal this long (default 10m)
-	TerminalBuffer    int           // BOXAZ_TERMINAL_BUFFER: replay ring per session in bytes (default 256 KiB)
-	SSHAddr           string        // BOXAZ_SSH_ADDR: direct SSH listener, e.g. :2222 ("" = only SSH over WebSocket)
-	SSHPublic         string        // BOXAZ_SSH_PUBLIC: host:port users dial for the direct listener (default from SSHAddr)
+	DashboardURL      string        // BOXMES_DASHBOARD_URL: origin allowed to open terminal / tcp / ssh WebSockets
+	AccessOrigins     []string      // BOXMES_ACCESS_ORIGINS: more allowed origins (comma separated)
+	TerminalDetachTTL time.Duration // BOXMES_TERMINAL_DETACH_TTL: keep a detached terminal this long (default 10m)
+	TerminalBuffer    int           // BOXMES_TERMINAL_BUFFER: replay ring per session in bytes (default 256 KiB)
+	SSHAddr           string        // BOXMES_SSH_ADDR: direct SSH listener, e.g. :2222 ("" = only SSH over WebSocket)
+	SSHPublic         string        // BOXMES_SSH_PUBLIC: host:port users dial for the direct listener (default from SSHAddr)
 	// v1.11 access P1
-	SFTPMode       string        // BOXAZ_SFTP: auto (box sftp-server, else core) | core | box
-	BrowserIdle    time.Duration // BOXAZ_BROWSER_IDLE: stop the on-demand browser after this long without CDP clients (default 10m)
-	DesktopIdle    time.Duration // BOXAZ_DESKTOP_IDLE: stop the on-demand desktop after this long without viewers (default 15m)
-	AllowMetadata  bool          // BOXAZ_EGRESS_ALLOW_METADATA=1: do not block cloud metadata addresses in box egress
-	BrowserInstall string        // BOXAZ_BROWSER_INSTALL: auto (default) | off — install Chromium in the box when none is found
+	SFTPMode       string        // BOXMES_SFTP: auto (box sftp-server, else core) | core | box
+	BrowserIdle    time.Duration // BOXMES_BROWSER_IDLE: stop the on-demand browser after this long without CDP clients (default 10m)
+	DesktopIdle    time.Duration // BOXMES_DESKTOP_IDLE: stop the on-demand desktop after this long without viewers (default 15m)
+	AllowMetadata  bool          // BOXMES_EGRESS_ALLOW_METADATA=1: do not block cloud metadata addresses in box egress
+	BrowserInstall string        // BOXMES_BROWSER_INSTALL: auto (default) | off — install Chromium in the box when none is found
 	BrowserPort    int           // in-box CDP port (default 9222; tests)
 	VNCPort        int           // in-box RFB port (default 5900; tests)
 	// v2 tenancy
-	SignupMode string        // BOXAZ_SIGNUP_MODE: invite (default) | open | closed
-	SessionTTL time.Duration // BOXAZ_SESSION_TTL: dashboard session lifetime (default 720h)
+	SignupMode string        // BOXMES_SIGNUP_MODE: invite (default) | open | closed
+	SessionTTL time.Duration // BOXMES_SESSION_TTL: dashboard session lifetime (default 720h)
 	Mailer     Mailer        // tests; nil = SMTP from settings.notify
 }
 

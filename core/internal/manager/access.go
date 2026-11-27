@@ -23,10 +23,10 @@ import (
 	"sync"
 	"time"
 
-	"boxaz/core/internal/hostlink"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/secret"
-	"boxaz/core/internal/store"
+	"boxmes/core/internal/hostlink"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/secret"
+	"boxmes/core/internal/store"
 )
 
 // AccessTicketPrefix marks access tickets (bxa_<box id>_<random>).
@@ -116,7 +116,7 @@ func (m *Manager) boxByName(ctx context.Context, label string) *model.Box {
 	return nil
 }
 
-// BoxForAccessHost resolves the box of a gateway host label for /.boxaz/
+// BoxForAccessHost resolves the box of a gateway host label for /.boxmes/
 // endpoints (any label of the box: <name> or <name>-<label>, or the legacy
 // <key>-<port> alias).
 func (m *Manager) BoxForAccessHost(ctx context.Context, seg string) (*model.Box, error) {
@@ -380,7 +380,7 @@ func (m *Manager) RevokeTicket(ctx context.Context, p *Principal, ref, id string
 	}
 	closed := 0
 	for _, t := range hit {
-		closed += m.closeTicketConns(t.ID, "[boxaz] access revoked")
+		closed += m.closeTicketConns(t.ID, "[boxmes] access revoked")
 	}
 	if len(hit) > 0 {
 		m.Emit(ctx, p.Actor(), b.ID, b.AgentID, "box.ticket", fmt.Sprintf("%d ticket(s) revoked, %d session(s) closed", len(hit), closed), nil)
@@ -552,7 +552,7 @@ func originOf(u string) string {
 }
 
 // AccessOrigins lists the browser origins allowed to open access WebSockets:
-// the dashboard (BOXAZ_DASHBOARD_URL), core's public URL, BOXAZ_ACCESS_ORIGINS
+// the dashboard (BOXMES_DASHBOARD_URL), core's public URL, BOXMES_ACCESS_ORIGINS
 // and explicit (non-*) CORS origins.
 func (m *Manager) AccessOrigins(cors string) []string {
 	var out []string
@@ -649,7 +649,7 @@ func (m *Manager) AccessLink(ctx context.Context, b *model.Box) (*model.Box, *ho
 		}
 		if m.Hub.IsVirtual(b.HostID) {
 			if ok, why := CoreLooksPublic(m.Cfg.PublicURL); !ok && !(m.Cfg.AssumePublicURL && m.Cfg.PublicURL != "") {
-				return nil, nil, model.EH(model.ErrProviderFailed, "Set BOXAZ_PUBLIC_URL to an internet-reachable URL of core so the sandbox's agent can dial in.", "this exec-only sandbox has no live link for interactive access: %s", why)
+				return nil, nil, model.EH(model.ErrProviderFailed, "Set BOXMES_PUBLIC_URL to an internet-reachable URL of core so the sandbox's agent can dial in.", "this exec-only sandbox has no live link for interactive access: %s", why)
 			}
 			l := m.exposeLock(b.ID)
 			if l.TryLock() {
@@ -698,7 +698,7 @@ func wsScheme(u string) string {
 }
 
 // accessURLs returns the WebSocket endpoint of a purpose on the box's own host
-// (wss://<name>.<domain>/.boxaz/…, "" without a gateway domain) and on core.
+// (wss://<name>.<domain>/.boxmes/…, "" without a gateway domain) and on core.
 func (m *Manager) accessURLs(ctx context.Context, b *model.Box, purpose string, port int, session string) (hostURL, coreURL string) {
 	kind := purpose
 	q := ""
@@ -715,7 +715,7 @@ func (m *Manager) accessURLs(ctx context.Context, b *model.Box, purpose string, 
 		if strings.HasPrefix(m.Cfg.PublicURL, "http://") {
 			scheme = "ws://"
 		}
-		hostURL = scheme + b.Subdomain + "." + d + "/.boxaz/" + kind + q
+		hostURL = scheme + b.Subdomain + "." + d + "/.boxmes/" + kind + q
 	}
 	base := strings.TrimRight(wsScheme(m.Cfg.PublicURL), "/")
 	coreURL = base + "/v1/boxes/" + b.ID + "/" + kind + q
@@ -744,7 +744,7 @@ type AccessInfo struct {
 
 // AccessTCP describes the TCP stream endpoint.
 type AccessTCP struct {
-	URL          string `json:"url"`      // wss://…/.boxaz/tcp?port={port}
+	URL          string `json:"url"`      // wss://…/.boxmes/tcp?port={port}
 	CoreURL      string `json:"core_url"` // wss://core/v1/boxes/{id}/tcp?port={port}
 	AllowedPorts []int  `json:"allowed_ports"`
 	Auth         string `json:"auth"`
@@ -752,7 +752,7 @@ type AccessTCP struct {
 
 // AccessAddon describes the on-demand browser or desktop of a box (v1.11).
 type AccessAddon struct {
-	URL     string `json:"url"`      // wss://<name>.<domain>/.boxaz/{cdp,vnc}?ticket=…
+	URL     string `json:"url"`      // wss://<name>.<domain>/.boxmes/{cdp,vnc}?ticket=…
 	CoreURL string `json:"core_url"` // same on core
 	Page    string `json:"page,omitempty"`
 	Start   string `json:"start"` // REST call that starts it and returns a ticketed URL
@@ -807,7 +807,7 @@ func (m *Manager) Access(ctx context.Context, p *Principal, ref string) (*Access
 			out.Link = "agent-on-demand"
 		} else {
 			out.Link = "none"
-			out.Notes = append(out.Notes, "exec-only sandbox and core is not reachable from it (BOXAZ_PUBLIC_URL): terminal, forward and ssh need the in-box agent to dial in")
+			out.Notes = append(out.Notes, "exec-only sandbox and core is not reachable from it (BOXMES_PUBLIC_URL): terminal, forward and ssh need the in-box agent to dial in")
 		}
 	}
 	h, c := m.accessURLs(ctx, b, model.PurposeTCP, 0, "")
@@ -818,7 +818,7 @@ func (m *Manager) Access(ctx context.Context, p *Principal, ref string) (*Access
 	h, c = m.accessURLs(ctx, b, model.PurposeSSH, 0, "")
 	alias := out.Host
 	if alias == "" {
-		alias = name + ".boxaz"
+		alias = name + ".boxmes"
 	}
 	known, fp := m.SSHKnownHosts()
 	out.SSH = AccessSSH{URL: h, CoreURL: c, Host: alias, ProxyCommand: "box ssh-proxy %h", Command: "box ssh " + name,
@@ -831,7 +831,7 @@ func (m *Manager) Access(ctx context.Context, p *Principal, ref string) (*Access
 	out.Commands["ssh_config"] = "box ssh-config --write"
 	out.Commands["ssh_cert"] = "box ssh-cert " + name + " --ttl 12h"
 	out.Commands["sftp"] = "box sftp " + name + " put ./file.txt /tmp/"
-	out.Commands["scp"] = "scp -o ProxyCommand='box ssh-proxy %h' -o HostKeyAlias=" + SSHHostKeyAlias + " ./file.txt boxaz@" + alias + ":/tmp/"
+	out.Commands["scp"] = "scp -o ProxyCommand='box ssh-proxy %h' -o HostKeyAlias=" + SSHHostKeyAlias + " ./file.txt boxmes@" + alias + ":/tmp/"
 	out.Commands["browser"] = "box browser " + name
 	out.Commands["desktop"] = "box desktop " + name
 	out.Commands["desktop_share"] = "box desktop " + name + " --share --ttl 1h"
@@ -844,7 +844,7 @@ func (m *Manager) Access(ctx context.Context, p *Principal, ref string) (*Access
 	out.CDP = AccessAddon{URL: h, CoreURL: c, Start: "POST /v1/boxes/" + b.ID + "/browser", Running: bUp, Clients: live["cdp"]}
 	h, c = m.accessURLs(ctx, b, model.PurposeVNC, 0, "")
 	out.Desktop = AccessAddon{URL: h, CoreURL: c, Page: strings.TrimSuffix(m.desktopPageURL(ctx, b, "ticket", ""), "?ticket="), Start: "POST /v1/boxes/" + b.ID + "/desktop", Running: dUp, Clients: live["vnc"]}
-	out.Commands["ssh_proxy"] = "ssh -o ProxyCommand='box ssh-proxy %h' -o HostKeyAlias=" + SSHHostKeyAlias + " boxaz@" + alias
+	out.Commands["ssh_proxy"] = "ssh -o ProxyCommand='box ssh-proxy %h' -o HostKeyAlias=" + SSHHostKeyAlias + " boxmes@" + alias
 	if out.SSH.Direct != "" {
 		host, port, _ := net.SplitHostPort(out.SSH.Direct)
 		out.Commands["ssh_direct"] = "ssh -p " + port + " $(box ticket " + name + " ssh)@" + host
@@ -853,13 +853,13 @@ func (m *Manager) Access(ctx context.Context, p *Principal, ref string) (*Access
 }
 
 // SSHHostKeyAlias is the known_hosts name of the gateway's host key.
-const SSHHostKeyAlias = "boxaz-ssh"
+const SSHHostKeyAlias = "boxmes-ssh"
 
 // SSHConfigBlock renders ~/.ssh/config entries routed through the ProxyCommand.
 func SSHConfigBlock(hosts []string, proxy string) string {
 	var b strings.Builder
 	for _, h := range hosts {
-		fmt.Fprintf(&b, "Host %s\n  HostName %s\n  User boxaz\n  ProxyCommand %s\n  HostKeyAlias %s\n  UserKnownHostsFile ~/.boxaz/known_hosts\n  ServerAliveInterval 25\n\n", h, h, proxy, SSHHostKeyAlias)
+		fmt.Fprintf(&b, "Host %s\n  HostName %s\n  User boxmes\n  ProxyCommand %s\n  HostKeyAlias %s\n  UserKnownHostsFile ~/.boxmes/known_hosts\n  ServerAliveInterval 25\n\n", h, h, proxy, SSHHostKeyAlias)
 	}
 	return b.String()
 }

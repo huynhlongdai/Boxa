@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"boxaz/core/internal/model"
+	"boxmes/core/internal/model"
 )
 
 // Hetzner Cloud API v1 adapter (https://docs.hetzner.cloud).

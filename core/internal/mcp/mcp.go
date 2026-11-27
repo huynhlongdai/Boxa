@@ -1,6 +1,6 @@
-// Package mcp implements the Boxaz MCP server (Model Context Protocol,
+// Package mcp implements the Boxmes MCP server (Model Context Protocol,
 // JSON-RPC 2.0): the box_* tools (tools.go), resources (box files, logs,
-// AGENTS.md via boxaz:// URIs) and prompts (resources.go). The same server runs over
+// AGENTS.md via boxmes:// URIs) and prompts (resources.go). The same server runs over
 // Streamable HTTP (core /mcp, JSON responses) and stdio (`box mcp`).
 // Tools are thin wrappers that call the REST API through a Caller, so
 // auth, scopes and behaviour are identical to REST.
@@ -11,7 +11,7 @@
 package mcp
 
 import (
-	"boxaz/core/internal/i18n"
+	"boxmes/core/internal/i18n"
 	"bufio"
 	"context"
 	"encoding/json"
@@ -627,7 +627,7 @@ func (s *Server) Handle(ctx context.Context, c Caller, raw []byte) *rpcResp {
 				"resources": map[string]any{"subscribe": false, "listChanged": false},
 				"prompts":   map[string]any{"listChanged": false},
 			},
-			"serverInfo":   map[string]any{"name": s.Name, "title": "Boxaz", "version": s.Version},
+			"serverInfo":   map[string]any{"name": s.Name, "title": "Boxmes", "version": s.Version},
 			"instructions": i18n.T(i18n.FromContext(ctx), "mcp.instructions"),
 		}
 	case "notifications/initialized", "notifications/cancelled", "initialized":

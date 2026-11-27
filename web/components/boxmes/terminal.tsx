@@ -1,11 +1,11 @@
 "use client";
 // v1.10 Terminal: xterm.js qua WebSocket tới Core, xác thực bằng ticket một lần (bxa_…, 60 s).
-//  - Ticket lấy qua proxy Next (POST /api/boxaz/boxes/{id}/tickets) — API key chỉ nằm ở server, không bao giờ trong URL / JS.
+//  - Ticket lấy qua proxy Next (POST /api/boxmes/boxes/{id}/tickets) — API key chỉ nằm ở server, không bao giờ trong URL / JS.
 //  - WS: <core>/v1/boxes/{id}/terminal?ticket=…&proto=2&mode=control|view[&session=…]&cols&rows
 //    proto=2: output là frame nhị phân, input gửi nhị phân; frame text là JSON điều khiển
 //    (session / viewers / control / exit / ping; client gửi resize / control / ping).
 //  - Terminal bền: chọn phiên (list, gắn lại có replay, phiên mới, kill); tự kết nối lại với ticket mới, gắn lại đúng phiên.
-//  - Origin của dashboard phải nằm trong allowlist của Core (BOXAZ_DASHBOARD_URL hoặc BOXAZ_ACCESS_ORIGINS).
+//  - Origin của dashboard phải nằm trong allowlist của Core (BOXMES_DASHBOARD_URL hoặc BOXMES_ACCESS_ORIGINS).
 //  - "Chiếm quyền" (takeover) vẫn là tạm dừng exec của agent; quyền gõ trong phiên là chế độ Điều khiển / Chỉ xem.
 // MOCK MODE: route Next không upgrade WebSocket → shell mô phỏng (lệnh qua /exec, /files); ticket + danh sách phiên là mock thật.
 import * as React from "react";
@@ -31,12 +31,12 @@ type Mode = "control" | "view";
 const NEW = "__new__";
 const MAX_RETRIES = 8;
 
-/** URL WebSocket terminal: NEXT_PUBLIC_BOXAZ_WS (nếu đặt) → core_url của ticket → suy ra từ NEXT_PUBLIC_BOXAZ_API. */
+/** URL WebSocket terminal: NEXT_PUBLIC_BOXMES_WS (nếu đặt) → core_url của ticket → suy ra từ NEXT_PUBLIC_BOXMES_API. */
 export function terminalWsUrl(t: AccessTicket, wsBase: string | null, q: Record<string, string | number | undefined>) {
   let base: string;
   if (wsBase) base = `${wsBase.replace(/\/+$/, "")}/boxes/${t.box_id}/terminal`;
   else if (t.core_url && /^wss?:\/\//.test(t.core_url)) base = t.core_url;
-  else base = `${(process.env.NEXT_PUBLIC_BOXAZ_API || "http://localhost:8080/v1").replace(/^http/, "ws").replace(/\/+$/, "")}/boxes/${t.box_id}/terminal`;
+  else base = `${(process.env.NEXT_PUBLIC_BOXMES_API || "http://localhost:8080/v1").replace(/^http/, "ws").replace(/\/+$/, "")}/boxes/${t.box_id}/terminal`;
   const u = new URL(base, typeof window !== "undefined" ? window.location.href : "http://localhost");
   if (u.protocol === "http:") u.protocol = "ws:";
   if (u.protocol === "https:") u.protocol = "wss:";

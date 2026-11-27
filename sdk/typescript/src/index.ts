@@ -1,9 +1,9 @@
 /**
- * @boxaz/sdk — TypeScript client for Boxaz (cheap disposable Linux boxes for AI agents).
+ * @boxmes/sdk — TypeScript client for Boxmes (cheap disposable Linux boxes for AI agents).
  * Zero dependencies: uses the global fetch (Node ≥ 18, Deno, Bun, browsers, edge runtimes).
  *
- *   import { Boxaz } from "@boxaz/sdk";
- *   const bx = new Boxaz();                // BOXAZ_URL / BOXAZ_API_KEY / BOXAZ_LANG from env
+ *   import { Boxmes } from "@boxmes/sdk";
+ *   const bx = new Boxmes();                // BOXMES_URL / BOXMES_API_KEY / BOXMES_LANG from env
  *   const box = await bx.createBox({ template: "python", lifecycle: "task", ttl_seconds: 600 });
  *   const r = await bx.exec(box.id, "python3 -c 'print(42)'");
  */
@@ -65,7 +65,7 @@ export interface AgentKind {
   transports: string[]; doc_url: string | null; language: string;
 }
 export interface Snippet { kind: string; language: string; snippet: string; file?: string; notes: string[]; locale: string }
-export interface BoxazEvent {
+export interface BoxmesEvent {
   id: string; ts: string; actor: string; box_id: string | null; agent_id: string | null; type: string;
   message: string; cost_usd: number | null; data?: Record<string, unknown>;
 }
@@ -100,7 +100,7 @@ export interface SandboxInfo {
   templates: string[]; default_template: string; workdir: string;
   credentials: { name: string; label: string; secret: boolean; optional: boolean; default?: string; hint?: string }[];
   env_vars: string[]; notes?: string[] | null;
-  /** No exec API (Render): always T2 dial-in; boxd is the service's start command and core needs BOXAZ_PUBLIC_URL. */
+  /** No exec API (Render): always T2 dial-in; boxd is the service's start command and core needs BOXMES_PUBLIC_URL. */
   dial_only?: boolean;
   /** The provider may restart the instance with a fresh filesystem; boxd rejoins with the host's token. */
   ephemeral_restart?: boolean;
@@ -142,7 +142,7 @@ export interface CreateBoxInput {
   budget_usd?: number; ports?: number[]; secrets?: string[]; setup?: string[]; region?: string; agent_id?: string;
   /** v1.3: workload profile (auto-picks template, size and placement) */
   profile?: string;
-  /** v1.3: declarative needs; Boxaz scores options and auto-picks */
+  /** v1.3: declarative needs; Boxmes scores options and auto-picks */
   requirements?: Requirements;
   /** v1.7: supervised app started with the box; wake on request (default true) */
   app?: AppSpec; wake_on_request?: boolean;
@@ -154,7 +154,7 @@ export interface CreateBoxInput {
 
 export type BatchCommand = string | { command: string; cwd?: string; timeout_s?: number };
 
-export interface BoxazOptions {
+export interface BoxmesOptions {
   apiKey?: string;
   baseUrl?: string;
   /** Accept-Language for localized error message/hint: vi | en | zh | ja */
@@ -170,7 +170,7 @@ const RETRYABLE = new Set(["NO_CAPACITY", "PROVIDER_FAILED", "RATE_LIMITED", "IN
 const ROOT_PATHS = new Set(["/llms.txt", "/llms-full.txt", "/.well-known/mcp.json", "/.well-known/agent.json", "/mcp"]);
 
 /** Error envelope from the API. `code` is stable; `message`/`hint` follow `lang`. */
-export class BoxazError extends Error {
+export class BoxmesError extends Error {
   readonly status: number;
   readonly code: string;
   /** localized message without the code prefix */
@@ -181,7 +181,7 @@ export class BoxazError extends Error {
   readonly body?: unknown;
   constructor(status: number, e: Partial<ApiErrorBody>, body?: unknown) {
     super(`${e.code ?? status}: ${e.message ?? ""}${e.hint ? ` (hint: ${e.hint})` : ""}`);
-    this.name = "BoxazError";
+    this.name = "BoxmesError";
     this.status = status;
     this.code = e.code ?? String(status);
     this.apiMessage = e.message ?? "";
@@ -196,16 +196,23 @@ export class BoxazError extends Error {
 function env(name: string): string | undefined {
   const p = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
   const v = p?.env?.[name];
-  if (v || !name.startsWith("BOXAZ_")) return v;
-  // Compat: pre-rename BOXA_* variables still work (deprecated).
-  const legacy = "BOXA_" + name.slice("BOXAZ_".length);
-  const old = p?.env?.[legacy];
-  if (old && !warnedLegacy.has(legacy)) {
-    warnedLegacy.add(legacy);
-    console.warn(`[boxaz] ${legacy} is deprecated; rename it to ${name}`);
+  if (v || !name.startsWith("BOXMES_")) return v;
+  // Compat: pre-rename BOXAZ_* (Boxaz → Boxmes), then BOXA_* (Boxa → Boxaz)
+  // variables still work (deprecated). The newest legacy name wins.
+  const suffix = name.slice("BOXMES_".length);
+  for (const prefix of LEGACY_ENV_PREFIXES) {
+    const legacy = prefix + suffix;
+    const old = p?.env?.[legacy];
+    if (!old) continue;
+    if (!warnedLegacy.has(legacy)) {
+      warnedLegacy.add(legacy);
+      console.warn(`[boxmes] ${legacy} is deprecated; rename it to ${name}`);
+    }
+    return old;
   }
-  return old;
+  return undefined;
 }
+const LEGACY_ENV_PREFIXES = ["BOXAZ_", "BOXA_"] as const;
 const warnedLegacy = new Set<string>();
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -213,7 +220,7 @@ const enc = encodeURIComponent;
 
 type Query = Record<string, string | number | boolean | undefined | null>;
 
-export class Boxaz {
+export class Boxmes {
   readonly baseUrl: string;
   apiKey: string;
   lang?: string;
@@ -221,16 +228,16 @@ export class Boxaz {
   timeoutMs: number;
   private readonly fetchImpl: typeof fetch;
 
-  constructor(opts: BoxazOptions = {}) {
-    this.apiKey = opts.apiKey ?? env("BOXAZ_API_KEY") ?? "";
-    let url = (opts.baseUrl ?? env("BOXAZ_URL") ?? "http://localhost:8080").replace(/\/+$/, "");
+  constructor(opts: BoxmesOptions = {}) {
+    this.apiKey = opts.apiKey ?? env("BOXMES_API_KEY") ?? "";
+    let url = (opts.baseUrl ?? env("BOXMES_URL") ?? "http://localhost:8080").replace(/\/+$/, "");
     if (url.endsWith("/v1")) url = url.slice(0, -3);
     this.baseUrl = url;
-    this.lang = opts.lang ?? env("BOXAZ_LANG") ?? undefined;
+    this.lang = opts.lang ?? env("BOXMES_LANG") ?? undefined;
     this.maxRetries = opts.maxRetries ?? 2;
     this.timeoutMs = opts.timeoutMs ?? 600_000;
     const f = opts.fetch ?? globalThis.fetch;
-    if (!f) throw new Error("@boxaz/sdk needs a global fetch (Node >= 18) or opts.fetch");
+    if (!f) throw new Error("@boxmes/sdk needs a global fetch (Node >= 18) or opts.fetch");
     this.fetchImpl = f.bind(globalThis);
   }
 
@@ -278,7 +285,7 @@ export class Boxaz {
       let env: Partial<ApiErrorBody> = {};
       let parsed: unknown;
       try { parsed = JSON.parse(text); env = (parsed as { error?: ApiErrorBody }).error ?? {}; } catch { env = { message: text.slice(0, 500) }; }
-      const err = new BoxazError(res.status, env, parsed);
+      const err = new BoxmesError(res.status, env, parsed);
       if (!err.retryable || attempt >= this.maxRetries) throw err;
       await sleep(Math.min((err.retryAfterS ?? 0.5 * 2 ** attempt) * 1000, 30_000));
     }
@@ -314,7 +321,7 @@ export class Boxaz {
   sleep(id: string) { return this.request<Box>("POST", `/boxes/${enc(id)}/sleep`, { body: {} }); }
   wake(id: string) { return this.request<Box>("POST", `/boxes/${enc(id)}/wake`, { body: {} }); }
   boxYaml(id: string) { return this.request<{ box_id: string; yaml: string; source: string }>("GET", `/boxes/${enc(id)}/yaml`); }
-  events(id: string) { return this.request<List<BoxazEvent>>("GET", `/boxes/${enc(id)}/events`); }
+  events(id: string) { return this.request<List<BoxmesEvent>>("GET", `/boxes/${enc(id)}/events`); }
 
   // ---- exec ----
   exec(id: string, command: string, opts?: { cwd?: string; timeout_s?: number; tail_lines?: number; async?: false; session?: boolean }): Promise<ExecResult>;
@@ -406,7 +413,7 @@ export class Boxaz {
   /** Whether a request to the gateway URL wakes the sleeping box (default on). */
   /** v1.9: name a port in its gateway URL (https://<name>-<label>.<domain>/). */
   setPortLabel(id: string, port: number, label: string) { return this.request<PortView>("PUT", `/boxes/${enc(id)}/ports/${port}`, { body: { label } }); }
-  /** v1.9: set the box's readable gateway name (https://<name>.<domain>/); taken / reserved names → BoxazError with next. */
+  /** v1.9: set the box's readable gateway name (https://<name>.<domain>/); taken / reserved names → BoxmesError with next. */
   renameUrl(id: string, name: string) { return this.request<Box>("PATCH", `/boxes/${enc(id)}`, { body: { subdomain: name } }); }
   setWakeOnRequest(id: string, on: boolean) { return this.request<Box>("PATCH", `/boxes/${enc(id)}`, { body: { wake_on_request: on } }); }
   /** Lifecycle capability flags per provider. */
@@ -465,11 +472,11 @@ export class Boxaz {
   }
 
   // ---- tool bridge ----
-  /** Execute a Boxaz tool by name through the MCP endpoint (same argument mapping as MCP). */
+  /** Execute a Boxmes tool by name through the MCP endpoint (same argument mapping as MCP). */
   async callTool<T = unknown>(name: string, args: Record<string, unknown> = {}): Promise<T> {
     const resp = await this.request<{ result?: { structuredContent?: unknown; content?: { text?: string }[]; isError?: boolean }; error?: { message: string } }>(
       "POST", "/mcp", { body: { jsonrpc: "2.0", id: Date.now(), method: "tools/call", params: { name, arguments: args } } });
-    if (resp.error) throw new BoxazError(400, { code: "INVALID", message: resp.error.message });
+    if (resp.error) throw new BoxmesError(400, { code: "INVALID", message: resp.error.message });
     const r = resp.result ?? {};
     let out: unknown = r.structuredContent;
     if (out === undefined) {
@@ -478,7 +485,7 @@ export class Boxaz {
     }
     if (r.isError && out && typeof out === "object" && "error" in out) {
       const e = (out as { error: ApiErrorBody }).error;
-      throw new BoxazError(400, e, out);
+      throw new BoxmesError(400, e, out);
     }
     return out as T;
   }
@@ -488,20 +495,20 @@ export class Boxaz {
 
 export interface OpenAITool { type: "function"; function: { name: string; description: string; parameters: Record<string, unknown>; strict?: boolean } }
 
-/** Boxaz tools in OpenAI Chat Completions format (fetched from the server). */
-export async function asOpenAITools(client: Boxaz = new Boxaz()): Promise<OpenAITool[]> {
+/** Boxmes tools in OpenAI Chat Completions format (fetched from the server). */
+export async function asOpenAITools(client: Boxmes = new Boxmes()): Promise<OpenAITool[]> {
   return (await client.tools("openai")) as OpenAITool[];
 }
-/** Boxaz tools in Anthropic Messages format. */
-export async function asAnthropicTools(client: Boxaz = new Boxaz()) {
+/** Boxmes tools in Anthropic Messages format. */
+export async function asAnthropicTools(client: Boxmes = new Boxmes()) {
   return (await client.tools("anthropic")) as { name: string; description: string; input_schema: Record<string, unknown> }[];
 }
-/** Boxaz tools as Gemini Tool objects. */
-export async function asGeminiTools(client: Boxaz = new Boxaz()) {
+/** Boxmes tools as Gemini Tool objects. */
+export async function asGeminiTools(client: Boxmes = new Boxmes()) {
   return (await client.tools("gemini")) as { functionDeclarations: { name: string; description: string; parameters: Record<string, unknown> }[] }[];
 }
 /** Vercel AI SDK-style tool map: { box_exec: { description, parameters(JSON Schema), execute } }. */
-export async function asToolMap(client: Boxaz = new Boxaz()) {
+export async function asToolMap(client: Boxmes = new Boxmes()) {
   const tools = await asOpenAITools(client);
   const map: Record<string, { description: string; parameters: Record<string, unknown>; execute: (args: Record<string, unknown>) => Promise<unknown> }> = {};
   for (const t of tools) {
@@ -511,31 +518,44 @@ export async function asToolMap(client: Boxaz = new Boxaz()) {
 }
 
 /** Execute one tool call and return a JSON string for the tool-result message (errors are returned, not thrown). */
-export async function handleToolCall(name: string, args: string | Record<string, unknown> | undefined, client: Boxaz = new Boxaz()): Promise<string> {
+export async function handleToolCall(name: string, args: string | Record<string, unknown> | undefined, client: Boxmes = new Boxmes()): Promise<string> {
   const parsed = typeof args === "string" ? (args ? JSON.parse(args) : {}) : args ?? {};
   try {
     const out = await client.callTool(name, parsed);
     return typeof out === "string" ? out : JSON.stringify(out);
   } catch (e) {
-    if (e instanceof BoxazError) return JSON.stringify({ error: { code: e.code, message: e.apiMessage, hint: e.hint, retry_after_s: e.retryAfterS } });
+    if (e instanceof BoxmesError) return JSON.stringify({ error: { code: e.code, message: e.apiMessage, hint: e.hint, retry_after_s: e.retryAfterS } });
     throw e;
   }
 }
 
-/** @deprecated Renamed to {@link Boxaz} (Boxa → Boxaz). */
-export const Boxa = Boxaz;
-/** @deprecated Renamed to {@link Boxaz}. */
-export type Boxa = Boxaz;
-/** @deprecated Renamed to {@link BoxazError}. */
-export const BoxaError = BoxazError;
-/** @deprecated Renamed to {@link BoxazError}. */
-export type BoxaError = BoxazError;
-/** @deprecated Renamed to {@link BoxazOptions}. */
-export type BoxaOptions = BoxazOptions;
-/** @deprecated Renamed to {@link BoxazEvent}. */
-export type BoxaEvent = BoxazEvent;
+/** @deprecated Renamed to {@link Boxmes} (Boxa → Boxmes). */
+export const Boxa = Boxmes;
+/** @deprecated Renamed to {@link Boxmes}. */
+export type Boxa = Boxmes;
+/** @deprecated Renamed to {@link BoxmesError}. */
+export const BoxaError = BoxmesError;
+/** @deprecated Renamed to {@link BoxmesError}. */
+export type BoxaError = BoxmesError;
+/** @deprecated Renamed to {@link BoxmesOptions}. */
+export type BoxaOptions = BoxmesOptions;
+/** @deprecated Renamed to {@link BoxmesEvent}. */
+export type BoxaEvent = BoxmesEvent;
 
-export default Boxaz;
+/** @deprecated Renamed to {@link Boxmes} (Boxaz → Boxmes). */
+export const Boxaz = Boxmes;
+/** @deprecated Renamed to {@link Boxmes}. */
+export type Boxaz = Boxmes;
+/** @deprecated Renamed to {@link BoxmesError}. */
+export const BoxazError = BoxmesError;
+/** @deprecated Renamed to {@link BoxmesError}. */
+export type BoxazError = BoxmesError;
+/** @deprecated Renamed to {@link BoxmesOptions}. */
+export type BoxazOptions = BoxmesOptions;
+/** @deprecated Renamed to {@link BoxmesEvent}. */
+export type BoxazEvent = BoxmesEvent;
+
+export default Boxmes;
 
 // ---- v1.7 types ----
 export type RestartPolicy = "always" | "on-failure" | "never";

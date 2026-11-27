@@ -12,9 +12,9 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
-import { ConfirmButton } from "@/components/boxaz/confirm";
-import { YamlEditor } from "@/components/boxaz/yaml-editor";
-import { ErrorBox, LoadingRows, PageHeader } from "@/components/boxaz/page";
+import { ConfirmButton } from "@/components/boxmes/confirm";
+import { YamlEditor } from "@/components/boxmes/yaml-editor";
+import { ErrorBox, LoadingRows, PageHeader } from "@/components/boxmes/page";
 
 const NEW_YAML = `name: moi
 image: ubuntu:24.04

@@ -3,7 +3,7 @@ package agentkit
 import (
 	"strings"
 
-	"boxaz/core/internal/i18n"
+	"boxmes/core/internal/i18n"
 )
 
 // Snippet is the response of GET /agents/:id/snippet. kind/language/snippet
@@ -18,7 +18,7 @@ type Snippet struct {
 }
 
 // Build renders the snippet for kind. base is the public core URL (no
-// trailing slash), agentName the Boxaz agent name, loc the comment language.
+// trailing slash), agentName the Boxmes agent name, loc the comment language.
 // Unknown kinds fall back to "custom".
 func Build(kind, base, agentName, loc string) Snippet {
 	if _, ok := Get(kind); !ok {
@@ -59,38 +59,38 @@ func templateFor(kind string) (tpl, file string, notes []string) {
 	switch kind {
 	case "claude-code":
 		return `# {{C_ENV}}
-export BOXAZ_API_KEY=bx_agent_...
+export BOXMES_API_KEY=bx_agent_...
 
 # {{C_HTTP}}
-claude mcp add --transport http boxaz {{MCP}} --header "Authorization: Bearer $BOXAZ_API_KEY"
+claude mcp add --transport http boxmes {{MCP}} --header "Authorization: Bearer $BOXMES_API_KEY"
 
 # {{C_STDIO}}
-claude mcp add boxaz --env BOXAZ_URL={{BASE}} --env BOXAZ_API_KEY=$BOXAZ_API_KEY -- box mcp
+claude mcp add boxmes --env BOXMES_URL={{BASE}} --env BOXMES_API_KEY=$BOXMES_API_KEY -- box mcp
 `, "", []string{"snip.n.claude"}
 
 	case "codex-cli":
 		// Codex reads ~/.codex/config.toml. stdio is the long-standing format;
 		// streamable HTTP (url + bearer_token_env_var) exists in newer releases.
 		return `# {{C_STDIO}}
-[mcp_servers.boxaz]
+[mcp_servers.boxmes]
 command = "box"
 args = ["mcp"]
-env = { BOXAZ_URL = "{{BASE}}", BOXAZ_API_KEY = "<BOXAZ_API_KEY>" }
-# env_vars = ["BOXAZ_API_KEY"]   # forward the key from your shell instead ({{C_UNCERTAIN}})
+env = { BOXMES_URL = "{{BASE}}", BOXMES_API_KEY = "<BOXMES_API_KEY>" }
+# env_vars = ["BOXMES_API_KEY"]   # forward the key from your shell instead ({{C_UNCERTAIN}})
 
 # {{C_HTTP}}
 # {{C_UNCERTAIN}}
-# [mcp_servers.boxaz]
+# [mcp_servers.boxmes]
 # url = "{{MCP}}"
-# bearer_token_env_var = "BOXAZ_API_KEY"
+# bearer_token_env_var = "BOXMES_API_KEY"
 `, "~/.codex/config.toml", []string{"snip.n.paste", "snip.n.codex"}
 
 	case "gemini-cli":
 		return `{
   "mcpServers": {
-    "boxaz": {
+    "boxmes": {
       "httpUrl": "{{MCP}}",
-      "headers": { "Authorization": "Bearer $BOXAZ_API_KEY" },
+      "headers": { "Authorization": "Bearer $BOXMES_API_KEY" },
       "timeout": 600000,
       "trust": false
     }
@@ -101,9 +101,9 @@ env = { BOXAZ_URL = "{{BASE}}", BOXAZ_API_KEY = "<BOXAZ_API_KEY>" }
 	case "cursor":
 		return `{
   "mcpServers": {
-    "boxaz": {
+    "boxmes": {
       "url": "{{MCP}}",
-      "headers": { "Authorization": "Bearer ${env:BOXAZ_API_KEY}" }
+      "headers": { "Authorization": "Bearer ${env:BOXMES_API_KEY}" }
     }
   }
 }
@@ -112,9 +112,9 @@ env = { BOXAZ_URL = "{{BASE}}", BOXAZ_API_KEY = "<BOXAZ_API_KEY>" }
 	case "windsurf":
 		return `{
   "mcpServers": {
-    "boxaz": {
+    "boxmes": {
       "serverUrl": "{{MCP}}",
-      "headers": { "Authorization": "Bearer ${env:BOXAZ_API_KEY}" }
+      "headers": { "Authorization": "Bearer ${env:BOXMES_API_KEY}" }
     }
   }
 }
@@ -123,10 +123,10 @@ env = { BOXAZ_URL = "{{BASE}}", BOXAZ_API_KEY = "<BOXAZ_API_KEY>" }
 	case "cline":
 		return `{
   "mcpServers": {
-    "boxaz": {
+    "boxmes": {
       "command": "box",
       "args": ["mcp"],
-      "env": { "BOXAZ_URL": "{{BASE}}", "BOXAZ_API_KEY": "<BOXAZ_API_KEY>" },
+      "env": { "BOXMES_URL": "{{BASE}}", "BOXMES_API_KEY": "<BOXMES_API_KEY>" },
       "disabled": false,
       "autoApprove": ["box_list", "box_read", "box_observe", "box_cost", "box_quote", "box_templates"]
     }
@@ -145,16 +145,16 @@ from agents.mcp import MCPServerStreamableHttp
 async def main() -> None:
     # {{C_HTTP}}
     async with MCPServerStreamableHttp(
-        name="boxaz",
+        name="boxmes",
         params={
             "url": "{{MCP}}",
-            "headers": {"Authorization": f"Bearer {os.environ['BOXAZ_API_KEY']}"},
+            "headers": {"Authorization": f"Bearer {os.environ['BOXMES_API_KEY']}"},
             "timeout": 60,
         },
         client_session_timeout_seconds=600,
         cache_tools_list=True,
-    ) as boxaz:
-        agent = Agent(name="{{NAME}}", instructions="{{INSTR}}", mcp_servers=[boxaz])
+    ) as boxmes:
+        agent = Agent(name="{{NAME}}", instructions="{{INSTR}}", mcp_servers=[boxmes])
         # {{C_RUN}}
         result = await Runner.run(agent, "{{TASK}}")
         print(result.final_output)
@@ -174,10 +174,10 @@ from langchain.agents import create_agent
 async def main() -> None:
     # {{C_HTTP}}
     client = MultiServerMCPClient({
-        "boxaz": {
+        "boxmes": {
             "transport": "streamable_http",
             "url": "{{MCP}}",
-            "headers": {"Authorization": f"Bearer {os.environ['BOXAZ_API_KEY']}"},
+            "headers": {"Authorization": f"Bearer {os.environ['BOXMES_API_KEY']}"},
         }
     })
     tools = await client.get_tools()
@@ -201,10 +201,10 @@ from langgraph.prebuilt import create_react_agent
 async def main() -> None:
     # {{C_HTTP}}
     client = MultiServerMCPClient({
-        "boxaz": {
+        "boxmes": {
             "transport": "streamable_http",
             "url": "{{MCP}}",
-            "headers": {"Authorization": f"Bearer {os.environ['BOXAZ_API_KEY']}"},
+            "headers": {"Authorization": f"Bearer {os.environ['BOXMES_API_KEY']}"},
         }
     })
     tools = await client.get_tools()
@@ -228,16 +228,16 @@ from crewai_tools import MCPServerAdapter
 server_params = {
     "url": "{{MCP}}",
     "transport": "streamable-http",
-    "headers": {"Authorization": f"Bearer {os.environ['BOXAZ_API_KEY']}"},
+    "headers": {"Authorization": f"Bearer {os.environ['BOXMES_API_KEY']}"},
 }
 
 # {{C_HTTP}}
-with MCPServerAdapter(server_params) as boxaz_tools:
+with MCPServerAdapter(server_params) as boxmes_tools:
     coder = Agent(
         role="{{NAME}}",
         goal="{{INSTR}}",
-        backstory="Runs code in disposable Boxaz sandboxes.",
-        tools=boxaz_tools,
+        backstory="Runs code in disposable Boxmes sandboxes.",
+        tools=boxmes_tools,
     )
     task = Task(description="{{TASK}}", expected_output="The command output.", agent=coder)
     # {{C_RUN}}
@@ -257,7 +257,7 @@ async def main() -> None:
     # {{C_HTTP}}
     params = StreamableHttpServerParams(
         url="{{MCP}}",
-        headers={"Authorization": f"Bearer {os.environ['BOXAZ_API_KEY']}"},
+        headers={"Authorization": f"Bearer {os.environ['BOXMES_API_KEY']}"},
         timeout=60,
     )
     tools = await mcp_server_tools(params)
@@ -284,11 +284,11 @@ from pydantic_ai import Agent
 from pydantic_ai.mcp import MCPServerStreamableHTTP
 
 # {{C_HTTP}}
-boxaz = MCPServerStreamableHTTP(
+boxmes = MCPServerStreamableHTTP(
     "{{MCP}}",
-    headers={"Authorization": f"Bearer {os.environ['BOXAZ_API_KEY']}"},
+    headers={"Authorization": f"Bearer {os.environ['BOXMES_API_KEY']}"},
 )
-agent = Agent("openai:gpt-4.1", toolsets=[boxaz], instructions="{{INSTR}}")
+agent = Agent("openai:gpt-4.1", toolsets=[boxmes], instructions="{{INSTR}}")
 
 
 async def main() -> None:
@@ -315,7 +315,7 @@ async def main() -> None:
     # {{C_HTTP}}
     client = BasicMCPClient(
         "{{MCP}}",
-        headers={"Authorization": f"Bearer {os.environ['BOXAZ_API_KEY']}"},
+        headers={"Authorization": f"Bearer {os.environ['BOXMES_API_KEY']}"},
     )
     tools = await McpToolSpec(client=client).to_tool_list_async()
     agent = FunctionAgent(tools=tools, llm=OpenAI(model="gpt-4.1"), system_prompt="{{INSTR}}")
@@ -334,9 +334,9 @@ import { openai } from "@ai-sdk/openai";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
 // {{C_HTTP}}
-const boxaz = await createMCPClient({
+const boxmes = await createMCPClient({
   transport: new StreamableHTTPClientTransport(new URL("{{MCP}}"), {
-    requestInit: { headers: { Authorization: ` + "`Bearer ${process.env.BOXAZ_API_KEY}`" + ` } },
+    requestInit: { headers: { Authorization: ` + "`Bearer ${process.env.BOXMES_API_KEY}`" + ` } },
   }),
 });
 
@@ -344,14 +344,14 @@ try {
   // {{C_RUN}}
   const { text } = await generateText({
     model: openai("gpt-4.1"),
-    tools: await boxaz.tools(),
+    tools: await boxmes.tools(),
     stopWhen: stepCountIs(10),
     system: "{{INSTR}}",
     prompt: "{{TASK}}",
   });
   console.log(text);
 } finally {
-  await boxaz.close();
+  await boxmes.close();
 }
 `, "", []string{"snip.n.aisdk"}
 
@@ -365,9 +365,9 @@ import { openai } from "@ai-sdk/openai";
 // {{C_HTTP}}
 const mcp = new MCPClient({
   servers: {
-    boxaz: {
+    boxmes: {
       url: new URL("{{MCP}}"),
-      requestInit: { headers: { Authorization: ` + "`Bearer ${process.env.BOXAZ_API_KEY}`" + ` } },
+      requestInit: { headers: { Authorization: ` + "`Bearer ${process.env.BOXMES_API_KEY}`" + ` } },
     },
   },
 });
@@ -388,7 +388,7 @@ console.log(res.text);
 		return `{
   "nodes": [
     {
-      "name": "Boxaz MCP",
+      "name": "Boxmes MCP",
       "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
       "typeVersion": 1.1,
       "position": [0, 0],
@@ -398,7 +398,7 @@ console.log(res.text);
         "authentication": "bearerAuth",
         "include": "all"
       },
-      "credentials": { "httpBearerAuth": { "name": "BOXAZ_API_KEY" } }
+      "credentials": { "httpBearerAuth": { "name": "BOXMES_API_KEY" } }
     }
   ],
   "connections": {}
@@ -408,14 +408,14 @@ console.log(res.text);
 	case "dify":
 		return `{
   "mcp_server": {
-    "name": "Boxaz",
-    "server_identifier": "boxaz",
+    "name": "Boxmes",
+    "server_identifier": "boxmes",
     "server_url": "{{MCP}}",
-    "headers": { "Authorization": "Bearer <BOXAZ_API_KEY>" }
+    "headers": { "Authorization": "Bearer <BOXMES_API_KEY>" }
   },
   "custom_tool_openapi": {
     "schema_url": "{{BASE}}/v1/openapi.json",
-    "auth": { "type": "api_key", "header": "Authorization", "value": "Bearer <BOXAZ_API_KEY>" }
+    "auth": { "type": "api_key", "header": "Authorization", "value": "Bearer <BOXMES_API_KEY>" }
   }
 }
 `, "", []string{"snip.n.dify", "snip.n.paste"}
@@ -423,7 +423,7 @@ console.log(res.text);
 	case "flowise":
 		return `{
   "url": "{{MCP}}",
-  "headers": { "Authorization": "Bearer {{$vars.BOXAZ_API_KEY}}" }
+  "headers": { "Authorization": "Bearer {{$vars.BOXMES_API_KEY}}" }
 }
 `, "", []string{"snip.n.flowise", "snip.n.uncertain"}
 
@@ -433,7 +433,7 @@ console.log(res.text);
   "url": "{{BASE}}/v1/boxes/{{box_id}}/exec",
   "method": "post",
   "headers": [
-    { "name": "Authorization", "value": "Bearer {{BOXAZ_API_KEY}}" },
+    { "name": "Authorization", "value": "Bearer {{BOXMES_API_KEY}}" },
     { "name": "Accept-Language", "value": "en" }
   ],
   "bodyType": "raw",
@@ -450,7 +450,7 @@ console.log(res.text);
   "method": "POST",
   "url": "{{BASE}}/v1/boxes/<box_id>/exec",
   "headers": {
-    "Authorization": "Bearer <BOXAZ_API_KEY>",
+    "Authorization": "Bearer <BOXMES_API_KEY>",
     "Content-Type": "application/json"
   },
   "data": "{\"command\": \"echo hello from Zapier\", \"tail_lines\": 40}"
@@ -460,9 +460,9 @@ console.log(res.text);
 	case "hark":
 		return `{
   "mcpServers": {
-    "boxaz": {
+    "boxmes": {
       "url": "{{MCP}}",
-      "headers": { "Authorization": "Bearer ${BOXAZ_API_KEY}" }
+      "headers": { "Authorization": "Bearer ${BOXMES_API_KEY}" }
     }
   }
 }
@@ -470,16 +470,16 @@ console.log(res.text);
 	}
 	// custom
 	return `# {{C_ENV}}
-export BOXAZ_URL={{BASE}} BOXAZ_API_KEY=bx_agent_...
-H="Authorization: Bearer $BOXAZ_API_KEY"
+export BOXMES_URL={{BASE}} BOXMES_API_KEY=bx_agent_...
+H="Authorization: Bearer $BOXMES_API_KEY"
 
 # {{C_REST}}
-BOX=$(curl -s -X POST $BOXAZ_URL/v1/boxes -H "$H" -H "Content-Type: application/json" \
+BOX=$(curl -s -X POST $BOXMES_URL/v1/boxes -H "$H" -H "Content-Type: application/json" \
   -d '{"template":"python","lifecycle":"task","spec":{"cpu":1,"ram_mb":1024,"disk_gb":10}}' | jq -r .id)
-curl -s -X POST $BOXAZ_URL/v1/boxes/$BOX/exec -H "$H" -d '{"command":"python3 -c \"print(42)\""}'
-curl -s -X DELETE $BOXAZ_URL/v1/boxes/$BOX -H "$H"
+curl -s -X POST $BOXMES_URL/v1/boxes/$BOX/exec -H "$H" -d '{"command":"python3 -c \"print(42)\""}'
+curl -s -X DELETE $BOXMES_URL/v1/boxes/$BOX -H "$H"
 
 # {{C_TOOLS}}
-curl -s "$BOXAZ_URL/v1/tools?format=openai"
+curl -s "$BOXMES_URL/v1/tools?format=openai"
 `, "", []string{"snip.n.discovery"}
 }

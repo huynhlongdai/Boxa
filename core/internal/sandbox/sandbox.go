@@ -7,7 +7,7 @@
 // of boxes.
 //
 // T2: the sandbox can keep a background process alive, so core starts
-// `boxd --dial` inside it and the sandbox joins Boxaz like any host.
+// `boxd --dial` inside it and the sandbox joins Boxmes like any host.
 // T3: the provider only offers request/response exec + files, so a
 // gateway-side Shim answers boxd's RPCs by translating them to the API.
 package sandbox
@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"boxaz/core/internal/model"
+	"boxmes/core/internal/model"
 )
 
 // Normalised sandbox states.
@@ -190,7 +190,7 @@ type Info struct {
 	// DialOnly: the provider has no exec/file API (it runs a long-lived
 	// service from an image), so the box is always T2 dial-in: the boxd
 	// bootstrap is the service's start command (Spec.Boot) and core needs
-	// an internet-reachable BOXAZ_PUBLIC_URL. Never a T3 shim.
+	// an internet-reachable BOXMES_PUBLIC_URL. Never a T3 shim.
 	DialOnly bool `json:"dial_only,omitempty"`
 	// EphemeralRestart: the provider may restart the instance with a fresh
 	// filesystem (idle spin-down, platform restarts). The host's one-time
@@ -245,7 +245,7 @@ type Previewer interface {
 // TrafficGuard is implemented by drivers whose preview host can refuse
 // public traffic (v1.8): sandboxes created with Spec.PrivateTraffic answer
 // 403 unless a request carries the headers PreviewHeaders returns, which only
-// the Boxaz gateway adds upstream.
+// the Boxmes gateway adds upstream.
 type TrafficGuard interface {
 	PrivateTrafficSupported() bool
 	PreviewHeaders(ctx context.Context, c Cred, id string) (map[string]string, error)
@@ -309,7 +309,7 @@ type HTTPError struct {
 
 func (e *HTTPError) Error() string { return fmt.Sprintf("HTTP %d: %s", e.Status, e.Body) }
 
-// wrapErr turns provider errors into Boxaz API errors (classified by provhealth).
+// wrapErr turns provider errors into Boxmes API errors (classified by provhealth).
 func wrapErr(name string, err error) error {
 	if err == nil {
 		return nil
@@ -322,7 +322,7 @@ func wrapErr(name string, err error) error {
 		case he.Status == 401 || he.Status == 403:
 			return model.EH(model.ErrUnauthorized, "Create an API key in the "+name+" console and paste it again.", "%s rejected the key (%d): %s", name, he.Status, trim(he.Body, 200))
 		case he.Status == 429:
-			return model.EH(model.ErrProviderFailed, "The provider is rate limiting or a quota is full; Boxaz backs off and fails over.", "%s rate limited (429): %s", name, trim(he.Body, 200))
+			return model.EH(model.ErrProviderFailed, "The provider is rate limiting or a quota is full; Boxmes backs off and fails over.", "%s rate limited (429): %s", name, trim(he.Body, 200))
 		case he.Status == 402 || strings.Contains(he.Body, "balance") || strings.Contains(he.Body, "quota"):
 			return model.EH(model.ErrProviderFailed, "Top up or raise the quota in the provider console.", "%s quota/balance (%d): %s", name, he.Status, trim(he.Body, 200))
 		}
@@ -433,7 +433,7 @@ func WaitRunning(ctx context.Context, d Driver, c Cred, id string, timeout time.
 			case StateRunning:
 				return sb, nil
 			case StateError, StateDeleted:
-				return sb, model.EH(model.ErrProviderFailed, "The provider reported a failed sandbox; Boxaz fails over to the next provider.", "%s sandbox %s is %s", d.Info().Name, id, sb.State)
+				return sb, model.EH(model.ErrProviderFailed, "The provider reported a failed sandbox; Boxmes fails over to the next provider.", "%s sandbox %s is %s", d.Info().Name, id, sb.State)
 			}
 		}
 		if time.Now().After(deadline) {

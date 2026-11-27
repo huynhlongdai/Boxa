@@ -1,7 +1,7 @@
 package manager
 
 import (
-	"boxaz/core/internal/i18n"
+	"boxmes/core/internal/i18n"
 	"context"
 	"errors"
 	"regexp"
@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/secret"
-	"boxaz/core/internal/store"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/secret"
+	"boxmes/core/internal/store"
 )
 
 // Principal is the authenticated caller.
@@ -142,7 +142,7 @@ func (m *Manager) bootstrapAdmin(ctx context.Context, envKey string) (string, er
 		if _, err := m.Store.GetKeyByHash(ctx, secret.Hash(envKey)); err == nil {
 			return "", nil
 		}
-		k := &model.APIKey{ID: secret.ID("key"), Name: "admin (BOXAZ_ADMIN_KEY)", Prefix: prefixOf(envKey), Scopes: []string{model.ScopeAdmin}, CreatedAt: time.Now().UTC(), Hash: secret.Hash(envKey)}
+		k := &model.APIKey{ID: secret.ID("key"), Name: "admin (BOXMES_ADMIN_KEY)", Prefix: prefixOf(envKey), Scopes: []string{model.ScopeAdmin}, CreatedAt: time.Now().UTC(), Hash: secret.Hash(envKey)}
 		return "", m.Store.PutKey(ctx, k)
 	}
 	keys, err := m.Store.ListKeys(ctx, "")

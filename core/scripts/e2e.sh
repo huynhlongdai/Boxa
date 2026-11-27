@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# End-to-end smoke test with real binaries: boxaz-core + boxd (local driver) + box CLI.
+# End-to-end smoke test with real binaries: boxmes-core + boxd (local driver) + box CLI.
 # Requires: go (or prebuilt bin/), curl, jq, python3. No Docker/Incus/Postgres needed.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 BIN=${BIN:-$ROOT/bin}
 PORT=${PORT:-18765}
-WORK=$(mktemp -d /tmp/boxaz-e2e.XXXXXX)
+WORK=$(mktemp -d /tmp/boxmes-e2e.XXXXXX)
 ADMIN=bx_admin_e2e_$(date +%s)
-export BOXAZ_URL=http://127.0.0.1:$PORT
+export BOXMES_URL=http://127.0.0.1:$PORT
 
 pass() { printf '  \033[32mPASS\033[0m %s\n' "$*"; }
 fail() { printf '  \033[31mFAIL\033[0m %s\n' "$*"; echo "--- core.log"; tail -30 "$WORK/core.log"; echo "--- boxd.log"; tail -30 "$WORK/boxd.log"; exit 1; }
-api() { local m=$1 p=$2; shift 2; curl -sS -X "$m" "$BOXAZ_URL/v1$p" -H "Authorization: Bearer ${KEY:-$ADMIN}" -H 'Content-Type: application/json' "$@"; }
+api() { local m=$1 p=$2; shift 2; curl -sS -X "$m" "$BOXMES_URL/v1$p" -H "Authorization: Bearer ${KEY:-$ADMIN}" -H 'Content-Type: application/json' "$@"; }
 
 cleanup() { kill ${CORE_PID:-} ${BOXD_PID:-} ${FSB_PID:-} 2>/dev/null || true; wait 2>/dev/null || true; [ -n "${KEEP:-}" ] || rm -rf "$WORK"; }
 trap cleanup EXIT
@@ -58,12 +58,12 @@ YAML
 python3 "$ROOT/scripts/fake-sandbox.py" "$FSB_PORT" "$WORK/fsb" >"$WORK/fsb.log" 2>&1 & FSB_PID=$!
 
 echo "== start core + boxd (workdir $WORK)"
-BOXAZ_DATA_DIR=$WORK/data BOXAZ_ADMIN_KEY=$ADMIN BOXAZ_BOOTSTRAP_TOKEN=boot-e2e BOXAZ_ADDR=127.0.0.1:$PORT \
-BOXAZ_SANDBOX_ADAPTERS_DIR=$WORK/adapters BOXAZ_AUTO_SANDBOX=1 BOXAZ_PRICE_FEED=off BOXAZ_LEDGER_INTERVAL=1s BOXAZ_LOCAL_PRICE_MONTH=73 BOXA_WARM_INTERVAL=1s BOXAZ_CLIENT_LOCATION=VN BOXAZ_DISABLE_TUNNEL=1 \
-  "$BIN/boxaz-core" >"$WORK/core.log" 2>&1 & CORE_PID=$!
-for i in $(seq 50); do curl -sf "$BOXAZ_URL/v1/health" >/dev/null && break; sleep 0.1; done
-curl -sf "$BOXAZ_URL/v1/health" | jq -e '.ok == true' >/dev/null && pass "core healthy: $(curl -s $BOXAZ_URL/v1/health | jq -c .components)" || fail health
-BOXD_LOCAL_CREATE_DELAY_MS=${COLD_MS:-1000} BOXD_CORE_URL=$BOXAZ_URL BOXD_TOKEN=boot-e2e BOXD_DRIVER=local BOXD_STATE_DIR=$WORK/boxd BOXD_IP=127.0.0.1 \
+BOXMES_DATA_DIR=$WORK/data BOXMES_ADMIN_KEY=$ADMIN BOXMES_BOOTSTRAP_TOKEN=boot-e2e BOXMES_ADDR=127.0.0.1:$PORT \
+BOXMES_SANDBOX_ADAPTERS_DIR=$WORK/adapters BOXMES_AUTO_SANDBOX=1 BOXMES_PRICE_FEED=off BOXMES_LEDGER_INTERVAL=1s BOXA_LEDGER_INTERVAL=9s BOXAZ_LOCAL_PRICE_MONTH=73 BOXA_WARM_INTERVAL=1s BOXMES_CLIENT_LOCATION=VN BOXMES_DISABLE_TUNNEL=1 \
+  "$BIN/boxmes-core" >"$WORK/core.log" 2>&1 & CORE_PID=$!
+for i in $(seq 50); do curl -sf "$BOXMES_URL/v1/health" >/dev/null && break; sleep 0.1; done
+curl -sf "$BOXMES_URL/v1/health" | jq -e '.ok == true' >/dev/null && pass "core healthy: $(curl -s $BOXMES_URL/v1/health | jq -c .components)" || fail health
+BOXD_LOCAL_CREATE_DELAY_MS=${COLD_MS:-1000} BOXD_CORE_URL=$BOXMES_URL BOXD_TOKEN=boot-e2e BOXD_DRIVER=local BOXD_STATE_DIR=$WORK/boxd BOXD_IP=127.0.0.1 \
   "$BIN/boxd" >"$WORK/boxd.log" 2>&1 & BOXD_PID=$!
 for i in $(seq 50); do [ "$(api GET /hosts | jq '[.items[]|select(.connected)]|length')" = 1 ] && break; sleep 0.1; done
 H=$(api GET /hosts | jq -c '.items[0] | {id,provider,status,connected,cpu,ram_mb,price_hour}')
@@ -74,7 +74,7 @@ AGENT=$(api POST /agents -d '{"name":"e2e-agent","kind":"claude-code","budget_da
 KEYJSON=$(api POST /keys -d "{\"agent_id\":\"$AGENT\",\"name\":\"e2e\"}")
 AKEY=$(echo "$KEYJSON" | jq -r .key)
 [[ $AKEY == bx_agent_* ]] && pass "agent $AGENT key $(echo "$KEYJSON" | jq -r .prefix)… scopes=$(echo "$KEYJSON" | jq -c .scopes)" || fail "key"
-export BOXAZ_API_KEY=$AKEY
+export BOXMES_API_KEY=$AKEY
 
 echo "== box up"
 OUT=$("$BIN/box" up --template python --lifecycle session --slug e2e --ram 512M --idempotency-key e2e-1)
@@ -117,31 +117,31 @@ SNAPFILE=$(echo "$SNAP" | awk '{print $NF}' | sed 's#local://##')
 tar tzf "$SNAPFILE" | grep -q 'work/notes/a.txt' && pass "snapshot = tar.gz containing work/notes/a.txt" || fail snapshot
 
 echo "== MCP"
-R=$(curl -s -X POST "$BOXAZ_URL/mcp" -H "Authorization: Bearer $AKEY" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
+R=$(curl -s -X POST "$BOXMES_URL/mcp" -H "Authorization: Bearer $AKEY" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
 N=$(echo "$R" | jq '.result.tools | length'); echo "    tools: $(echo "$R" | jq -c '[.result.tools[].name]')"
 [ "$N" = 32 ] && pass "MCP HTTP tools/list → 32 tools" || fail "mcp http"
-R=$(curl -s -X POST "$BOXAZ_URL/mcp" -H "Authorization: Bearer $AKEY" -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"box_exec\",\"arguments\":{\"box_id\":\"$BOX\",\"command\":\"echo via-mcp\"}}}")
+R=$(curl -s -X POST "$BOXMES_URL/mcp" -H "Authorization: Bearer $AKEY" -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"box_exec\",\"arguments\":{\"box_id\":\"$BOX\",\"command\":\"echo via-mcp\"}}}")
 echo "$R" | jq -e '.result.isError==false and .result.structuredContent.stdout_tail=="via-mcp"' >/dev/null && pass "MCP tools/call box_exec" || fail "mcp call"
 R=$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' '{"jsonrpc":"2.0","method":"notifications/initialized"}' '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | "$BIN/box" mcp)
 [ "$(echo "$R" | jq -s '.[] | select(.id==2) | .result.tools | length')" = 32 ] && pass "MCP stdio (box mcp) tools/list → 32 tools" || fail "mcp stdio"
 
 echo "== v1.1 discovery (no auth)"
-curl -sf "$BOXAZ_URL/v1/openapi.json" | jq -e '.openapi=="3.1.0" and (.paths|has("/v1/quote")) and (.paths|has("/v1/boxes/{id}/fork"))' >/dev/null \
-  && pass "openapi.json 3.1 ($(curl -s $BOXAZ_URL/v1/openapi.json | jq '[.paths[]|keys[]]|length') operations)" || fail openapi
-LT=$(curl -sf "$BOXAZ_URL/llms.txt"); [[ $LT == "# Boxaz"* ]] && pass "llms.txt" || fail llms
-LF=$(curl -sf -H 'Accept-Language: vi' "$BOXAZ_URL/llms-full.txt"); grep -q 'Bắt đầu nhanh' <<<"$LF" && grep -q '/a2a' <<<"$LF" && pass "llms-full.txt localized (vi)" || fail llms-full
-curl -sf "$BOXAZ_URL/.well-known/mcp.json" | jq -e '.transport.url|endswith("/mcp")' >/dev/null && pass ".well-known/mcp.json" || fail mcpcard
-curl -sf "$BOXAZ_URL/.well-known/agent.json" | jq -e '.protocolVersion=="0.3.0" and (.skills|length)==33' >/dev/null && pass ".well-known/agent.json (A2A card, exec + 32 tool skills)" || fail agentcard
+curl -sf "$BOXMES_URL/v1/openapi.json" | jq -e '.openapi=="3.1.0" and (.paths|has("/v1/quote")) and (.paths|has("/v1/boxes/{id}/fork"))' >/dev/null \
+  && pass "openapi.json 3.1 ($(curl -s $BOXMES_URL/v1/openapi.json | jq '[.paths[]|keys[]]|length') operations)" || fail openapi
+LT=$(curl -sf "$BOXMES_URL/llms.txt"); [[ $LT == "# Boxmes"* ]] && pass "llms.txt" || fail llms
+LF=$(curl -sf -H 'Accept-Language: vi' "$BOXMES_URL/llms-full.txt"); grep -q 'Bắt đầu nhanh' <<<"$LF" && grep -q '/a2a' <<<"$LF" && pass "llms-full.txt localized (vi)" || fail llms-full
+curl -sf "$BOXMES_URL/.well-known/mcp.json" | jq -e '.transport.url|endswith("/mcp")' >/dev/null && pass ".well-known/mcp.json" || fail mcpcard
+curl -sf "$BOXMES_URL/.well-known/agent.json" | jq -e '.protocolVersion=="0.3.0" and (.skills|length)==33' >/dev/null && pass ".well-known/agent.json (A2A card, exec + 32 tool skills)" || fail agentcard
 for F in openai anthropic gemini mcp; do
-  N=$(curl -sf "$BOXAZ_URL/v1/tools?format=$F" | jq 'if type=="array" then (if .[0].functionDeclarations then .[0].functionDeclarations|length else length end) else .tools|length end')
+  N=$(curl -sf "$BOXMES_URL/v1/tools?format=$F" | jq 'if type=="array" then (if .[0].functionDeclarations then .[0].functionDeclarations|length else length end) else .tools|length end')
   [ "$N" = 32 ] && pass "tools?format=$F → $N" || fail "tools $F ($N)"
 done
-[ "$(curl -sf $BOXAZ_URL/v1/agent-kinds | jq '.items|length')" = 22 ] && pass "agent-kinds → 22" || fail kinds
+[ "$(curl -sf $BOXMES_URL/v1/agent-kinds | jq '.items|length')" = 22 ] && pass "agent-kinds → 22" || fail kinds
 
 echo "== v1.1 i18n errors"
-E=$(curl -s -H "Authorization: Bearer $AKEY" -H 'Accept-Language: vi-VN,vi;q=0.9' "$BOXAZ_URL/v1/boxes/box_khongco"); echo "    $(echo "$E" | jq -c .error)"
+E=$(curl -s -H "Authorization: Bearer $AKEY" -H 'Accept-Language: vi-VN,vi;q=0.9' "$BOXMES_URL/v1/boxes/box_khongco"); echo "    $(echo "$E" | jq -c .error)"
 echo "$E" | jq -e '.error.code=="NOT_FOUND" and (.error.message|test("không tìm thấy")) and (.error.docs_url|endswith("#NOT_FOUND"))' >/dev/null && pass "Accept-Language vi → localized message+hint, code unchanged" || fail "i18n vi"
-E=$(curl -s -H "Authorization: Bearer $AKEY" -H 'Accept-Language: ja' -X POST "$BOXAZ_URL/v1/boxes" -d '{"template":"nope"}')
+E=$(curl -s -H "Authorization: Bearer $AKEY" -H 'Accept-Language: ja' -X POST "$BOXMES_URL/v1/boxes" -d '{"template":"nope"}')
 echo "$E" | jq -e '.error.code=="INVALID" and (.error.message|test("テンプレート"))' >/dev/null && pass "Accept-Language ja" || fail "i18n ja"
 
 echo "== v1.1 quote / batch / long-poll / yaml / restore / fork"
@@ -169,10 +169,10 @@ FORK=$("$BIN/box" fork "$BOX" "$SNAP2" --slug e2e-fork | awk '{print $1}')
 [ "$("$BIN/box" read "$FORK" /work/state.txt)" = v1 ] && pass "fork → $FORK has the snapshot files" || fail fork
 "$BIN/box" read "$FORK" /AGENTS.md | grep -q "$SNAP2" && pass "fork AGENTS.md mentions source snapshot" || fail forkmd
 "$BIN/box" down "$FORK" >/dev/null
-R=$(curl -s -X POST "$BOXAZ_URL/mcp" -H "Authorization: Bearer $AKEY" -H 'Accept-Language: zh' -d '{"jsonrpc":"2.0","id":9,"method":"prompts/get","params":{"name":"debug-failing-command","arguments":{"box_id":"x","command":"pytest"}}}')
+R=$(curl -s -X POST "$BOXMES_URL/mcp" -H "Authorization: Bearer $AKEY" -H 'Accept-Language: zh' -d '{"jsonrpc":"2.0","id":9,"method":"prompts/get","params":{"name":"debug-failing-command","arguments":{"box_id":"x","command":"pytest"}}}')
 echo "$R" | jq -e '.result.messages[0].content.text|test("调试")' >/dev/null && pass "MCP prompts/get localized (zh)" || fail prompt
-R=$(curl -s -X POST "$BOXAZ_URL/mcp" -H "Authorization: Bearer $AKEY" -d "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"resources/read\",\"params\":{\"uri\":\"boxaz://box/$BOX/file/work/state.txt\"}}")
-echo "$R" | jq -e '.result.contents[0].text=="v1\n"' >/dev/null && pass "MCP resources/read boxaz://box/…/file/work/state.txt" || fail resource
+R=$(curl -s -X POST "$BOXMES_URL/mcp" -H "Authorization: Bearer $AKEY" -d "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"resources/read\",\"params\":{\"uri\":\"boxmes://box/$BOX/file/work/state.txt\"}}")
+echo "$R" | jq -e '.result.contents[0].text=="v1\n"' >/dev/null && pass "MCP resources/read boxmes://box/…/file/work/state.txt" || fail resource
 
 echo "== v1.2 providers / egress / A2A / notify / storage"
 P=$(api GET /providers); echo "    providers: $(echo "$P" | jq -c '[.items[]|{id,implemented,chain_rank}]')"
@@ -182,19 +182,19 @@ EB=$(KEY=$AKEY api POST /boxes -d '{"template":"base","slug":"e2e-egress","spec"
 echo "    egress: $(echo "$EB" | jq -c .egress)"
 echo "$EB" | jq -e '.egress.enforced==false and .egress.mode=="none" and (.egress.warning|test("NOT enforced"))' >/dev/null && pass "egress allowlist on local driver → clear warning (not enforced)" || fail egress
 "$BIN/box" down "$(echo "$EB" | jq -r .id)" >/dev/null
-A=$(curl -s -X POST "$BOXAZ_URL/a2a" -H "Authorization: Bearer $AKEY" -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"message/send\",\"params\":{\"message\":{\"role\":\"user\",\"parts\":[{\"kind\":\"text\",\"text\":\"echo a2a-ok\"}]},\"metadata\":{\"box_id\":\"$BOX\"}}}")
+A=$(curl -s -X POST "$BOXMES_URL/a2a" -H "Authorization: Bearer $AKEY" -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"message/send\",\"params\":{\"message\":{\"role\":\"user\",\"parts\":[{\"kind\":\"text\",\"text\":\"echo a2a-ok\"}]},\"metadata\":{\"box_id\":\"$BOX\"}}}")
 echo "$A" | jq -e '.result.status.state=="completed" and (.result.artifacts[0].parts[1].text|test("a2a-ok"))' >/dev/null && pass "A2A message/send → task $(echo "$A" | jq -r .result.id) completed" || { echo "$A"; fail a2a; }
 TID=$(echo "$A" | jq -r .result.id)
-curl -s -X POST "$BOXAZ_URL/a2a" -H "Authorization: Bearer $AKEY" -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tasks/get\",\"params\":{\"id\":\"$TID\"}}" | jq -e '.result.status.state=="completed"' >/dev/null && pass "A2A tasks/get" || fail a2aget
-S=$(curl -sN -X POST "$BOXAZ_URL/a2a" -H "Authorization: Bearer $AKEY" -d "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tasks/sendSubscribe\",\"params\":{\"message\":{\"role\":\"user\",\"parts\":[{\"type\":\"text\",\"text\":\"echo sse\"}]},\"metadata\":{\"box_id\":\"$BOX\"}}}")
+curl -s -X POST "$BOXMES_URL/a2a" -H "Authorization: Bearer $AKEY" -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tasks/get\",\"params\":{\"id\":\"$TID\"}}" | jq -e '.result.status.state=="completed"' >/dev/null && pass "A2A tasks/get" || fail a2aget
+S=$(curl -sN -X POST "$BOXMES_URL/a2a" -H "Authorization: Bearer $AKEY" -d "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tasks/sendSubscribe\",\"params\":{\"message\":{\"role\":\"user\",\"parts\":[{\"type\":\"text\",\"text\":\"echo sse\"}]},\"metadata\":{\"box_id\":\"$BOX\"}}}")
 echo "$S" | grep '^data: ' | tail -1 | sed 's/^data: //' | jq -e '.result.final==true and .result.status.state=="completed"' >/dev/null && pass "A2A tasks/sendSubscribe (SSE, $(echo "$S" | grep -c '^data: ') events)" || { echo "$S"; fail a2asse; }
-curl -sf "$BOXAZ_URL/.well-known/agent.json" | jq -e '.capabilities.streaming and (.url|endswith("/a2a"))' >/dev/null && pass "agent card advertises /a2a + streaming" || fail card
+curl -sf "$BOXMES_URL/.well-known/agent.json" | jq -e '.capabilities.streaming and (.url|endswith("/a2a"))' >/dev/null && pass "agent card advertises /a2a + streaming" || fail card
 api GET /notify | jq -e '(.events_available|length)==6 and .telegram_configured==false' >/dev/null && pass "GET /notify" || fail notify
 api POST /notify/test -d '{"channel":"telegram"}' | jq -e '.results[0].ok==false' >/dev/null && pass "notify test reports unconfigured channel" || fail notifytest
 api GET /storage | jq -e '.configured==false and .provider=="local"' >/dev/null && pass "storage: local fallback when unconfigured" || fail storage
 
 echo "== v1.3 providers / selection / speed / agents / mesh"
-curl -sf "$BOXAZ_URL/v1/profiles" | jq -e '(.items|length)==7 and (.kinds|length)==22' >/dev/null && pass "GET /profiles: 7 workload profiles, 22 agent kinds" || fail profiles
+curl -sf "$BOXMES_URL/v1/profiles" | jq -e '(.items|length)==7 and (.kinds|length)==22' >/dev/null && pass "GET /profiles: 7 workload profiles, 22 agent kinds" || fail profiles
 R=$(KEY=$AKEY api POST /recommend -d '{"profile":"coding-agent"}')
 echo "    recommend: $(echo "$R" | jq -c '{pick:(.pick|{kind,provider,score,eta_seconds,cost_per_hour}),rejected:(.rejected|length)}')"
 echo "$R" | jq -e '.pick.kind=="pool" and (.pick.reasons|length)>0 and (.pick.breakdown|length)==6' >/dev/null && pass "POST /recommend ranks + explains (pool host for coding-agent)" || fail recommend
@@ -228,10 +228,10 @@ api PUT /warm-pool -d '{"enabled":false,"pools":[]}' >/dev/null
 echo "== v1.4 sandbox API providers (T2/T3) / YAML adapters / recommend"
 SP=$(api GET /sandbox/providers)
 echo "    sandbox providers: $(echo "$SP" | jq -c '[.items[]|"\(.id):\(.tier)/\(.mode)/\(.verification)"]')"
-echo "$SP" | jq -e '[.items[].id]|contains(["e2b","novita","daytona","prized","boxdsh","runloop","blaxel","vercel","boat","agent37","upstash-box","render","fakesbx"])' >/dev/null && pass "GET /sandbox/providers: 12 built-in adapters + custom YAML from BOXAZ_SANDBOX_ADAPTERS_DIR" || fail sbxlist
+echo "$SP" | jq -e '[.items[].id]|contains(["e2b","novita","daytona","prized","boxdsh","runloop","blaxel","vercel","boat","agent37","upstash-box","render","fakesbx"])' >/dev/null && pass "GET /sandbox/providers: 12 built-in adapters + custom YAML from BOXMES_SANDBOX_ADAPTERS_DIR" || fail sbxlist
 echo "$SP" | jq -e '(.items[]|select(.id=="prized")|.verification=="live-verified") and (.items[]|select(.id=="upstash-box")|.tier=="T3" and .mode=="shim") and all(.items[]; .docs!="" and .initials!="" and (.from_usd_h>0 or .id=="render") and (.capabilities|has("boot_ms") and has("fork") and has("max_lifetime_s")))' >/dev/null && pass "adapter metadata: verification level, docs, initials, capabilities, per-second price" || fail sbxmeta
-# Render: dial-only (no exec API) web service running boxd; without BOXAZ_PUBLIC_URL it is blocked
-echo "$SP" | jq -e '.items[]|select(.id=="render")|.tier=="T2" and .mode=="dial" and .dial_only and (.blocked|test("BOXAZ_PUBLIC_URL")) and .from_usd_h==0 and (.capabilities.pause|not) and .capabilities.ports and ([.sizes[]|select(.sku=="0.5c-512mb")|.price_hour][0]==0.009589)' >/dev/null && pass "render: T2 dial-only, blocked without BOXAZ_PUBLIC_URL, flat plan prices (free \$0, 0.5c-512mb \$7/mo = \$0.009589/h)" || fail render
+# Render: dial-only (no exec API) web service running boxd; without BOXMES_PUBLIC_URL it is blocked
+echo "$SP" | jq -e '.items[]|select(.id=="render")|.tier=="T2" and .mode=="dial" and .dial_only and (.blocked|test("BOXMES_PUBLIC_URL")) and .from_usd_h==0 and (.capabilities.pause|not) and .capabilities.ports and ([.sizes[]|select(.sku=="0.5c-512mb")|.price_hour][0]==0.009589)' >/dev/null && pass "render: T2 dial-only, blocked without BOXMES_PUBLIC_URL, flat plan prices (free \$0, 0.5c-512mb \$7/mo = \$0.009589/h)" || fail render
 RCT=$(api GET "/catalog?provider=render")
 echo "$RCT" | jq -e '(.items|length)>=40 and any(.items[]; .sku=="1c-2g" and .price_month>24.9 and .price_month<25.1) and all(.items[]; .tier=="T2" and .group=="sandbox")' >/dev/null && pass "render catalog: 9 plans × 5 regions (1c-2g = \$25/mo)" || fail rendercat
 RTOK() { jq -nc --arg k "$1" --arg u "http://127.0.0.1:$FSB_PORT" '{token: ({token: $k, base_url: $u}|tojson)}'; }
@@ -277,7 +277,8 @@ for i in $(seq 40); do grep -q '^DELETE /v1/sandboxes/' "$WORK/fsb/calls.log" &&
 grep -q '^DELETE /v1/sandboxes/' "$WORK/fsb/calls.log" && pass "box down → sandbox deleted at the provider (per-second billing stops)" || fail sbxdelete
 echo "    fake provider calls: $(awk '{print $1" "$2}' "$WORK/fsb/calls.log" | sed 's/sbx-[0-9a-f]*/:id/' | sort | uniq -c | awk '{print $2" "$3"×"$1}' | paste -sd, -)"
 
-grep -q "deprecated env vars honoured, rename them to BOXAZ_\*: BOXA_WARM_INTERVAL" "$WORK/core.log" && pass "legacy BOXA_* env still honoured, with a deprecation note" || fail "legacy env compat"
+grep -q "deprecated env vars honoured, rename them to BOXMES_\*: BOXAZ_LOCAL_PRICE_MONTH, BOXA_WARM_INTERVAL" "$WORK/core.log" && pass "legacy BOXAZ_*/BOXA_* env still honoured, with a deprecation note" || fail "legacy env compat"
+grep -q "legacy env vars ignored because a newer name is set: BOXA_LEDGER_INTERVAL" "$WORK/core.log" && pass "legacy env shadowed by BOXMES_* is ignored, with a note" || fail "legacy env shadowing note"
 echo "== v1.7 app supervisor / gateway (wake on request) / URL tokens"
 APORT=${APP_PORT:-18791}
 AB=$(KEY=$AKEY api POST /boxes -d '{"template":"base","slug":"e2e-app","lifecycle":"session"}' | jq -r .id)
@@ -285,7 +286,7 @@ for i in $(seq 40); do [ "$(KEY=$AKEY api GET /boxes/$AB | jq -r .status)" = run
 "$BIN/box" app set "$AB" --start "exec python3 -m http.server \$PORT --bind 127.0.0.1" --install "echo app-ok > index.html" --port $APORT --ready-http / --workdir /work/site >/dev/null || fail "box app set"
 for i in $(seq 60); do S=$("$BIN/box" app status "$AB" | awk '$1=="state"{print $2}'); [ "$S" = ready ] && break; sleep 0.25; done
 [ "$S" = ready ] && pass "box app set → supervised app ready (boxd supervisor)" || fail "app state $S"
-GW=$BOXAZ_URL$(KEY=$AKEY api GET /boxes/$AB/ports | jq -r --argjson p $APORT '.ports[]|select(.port==$p)|.gateway_url')
+GW=$BOXMES_URL$(KEY=$AKEY api GET /boxes/$AB/ports | jq -r --argjson p $APORT '.ports[]|select(.port==$p)|.gateway_url')
 [ "$(curl -s "$GW")" = app-ok ] && pass "gateway URL serves the app: $GW" || fail "gateway $GW"
 pkill -f "http.server $APORT" || true; sleep 0.5
 for i in $(seq 60); do R=$(KEY=$AKEY api GET /boxes/$AB/app); [ "$(echo "$R" | jq -r .status.state)" = ready ] && break; sleep 0.25; done
@@ -299,12 +300,12 @@ TOK=$("$BIN/box" url "$AB" $APORT --token --ttl 10m | awk '/^token /{print $2}')
 [ "$(curl -s -o /dev/null -w '%{http_code}' "$GW")" = 401 ] && [ "$(curl -s -H "Authorization: Bearer $TOK" "$GW")" = app-ok ] && pass "box url --token: 401 without, 200 with Bearer" || fail "token"
 C=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "$GW?token=$TOK"); [[ $C == 302* && $C != *bxt_* ]] && pass "?token= exchanged for a cookie + redirect without it" || fail "query token $C"
 TID=$("$BIN/box" url "$AB" $APORT --tokens | awk 'NR==2{print $1}'); "$BIN/box" url "$AB" $APORT --revoke "$TID" >/dev/null
-[ "$(curl -s -o /dev/null -w '%{http_code}' -H "X-Boxaz-Token: $TOK" "$GW")" = 401 ] && pass "revoked token → 401" || fail "revoke"
+[ "$(curl -s -o /dev/null -w '%{http_code}' -H "X-Boxmes-Token: $TOK" "$GW")" = 401 ] && pass "revoked token → 401" || fail "revoke"
 echo "== v1.9 readable gateway names"
-[[ $GW == "$BOXAZ_URL/x/e2e-app/" ]] && pass "gateway URL is the box name, no numbers: $GW" || fail "name url $GW"
+[[ $GW == "$BOXMES_URL/x/e2e-app/" ]] && pass "gateway URL is the box name, no numbers: $GW" || fail "name url $GW"
 "$BIN/box" url "$AB" $APORT --public >/dev/null
 N=$("$BIN/box" url "$AB" --name "Shop E2E" | sed -n 1p); [ "$N" = "name: shop-e2e" ] || fail "rename $N"
-P=$(KEY=$AKEY api GET /boxes/$AB/ports); NGW=$BOXAZ_URL$(echo "$P" | jq -r .ports[0].gateway_url); AL=$BOXAZ_URL$(echo "$P" | jq -r .ports[0].alias_url)
+P=$(KEY=$AKEY api GET /boxes/$AB/ports); NGW=$BOXMES_URL$(echo "$P" | jq -r .ports[0].gateway_url); AL=$BOXMES_URL$(echo "$P" | jq -r .ports[0].alias_url)
 [ "$(curl -s "$NGW")" = app-ok ] && [ "$(curl -s "$AL")" = app-ok ] && [ "$(curl -s -o /dev/null -w '%{http_code}' "$GW")" = 404 ] && pass "box url --name: $NGW serves the app, alias $(basename "$AL") still works, old name 404" || fail "renamed $NGW $AL"
 O=$("$BIN/box" url "$AB" --name hark 2>&1) && fail "reserved name accepted" || { [[ $O == *reserved* ]] && pass "reserved name refused: $(echo "$O" | sed -n 1p | cut -c1-70)…" || fail "reserved $O"; }
 api GET /capabilities | jq -e 'any(.items[]; .provider=="e2b" and .wake_on_http_native and .memory_pause) and any(.items[]; .provider=="prized" and (.inbound_http|not)) and all(.items[]; .wake_via_gateway)' >/dev/null && pass "GET /capabilities: lifecycle flags per provider" || fail caps
@@ -350,17 +351,17 @@ print(b.decode().strip())" "$@"; }
 [ "$(echoq $LPORT fwd-echo)" = fwd-echo ] && [ "$(echoq $LPORT twice)" = twice ] && pass "box forward $EPORT → 127.0.0.1:$LPORT: echo through the WebSocket stream (2 connections)" || { cat "$WORK/fwd.log"; fail forward; }
 kill $FWD_PID 2>/dev/null || true
 "$BIN/box" access "$BOX" | grep -q "allowed ports \[22 $EPORT\]" && pass "box access: port added to the forward allowlist" || fail "allowlist"
-O=$(BOXAZ_SSH_BUILTIN=1 "$BIN/box" ssh "$BOX" -- 'uname -s; echo ssh-$((6*7))' </dev/null)
+O=$(BOXMES_SSH_BUILTIN=1 "$BIN/box" ssh "$BOX" -- 'uname -s; echo ssh-$((6*7))' </dev/null)
 [[ $O == *Linux*ssh-42* ]] && pass "box ssh -- cmd (SSH gateway over WebSocket, no sshd in the box)" || fail "ssh exec $O"
-set +e; BOXAZ_SSH_BUILTIN=1 "$BIN/box" ssh "$BOX" -- 'exit 3' </dev/null; RC=$?; set -e
+set +e; BOXMES_SSH_BUILTIN=1 "$BIN/box" ssh "$BOX" -- 'exit 3' </dev/null; RC=$?; set -e
 [ $RC = 3 ] && pass "ssh exit status propagated (3)" || fail "ssh rc $RC"
-BOXAZ_SSH_BUILTIN=1 "$BIN/box" ssh "$BOX" -L $SPORT:127.0.0.1:$EPORT -- 'sleep 5' </dev/null 2>"$WORK/sshL.log" & SSHL=$!
+BOXMES_SSH_BUILTIN=1 "$BIN/box" ssh "$BOX" -L $SPORT:127.0.0.1:$EPORT -- 'sleep 5' </dev/null 2>"$WORK/sshL.log" & SSHL=$!
 for i in $(seq 50); do grep -q forwarding "$WORK/sshL.log" && break; sleep 0.1; done
 [ "$(echoq $SPORT via-ssh-L)" = via-ssh-L ] && pass "ssh -L $SPORT:127.0.0.1:$EPORT (direct-tcpip) echo" || { cat "$WORK/sshL.log"; fail "ssh -L"; }
 wait $SSHL 2>/dev/null || true
 if command -v ssh >/dev/null 2>&1; then
   mkdir -p "$WORK/home"; SPORT2=$((PORT+43))
-  O=$(HOME=$WORK/home "$BIN/box" ssh "$BOX" -o BatchMode=yes -- 'echo openssh-$((2*21)); tty || true' </dev/null 2>&1) && [[ $O == *openssh-42* ]] && pass "OpenSSH client through ProxyCommand 'box ssh-proxy %h' (host key pinned in ~/.boxaz/known_hosts)" || fail "openssh $O"
+  O=$(HOME=$WORK/home "$BIN/box" ssh "$BOX" -o BatchMode=yes -- 'echo openssh-$((2*21)); tty || true' </dev/null 2>&1) && [[ $O == *openssh-42* ]] && pass "OpenSSH client through ProxyCommand 'box ssh-proxy %h' (host key pinned in ~/.boxmes/known_hosts)" || fail "openssh $O"
   HOME=$WORK/home "$BIN/box" ssh "$BOX" -o BatchMode=yes -o ExitOnForwardFailure=yes -L $SPORT2:127.0.0.1:$EPORT -- 'sleep 4' </dev/null >"$WORK/osshL.log" 2>&1 & OSSHL=$!
   for i in $(seq 30); do echoq $SPORT2 x >/dev/null 2>&1 && break; sleep 0.2; done
   [ "$(echoq $SPORT2 openssh-L)" = openssh-L ] && pass "OpenSSH -L $SPORT2:127.0.0.1:$EPORT echo" || { cat "$WORK/osshL.log"; fail "openssh -L"; }
@@ -377,18 +378,18 @@ O=$("$BIN/box" sftp "$BOX" put "$WORK/sftp-up.bin" /tmp/sftp-e2e.bin) && "$BIN/b
   && pass "box sftp put + get (300 KB round trip, $O)" || fail "box sftp"
 "$BIN/box" sftp "$BOX" ls /tmp | grep -q sftp-e2e.bin && pass "box sftp ls" || fail "sftp ls"
 if command -v sftp >/dev/null 2>&1 && command -v ssh >/dev/null 2>&1; then
-  mkdir -p "$WORK/home"; KH="$WORK/home/.boxaz/known_hosts"
-  SSHO=(-o "ProxyCommand=$BIN/box ssh-proxy %h" -o HostKeyAlias=boxaz-ssh -o "UserKnownHostsFile=$KH" -o BatchMode=yes -o LogLevel=ERROR)
+  mkdir -p "$WORK/home"; KH="$WORK/home/.boxmes/known_hosts"
+  SSHO=(-o "ProxyCommand=$BIN/box ssh-proxy %h" -o HostKeyAlias=boxmes-ssh -o "UserKnownHostsFile=$KH" -o BatchMode=yes -o LogLevel=ERROR)
   echo "put $WORK/sftp-up.bin /tmp/openssh-sftp.bin" > "$WORK/sftp.batch"
-  HOME=$WORK/home sftp "${SSHO[@]}" -b "$WORK/sftp.batch" "boxaz@$NAME.boxaz" >/dev/null 2>&1 && cmp -s "$WORK/sftp-up.bin" /tmp/openssh-sftp.bin && pass "OpenSSH sftp -b put through ProxyCommand" || fail "openssh sftp"
-  HOME=$WORK/home scp "${SSHO[@]}" -q "boxaz@$NAME.boxaz:/tmp/openssh-sftp.bin" "$WORK/scp-down.bin" && cmp -s "$WORK/sftp-up.bin" "$WORK/scp-down.bin" && pass "OpenSSH scp get (SFTP protocol) through ProxyCommand" || fail "openssh scp"
+  HOME=$WORK/home sftp "${SSHO[@]}" -b "$WORK/sftp.batch" "boxmes@$NAME.boxmes" >/dev/null 2>&1 && cmp -s "$WORK/sftp-up.bin" /tmp/openssh-sftp.bin && pass "OpenSSH sftp -b put through ProxyCommand" || fail "openssh sftp"
+  HOME=$WORK/home scp "${SSHO[@]}" -q "boxmes@$NAME.boxmes:/tmp/openssh-sftp.bin" "$WORK/scp-down.bin" && cmp -s "$WORK/sftp-up.bin" "$WORK/scp-down.bin" && pass "OpenSSH scp get (SFTP protocol) through ProxyCommand" || fail "openssh scp"
   # short-lived certificate: no API key in the ssh process at all
   HOME=$WORK/home "$BIN/box" ssh-cert "$BOX" --ttl 10m --json > "$WORK/cert.json" || fail "ssh-cert"
   CID=$(jq -r .id "$WORK/cert.json"); CUSER=$(jq -r .user "$WORK/cert.json")
-  CERTO=(-i "$WORK/home/.boxaz/id_ed25519" -o "CertificateFile=$WORK/home/.boxaz/id_ed25519-cert.pub" -o IdentitiesOnly=yes -o "ProxyCommand=env -u BOXAZ_API_KEY $BIN/box ssh-proxy --anon %h" -o HostKeyAlias=boxaz-ssh -o "UserKnownHostsFile=$KH" -o BatchMode=yes -o LogLevel=ERROR)
-  O=$(HOME=$WORK/home ssh "${CERTO[@]}" "$CUSER@$NAME.boxaz" 'echo cert-$((40+2))' </dev/null 2>&1) && [[ $O == *cert-42* ]] && pass "OpenSSH with a short-lived certificate (box ssh-proxy --anon, no API key)" || fail "cert ssh $O"
+  CERTO=(-i "$WORK/home/.boxmes/id_ed25519" -o "CertificateFile=$WORK/home/.boxmes/id_ed25519-cert.pub" -o IdentitiesOnly=yes -o "ProxyCommand=env -u BOXMES_API_KEY $BIN/box ssh-proxy --anon %h" -o HostKeyAlias=boxmes-ssh -o "UserKnownHostsFile=$KH" -o BatchMode=yes -o LogLevel=ERROR)
+  O=$(HOME=$WORK/home ssh "${CERTO[@]}" "$CUSER@$NAME.boxmes" 'echo cert-$((40+2))' </dev/null 2>&1) && [[ $O == *cert-42* ]] && pass "OpenSSH with a short-lived certificate (box ssh-proxy --anon, no API key)" || fail "cert ssh $O"
   KEY=$AKEY api DELETE "/boxes/$BOX/tickets/$CID" >/dev/null
-  if HOME=$WORK/home ssh "${CERTO[@]}" "$CUSER@$NAME.boxaz" true </dev/null >/dev/null 2>&1; then fail "revoked certificate accepted"; else pass "revoked certificate refused"; fi
+  if HOME=$WORK/home ssh "${CERTO[@]}" "$CUSER@$NAME.boxmes" true </dev/null >/dev/null 2>&1; then fail "revoked certificate accepted"; else pass "revoked certificate refused"; fi
 else
   echo "    (OpenSSH client not installed: OpenSSH sftp/scp/cert steps skipped)"
 fi

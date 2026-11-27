@@ -13,12 +13,12 @@ import (
 	"sync"
 	"time"
 
-	"boxaz/core/internal/boxyaml"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/proto"
-	"boxaz/core/internal/provhealth"
-	"boxaz/core/internal/secret"
-	"boxaz/core/internal/store"
+	"boxmes/core/internal/boxyaml"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/proto"
+	"boxmes/core/internal/provhealth"
+	"boxmes/core/internal/secret"
+	"boxmes/core/internal/store"
 )
 
 // ---- clone ----
@@ -529,7 +529,7 @@ func (m *Manager) rightSize(b *model.Box) *RightSize {
 
 func idleAction(b *model.Box) string {
 	if b.Lifecycle == model.LifecycleService {
-		return "stop" // services are never auto-stopped: Boxaz only suggests it
+		return "stop" // services are never auto-stopped: Boxmes only suggests it
 	}
 	return "sleep"
 }

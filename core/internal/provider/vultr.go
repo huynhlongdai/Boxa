@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"boxaz/core/internal/model"
+	"boxmes/core/internal/model"
 )
 
 // Vultr API v2 adapter (https://www.vultr.com/api/).

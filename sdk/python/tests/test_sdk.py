@@ -4,13 +4,13 @@ import time
 
 import pytest
 
-import boxaz
-from boxaz import AsyncBoxaz, Boxaz, BoxazError, as_anthropic_tools, as_gemini_tools, as_openai_tools, handle_tool_call
-from boxaz import _client
+import boxmes
+from boxmes import AsyncBoxmes, Boxmes, BoxmesError, as_anthropic_tools, as_gemini_tools, as_openai_tools, handle_tool_call
+from boxmes import _client
 
 
 def test_discovery(core):
-    bx = Boxaz(core["key"], core["url"])
+    bx = Boxmes(core["key"], core["url"])
     assert bx.health()["ok"] is True
     assert len(bx.agent_kinds()["items"]) == 22
     tools = as_openai_tools(bx)
@@ -19,13 +19,13 @@ def test_discovery(core):
     assert as_openai_tools(bx, responses_api=True)[0]["name"] == "box_ensure"
     assert as_anthropic_tools(bx)[0]["input_schema"]["type"] == "object"
     assert len(as_gemini_tools(bx)[0]["functionDeclarations"]) == 32
-    assert bx.llms_txt().startswith("# Boxaz")
+    assert bx.llms_txt().startswith("# Boxmes")
     assert bx.openapi()["openapi"] == "3.1.0"
 
 
 def test_errors_localized(core):
-    bx = Boxaz(core["key"], core["url"], lang="vi")
-    with pytest.raises(BoxazError) as ei:
+    bx = Boxmes(core["key"], core["url"], lang="vi")
+    with pytest.raises(BoxmesError) as ei:
         bx.get_box("box_khong_co")
     e = ei.value
     assert e.code == "NOT_FOUND" and e.status == 404 and "không tìm thấy" in e.message and e.docs_url.endswith("#NOT_FOUND")
@@ -33,7 +33,7 @@ def test_errors_localized(core):
 
 
 def test_box_lifecycle_sync(core):
-    with Boxaz(core["key"], core["url"]) as bx:
+    with Boxmes(core["key"], core["url"]) as bx:
         q = bx.quote("python", "task", ram_mb=512, ttl_seconds=1800)
         assert q["available"] and q["expected_hours"] == 0.5
         box = bx.create_box("python", "session", ram_mb=512, slug="sdk-py", idempotency_key="sdk-py-1")
@@ -69,7 +69,7 @@ def test_box_lifecycle_sync(core):
 
 def test_async_client(core):
     async def main():
-        async with AsyncBoxaz(core["key"], core["url"], lang="ja") as bx:
+        async with AsyncBoxmes(core["key"], core["url"], lang="ja") as bx:
             box = await bx.up("base", "task", ttl_seconds=600, ram_mb=256)
             r = await bx.exec(box["id"], "echo async-hi")
             assert r["stdout_tail"] == "async-hi"
@@ -78,7 +78,7 @@ def test_async_client(core):
             try:
                 await bx.get_box("box_nope")
                 raise AssertionError("expected error")
-            except BoxazError as e:
+            except BoxmesError as e:
                 assert e.code == "NOT_FOUND" and "見つかりません" in e.message
             assert (await bx.call_tool("box_list", {}))["items"]
             await bx.down(box["id"])
@@ -88,15 +88,15 @@ def test_async_client(core):
 
 def test_urllib_fallback(core, monkeypatch):
     monkeypatch.setattr(_client, "httpx", None)
-    bx = Boxaz(core["key"], core["url"], lang="zh")
+    bx = Boxmes(core["key"], core["url"], lang="zh")
     assert bx._http is None
     assert bx.health()["ok"]
-    with pytest.raises(BoxazError) as ei:
+    with pytest.raises(BoxmesError) as ei:
         bx.get_box("box_nope")
     assert "未找到" in ei.value.message
 
     async def main():
-        abx = AsyncBoxaz(core["key"], core["url"])
+        abx = AsyncBoxmes(core["key"], core["url"])
         assert abx._http is None
         assert len((await abx.agent_kinds())["items"]) == 22
 
@@ -104,42 +104,67 @@ def test_urllib_fallback(core, monkeypatch):
 
 
 def test_env_defaults(monkeypatch):
-    monkeypatch.setenv("BOXAZ_URL", "http://example.test:9/v1")
-    monkeypatch.setenv("BOXAZ_API_KEY", "bx_agent_x")
-    monkeypatch.setenv("BOXAZ_LANG", "vi")
-    bx = Boxaz()
+    monkeypatch.setenv("BOXMES_URL", "http://example.test:9/v1")
+    monkeypatch.setenv("BOXMES_API_KEY", "bx_agent_x")
+    monkeypatch.setenv("BOXMES_LANG", "vi")
+    bx = Boxmes()
     assert bx.base_url == "http://example.test:9" and bx.api_key == "bx_agent_x"
     h = bx._headers()
     assert h["Authorization"] == "Bearer bx_agent_x" and h["Accept-Language"] == "vi"
     assert bx._url("/llms.txt") == "http://example.test:9/llms.txt"
     assert bx._url("/boxes", {"all": True, "status": None}) == "http://example.test:9/v1/boxes?all=true"
-    assert boxaz.__version__ == "1.1.0"
+    assert boxmes.__version__ == "1.1.0"
 
 
 def test_legacy_env_and_package(monkeypatch):
     # Pre-rename BOXA_* env vars and the old `boxa` package keep working.
-    for k in ("BOXAZ_URL", "BOXAZ_API_KEY", "BOXAZ_LANG"):
+    for k in ("BOXMES_URL", "BOXMES_API_KEY", "BOXMES_LANG"):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("BOXA_URL", "http://legacy.test:9")
     monkeypatch.setenv("BOXA_API_KEY", "bx_agent_old")
     with pytest.warns(DeprecationWarning):
-        bx = Boxaz()
+        bx = Boxmes()
     assert bx.base_url == "http://legacy.test:9" and bx.api_key == "bx_agent_old"
-    monkeypatch.setenv("BOXAZ_URL", "http://new.test:9")
-    assert Boxaz().base_url == "http://new.test:9"
+    monkeypatch.setenv("BOXMES_URL", "http://new.test:9")
+    assert Boxmes().base_url == "http://new.test:9"
     import importlib
     import sys
 
     sys.modules.pop("boxa", None)
     with pytest.warns(DeprecationWarning):
         boxa = importlib.import_module("boxa")
-    assert boxa.Boxa is Boxaz and boxa.BoxaError is BoxazError and boxa.AsyncBoxa is AsyncBoxaz
+    assert boxa.Boxa is Boxmes and boxa.BoxaError is BoxmesError and boxa.AsyncBoxa is AsyncBoxmes
+
+
+def test_legacy_boxaz_env_and_package(monkeypatch):
+    # Pre-rename BOXAZ_* env vars and the old `boxaz` package keep working;
+    # lookup order is BOXMES_* → BOXAZ_* → BOXA_*.
+    for k in ("BOXMES_URL", "BOXMES_API_KEY", "BOXMES_LANG"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("BOXAZ_URL", "http://boxaz.test:9")
+    monkeypatch.setenv("BOXA_URL", "http://boxa.test:9")
+    monkeypatch.setenv("BOXAZ_API_KEY", "bx_agent_boxaz")
+    monkeypatch.setenv("BOXA_LANG", "ja")
+    with pytest.warns(DeprecationWarning, match="BOXAZ_URL"):
+        bx = Boxmes()
+    assert bx.base_url == "http://boxaz.test:9" and bx.api_key == "bx_agent_boxaz"
+    assert bx._headers()["Accept-Language"] == "ja"
+    monkeypatch.setenv("BOXMES_URL", "http://new.test:9")
+    assert Boxmes().base_url == "http://new.test:9"
+    import importlib
+    import sys
+
+    sys.modules.pop("boxaz", None)
+    with pytest.warns(DeprecationWarning, match="boxaz"):
+        boxaz = importlib.import_module("boxaz")
+    assert boxaz.Boxaz is Boxmes and boxaz.BoxazError is BoxmesError and boxaz.AsyncBoxaz is AsyncBoxmes
+    assert boxaz.Boxmes is Boxmes and boxaz.__version__ == boxmes.__version__
 
 
 def test_v13_selection_helpers(core):
-    from boxaz import Boxaz
+    from boxmes import Boxmes
     url, akey = core["url"], core["key"]
-    with Boxaz(akey, url) as bx:
+    with Boxmes(akey, url) as bx:
         pr = bx.profiles()
         assert len(pr["items"]) == 7 and len(pr["kinds"]) == 22
         rec = bx.recommend("general", ram_mb=256, disk_gb=1, max_price_hour=1)
@@ -161,9 +186,9 @@ def test_v13_selection_helpers(core):
 
 
 def test_v14_sandbox_helpers(core):
-    from boxaz import Boxaz, BoxazError
+    from boxmes import Boxmes, BoxmesError
     url, admin, akey = core["url"], core["admin"], core["key"]
-    with Boxaz(akey, url) as bx:
+    with Boxmes(akey, url) as bx:
         sp = bx.sandbox_providers()["items"]
         ids = {p["id"]: p for p in sp}
         assert {"e2b", "novita", "daytona", "prized", "boxdsh", "runloop", "blaxel", "vercel", "boat", "agent37", "upstash-box", "render"} <= set(ids)
@@ -175,9 +200,9 @@ def test_v14_sandbox_helpers(core):
         try:
             bx.lint_adapter("id: x")
             raise AssertionError("agent key must not lint adapters")
-        except BoxazError as e:
+        except BoxmesError as e:
             assert e.code in ("UNAUTHORIZED", "POLICY_DENIED")
-    with Boxaz(admin, url) as adm:
+    with Boxmes(admin, url) as adm:
         bad = adm.lint_adapter("id: x\nname: X\n")
         assert bad["ok"] is False and "missing" in bad["error"]
         good = adm.lint_adapter(
@@ -200,7 +225,7 @@ def test_v17_app_gateway_tokens(core):
     import urllib.request
     if not shutil.which("python3"):
         pytest.skip("python3 required in the box")
-    from boxaz import Boxaz
+    from boxmes import Boxmes
     url, akey = core["url"], core["key"]
     s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -212,7 +237,7 @@ def test_v17_app_gateway_tokens(core):
         except urllib.error.HTTPError as e:
             return e.code, e.read().decode()
 
-    with Boxaz(akey, url) as bx:
+    with Boxmes(akey, url) as bx:
         box = bx.up(template="base", lifecycle="session", slug="sdk-py-app")
         try:
             v = bx.set_app(box["id"], "exec python3 -m http.server $PORT --bind 127.0.0.1", install="echo py-sdk > index.html",
@@ -233,7 +258,7 @@ def test_v17_app_gateway_tokens(core):
             assert get(full, {"Authorization": "Bearer " + t["token"]})[0] == 200
             assert bx.url_tokens(box["id"], port)["access"] == "token"
             bx.revoke_url_token(box["id"], port, t["id"])
-            assert get(full, {"X-Boxaz-Token": t["token"]})[0] == 401
+            assert get(full, {"X-Boxmes-Token": t["token"]})[0] == 401
             bx.set_port_access(box["id"], port, "public")
             bx.sleep(box["id"])
             assert get(full) == (200, "py-sdk\n")  # wake on request
@@ -263,16 +288,16 @@ SSH_PUB = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHriFbNRs2ilXN0Y7F+viZSJ0GcP4uLy8
 
 
 def test_v110_access(core):
-    from boxaz import Boxaz, BoxazError
+    from boxmes import Boxmes, BoxmesError
     url, akey = core["url"], core["key"]
-    with Boxaz(akey, url) as bx:
+    with Boxmes(akey, url) as bx:
         box = bx.up(template="base", lifecycle="session", slug="sdk-py-acc")
         try:
             t = bx.ticket(box["id"], "terminal")
             assert t["ticket"].startswith("bxa_") and "ticket=bxa_" in t["url"] and "/terminal" in t["url"]
-            with pytest.raises(BoxazError):
+            with pytest.raises(BoxmesError):
                 bx.ticket(box["id"], "tcp")  # needs a port
-            with pytest.raises(BoxazError):
+            with pytest.raises(BoxmesError):
                 bx.ticket(box["id"], "tcp", port=6390)  # not in the allowlist
             tt = bx.ticket(box["id"], "tcp", port=6390, allow=True)
             assert "port=6390" in tt["url"]
@@ -282,9 +307,9 @@ def test_v110_access(core):
             assert 6390 in bx.allow_forward_port(box["id"], 6391)["allowed_ports"]
             a = bx.access(box["id"])
             assert a["commands"]["forward"].startswith("box forward ") and 6391 in a["tcp"]["allowed_ports"]
-            assert "ssh-proxy" in a["ssh"]["config"] and a["ssh"]["known_hosts"].startswith("boxaz-ssh ssh-ed25519 ")
+            assert "ssh-proxy" in a["ssh"]["config"] and a["ssh"]["known_hosts"].startswith("boxmes-ssh ssh-ed25519 ")
             assert bx.terminals(box["id"])["items"] == []
-            assert bx.ssh_info()["host_key_alias"] == "boxaz-ssh"
+            assert bx.ssh_info()["host_key_alias"] == "boxmes-ssh"
             k = bx.add_ssh_key(SSH_PUB)
             assert k["fingerprint"].startswith("SHA256:") and k["name"] == "sdk-test"
             assert any(x["id"] == k["id"] for x in bx.ssh_keys()["items"])
@@ -294,14 +319,14 @@ def test_v110_access(core):
 
 
 def test_v111_access(core):
-    from boxaz import Boxaz, BoxazError
+    from boxmes import Boxmes, BoxmesError
     url, akey = core["url"], core["key"]
-    with Boxaz(akey, url) as bx:
+    with Boxmes(akey, url) as bx:
         box = bx.up(template="base", lifecycle="session", slug="sdk-py-p1")
         try:
             c = bx.ssh_cert(box["id"], SSH_PUB, ttl_s=600)
             assert c["certificate"].startswith("ssh-ed25519-cert-v01@openssh.com ") and box["id"] in c["principals"]
-            with pytest.raises(BoxazError):
+            with pytest.raises(BoxmesError):
                 bx.ssh_cert(box["id"], SSH_PUB, ttl_s=50000)
             assert bx.revoke_ticket(box["id"], c["id"])["revoked"] == 1
             assert bx.ssh_info()["user_ca"].startswith("ssh-ed25519 ")

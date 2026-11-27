@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/proto"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/proto"
 )
 
 type appState struct {

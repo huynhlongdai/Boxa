@@ -1,14 +1,16 @@
 ---
-title: "Boxaz — Spec chi tiết v1.0"
+title: "Boxmes — Spec chi tiết v1.0"
 subtitle: "Nền tảng box đa nhà cung cấp cho AI agent, nhiều khách hàng (SaaS)"
 date: "2026-11-26"
 ---
 
-# Boxaz spec v1.0 — đặc tả chi tiết ứng dụng
+# Boxmes spec v1.0 — đặc tả chi tiết ứng dụng
 
 Ngày: 2026-11-26. Thay thế v0.4 (2026-10-27). v0.4 vẫn đúng về kiến trúc kết nối provider (mục 1–9) và Growth/Invite (mục 10); v1.0 gom toàn bộ những gì **đã xây** (core v1.12 + tenancy), bổ sung các **module còn thiếu** để mở cho nhiều khách hàng và thu tiền, và chốt lộ trình tới bản ra mắt.
 
 Nguồn nghiên cứu đối thủ (có URL cho từng số liệu): `docs/research/competitors-2026-11.md`.
+
+Đặc tả giao diện (UI) v2 đi kèm: [`docs/boxmes-ui-spec-v2.md`](boxmes-ui-spec-v2.md).
 
 Ký hiệu trạng thái module: **Có** = đã code + test · **Một phần** = có nhưng thiếu phần quan trọng · **Mới** = chưa có. Ưu tiên: **P0** = bắt buộc trước khi nhận tiền người lạ · **P1** = cần trong 3–6 tháng đầu để cạnh tranh · **P2** = sau / doanh nghiệp.
 
@@ -16,33 +18,33 @@ Ký hiệu trạng thái module: **Có** = đã code + test · **Một phần** 
 
 ## 0. Tóm tắt điều hành
 
-- **Boxaz là gì:** một API / MCP / CLI duy nhất để AI agent xin "box" (máy Linux cách ly) ở **bất kỳ đâu** — VPS thô (Hetzner, Vultr, Contabo, netcup, DigitalOcean, máy nhà) hoặc sandbox API (E2B, Daytona, Novita, Prized, Blaxel, Vercel, Render…) — và tự chọn chỗ **rẻ nhất đạt yêu cầu**, kèm ngân sách, duyệt, ngủ/thức, snapshot, URL công khai, terminal/SSH/VNC.
+- **Boxmes là gì:** một API / MCP / CLI duy nhất để AI agent xin "box" (máy Linux cách ly) ở **bất kỳ đâu** — VPS thô (Hetzner, Vultr, Contabo, netcup, DigitalOcean, máy nhà) hoặc sandbox API (E2B, Daytona, Novita, Prized, Blaxel, Vercel, Render…) — và tự chọn chỗ **rẻ nhất đạt yêu cầu**, kèm ngân sách, duyệt, ngủ/thức, snapshot, URL công khai, terminal/SSH/VNC.
 - **Hiện trạng (HEAD `af2dc05`):** ~56k dòng Go, ~18k dòng TypeScript dashboard, SDK Python + TS, 18+ tool MCP, 6 provider VPS + 12 provider sandbox, 4 ngôn ngữ (vi/en/zh/ja). Đã chạy thật với E2B, Novita, Prized, Hetzner/Vultr (đọc). Vừa thêm lớp tài khoản/phiên/mã mời/danh sách chờ.
 - **Khoảng trống để thành SaaS:** chưa cô lập dữ liệu theo workspace, chưa có vai trò thành viên, chưa có thanh toán/ví credit, chưa có gói & hạn mức theo khách, chưa có chống lạm dụng, chưa có webhook/audit cho khách, dashboard chưa có màn đăng ký/đăng nhập.
 - **Lợi thế khác biệt (giữ và đẩy mạnh):** (1) VPS thô + Incus là một loại provider → giá box 2 vCPU/4 GB chỉ ~€0.01/giờ so với $0.07–0.24/giờ của sandbox thương mại; (2) quản trị agent: key riêng, ngân sách, chính sách, duyệt "Cần anh"; (3) A2A + MCP + llms.txt; (4) price feed sống; (5) truy cập đầy đủ (terminal, SSH cert, SFTP, CDP, VNC, link chia sẻ) qua một API.
 - **Thời điểm:** Runloop đóng (13/11/2026) và Ona/Gitpod đóng cloud (31/10/2026) → có một làn sóng người dùng cần chỗ mới; nên có **API tương thích E2B** và công cụ nhập sớm.
-- **Thanh toán:** Stripe không nhận doanh nghiệp đăng ký tại Việt Nam → đề xuất **Polar** (merchant of record, chi trả về VN, có meter + credit), Paddle dự phòng; tự giữ sổ cái và số dư credit trong Boxaz để chặn chi theo thời gian thực.
+- **Thanh toán:** Stripe không nhận doanh nghiệp đăng ký tại Việt Nam → đề xuất **Polar** (merchant of record, chi trả về VN, có meter + credit), Paddle dự phòng; tự giữ sổ cái và số dư credit trong Boxmes để chặn chi theo thời gian thực.
 
 ---
 
 ## 1. Định vị và khách hàng
 
 ### 1.1 Định vị
-"Hạ tầng box cho agent, rẻ nhất có thể, có phanh." Boxaz không cạnh tranh làm sandbox nhanh nhất; Boxaz là **lớp điều phối trung lập** đặt trên các sandbox và VPS, cộng lớp quản trị chi phí/quyền cho agent.
+"Hạ tầng box cho agent, rẻ nhất có thể, có phanh." Boxmes không cạnh tranh làm sandbox nhanh nhất; Boxmes là **lớp điều phối trung lập** đặt trên các sandbox và VPS, cộng lớp quản trị chi phí/quyền cho agent.
 
-| Nhóm đối thủ | Ví dụ | Boxaz khác ở đâu |
+| Nhóm đối thủ | Ví dụ | Boxmes khác ở đâu |
 |---|---|---|
 | Sandbox đơn nhà | E2B, Daytona, Modal, Blaxel, Vercel, Cloudflare, Morph, Fly Sprites | Không khoá vào một nơi; dùng được VPS giá rẻ; ngân sách/duyệt theo agent |
-| Router đa provider | ComputeSDK (~39 provider), Crabbox, Open Sandbox Router | Boxaz có data plane riêng (`boxd`) nên hành vi giống nhau ở mọi nơi, có VPS + Incus, có quản trị và truy cập đầy đủ |
-| Quản trị agent | Sandscale, Coder Agent Firewall | Boxaz vừa quản trị vừa cấp hạ tầng |
-| Dev environment | Coder, Daytona, (Ona đã đóng) | Boxaz hướng agent trước, người sau |
+| Router đa provider | ComputeSDK (~39 provider), Crabbox, Open Sandbox Router | Boxmes có data plane riêng (`boxd`) nên hành vi giống nhau ở mọi nơi, có VPS + Incus, có quản trị và truy cập đầy đủ |
+| Quản trị agent | Sandscale, Coder Agent Firewall | Boxmes vừa quản trị vừa cấp hạ tầng |
+| Dev environment | Coder, Daytona, (Ona đã đóng) | Boxmes hướng agent trước, người sau |
 | Hyperscaler | AWS/Azure/GCP agent sandbox (2026) | Trung lập, rẻ, đơn giản, đa provider |
 
 ### 1.2 Khách hàng mục tiêu (persona)
 1. **Dev cá nhân / indie hacker** chạy Claude Code, Codex, Cursor agent: cần box rẻ, URL công khai, ngủ khi không dùng. Gói Free/Pro.
 2. **Startup làm sản phẩm AI agent** (coding agent, data agent, browser agent): cần API ổn định, nhiều box song song, webhook, hạn mức, hoá đơn. Gói Pro/Team.
 3. **Agency / đội automation** (n8n, Dify, Make): nhiều khách con, mỗi khách một workspace, ngân sách riêng. Gói Team.
-4. **Công ty có tài khoản cloud riêng**: muốn Boxaz điều phối trên tài khoản Hetzner/AWS của mình (BYOC), trả phí nền tảng. Gói BYOC/Enterprise.
+4. **Công ty có tài khoản cloud riêng**: muốn Boxmes điều phối trên tài khoản Hetzner/AWS của mình (BYOC), trả phí nền tảng. Gói BYOC/Enterprise.
 5. **Người vận hành nền tảng (anh)**: quản trị toàn hệ thống, pool VPS, giá, mã mời, lạm dụng.
 
 ### 1.3 Use case chính
@@ -61,7 +63,7 @@ Ký hiệu trạng thái module: **Có** = đã code + test · **Một phần** 
  Người dùng (dashboard web) · Agent (MCP / REST / A2A / CLI / SDK / API tương thích E2B)
             │ phiên bxs_  · API key bx_ (theo workspace) · ticket truy cập
             ▼
- ┌──────────────────────────── boxaz-core ─────────────────────────────┐
+ ┌──────────────────────────── boxmes-core ─────────────────────────────┐
  │ Edge: auth (session/key/ticket), tenant resolver, rate limit,       │
  │       idempotency, quota check, i18n lỗi, OpenAPI/llms.txt          │
  │ Identity & Tenancy: users, workspaces, members/RBAC, invites        │
@@ -159,7 +161,7 @@ Mỗi module: mục đích · trạng thái · chức năng · API chính · UI 
 
 ### M6. Adapter provider — **Có**
 - T1: Hetzner, Vultr (live), DigitalOcean, Contabo, netcup, local. T2/T3: E2B, Novita, Prized (live), Daytona, boxd.sh, Runloop (**đã đóng 13/11/2026 → gỡ khỏi chuỗi mặc định, đánh dấu deprecated**), Blaxel (đã thuộc Baseten), Upstash Box, Agent 37, boat, Vercel, Render.
-- Bổ sung: **P1** OVHcloud, Scaleway, Linode/Akamai, AWS EC2 (spot), Fly Machines (REST công khai), Northflank; **P1** self-test tự động hằng tuần cho provider đã kết nối; **P2** Modal (qua sidecar SDK), Cloudflare Containers (qua Worker mẫu do Boxaz cung cấp), AWS/Azure/GCP agent sandbox.
+- Bổ sung: **P1** OVHcloud, Scaleway, Linode/Akamai, AWS EC2 (spot), Fly Machines (REST công khai), Northflank; **P1** self-test tự động hằng tuần cho provider đã kết nối; **P2** Modal (qua sidecar SDK), Cloudflare Containers (qua Worker mẫu do Boxmes cung cấp), AWS/Azure/GCP agent sandbox.
 
 ### M7. Data plane (exec, file, job, log) — **Có**
 - exec/exec-batch/async job/long-poll, output shaper (tail, `tokens_saved`, `log_id`), file đọc/ghi/grep, observe, PTY, AGENTS.md theo ngôn ngữ.
@@ -222,7 +224,7 @@ Quan trọng vì VPS thô + URL công khai dễ bị dùng để đào coin, qu�
 
 ### M19. Thông báo & webhook — **Một phần** (P0)
 - Đã có: Telegram, email SMTP (báo cáo ngày, ngân sách, duyệt, box lỗi, host down).
-- **P0 webhook cho khách**: đăng ký URL + chọn sự kiện (`box.created|running|sleeping|terminated|failed`, `job.finished`, `budget.threshold`, `billing.low_balance`, `approval.created`), ký `X-Boxaz-Signature: t=…,v1=HMAC-SHA256`, thử lại lũy thừa 24 h, lịch sử gửi + gửi lại thủ công, tự tắt sau nhiều lần lỗi.
+- **P0 webhook cho khách**: đăng ký URL + chọn sự kiện (`box.created|running|sleeping|terminated|failed`, `job.finished`, `budget.threshold`, `billing.low_balance`, `approval.created`), ký `X-Boxmes-Signature: t=…,v1=HMAC-SHA256`, thử lại lũy thừa 24 h, lịch sử gửi + gửi lại thủ công, tự tắt sau nhiều lần lỗi.
 - **P1** Slack, Discord; thông báo theo người dùng (mỗi thành viên chọn kênh).
 - **P1 email giao dịch**: chào mừng, xác thực, đặt lại mật khẩu, mời thành viên, sắp hết tiền, hoá đơn — mẫu đa ngôn ngữ; dùng SMTP/Resend/SES.
 
@@ -245,7 +247,7 @@ Quan trọng vì VPS thô + URL công khai dễ bị dùng để đào coin, qu�
 - GitHub App / GitLab OAuth gắn vào workspace; clone repo private bằng token ngắn hạn (qua egress proxy, không lưu trong box); tạo nhánh, commit, push, mở PR; `POST /v1/boxes/{id}/git/{clone,commit,push,pr}`; tool MCP `box_git`.
 
 ### M24. GPU / Windows / macOS — **Mới** (P2)
-- Định tuyến khi `requirements.gpu|os` được yêu cầu: Daytona, Modal, Northflank, RunPod, Vast (GPU), Daytona Windows/macOS; Boxaz giữ API giống hệt.
+- Định tuyến khi `requirements.gpu|os` được yêu cầu: Daytona, Modal, Northflank, RunPod, Vast (GPU), Daytona Windows/macOS; Boxmes giữ API giống hệt.
 
 ### M25. Bảng điều khiển web — **Có**, cần bổ sung (P0)
 - Đã có (Next.js, vi/en/zh/ja): Tổng quan, Boxes (+ chi tiết: terminal, tệp, cổng/app, snapshot, màn hình), Agents, Chi phí, Hạ tầng (VPS, Sandbox API, sức khoẻ, bảng giá, tốc độ, mesh, adapter), Recommend, Templates, Secrets, Developers (8 tab tích hợp), Cài đặt, Admin (hệ thống, job, audit, API keys, quota, tính năng, người dùng), Onboarding.
@@ -258,7 +260,7 @@ Quan trọng vì VPS thô + URL công khai dễ bị dùng để đào coin, qu�
 - **P0**: danh sách workspace (gói, số dư, chi/thu tháng, trạng thái), khoá/mở workspace, tặng credit, xem như (impersonate, có audit), hàng chờ lạm dụng; UI cho mã mời + danh sách chờ; **P1** báo cáo doanh thu/biên lợi nhuận theo ngày, theo provider, theo gói; cohort đăng ký → trả tiền.
 
 ### M27. BYOC (mang tài khoản cloud riêng) — **Mới** (P1)
-- Workspace kết nối token Hetzner/Vultr/E2B… của chính họ; host/box chạy trên tài khoản đó, Boxaz chỉ thu **phí nền tảng** (đề xuất $0.01/vCPU-giờ hoặc 10% chi phí compute, tối thiểu $X/tháng). Tách `Host.owner_workspace_id`; scheduler chỉ dùng host của workspace đó (hoặc pool nền tảng nếu cho phép).
+- Workspace kết nối token Hetzner/Vultr/E2B… của chính họ; host/box chạy trên tài khoản đó, Boxmes chỉ thu **phí nền tảng** (đề xuất $0.01/vCPU-giờ hoặc 10% chi phí compute, tối thiểu $X/tháng). Tách `Host.owner_workspace_id`; scheduler chỉ dùng host của workspace đó (hoặc pool nền tảng nếu cho phép).
 
 ### M28. Tài liệu, i18n, hỗ trợ — **Có**, mở rộng (P1)
 - Đã có: README, API contract, llms.txt, catalog lỗi dịch 4 ngôn ngữ.
@@ -306,7 +308,7 @@ Bảng giá credit (đề xuất ban đầu, chỉnh theo số liệu):
 
 ## 7. Lộ trình
 
-Mốc tính từ 2026-11-26; mỗi mốc kết thúc bằng commit `Boxaz v2.x …` + test e2e + docs (theo quy ước repo).
+Mốc tính từ 2026-11-26; mỗi mốc kết thúc bằng commit `Boxmes v2.x …` + test e2e + docs (theo quy ước repo).
 
 | Giai đoạn | Thời lượng | Nội dung | Kết quả |
 |---|---|---|---|
@@ -364,6 +366,6 @@ Danh sách kiểm tra trước khi nhận tiền người lạ: cô lập worksp
 
 ## Phụ lục B. Biến môi trường mới dự kiến
 
-`BOXAZ_SIGNUP_MODE`, `BOXAZ_SESSION_TTL` (có) · `BOXAZ_DASHBOARD_URL` (có) · `BOXAZ_POLAR_TOKEN`, `BOXAZ_POLAR_WEBHOOK_SECRET`, `BOXAZ_BILLING_MODE=off|prepaid` · `BOXAZ_FREE_CREDIT_USD` · `BOXAZ_ABUSE_*` (ngưỡng) · `BOXAZ_OAUTH_{GITHUB,GOOGLE}_{ID,SECRET}` · `BOXAZ_MAIL_PROVIDER=smtp|resend|ses`.
+`BOXMES_SIGNUP_MODE`, `BOXMES_SESSION_TTL` (có) · `BOXMES_DASHBOARD_URL` (có) · `BOXMES_POLAR_TOKEN`, `BOXMES_POLAR_WEBHOOK_SECRET`, `BOXMES_BILLING_MODE=off|prepaid` · `BOXMES_FREE_CREDIT_USD` · `BOXMES_ABUSE_*` (ngưỡng) · `BOXMES_OAUTH_{GITHUB,GOOGLE}_{ID,SECRET}` · `BOXMES_MAIL_PROVIDER=smtp|resend|ses`.
 
-Chế độ tự host một người (như hiện nay) vẫn được giữ: `BOXAZ_BILLING_MODE=off`, `BOXAZ_SIGNUP_MODE=closed` → hành vi giống v1.12.
+Chế độ tự host một người (như hiện nay) vẫn được giữ: `BOXMES_BILLING_MODE=off`, `BOXMES_SIGNUP_MODE=closed` → hành vi giống v1.12.

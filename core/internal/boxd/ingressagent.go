@@ -22,8 +22,8 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"boxaz/core/internal/hostlink"
-	"boxaz/core/internal/proto"
+	"boxmes/core/internal/hostlink"
+	"boxmes/core/internal/proto"
 )
 
 // IngressAgentConfig configures RunIngressAgent.

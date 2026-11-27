@@ -1,4 +1,4 @@
-"""Boxaz clients (sync ``Boxaz`` and async ``AsyncBoxaz``).
+"""Boxmes clients (sync ``Boxmes`` and async ``AsyncBoxmes``).
 
 Uses httpx when installed; falls back to the standard library (urllib) so the
 SDK works with zero dependencies. Both clients expose the same methods; the
@@ -27,19 +27,20 @@ try:  # optional dependency
 except Exception:  # pragma: no cover - exercised when httpx is absent
     httpx = None  # type: ignore
 
-__all__ = ["Boxaz", "AsyncBoxaz", "BoxazError"]
+__all__ = ["Boxmes", "AsyncBoxmes", "BoxmesError"]
 
 def _env(name: str) -> "str | None":
-    """BOXAZ_<name>, falling back to the pre-rename BOXA_<name> (deprecated)."""
-    v = os.environ.get("BOXAZ_" + name)
+    """BOXMES_<name>, falling back to the pre-rename BOXAZ_<name>, then BOXA_<name> (both deprecated)."""
+    v = os.environ.get("BOXMES_" + name)
     if v:
         return v
-    old = os.environ.get("BOXA_" + name)
-    if old:
-        import warnings
+    for prefix in ("BOXAZ_", "BOXA_"):  # newest legacy name wins
+        old = os.environ.get(prefix + name)
+        if old:
+            import warnings
 
-        warnings.warn(f"BOXA_{name} is deprecated; rename it to BOXAZ_{name}", DeprecationWarning, stacklevel=3)
-        return old
+            warnings.warn(f"{prefix}{name} is deprecated; rename it to BOXMES_{name}", DeprecationWarning, stacklevel=3)
+            return old
     return None
 
 
@@ -47,7 +48,7 @@ DEFAULT_URL = "http://localhost:8080"
 RETRYABLE = {"NO_CAPACITY", "PROVIDER_FAILED", "RATE_LIMITED", "INTERNAL"}
 
 
-class BoxazError(Exception):
+class BoxmesError(Exception):
     """Error envelope from the API: ``{"error": {code, message, hint, retry_after_s?, docs_url?}}``.
 
     ``code`` is stable across languages; ``message``/``hint`` follow the
@@ -65,14 +66,14 @@ class BoxazError(Exception):
         return self.code in RETRYABLE
 
 
-def _error_from(status: int, body: bytes) -> BoxazError:
+def _error_from(status: int, body: bytes) -> BoxmesError:
     try:
         env = _json.loads(body.decode() or "{}").get("error") or {}
     except Exception:
         env = {}
     if not env.get("code"):
-        return BoxazError(status, str(status), body.decode(errors="replace").strip()[:500])
-    return BoxazError(status, env.get("code", ""), env.get("message", ""), env.get("hint", ""),
+        return BoxmesError(status, str(status), body.decode(errors="replace").strip()[:500])
+    return BoxmesError(status, env.get("code", ""), env.get("message", ""), env.get("hint", ""),
                      env.get("retry_after_s"), env.get("docs_url"), env)
 
 
@@ -96,10 +97,10 @@ def _q(v: str) -> str:
 
 class _Base:
     """Request building shared by both clients. Methods return whatever
-    ``self._call`` returns (a value for Boxaz, an awaitable for AsyncBoxaz)."""
+    ``self._call`` returns (a value for Boxmes, an awaitable for AsyncBoxmes)."""
 
     def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None, *, lang: Optional[str] = None,
-                 timeout: float = 600.0, max_retries: int = 2, user_agent: str = "boxaz-python/1.1"):
+                 timeout: float = 600.0, max_retries: int = 2, user_agent: str = "boxmes-python/1.1"):
         self.api_key = api_key if api_key is not None else _env("API_KEY") or ""
         url = (base_url or _env("URL") or DEFAULT_URL).rstrip("/")
         if url.endswith("/v1"):
@@ -315,7 +316,7 @@ class _Base:
                 install: Optional[str] = None, port: Optional[int] = None, ready_http: Optional[str] = None,
                 ready_tcp: bool = False, restart: Optional[str] = None, env: Optional[Mapping[str, str]] = None,
                 workdir: Optional[str] = None, backoff_max_s: Optional[int] = None, label: Optional[str] = None) -> Dict[str, Any]:
-        """Declare the box's long-running app: Boxaz clones ``repo``, runs ``install`` once, starts
+        """Declare the box's long-running app: Boxmes clones ``repo``, runs ``install`` once, starts
         ``start``, restarts it on crash (``restart`` = always | on-failure | never), starts it again after
         wake / restore / clone and gates gateway traffic to ``port`` until it is ready. ``port`` is also the box's
         primary URL (``https://<name>.<domain>/``); ``label`` names it for ``<name>-<label>``. Returns ``{spec, status}``."""
@@ -523,7 +524,7 @@ class _Base:
     @staticmethod
     def _mcp_result(resp: Mapping[str, Any]) -> Any:
         if resp.get("error"):
-            raise BoxazError(400, "INVALID", resp["error"].get("message", "MCP error"))
+            raise BoxmesError(400, "INVALID", resp["error"].get("message", "MCP error"))
         res = resp.get("result") or {}
         out = res.get("structuredContent")
         if out is None:
@@ -534,7 +535,7 @@ class _Base:
                 out = text
         if res.get("isError") and isinstance(out, dict) and "error" in out:
             e = out["error"]
-            raise BoxazError(400, e.get("code", "INVALID"), e.get("message", ""), e.get("hint", ""),
+            raise BoxmesError(400, e.get("code", "INVALID"), e.get("message", ""), e.get("hint", ""),
                             e.get("retry_after_s"), e.get("docs_url"), out)
         return out
 
@@ -547,16 +548,16 @@ def _parse(status: int, ctype: str, body: bytes, raw: bool) -> Any:
     return _json.loads(body.decode() or "null")
 
 
-def _retry_wait(err: BoxazError, attempt: int) -> float:
+def _retry_wait(err: BoxmesError, attempt: int) -> float:
     if err.retry_after_s:
         return min(float(err.retry_after_s), 30.0)
     return min(0.5 * (2 ** attempt), 8.0)
 
 
-class Boxaz(_Base):
+class Boxmes(_Base):
     """Synchronous client.
 
-    >>> bx = Boxaz()                       # BOXAZ_URL / BOXAZ_API_KEY / BOXAZ_LANG from env
+    >>> bx = Boxmes()                       # BOXMES_URL / BOXMES_API_KEY / BOXMES_LANG from env
     >>> box = bx.create_box("python", "task", ttl_seconds=600)
     >>> bx.exec(box["id"], "python3 -c 'print(42)'")["stdout_tail"]
     '42'
@@ -572,7 +573,7 @@ class Boxaz(_Base):
         if self._http is not None:
             self._http.close()
 
-    def __enter__(self) -> "Boxaz":
+    def __enter__(self) -> "Boxmes":
         return self
 
     def __exit__(self, *exc: Any) -> None:
@@ -601,7 +602,7 @@ class Boxaz(_Base):
             st, ctype, content = self._send(method, url, data, h)
             try:
                 return _parse(st, ctype, content, raw)
-            except BoxazError as e:
+            except BoxmesError as e:
                 if not e.retryable or attempt >= self.max_retries:
                     raise
                 time.sleep(_retry_wait(e, attempt))
@@ -617,25 +618,25 @@ class Boxaz(_Base):
                 return j
 
     def call_tool(self, name: str, arguments: Optional[Mapping[str, Any]] = None) -> Any:
-        """Execute a Boxaz tool by name (as returned by :func:`as_openai_tools`) through the MCP
+        """Execute a Boxmes tool by name (as returned by :func:`as_openai_tools`) through the MCP
         endpoint, so arguments are mapped exactly like the MCP server does."""
         resp = self._call("POST", "/mcp", self._mcp_body(name, arguments or {}))
         return self._mcp_result(resp)
 
 
-class AsyncBoxaz(_Base):
+class AsyncBoxmes(_Base):
     """Asynchronous client (httpx.AsyncClient, or urllib in a worker thread)."""
 
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
         self._http = httpx.AsyncClient(timeout=self.timeout, trust_env=not self._loopback) if httpx is not None else None
-        self._sync = None if httpx is not None else Boxaz(*args, **kwargs)
+        self._sync = None if httpx is not None else Boxmes(*args, **kwargs)
 
     async def aclose(self) -> None:
         if self._http is not None:
             await self._http.aclose()
 
-    async def __aenter__(self) -> "AsyncBoxaz":
+    async def __aenter__(self) -> "AsyncBoxmes":
         return self
 
     async def __aexit__(self, *exc: Any) -> None:
@@ -655,7 +656,7 @@ class AsyncBoxaz(_Base):
             r = await self._http.request(method, url, content=data, headers=h)
             try:
                 return _parse(r.status_code, r.headers.get("content-type", ""), r.content, raw)
-            except BoxazError as e:
+            except BoxmesError as e:
                 if not e.retryable or attempt >= self.max_retries:
                     raise
                 await asyncio.sleep(_retry_wait(e, attempt))

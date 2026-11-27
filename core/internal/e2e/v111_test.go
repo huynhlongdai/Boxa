@@ -32,9 +32,9 @@ import (
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 
-	"boxaz/core/internal/manager"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/wsconn"
+	"boxmes/core/internal/manager"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/wsconn"
 )
 
 func freePort(t *testing.T) int {
@@ -231,7 +231,7 @@ func TestAccessP1(t *testing.T) {
 	if st != 101 {
 		t.Fatalf("ssh ws %d %s", st, body)
 	}
-	sc, chans, reqs, err := ssh.NewClientConn(wsconn.New(sws), "p1", &ssh.ClientConfig{User: "boxaz", HostKeyCallback: ssh.FixedHostKey(hostKey), Timeout: 20 * time.Second})
+	sc, chans, reqs, err := ssh.NewClientConn(wsconn.New(sws), "p1", &ssh.ClientConfig{User: "boxmes", HostKeyCallback: ssh.FixedHostKey(hostKey), Timeout: 20 * time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func TestAccessP1(t *testing.T) {
 		t.Fatalf("sftp subsystem: %v", err)
 	}
 	dir := t.TempDir()
-	payload := bytes.Repeat([]byte("boxaz-sftp-0123456789\n"), 20000) // ~440 KB
+	payload := bytes.Repeat([]byte("boxmes-sftp-0123456789\n"), 20000) // ~440 KB
 	f, err := sf.Create(dir + "/up.bin")
 	if err != nil {
 		t.Fatalf("sftp create: %v", err)
@@ -573,8 +573,8 @@ func TestAccessP1(t *testing.T) {
 	_ = bufio.NewReader
 }
 
-// v1.11 control-origin hardening: only BOXAZ_PUBLIC_URL's host is core; box
-// hosts serve box traffic + /.boxaz/*; a box cannot set cookies for the whole
+// v1.11 control-origin hardening: only BOXMES_PUBLIC_URL's host is core; box
+// hosts serve box traffic + /.boxmes/*; a box cannot set cookies for the whole
 // gateway domain; box-host origins never open access sockets.
 func TestControlOrigin(t *testing.T) {
 	appPort := freePort(t)
@@ -627,11 +627,11 @@ func TestControlOrigin(t *testing.T) {
 	if len(r.Header.Values("Set-Cookie")) != 2 {
 		t.Fatalf("cookies %v", r.Header.Values("Set-Cookie"))
 	}
-	if r := do(host, "/.boxaz/nope", nil); r.StatusCode != 404 {
-		t.Fatalf("/.boxaz/nope → %d", r.StatusCode)
+	if r := do(host, "/.boxmes/nope", nil); r.StatusCode != 404 {
+		t.Fatalf("/.boxmes/nope → %d", r.StatusCode)
 	}
 	tk := ticket(t, e, ag, b.ID, map[string]any{"purpose": "terminal"})
-	if r := do(host, "/.boxaz/terminal?ticket="+url.QueryEscape(tk.Ticket), http.Header{"Origin": {"https://other-box.example.test"}, "Connection": {"Upgrade"}, "Upgrade": {"websocket"},
+	if r := do(host, "/.boxmes/terminal?ticket="+url.QueryEscape(tk.Ticket), http.Header{"Origin": {"https://other-box.example.test"}, "Connection": {"Upgrade"}, "Upgrade": {"websocket"},
 		"Sec-Websocket-Version": {"13"}, "Sec-Websocket-Key": {"dGhlIHNhbXBsZSBub25jZQ=="}}); r.StatusCode != 403 {
 		t.Fatalf("box-host origin opened an access socket: %d", r.StatusCode)
 	}

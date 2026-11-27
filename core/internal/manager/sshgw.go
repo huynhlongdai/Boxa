@@ -3,11 +3,11 @@ package manager
 // v1.10 SSH gateway: an SSH server inside core (golang.org/x/crypto/ssh), so
 // no sshd is needed in any box. Two ways in:
 //
-//   - over WebSocket (Cloudflare-friendly): wss://<name>.<domain>/.boxaz/ssh
+//   - over WebSocket (Cloudflare-friendly): wss://<name>.<domain>/.boxmes/ssh
 //     or /v1/boxes/{id}/ssh, authenticated by a ticket (purpose ssh) or an
 //     API key; `box ssh-proxy %h` is the ProxyCommand. The SSH layer then
 //     accepts any client auth (the transport is already authenticated).
-//   - direct TCP listener (BOXAZ_SSH_ADDR, needs a public IP / DNS-only
+//   - direct TCP listener (BOXMES_SSH_ADDR, needs a public IP / DNS-only
 //     record): `ssh <ticket>@ssh.<domain>` (ticket as the username) or
 //     `ssh <box>@ssh.<domain>` with a public key registered via /v1/ssh/keys.
 //
@@ -33,10 +33,10 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"boxaz/core/internal/hostlink"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/proto"
-	"boxaz/core/internal/secret"
+	"boxmes/core/internal/hostlink"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/proto"
+	"boxmes/core/internal/secret"
 )
 
 type sshState struct {
@@ -72,7 +72,7 @@ func (m *Manager) sshSigner() (ssh.Signer, error) {
 	if err != nil {
 		return nil, err
 	}
-	blk, err := ssh.MarshalPrivateKey(priv, "boxaz ssh gateway")
+	blk, err := ssh.MarshalPrivateKey(priv, "boxmes ssh gateway")
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +260,7 @@ func (m *Manager) sshDirectConfig(signer ssh.Signer) *ssh.ServerConfig {
 		return &ssh.Permissions{Extensions: map[string]string{"box": b.ID, "key": t.KeyID, "ticket": t.ID}}, nil
 	}
 	cfg := &ssh.ServerConfig{
-		ServerVersion:        "SSH-2.0-boxaz",
+		ServerVersion:        "SSH-2.0-boxmes",
 		MaxAuthTries:         6,
 		NoClientAuth:         true,
 		NoClientAuthCallback: byTicket,
@@ -296,7 +296,7 @@ func hostOnlyAddr(a string) string {
 	return a
 }
 
-// StartSSH starts the direct SSH listener (BOXAZ_SSH_ADDR) until ctx ends.
+// StartSSH starts the direct SSH listener (BOXMES_SSH_ADDR) until ctx ends.
 func (m *Manager) StartSSH(ctx context.Context) error {
 	if m.Cfg.SSHAddr == "" {
 		return nil
@@ -352,7 +352,7 @@ func (m *Manager) ServeSSH(ctx context.Context, conn net.Conn, t *SSHTarget) {
 		conn.Close()
 		return
 	}
-	cfg := &ssh.ServerConfig{ServerVersion: "SSH-2.0-boxaz", NoClientAuth: true,
+	cfg := &ssh.ServerConfig{ServerVersion: "SSH-2.0-boxmes", NoClientAuth: true,
 		PasswordCallback:  func(ssh.ConnMetadata, []byte) (*ssh.Permissions, error) { return nil, nil },
 		PublicKeyCallback: func(ssh.ConnMetadata, ssh.PublicKey) (*ssh.Permissions, error) { return nil, nil }}
 	cfg.AddHostKey(signer)
@@ -436,7 +436,7 @@ func (m *Manager) serveSSHConn(ctx context.Context, conn net.Conn, cfg *ssh.Serv
 		case "direct-tcpip":
 			go m.sshDirectTCPIP(cctx, b, nc, link)
 		default:
-			nc.Reject(ssh.Prohibited, "boxaz: only session and direct-tcpip channels are supported")
+			nc.Reject(ssh.Prohibited, "boxmes: only session and direct-tcpip channels are supported")
 		}
 	}
 	m.Emit(context.Background(), t.P.Actor(), b.ID, b.AgentID, "box.ssh", fmt.Sprintf("SSH session closed after %s (%d channels)", time.Since(start).Round(time.Second), nch), nil)
@@ -517,7 +517,7 @@ func (m *Manager) sshSession(ctx context.Context, b *model.Box, nc ssh.NewChanne
 				peer, err := link()
 				if err != nil {
 					req.Reply(false, nil)
-					fmt.Fprintf(ch.Stderr(), "boxaz: %s\r\n", model.AsAPIError(err).Message)
+					fmt.Fprintf(ch.Stderr(), "boxmes: %s\r\n", model.AsAPIError(err).Message)
 					ch.SendRequest("exit-status", false, ssh.Marshal(struct{ Code uint32 }{255}))
 					return
 				}
@@ -545,7 +545,7 @@ func (m *Manager) sshSession(ctx context.Context, b *model.Box, nc ssh.NewChanne
 			}
 			if err != nil {
 				req.Reply(false, nil)
-				fmt.Fprintf(ch.Stderr(), "boxaz: %s\r\n", model.AsAPIError(err).Message)
+				fmt.Fprintf(ch.Stderr(), "boxmes: %s\r\n", model.AsAPIError(err).Message)
 				ch.SendRequest("exit-status", false, ssh.Marshal(struct{ Code uint32 }{255}))
 				return
 			}
@@ -615,7 +615,7 @@ func (m *Manager) sshDirectTCPIP(ctx context.Context, b *model.Box, nc ssh.NewCh
 	}
 	h := strings.Trim(strings.ToLower(d.Host), "[]")
 	if !(h == "localhost" || h == "127.0.0.1" || h == "::1" || h == "0.0.0.0" || h == b.Subdomain) || d.Port < 1 || d.Port > 65535 {
-		nc.Reject(ssh.Prohibited, "boxaz: only ports inside the box (localhost:<port>) can be forwarded")
+		nc.Reject(ssh.Prohibited, "boxmes: only ports inside the box (localhost:<port>) can be forwarded")
 		return
 	}
 	peer, err := link()
@@ -627,7 +627,7 @@ func (m *Manager) sshDirectTCPIP(ctx context.Context, b *model.Box, nc ssh.NewCh
 	sc, err := peer.OpenStream(cctx, b.ID, int(d.Port))
 	cancel()
 	if err != nil {
-		nc.Reject(ssh.ConnectionFailed, "boxaz: "+strconv.Itoa(int(d.Port))+": "+model.AsAPIError(err).Message)
+		nc.Reject(ssh.ConnectionFailed, "boxmes: "+strconv.Itoa(int(d.Port))+": "+model.AsAPIError(err).Message)
 		return
 	}
 	ch, reqs, err := nc.Accept()

@@ -5,15 +5,15 @@ package manager
 // one fallback chain:
 //
 //  1. provider-preview — the provider's own public host (E2B, Novita, …).
-//  2. ingress — core publishes the port at <BOXAZ_PUBLIC_URL>/x/<key>-<port>/
+//  2. ingress — core publishes the port at <BOXMES_PUBLIC_URL>/x/<key>-<port>/
 //     and forwards each request through its existing ingress Proxy. T2 boxes
 //     already have boxd dialled in; T3 (shim) boxes get a small in-box agent
 //     (`boxd ingress`, downloaded from core) that dials out to
-//     /v1/ingress/connect. Used when BOXAZ_PUBLIC_URL looks internet-facing
+//     /v1/ingress/connect. Used when BOXMES_PUBLIC_URL looks internet-facing
 //     and the agent actually connects from inside the sandbox.
 //  3. tunnel — a Cloudflare quick tunnel (cloudflared, downloaded on demand
 //     inside the sandbox, free, no account) when core is not reachable.
-//     Disabled by settings.disable_tunnel or BOXAZ_DISABLE_TUNNEL=1.
+//     Disabled by settings.disable_tunnel or BOXMES_DISABLE_TUNNEL=1.
 //
 // After a wake the exposures are re-established (agent restarted / tunnel
 // re-checked, new URL if it had to restart); box down drops them. Everything
@@ -37,11 +37,11 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"boxaz/core/internal/boxd"
-	"boxaz/core/internal/hostlink"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/proto"
-	"boxaz/core/internal/store"
+	"boxmes/core/internal/boxd"
+	"boxmes/core/internal/hostlink"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/proto"
+	"boxmes/core/internal/store"
 )
 
 // Kinds reported by the ports API.
@@ -50,13 +50,13 @@ const (
 	KindIngress = "ingress"
 	KindTunnel  = "tunnel"
 	KindNone    = "none"
-	KindGateway = "gateway" // v1.7: token-protected port, only via the Boxaz gateway
+	KindGateway = "gateway" // v1.7: token-protected port, only via the Boxmes gateway
 )
 
 // Caveats shown with each kind.
 var (
 	caveatIngress = "path-prefixed URL (/x/<name>/ or /x/<name>-<label>/): the app must use relative links (X-Forwarded-Prefix is sent); streamed through core (WebSocket and SSE pass through); a sleeping box is woken by the first request (held up to settings.wake.hold_s, then 503 + Retry-After)"
-	caveatGateway = "Boxaz gateway URL: path-prefixed (/x/<name>[-<label>]/) unless a gateway domain is set (host-based <name>.<domain> / <name>-<label>.<domain>); WebSocket and SSE pass through; a sleeping box is woken by the first request"
+	caveatGateway = "Boxmes gateway URL: path-prefixed (/x/<name>[-<label>]/) unless a gateway domain is set (host-based <name>.<domain> / <name>-<label>.<domain>); WebSocket and SSE pass through; a sleeping box is woken by the first request"
 	// caveatHostGateway replaces caveatIngress when a gateway domain is set.
 	caveatHostGateway = "served through core at a host-based gateway URL (<name>.<domain> or <name>-<label>.<domain>, no path prefix); WebSocket and SSE pass through; a sleeping box is woken by the first request (held up to settings.wake.hold_s, then 503 + Retry-After)"
 	caveatTunnel      = "Cloudflare quick tunnel (trycloudflare.com): free and accountless but without uptime guarantee; the URL changes if the tunnel has to restart (e.g. a wake that lost processes); the first request can take a few seconds"
@@ -107,23 +107,23 @@ func (m *Manager) ingressURL(b *model.Box, port int) string {
 	return strings.TrimRight(m.Cfg.PublicURL, "/") + "/x/" + seg + "/"
 }
 
-// CoreLooksPublic reports whether BOXAZ_PUBLIC_URL can be reached from the
+// CoreLooksPublic reports whether BOXMES_PUBLIC_URL can be reached from the
 // internet (not empty, not localhost / private / link-local). The in-box
 // agent connecting is the real proof; this only avoids a pointless attempt.
 func CoreLooksPublic(public string) (bool, string) {
 	if public == "" {
-		return false, "BOXAZ_PUBLIC_URL is not set"
+		return false, "BOXMES_PUBLIC_URL is not set"
 	}
 	u, err := url.Parse(public)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
-		return false, "BOXAZ_PUBLIC_URL is not an http(s) URL"
+		return false, "BOXMES_PUBLIC_URL is not an http(s) URL"
 	}
 	h := strings.ToLower(u.Hostname())
 	if h == "localhost" || strings.HasSuffix(h, ".localhost") || strings.HasSuffix(h, ".local") || strings.HasSuffix(h, ".internal") || strings.HasSuffix(h, ".lan") || !strings.Contains(h, ".") && net.ParseIP(h) == nil {
-		return false, "BOXAZ_PUBLIC_URL (" + h + ") is a local name"
+		return false, "BOXMES_PUBLIC_URL (" + h + ") is a local name"
 	}
 	if ip := net.ParseIP(h); ip != nil && (ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified()) {
-		return false, "BOXAZ_PUBLIC_URL (" + h + ") is a private address"
+		return false, "BOXMES_PUBLIC_URL (" + h + ") is a private address"
 	}
 	return true, ""
 }
@@ -459,7 +459,7 @@ func (m *Manager) ensurePublic(ctx context.Context, b *model.Box, port int, forc
 	}
 	// 3. in-box tunnel
 	if m.tunnelDisabled(ctx) {
-		caveats = append(caveats, "tunnel fallback is disabled (settings.disable_tunnel / BOXAZ_DISABLE_TUNNEL)")
+		caveats = append(caveats, "tunnel fallback is disabled (settings.disable_tunnel / BOXMES_DISABLE_TUNNEL)")
 	} else if u, err := m.startTunnel(ctx, b, port); err != nil {
 		caveats = append(caveats, "tunnel failed: "+err.Error())
 	} else {
@@ -488,7 +488,7 @@ func caveatFor(kind string) string {
 func (m *Manager) exposedView(e *model.Exposure) PortView {
 	v := PortView{Port: e.Port, URL: e.URL, Kind: e.Kind, Public: true, Caveats: []string{caveatFor(e.Kind)}}
 	if e.Kind == KindIngress {
-		v.Note = "served by Boxaz ingress through core; serve on 0.0.0.0 or 127.0.0.1:" + strconv.Itoa(e.Port)
+		v.Note = "served by Boxmes ingress through core; serve on 0.0.0.0 or 127.0.0.1:" + strconv.Itoa(e.Port)
 	} else {
 		v.Note = "served by an in-box Cloudflare quick tunnel to 127.0.0.1:" + strconv.Itoa(e.Port)
 	}

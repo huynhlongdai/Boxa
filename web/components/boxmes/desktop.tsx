@@ -1,5 +1,5 @@
 "use client";
-// v1.11 tab "Màn hình": desktop của box qua VNC. Trang noVNC của core (/.boxaz/desktop?ticket=…) được nhúng bằng
+// v1.11 tab "Màn hình": desktop của box qua VNC. Trang noVNC của core (/.boxmes/desktop?ticket=…) được nhúng bằng
 // iframe; ticket viewer một lần (60 s) lấy qua proxy Next (POST /boxes/{id}/desktop) nên API key luôn ở phía server.
 // Bật / tắt desktop, chế độ điều khiển hoặc chỉ xem, kết nối lại bằng ticket mới, mở tab riêng, toàn màn hình.
 // Thẻ share link: tạo (TTL, chỉ xem / điều khiển), copy URL (chỉ hiện một lần), danh sách, thu hồi từng link / tất cả.
@@ -18,10 +18,10 @@ import { Button } from "@/components/ui/button";
 import { Field, Select } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { CopyButton } from "@/components/boxaz/code-block";
-import { ConfirmButton } from "@/components/boxaz/confirm";
-import { Empty, ErrorBox, LoadingRows } from "@/components/boxaz/page";
-import { Dot, Mono } from "@/components/boxaz/status";
+import { CopyButton } from "@/components/boxmes/code-block";
+import { ConfirmButton } from "@/components/boxmes/confirm";
+import { Empty, ErrorBox, LoadingRows } from "@/components/boxmes/page";
+import { Dot, Mono } from "@/components/boxmes/status";
 
 const SHARE_TTLS = [900, 3600, 4 * 3600, 86400] as const;
 

@@ -16,8 +16,8 @@ import (
 	"sync"
 	"time"
 
-	"boxaz/core/internal/mesh"
-	"boxaz/core/internal/proto"
+	"boxmes/core/internal/mesh"
+	"boxmes/core/internal/proto"
 )
 
 // Claimer re-targets a pre-started (warm) box to its new owner.
@@ -195,12 +195,12 @@ func CacheEnv(host string) map[string]string {
 		"npm_config_registry": "http://" + host + ":4873/",
 		"YARN_REGISTRY":       "http://" + host + ":4873/",
 		"GOPROXY":             "http://" + host + ":3000,https://proxy.golang.org,direct",
-		"BOXAZ_APT_PROXY":     "http://" + host + ":3142",
-		"BOXAZ_CACHE_HOST":    host,
+		"BOXMES_APT_PROXY":    "http://" + host + ":3142",
+		"BOXMES_CACHE_HOST":   host,
 	}
 }
 
-// AptProxyConf is written to /etc/apt/apt.conf.d/01boxaz-cache in new boxes.
+// AptProxyConf is written to /etc/apt/apt.conf.d/01boxmes-cache in new boxes.
 func AptProxyConf(host string) string {
 	return "Acquire::http::Proxy \"http://" + host + ":3142\";\nAcquire::https::Proxy \"DIRECT\";\n"
 }

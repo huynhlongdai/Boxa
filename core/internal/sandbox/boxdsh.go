@@ -17,12 +17,12 @@ import (
 
 // BoxdSh is the boxd.sh driver (persistent KVM microVMs that fork and
 // suspend). The public API is gRPC (boxd.api.v1.BoxdApi at boxd.sh:9443),
-// also served as grpc-web over HTTP/1.1 on the same port; Boxaz speaks
+// also served as grpc-web over HTTP/1.1 on the same port; Boxmes speaks
 // grpc-web with hand-encoded protobuf for the handful of RPCs it uses.
 // Auth: API key (bxd_…) → POST https://app.boxd.sh/api/v1/auth/token → 1 h JWT.
 // Source: docs.boxd.sh/reference/grpc-api and /reference/grpc-proto.
 //
-// Not to be confused with Boxaz's own host agent, which is also called boxd.
+// Not to be confused with Boxmes's own host agent, which is also called boxd.
 type BoxdSh struct {
 	h       *httpClient
 	rpc     string // https://boxd.sh:9443
@@ -55,7 +55,7 @@ func NewBoxdSh(c *http.Client, base string) *BoxdSh {
 		Templates: []string{"ubuntu:24.04"}, DefaultTemplate: "", WorkDir: "/home/boxd",
 		Credentials: []CredField{{Name: "token", Label: "API key", Secret: true, Hint: "bxd_…"}, {Name: "org", Label: "Organization", Optional: true}},
 		EnvVars:     []string{"BOXDSH_API_KEY", "BOXDSH_ORG"},
-		Notes:       []string{"Persistent VMs with a public HTTPS domain; Boxaz creates them isolated (no peers) and deletes them when the box ends."}}
+		Notes:       []string{"Persistent VMs with a public HTTPS domain; Boxmes creates them isolated (no peers) and deletes them when the box ends."}}
 	return d
 }
 

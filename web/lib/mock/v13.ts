@@ -1,5 +1,5 @@
 // MOCK MODE v1.3: provider manager (health, breaker, prefs, validate, catalog), recommend + profiles,
-// right-sizing, warm pool, speed, clone/ensure/resume, mesh. Shape bám theo boxaz/core/internal (xem lib/types.ts).
+// right-sizing, warm pool, speed, clone/ensure/resume, mesh. Shape bám theo boxmes/core/internal (xem lib/types.ts).
 import type {
   Box,
   BoxEstimate,
@@ -58,7 +58,7 @@ export const PROFILES: WorkloadProfile[] = [
   prof({ id: "data", name: "Data processing", description: "Pandas/DuckDB/ETL jobs: RAM and disk heavy, latency-insensitive.", template: "python", lifecycle: "task", ttl_seconds: 4 * 3600,
     defaults: { cpu: 2, ram_mb: 8192, disk_gb: 50, lifetime: "ephemeral", duration_hours: 4 }, weights: { cost: 0.45, health: 0.1, speed: 0.1, latency: 0.05, capacity: 0.2, reliability: 0.1 }, tips: ["Write results to /memory or snapshot to object storage before the TTL ends."] }),
   prof({ id: "long-running-service", name: "Long-running service", description: "Bots, webhooks, APIs that run 24/7 with a public URL; reliability and monthly cost dominate.", template: "node", lifecycle: "service",
-    defaults: { cpu: 1, ram_mb: 1024, disk_gb: 10, lifetime: "persistent", duration_hours: 730, public_url: true }, weights: { cost: 0.35, health: 0.15, speed: 0.05, latency: 0.15, capacity: 0.1, reliability: 0.2 }, tips: ["Service boxes are never auto-stopped; Boxaz asks you before stopping one over budget."] }),
+    defaults: { cpu: 1, ram_mb: 1024, disk_gb: 10, lifetime: "persistent", duration_hours: 730, public_url: true }, weights: { cost: 0.35, health: 0.15, speed: 0.05, latency: 0.15, capacity: 0.1, reliability: 0.2 }, tips: ["Service boxes are never auto-stopped; Boxmes asks you before stopping one over budget."] }),
   prof({ id: "sandbox-untrusted", name: "Untrusted code sandbox", description: "Run code you do not trust (user uploads, generated code): strongest isolation, offline by default, thrown away.", template: "python", lifecycle: "task", ttl_seconds: 900,
     defaults: { cpu: 1, ram_mb: 1024, disk_gb: 5, lifetime: "ephemeral", isolation: "vm", untrusted: true, duration_hours: 0.25 }, weights: { cost: 0.2, health: 0.15, speed: 0.2, latency: 0.05, capacity: 0.1, reliability: 0.3 },
     egress_deny_by_default: true, egress_allow: ["pypi.org", "files.pythonhosted.org"], warm: true, tips: ["Prefers an Incus VM or a T2 sandbox API; containers share the host kernel."] }),
@@ -455,22 +455,22 @@ function speed(s: MockState, L: Locale) {
 }
 
 // ---------------- Mesh ----------------
-const MESH_URL = "https://mesh.boxaz.example";
+const MESH_URL = "https://mesh.boxmes.example";
 function meshNodes(s: MockState): MeshNode[] {
   const pool = s.hosts.filter((h) => h.billing === "pool");
-  const nodes: MeshNode[] = pool.map((h, i) => ({ id: String(i + 1), name: h.id.replace(/_/g, "-"), givenName: h.id.replace(/_/g, "-"), ipAddresses: [`100.64.0.${i + 1}`, `fd7a:115c:a1e0::${i + 1}`], online: h.status === "ready", lastSeen: ago((i + 1) * 20 * 1000), forcedTags: ["tag:boxaz-host"], validTags: [], user: { name: "boxaz" } }));
+  const nodes: MeshNode[] = pool.map((h, i) => ({ id: String(i + 1), name: h.id.replace(/_/g, "-"), givenName: h.id.replace(/_/g, "-"), ipAddresses: [`100.64.0.${i + 1}`, `fd7a:115c:a1e0::${i + 1}`], online: h.status === "ready", lastSeen: ago((i + 1) * 20 * 1000), forcedTags: ["tag:boxmes-host"], validTags: [], user: { name: "boxmes" } }));
   const svc = s.boxes.filter((b) => b.lifecycle === "service" && b.status === "running").slice(0, 2);
-  svc.forEach((b, i) => nodes.push({ id: String(nodes.length + 1), name: b.slug, givenName: b.slug, ipAddresses: [`100.64.1.${i + 1}`], online: true, lastSeen: ago(40 * 1000), forcedTags: [`tag:box-${b.slug}`, `tag:agent-${b.agent_name}`], validTags: [], user: { name: "boxaz" } }));
-  nodes.push({ id: String(nodes.length + 1), name: "anh-macbook", givenName: "anh-macbook", ipAddresses: ["100.64.2.1"], online: false, lastSeen: ago(3 * HOUR), forcedTags: ["tag:admin"], validTags: [], user: { name: "boxaz" } });
+  svc.forEach((b, i) => nodes.push({ id: String(nodes.length + 1), name: b.slug, givenName: b.slug, ipAddresses: [`100.64.1.${i + 1}`], online: true, lastSeen: ago(40 * 1000), forcedTags: [`tag:box-${b.slug}`, `tag:agent-${b.agent_name}`], validTags: [], user: { name: "boxmes" } }));
+  nodes.push({ id: String(nodes.length + 1), name: "anh-macbook", givenName: "anh-macbook", ipAddresses: ["100.64.2.1"], online: false, lastSeen: ago(3 * HOUR), forcedTags: ["tag:admin"], validTags: [], user: { name: "boxmes" } });
   return nodes;
 }
 function meshPolicy(s: MockState) {
   const svc = s.boxes.filter((b) => b.lifecycle === "service" && b.status !== "terminated");
   return {
-    tagOwners: { "tag:boxaz-host": ["boxaz@"], "tag:admin": ["boxaz@"], ...Object.fromEntries(svc.map((b) => [`tag:box-${b.slug}`, ["boxaz@"]])) },
+    tagOwners: { "tag:boxmes-host": ["boxmes@"], "tag:admin": ["boxmes@"], ...Object.fromEntries(svc.map((b) => [`tag:box-${b.slug}`, ["boxmes@"]])) },
     acls: [
       { action: "accept", src: ["tag:admin"], dst: ["*:*"] },
-      { action: "accept", src: ["tag:boxaz-host"], dst: ["tag:boxaz-host:*"] },
+      { action: "accept", src: ["tag:boxmes-host"], dst: ["tag:boxmes-host:*"] },
       ...svc.map((b) => ({ action: "accept", src: [`tag:agent-${b.agent_name}`], dst: [`tag:box-${b.slug}:${b.ports.length ? b.ports.join(",") : "*"}`] })),
     ],
   };
@@ -516,11 +516,11 @@ export function handleV13(s: MockState, ctx: V13Ctx, M: string, segs: string[], 
     if (!r1 && M === "GET") {
       if (!st.mesh.enabled) return ok({ enabled: false, nodes: [], online: 0, hosts_joined: 0, hosts: s.hosts.length, acl_rules: 0, derp: "", hint: mt(L, "mesh_off") });
       const nodes = meshNodes(s);
-      return ok({ enabled: true, url: MESH_URL, user: "boxaz", nodes, online: nodes.filter((n) => n.online).length, hosts_joined: nodes.filter((n) => n.forcedTags.includes("tag:boxaz-host")).length, hosts: s.hosts.filter((h) => h.status !== "down").length, acl_rules: meshPolicy(s).acls.length, derp: "embedded (region 900 boxaz)" });
+      return ok({ enabled: true, url: MESH_URL, user: "boxmes", nodes, online: nodes.filter((n) => n.online).length, hosts_joined: nodes.filter((n) => n.forcedTags.includes("tag:boxmes-host")).length, hosts: s.hosts.filter((h) => h.status !== "down").length, acl_rules: meshPolicy(s).acls.length, derp: "embedded (region 900 boxmes)" });
     }
     if (r1 === "config" && M === "GET") {
-      const config = `server_url: ${MESH_URL}\nlisten_addr: 0.0.0.0:8080\nmetrics_listen_addr: 127.0.0.1:9090\nprefixes:\n  v4: 100.64.0.0/10\n  v6: fd7a:115c:a1e0::/48\nderp:\n  server:\n    enabled: true\n    region_id: 900\n    region_code: boxaz\n    stun_listen_addr: 0.0.0.0:3478\n  paths:\n    - /etc/headscale/derp.yaml\ndns:\n  magic_dns: true\n  base_domain: mesh.boxaz.internal\npolicy:\n  mode: file\n  path: /etc/headscale/acl.json\n`;
-      const derp = `regions:\n  900:\n    regionid: 900\n    regioncode: boxaz\n    nodes:\n      - name: 900a\n        hostname: mesh.boxaz.example\n        stunport: 3478\n`;
+      const config = `server_url: ${MESH_URL}\nlisten_addr: 0.0.0.0:8080\nmetrics_listen_addr: 127.0.0.1:9090\nprefixes:\n  v4: 100.64.0.0/10\n  v6: fd7a:115c:a1e0::/48\nderp:\n  server:\n    enabled: true\n    region_id: 900\n    region_code: boxmes\n    stun_listen_addr: 0.0.0.0:3478\n  paths:\n    - /etc/headscale/derp.yaml\ndns:\n  magic_dns: true\n  base_domain: mesh.boxmes.internal\npolicy:\n  mode: file\n  path: /etc/headscale/acl.json\n`;
+      const derp = `regions:\n  900:\n    regionid: 900\n    regioncode: boxmes\n    nodes:\n      - name: 900a\n        hostname: mesh.boxmes.example\n        stunport: 3478\n`;
       return ok({ enabled: st.mesh.enabled, config, derp, acl: JSON.stringify(meshPolicy(s), null, 2), paths: { config: "/etc/headscale/config.yaml", derp: "/etc/headscale/derp.yaml", acl: "/etc/headscale/acl.json" } });
     }
     if (r1 === "acl" && M === "GET") return ok({ enabled: st.mesh.enabled, policy: meshPolicy(s), notes: s.boxes.some((b) => b.egress?.allow?.some((a) => a.startsWith("*."))) ? [mt(L, "mesh_note_wildcard")] : [] });
@@ -531,9 +531,9 @@ export function handleV13(s: MockState, ctx: V13Ctx, M: string, segs: string[], 
       st.mesh.keys++;
       const box = body.box_id ? s.boxes.find((b) => b.id === body.box_id || b.slug === body.box_id) : undefined;
       if (body.box_id && !box) return err(404, "NOT_FOUND", "not_found", { what: `box ${body.box_id}` });
-      const tags = box ? [`tag:box-${box.slug}`, `tag:agent-${box.agent_name}`] : ["tag:boxaz-host"];
+      const tags = box ? [`tag:box-${box.slug}`, `tag:agent-${box.agent_name}`] : ["tag:boxmes-host"];
       const key = `hskey-auth-${Array.from(crypto.getRandomValues(new Uint8Array(12))).map((x) => x.toString(16).padStart(2, "0")).join("")}`;
-      const hostname = box?.slug ?? (body.host_id as string) ?? "boxaz-host";
+      const hostname = box?.slug ?? (body.host_id as string) ?? "boxmes-host";
       ctx.pushEvent({ actor: "user:anh", box_id: box?.id ?? null, agent_id: box?.agent_id ?? null, type: "mesh.key_created", message: `Mesh pre-auth key (${tags.join(",")})`, cost_usd: null });
       return ok({ key, tags, ephemeral: !body.reusable, expires_at: iso(Date.now() + ttl * MIN), login_server: MESH_URL, command: `tailscale up --login-server ${MESH_URL} --authkey ${key} --hostname ${hostname}` }, 201);
     }

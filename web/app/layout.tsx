@@ -14,7 +14,7 @@ import { Toaster } from "sonner";
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("meta");
   return {
-    title: { default: "Boxaz", template: "%s · Boxaz" },
+    title: { default: "Boxmes", template: "%s · Boxmes" },
     description: t("description"),
   };
 }

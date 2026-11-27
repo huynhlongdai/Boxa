@@ -14,11 +14,11 @@ import (
 	"testing"
 	"time"
 
-	"boxaz/core/internal/boxd"
-	"boxaz/core/internal/client"
-	"boxaz/core/internal/manager"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/provider"
+	"boxmes/core/internal/boxd"
+	"boxmes/core/internal/client"
+	"boxmes/core/internal/manager"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/provider"
 )
 
 // fakeCloud is an in-process provider: Create either fails like a sold-out
@@ -558,7 +558,7 @@ func TestMesh(t *testing.T) {
 			keyReqs = append(keyReqs, b)
 			json.NewEncoder(w).Encode(map[string]any{"preAuthKey": map[string]any{"id": "1", "key": fmt.Sprintf("hskey-%d", len(keyReqs)), "aclTags": b["aclTags"], "expiration": b["expiration"]}})
 		case r.URL.Path == "/api/v1/node":
-			w.Write([]byte(`{"nodes":[{"id":"1","name":"host-a","ipAddresses":["100.64.0.1"],"online":true,"user":{"name":"boxaz"}},{"id":"2","name":"host-b","online":false}]}`))
+			w.Write([]byte(`{"nodes":[{"id":"1","name":"host-a","ipAddresses":["100.64.0.1"],"online":true,"user":{"name":"boxmes"}},{"id":"2","name":"host-b","online":false}]}`))
 		default:
 			w.WriteHeader(404)
 		}
@@ -576,7 +576,7 @@ func TestMesh(t *testing.T) {
 		first = keyReqs[0]
 	}
 	mu.Unlock()
-	if n == 0 || !users["boxaz"] || fmt.Sprint(first["aclTags"]) != "[tag:boxaz-host]" || first["reusable"] != false {
+	if n == 0 || !users["boxmes"] || fmt.Sprint(first["aclTags"]) != "[tag:boxmes-host]" || first["reusable"] != false {
 		t.Fatalf("host join key: %d %+v", n, first)
 	}
 	e2.must(e2.admin, "GET", "/mesh", nil, &mv)

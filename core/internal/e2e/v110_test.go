@@ -25,9 +25,9 @@ import (
 	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/ssh"
 
-	"boxaz/core/internal/manager"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/wsconn"
+	"boxmes/core/internal/manager"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/wsconn"
 )
 
 func wsBase(e *env) string { return "ws" + strings.TrimPrefix(e.srv.URL, "http") }
@@ -319,7 +319,7 @@ func TestAccessP0(t *testing.T) {
 		if st != 101 {
 			t.Fatalf("ssh ws %d %s", st, body)
 		}
-		sc, chans, reqs, err := ssh.NewClientConn(wsconn.New(sws), "acc", &ssh.ClientConfig{User: "boxaz", HostKeyCallback: ssh.FixedHostKey(hostKey), Timeout: 20 * time.Second})
+		sc, chans, reqs, err := ssh.NewClientConn(wsconn.New(sws), "acc", &ssh.ClientConfig{User: "boxmes", HostKeyCallback: ssh.FixedHostKey(hostKey), Timeout: 20 * time.Second})
 		if err != nil {
 			t.Fatalf("ssh handshake: %v", err)
 		}
@@ -338,7 +338,7 @@ func TestAccessP0(t *testing.T) {
 		if stdin != "" {
 			s.Stdin = strings.NewReader(stdin)
 		}
-		s.Setenv("BOXAZ_TEST", "env-ok")
+		s.Setenv("BOXMES_TEST", "env-ok")
 		code := 0
 		if err := s.Run(cmd); err != nil {
 			ee, ok := err.(*ssh.ExitError)
@@ -349,7 +349,7 @@ func TestAccessP0(t *testing.T) {
 		}
 		return o.String(), eb.String(), code
 	}
-	if o, _, c := run(cl, "uname -s; echo $BOXAZ_TEST", ""); c != 0 || !strings.Contains(o, "Linux") || !strings.Contains(o, "env-ok") {
+	if o, _, c := run(cl, "uname -s; echo $BOXMES_TEST", ""); c != 0 || !strings.Contains(o, "Linux") || !strings.Contains(o, "env-ok") {
 		t.Fatalf("ssh exec: %q %d", o, c)
 	}
 	if o, se, c := run(cl, "echo out; echo err >&2; exit 7", ""); c != 7 || o != "out\n" || se != "err\n" {

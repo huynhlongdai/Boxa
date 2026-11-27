@@ -1,6 +1,6 @@
 package api
 
-// v1.7 Boxaz gateway (HTTP side): stable URL per box+port, scoped URL tokens,
+// v1.7 Boxmes gateway (HTTP side): stable URL per box+port, scoped URL tokens,
 // wake-on-request with a bounded hold, readiness gating, and unbuffered
 // pass-through (WebSocket upgrade, SSE, chunked bodies) via
 // httputil.ReverseProxy over a box stream or the provider preview host.
@@ -21,16 +21,16 @@ import (
 	"strings"
 	"time"
 
-	"boxaz/core/internal/hostlink"
-	"boxaz/core/internal/manager"
-	"boxaz/core/internal/model"
+	"boxmes/core/internal/hostlink"
+	"boxmes/core/internal/manager"
+	"boxmes/core/internal/model"
 )
 
-const gatewayCookie = "boxaz_ut"
+const gatewayCookie = "boxmes_ut"
 
-// tokenQueryParams are the query names a Boxaz URL token may arrive in. Only
+// tokenQueryParams are the query names a Boxmes URL token may arrive in. Only
 // values with the bxt_ prefix are consumed, so an app's own ?token= is kept.
-var tokenQueryParams = []string{"token", "boxaz_token", legacyTokenParam}
+var tokenQueryParams = append([]string{"token", "boxmes_token"}, legacyTokenParams...)
 
 // previewTransport talks HTTP/1.1 only (ALPN http/1.1): WebSocket upgrades
 // need it, and a clone of DefaultTransport would still offer h2 via ALPN.
@@ -45,13 +45,18 @@ var previewTransport = &http.Transport{
 	ExpectContinueTimeout: time.Second,
 }
 
-// gatewayToken finds a Boxaz URL token in the request: header, query, cookie.
+// gatewayToken finds a Boxmes URL token in the request: header, query, cookie.
 func gatewayToken(r *http.Request) (tok, src string) {
 	if a := r.Header.Get("Authorization"); strings.HasPrefix(a, "Bearer "+manager.URLTokenPrefix) {
 		return strings.TrimSpace(a[7:]), "header"
 	}
-	if t := strings.TrimSpace(r.Header.Get("X-Boxaz-Token")); t != "" {
+	if t := strings.TrimSpace(r.Header.Get("X-Boxmes-Token")); t != "" {
 		return t, "header"
+	}
+	for _, h := range legacyTokenHeaders { // compat: X-Boxaz-Token
+		if t := strings.TrimSpace(r.Header.Get(h)); t != "" {
+			return t, "header"
+		}
 	}
 	q := r.URL.Query()
 	for _, k := range tokenQueryParams {
@@ -59,8 +64,10 @@ func gatewayToken(r *http.Request) (tok, src string) {
 			return v, "query"
 		}
 	}
-	if c, err := r.Cookie(gatewayCookie); err == nil && c.Value != "" {
-		return c.Value, "cookie"
+	for _, name := range append([]string{gatewayCookie}, legacyGatewayCookie...) {
+		if c, err := r.Cookie(name); err == nil && c.Value != "" {
+			return c.Value, "cookie"
+		}
 	}
 	return "", ""
 }
@@ -119,17 +126,17 @@ func (s *Server) gateway(w http.ResponseWriter, r *http.Request, seg, prefix str
 		http.Redirect(w, r, prefix+"/"+qs(r.URL.RawQuery), http.StatusMovedPermanently)
 		return
 	}
-	// 1. access: token ports need a valid Boxaz URL token
+	// 1. access: token ports need a valid Boxmes URL token
 	tok, src := gatewayToken(r)
 	valid := tok != "" && s.M.CheckURLToken(ctx, b, port, tok)
 	if b.AccessFor(port) == model.AccessToken && !valid {
-		w.Header().Set("WWW-Authenticate", `Bearer realm="boxaz"`)
+		w.Header().Set("WWW-Authenticate", `Bearer realm="boxmes"`)
 		if src == "cookie" {
 			http.SetCookie(w, &http.Cookie{Name: gatewayCookie, Value: "", Path: prefix + "/", MaxAge: -1})
 		}
-		msg := "This URL needs a Boxaz URL token (Authorization: Bearer, X-Boxaz-Token, or ?token=)."
+		msg := "This URL needs a Boxmes URL token (Authorization: Bearer, X-Boxmes-Token, or ?token=)."
 		if tok != "" {
-			msg = "The Boxaz URL token is invalid, expired or revoked."
+			msg = "The Boxmes URL token is invalid, expired or revoked."
 		}
 		gatewayPage(w, r, http.StatusUnauthorized, model.ErrUnauthorized, "Access token required", msg, 0)
 		return
@@ -267,17 +274,19 @@ func (s *Server) proxyGateway(w http.ResponseWriter, r *http.Request, b *model.B
 					h.Del(k)
 				}
 			}
-			h.Del("X-Boxaz-Token")
-			h.Del("X-Boxaz-No-Wake")
+			h.Del("X-Boxmes-Token")
+			h.Del("X-Boxmes-No-Wake")
+			for _, lh := range legacyTokenHeaders {
+				h.Del(lh)
+			}
+			h.Del("X-Boxaz-No-Wake") // compat: pre-rename name
 			if strings.HasPrefix(h.Get("Authorization"), "Bearer "+manager.URLTokenPrefix) {
 				h.Del("Authorization")
 			}
 			// the app gets its own cookies, never the gateway / dashboard ones
 			var keep []string
 			for _, c := range pr.In.Cookies() {
-				switch c.Name {
-				case gatewayCookie, "boxaz_key", "boxa_key", "boxaz_t", legacyTokenCookie:
-				default:
+				if !isGatewayOwnedCookie(c.Name) {
 					keep = append(keep, c.Name+"="+c.Value)
 				}
 			}
@@ -364,13 +373,13 @@ func (s *Server) bufferedGateway(w http.ResponseWriter, r *http.Request, b *mode
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 32<<20))
 	hdr := map[string][]string{}
 	for k, v := range r.Header {
-		if !hopHeaders[k] && k != "Cookie" && k != "X-Boxaz-Token" && !(k == "Authorization" && strings.HasPrefix(r.Header.Get(k), "Bearer "+manager.URLTokenPrefix)) {
+		if !hopHeaders[k] && k != "Cookie" && !isGatewayTokenHeader(k) && !(k == "Authorization" && strings.HasPrefix(r.Header.Get(k), "Bearer "+manager.URLTokenPrefix)) {
 			hdr[k] = v
 		}
 	}
 	var keep []string
 	for _, c := range r.Cookies() {
-		if c.Name != gatewayCookie && c.Name != "boxaz_key" && c.Name != "boxa_key" {
+		if !isGatewayOwnedCookie(c.Name) {
 			keep = append(keep, c.Name+"="+c.Value)
 		}
 	}

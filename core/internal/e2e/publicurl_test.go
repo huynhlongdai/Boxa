@@ -1,7 +1,7 @@
 package e2e
 
 // Public-URL fallback for sandbox boxes whose provider has no preview host:
-// provider preview → Boxaz ingress (in-box `boxd ingress` agent dialling core,
+// provider preview → Boxmes ingress (in-box `boxd ingress` agent dialling core,
 // served at /x/<key>-<port>/) → in-box quick tunnel → none. The fake provider
 // runs each sandbox as a local directory (HOME points into it), the agent is
 // the real boxd binary downloaded from a fake /dl server, the tunnel is a fake
@@ -23,9 +23,9 @@ import (
 	"testing"
 	"time"
 
-	"boxaz/core/internal/manager"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/sandbox"
+	"boxmes/core/internal/manager"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/sandbox"
 )
 
 // noPreviewSandbox: a deploySandbox without ports/preview whose commands see
@@ -194,7 +194,7 @@ func TestPublicURLIngressFallback(t *testing.T) {
 	if !strings.Contains(v.Caveats[0], "no public preview") {
 		t.Fatalf("caveats %v", v.Caveats)
 	}
-	st, body, _ := getBody(t, v.URL+"hello?x=1", "boxaz_key=SECRET; app=1")
+	st, body, _ := getBody(t, v.URL+"hello?x=1", "boxmes_key=SECRET; app=1")
 	if st != 200 || !strings.Contains(body, "Hello World! path=/hello") || !strings.Contains(body, "prefix=/x/") || strings.Contains(body, "SECRET") || !strings.Contains(body, "app=1") {
 		t.Fatalf("GET via ingress: %d %q", st, body)
 	}

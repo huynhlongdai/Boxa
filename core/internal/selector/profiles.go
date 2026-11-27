@@ -8,7 +8,7 @@ package selector
 import (
 	"sort"
 
-	"boxaz/core/internal/model"
+	"boxmes/core/internal/model"
 )
 
 // Weights of the scoring components (normalised to sum 1 at use).
@@ -71,7 +71,7 @@ var Profiles = []Profile{
 		Template: "node", Lifecycle: model.LifecycleService,
 		Defaults: model.Requirements{CPU: 1, RAMMB: 1024, DiskGB: 10, Lifetime: "persistent", DurationHours: 730, PublicURL: true},
 		Weights:  Weights{Cost: 0.35, Health: 0.15, Speed: 0.05, Latency: 0.15, Capacity: 0.10, Reliability: 0.20},
-		Tips:     []string{"Service boxes are never auto-stopped; Boxaz asks you before stopping one over budget."}},
+		Tips:     []string{"Service boxes are never auto-stopped; Boxmes asks you before stopping one over budget."}},
 	{ID: "sandbox-untrusted", Name: "Untrusted code sandbox", Description: "Run code you do not trust (user uploads, generated code): strongest isolation, offline by default, thrown away.",
 		Template: "python", Lifecycle: model.LifecycleTask, TTLSeconds: 900,
 		Defaults:            model.Requirements{CPU: 1, RAMMB: 1024, DiskGB: 5, Lifetime: "ephemeral", Isolation: "vm", Untrusted: true, DurationHours: 0.25},

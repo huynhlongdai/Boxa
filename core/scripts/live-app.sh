@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Live v1.7 test: supervised app + Boxaz gateway (wake on request) + scoped URL
-# tokens on real sandbox providers, through boxaz-core exposed to the internet
-# by a local cloudflared quick tunnel (BOXAZ_PUBLIC_URL), as an agent would:
+# Live v1.7 test: supervised app + Boxmes gateway (wake on request) + scoped URL
+# tokens on real sandbox providers, through boxmes-core exposed to the internet
+# by a local cloudflared quick tunnel (BOXMES_PUBLIC_URL), as an agent would:
 #   box up → PUT /app (repo heroku/node-js-sample, npm install, node index.js,
 #   port 8000, ready http /) → gateway URL → 200 from outside → kill the app →
 #   supervisor restarts it → sleep → request to the gateway URL wakes the box
@@ -22,12 +22,12 @@ ADMIN=bx_admin_live_$(date +%s)
 REPO=${DEPLOY_REPO:-https://github.com/heroku/node-js-sample}
 CLOUDFLARED=${CLOUDFLARED:-cloudflared}
 RESULTS=${RESULTS:-$WORK/results.json}
-export BOXAZ_URL=http://127.0.0.1:$PORT
+export BOXMES_URL=http://127.0.0.1:$PORT
 
 pass() { printf '  PASS %s\n' "$*"; }
 note() { printf '  NOTE %s\n' "$*"; }
 fail() { printf '  FAIL %s\n' "$*"; echo "--- core.log"; tail -60 "$WORK/core.log"; exit 1; }
-api() { local m=$1 p=$2; shift 2; curl -sS -X "$m" "$BOXAZ_URL/v1$p" -H "Authorization: Bearer ${KEY:-$ADMIN}" -H 'Content-Type: application/json' "$@"; }
+api() { local m=$1 p=$2; shift 2; curl -sS -X "$m" "$BOXMES_URL/v1$p" -H "Authorization: Bearer ${KEY:-$ADMIN}" -H 'Content-Type: application/json' "$@"; }
 ms() { date +%s%3N; }
 declare -A T
 rec() { T[$PROV.$1]=$2; printf '    ⏱ %-22s %7s\n' "$1" "$2"; }
@@ -78,23 +78,23 @@ start_tunnel() {
   sleep 3 # let the quick-tunnel DNS record exist before the first lookup (avoids a cached NXDOMAIN)
 }
 start_tunnel
-echo "    BOXAZ_PUBLIC_URL=$PUB"
+echo "    BOXMES_PUBLIC_URL=$PUB"
 start_core() {
-env -u NOVITA_API_KEY -u E2B_API_KEY -u PRIZED_API_KEY BOXAZ_DATA_DIR=$WORK/data BOXAZ_ADMIN_KEY=$ADMIN BOXAZ_ADDR=127.0.0.1:$PORT BOXAZ_AUTO_SANDBOX=1 BOXAZ_PRICE_FEED=off \
-BOXAZ_CLIENT_LOCATION=VN BOXAZ_PUBLIC_URL=$PUB BOXAZ_DIST_DIR=$WORK/dist BOXAZ_DISABLE_TUNNEL=1 \
-  "$BIN/boxaz-core" >>"$WORK/core.log" 2>&1 & CORE_PID=$!
-for i in $(seq 50); do curl -sf "$BOXAZ_URL/v1/health" >/dev/null && break; sleep 0.1; done
+env -u NOVITA_API_KEY -u E2B_API_KEY -u PRIZED_API_KEY BOXMES_DATA_DIR=$WORK/data BOXMES_ADMIN_KEY=$ADMIN BOXMES_ADDR=127.0.0.1:$PORT BOXMES_AUTO_SANDBOX=1 BOXMES_PRICE_FEED=off \
+BOXMES_CLIENT_LOCATION=VN BOXMES_PUBLIC_URL=$PUB BOXMES_DIST_DIR=$WORK/dist BOXMES_DISABLE_TUNNEL=1 \
+  "$BIN/boxmes-core" >>"$WORK/core.log" 2>&1 & CORE_PID=$!
+for i in $(seq 50); do curl -sf "$BOXMES_URL/v1/health" >/dev/null && break; sleep 0.1; done
 }
 start_core
 for try in 1 2 3; do # quick tunnels sometimes never resolve: start a fresh one
   for i in $(seq 60); do [ "$(get "$PUB/v1/health" "" 10)" = 200 ] && break 2; sleep 1; done
   echo "    tunnel $PUB unreachable, starting a new one"; kill $CF_PID 2>/dev/null || true; start_tunnel
-  echo "    BOXAZ_PUBLIC_URL=$PUB (core restarted with it)"; kill $CORE_PID; wait $CORE_PID 2>/dev/null || true; start_core
+  echo "    BOXMES_PUBLIC_URL=$PUB (core restarted with it)"; kill $CORE_PID; wait $CORE_PID 2>/dev/null || true; start_core
 done
 [ "$(get "$PUB/v1/health" "" 10)" = 200 ] && pass "core reachable from the internet at $PUB" || fail "core not reachable via $PUB"
 AGENT=$(api POST /agents -d '{"name":"app-live","kind":"claude-code","budget_day_usd":1}' | jq -r .id)
-export BOXAZ_API_KEY=$(api POST /keys -d "{\"agent_id\":\"$AGENT\",\"name\":\"app-live\"}" | jq -r .key)
-AKEY=$BOXAZ_API_KEY
+export BOXMES_API_KEY=$(api POST /keys -d "{\"agent_id\":\"$AGENT\",\"name\":\"app-live\"}" | jq -r .key)
+AKEY=$BOXMES_API_KEY
 
 SPEC=$(jq -n --arg r "$REPO" '{repo:$r, install:"npm install --omit=dev --no-audit --no-fund --loglevel=error", start:"node index.js", port:8000, ready:{http:"/"}, restart:"always", backoff_max_s:5}')
 

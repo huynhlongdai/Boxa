@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/proto"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/proto"
 )
 
 func freePort(t *testing.T) int {

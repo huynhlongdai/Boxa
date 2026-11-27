@@ -1,6 +1,6 @@
 package e2e
 
-// v1.7: Boxaz gateway (stable URL, wake on request, hold + 503, probes,
+// v1.7: Boxmes gateway (stable URL, wake on request, hold + 503, probes,
 // WebSocket/SSE pass-through), app supervisor (boxd + T3 script), scoped URL
 // tokens, lifecycle capabilities.
 
@@ -22,9 +22,9 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"boxaz/core/internal/manager"
-	"boxaz/core/internal/model"
-	"boxaz/core/internal/sandbox"
+	"boxmes/core/internal/manager"
+	"boxmes/core/internal/model"
+	"boxmes/core/internal/sandbox"
 )
 
 func freePortE2E(t *testing.T) int {
@@ -205,17 +205,17 @@ func TestGatewayAppTokensLocal(t *testing.T) {
 	}
 	r = gwDo(t, "GET", tok.URL+"&keep=1", nil)
 	loc := r.hdr.Get("Location")
-	if r.status != 302 || strings.Contains(loc, "bxt_") || !strings.Contains(loc, "keep=1") || !strings.Contains(r.hdr.Get("Set-Cookie"), "boxaz_ut=") || !strings.Contains(r.hdr.Get("Set-Cookie"), "HttpOnly") {
+	if r.status != 302 || strings.Contains(loc, "bxt_") || !strings.Contains(loc, "keep=1") || !strings.Contains(r.hdr.Get("Set-Cookie"), "boxmes_ut=") || !strings.Contains(r.hdr.Get("Set-Cookie"), "HttpOnly") {
 		t.Fatalf("query token exchange: %d %v", r.status, r.hdr)
 	}
-	if r := gwDo(t, "GET", gw, map[string]string{"Cookie": "boxaz_ut=" + tok.Token}); r.status != 200 {
+	if r := gwDo(t, "GET", gw, map[string]string{"Cookie": "boxmes_ut=" + tok.Token}); r.status != 200 {
 		t.Fatalf("cookie → %d", r.status)
 	}
 	if r := gwDo(t, "GET", gw, map[string]string{"Authorization": "Bearer " + tok.Token}); r.status != 200 {
 		t.Fatalf("bearer → %d", r.status)
 	}
-	if r := gwDo(t, "GET", gw, map[string]string{"X-Boxaz-Token": tok.Token}); r.status != 200 {
-		t.Fatalf("x-boxaz-token → %d", r.status)
+	if r := gwDo(t, "GET", gw, map[string]string{"X-Boxmes-Token": tok.Token}); r.status != 200 {
+		t.Fatalf("x-boxmes-token → %d", r.status)
 	}
 	e.must(ag, "GET", "/boxes/"+b.ID+"/ports", nil, &pr)
 	if p := pr.Ports[0]; p.Access != "token" || p.Kind != manager.KindGateway || p.URL != gw || p.Public {
@@ -331,8 +331,8 @@ func TestGatewayStreaming(t *testing.T) {
 	cur, _ := e.m.Store.GetBox(e.ctx, b.ID)
 	gw := e.m.GatewayURL(cur, port)
 
-	// headers: the app's own Authorization survives, Boxaz cookies do not
-	r := gwDo(t, "GET", gw+"h", map[string]string{"Authorization": "Bearer app-secret", "Cookie": "boxaz_key=K; boxaz_ut=bxt_x; mine=1"})
+	// headers: the app's own Authorization survives, Boxmes cookies do not
+	r := gwDo(t, "GET", gw+"h", map[string]string{"Authorization": "Bearer app-secret", "Cookie": "boxmes_key=K; boxmes_ut=bxt_x; mine=1"})
 	if r.status != 200 || !strings.Contains(r.body, `auth="Bearer app-secret"`) || !strings.Contains(r.body, `cookie="mine=1"`) || !strings.Contains(r.body, "prefix=/x/") {
 		t.Fatalf("headers: %d %s", r.status, r.body)
 	}

@@ -5,7 +5,7 @@ import (
 	"errors"
 )
 
-// Minimal protobuf wire encoding for the few boxd.sh messages Boxaz needs
+// Minimal protobuf wire encoding for the few boxd.sh messages Boxmes needs
 // (no generated code, no protobuf dependency).
 
 type pbMsg []byte
