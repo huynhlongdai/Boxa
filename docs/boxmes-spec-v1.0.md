@@ -334,14 +334,14 @@ Danh sách kiểm tra trước khi nhận tiền người lạ: cô lập worksp
 
 ---
 
-## 9. Quyết định cần anh chốt
+## 9. Quyết định đã chốt (2026-11-27, anh duyệt "theo đề xuất")
 
-1. **Cổng thanh toán**: Polar (đề xuất) hay Paddle? Pháp nhân đăng ký ở đâu?
-2. **Bảng giá & credit tặng**: dùng bảng mục 5 hay chỉnh? Free có cần thẻ không?
-3. **Thứ tự**: làm v2.0 (cô lập workspace) trước hay ưu tiên API tương thích E2B để đón người dùng Runloop/Ona?
-4. **Tên miền & thương hiệu** công khai (hiện gateway trên `boxs.tech`): domain chính cho dashboard/docs?
-5. **Chính sách dữ liệu**: lưu ở EU (Hetzner) mặc định hay theo vùng khách chọn?
-6. **BYOC**: mở từ beta hay sau khi có khách trả tiền?
+1. **Cổng thanh toán:** Polar (merchant of record) làm chính, Paddle dự phòng. Pháp nhân: dùng tài khoản Polar cá nhân/hộ kinh doanh trước, tách pháp nhân khi doanh thu ổn định.
+2. **Bảng giá & credit:** áp dụng nguyên bảng mục 5. Free **không cần thẻ**: $5 credit một lần, 1 box ≤1 vCPU/2 GB, TTL ≤2 giờ, egress hạn chế, không URL công khai; mở URL công khai khi nạp ≥ $10 (bậc xác minh M18).
+3. **Thứ tự:** v2.0 tenancy trước, rồi v2.1 billing, v2.2 an toàn + beta; API tương thích E2B ở v2.3.
+4. **Tên miền:** giữ `boxs.tech` cho gateway; tạm dùng `app.boxs.tech` (dashboard) và `docs.boxs.tech` cho tới khi mua domain thương hiệu Boxmes (khi đó chỉ đổi `BOXMES_DASHBOARD_URL`/`BOXMES_PUBLIC_URL`).
+5. **Dữ liệu:** EU (Hetzner) mặc định; trường `region` theo workspace có sẵn trong mô hình để mở chọn vùng sau.
+6. **BYOC:** để sau khi có khách trả tiền (v2.4), không mở trong beta.
 
 ---
 
