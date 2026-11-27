@@ -266,6 +266,13 @@ Quan trọng vì VPS thô + URL công khai dễ bị dùng để đào coin, qu�
 - Đã có: README, API contract, llms.txt, catalog lỗi dịch 4 ngôn ngữ.
 - **P1** trang docs công khai (quickstart theo từng agent, cookbook: deploy app, eval song song, browser agent, computer use), changelog, kênh hỗ trợ (Discord + email), mẫu email đa ngôn ngữ.
 
+
+### M29. Hạ tầng v2 — Tài khoản nhà cung cấp — **Mới** (P0 cho beta, v2.2)
+- Vấn đề: mỗi provider chỉ có một token (`Provider.TokenEnc`), host không gắn tài khoản, không có số dư/credit/hạn token/hạn credit/chu kỳ hoá đơn/hạn mức tài khoản, breaker theo provider → không dự phòng được khi một tài khoản bị khoá, hết tiền hay chạm hạn mức.
+- Thiết kế: provider → `provider_accounts[]` (nhãn, credential trong vault, ưu tiên/trọng số, trạng thái, hạn mức, số dư, các mốc thời gian, chi ngày/tháng so với trần); `Host.account_id`, `LedgerEntry.account_id`; chọn account + failover theo lớp lỗi (auth/402/quota → đổi account; capacity → đổi vùng/provider; 429 → cooldown); breaker 2 tầng; thăm dò số dư qua API khi có (Vultr, DO, Novita, Daytona, Runpod, Linode…), còn lại nhập tay + ước tính từ ledger; dự báo "còn X ngày"; cảnh báo (số dư thấp, credit/token/hợp đồng sắp hết hạn, gần hạn mức, failover, hoá đơn); audit; API `/v1/admin/providers/{p}/accounts…`.
+- Pha A v2.2 (mô hình + failover + nhập tay + cảnh báo), Pha B v2.3 (API số dư/hạn mức, dự báo, đối soát), Pha C v2.4 (BYOC dùng lại, M27).
+- Chi tiết: **`docs/boxmes-infra-accounts-spec.md`**.
+
 ---
 
 ## 5. Gói & giá đề xuất (cần anh chốt)
@@ -314,7 +321,7 @@ Mốc tính từ 2026-11-26; mỗi mốc kết thúc bằng commit `Boxmes v2.x 
 |---|---|---|---|
 | **v2.0 Tenancy hoàn chỉnh** | 2 tuần | M2 cô lập dữ liệu mọi route + test chéo workspace; hạn mức workspace; M3 key theo workspace; M2 thành viên + vai trò; M1 màn web đăng ký/đăng nhập + cookie phiên + CSRF; dashboard tách quyền | Nhiều người dùng thật trên một core, không thấy dữ liệu nhau |
 | **v2.1 Thanh toán** | 2 tuần | M15 ví credit + Polar + tự nạp + hoá đơn; M16 gói/hạn mức/rate limit; giá bán trong ledger; ngân sách workspace | Thu được tiền, chặn chi khi hết credit |
-| **v2.2 An toàn & khách hàng** | 1–2 tuần | M18 chống lạm dụng P0; M19 webhook + email giao dịch; M20 audit workspace + xuất; M26 ops console P0; điều khoản/AUP/privacy | **Mở beta công khai (invite)** |
+| **v2.2 An toàn & khách hàng** | 1–2 tuần | M18 chống lạm dụng P0; M29 Pha A (nhiều tài khoản provider + failover + cảnh báo tiền/hạn); M19 webhook + email giao dịch; M20 audit workspace + xuất; M26 ops console P0; điều khoản/AUP/privacy | **Mở beta công khai (invite)** |
 | **v2.3 Cạnh tranh** | 3–4 tuần | Warm pool; egress proxy giữ bí mật; volume; API tương thích E2B; code interpreter; computer-use; Git; OTel; vùng | Ngang tầm E2B/Daytona về tính năng chính, rẻ hơn |
 | **v2.4 Growth** | 2 tuần | Referral + funnel + trang waitlist; landing/pricing/docs/status; BYOC; Slack/Discord | Mở đăng ký rộng |
 | **v3** | sau | SSO/SCIM, GPU/Windows/macOS, marketplace template, browser nâng cao, DLP, SOC 2 | Doanh nghiệp |
@@ -363,6 +370,7 @@ Danh sách kiểm tra trước khi nhận tiền người lạ: cô lập worksp
 | Metrics | `GET /v1/boxes/{id}/metrics`, `PUT /v1/observability` (OTLP) |
 | E2B-compat | `/e2b/sandboxes…` (ánh xạ API E2B) |
 | Admin | `/v1/admin/workspaces[/{id}]` (khoá, credit, impersonate), `/v1/admin/abuse`, `/v1/admin/revenue` |
+| Hạ tầng (M29) | `/v1/admin/providers[/{p}]`, `/v1/admin/providers/{p}/accounts[/{a}]` (+ `validate`, `rotate`, `check`, `enable|disable|drain|reset`, `snapshots`, `timeline`), `/v1/admin/providers/{p}/strategy`, `/v1/admin/infra/{alerts,forecast}` |
 
 ## Phụ lục B. Biến môi trường mới dự kiến
 

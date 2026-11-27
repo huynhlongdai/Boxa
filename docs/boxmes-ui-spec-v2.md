@@ -208,6 +208,13 @@ Tab:
 ## 16. Hạ tầng (chỉ PA; M5, M6, M11) — [Có, chuyển vào khu Nền tảng]
 Giữ các tab hiện có: VPS · Sandbox API · Sức khoẻ · Bảng giá · Tốc độ · Mesh · Adapter. Bổ sung: **Pool** (lấp đầy theo pool Free/Pro/Team, đề xuất thêm/bớt host), **Warm pool toàn hệ thống**, **Provider deprecated** (Runloop đánh dấu đã đóng), cột độ tin cậy p50/p95 boot và tỷ lệ lỗi.
 
+**Hạ tầng v2 — Tài khoản nhà cung cấp (M29) [Mới, v2.2]** — chi tiết ở `docs/boxmes-infra-accounts-spec.md` §8:
+- Tab **Tài khoản** (mặc định): dải KPI (tổng số dư khả dụng, chi hôm nay/tháng, dự báo cuối tháng, runway ngắn nhất "còn ~X ngày", account khoẻ/suy giảm/hỏng, cảnh báo mở) + bảng provider (số account, số dư, chi tháng, runway, host/box, % hạn mức cao nhất, sức khoẻ, chiến lược, badge cảnh báo).
+- **Chi tiết provider** `/infra/providers/[id]`: năng lực (API số dư/hạn mức, rate limit, mô hình trả tiền), bảng tài khoản (trạng thái + lý do + cooldown, ưu tiên kéo thả/trọng số, số dư kèm nguồn API/ước tính/nhập tay, chi so với trần, runway, thanh hạn mức, hạn token/credit, host; hành động Kiểm tra · Drain · Tắt · Rotate · Sửa), chiến lược chọn, biểu đồ số dư/chi + dự báo.
+- **Ngăn kéo tài khoản**: Tổng quan (nhập tay khi không có API) · Hạn mức · Tiền (snapshots, ledger, đối soát) · Host/Box · Dòng thời gian · Cảnh báo (ngưỡng riêng).
+- **Luồng thêm/rotate khoá**: hướng dẫn quyền tối thiểu → dán khoá → validate (org/project, scopes, số dư, hạn mức, cảnh báo trùng tài khoản thật) → cấu hình → lưu; rotate bắt buộc cùng `external_id`.
+- Tab cũ: Sức khoẻ thêm lọc/breaker theo account; VPS/Sandbox thêm cột "Tài khoản".
+
 ## 17. Admin nền tảng (M26, M18, M17) — [Sửa]
 | Tab | Nội dung |
 |---|---|
