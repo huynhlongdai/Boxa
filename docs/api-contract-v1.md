@@ -171,3 +171,116 @@ EOF
 - Platform admin (admin key, or session of a `platform_admin` user, which also gets the whole v1 operator API): `GET /admin/users` → `[{id, email, name, email_verified, platform_admin, created_at, workspaces:[{id, name, role, max_boxes, max_ttl_hours}]}]`, `PATCH /admin/users/{id}` `{platform_admin?, email_verified?}`, `DELETE /admin/users/{id}`, `GET /admin/invites` (`+redemptions`), `POST /admin/invites` `{code?, max_uses=1, expires_in_hours=0, note?, email?}` → 201, `DELETE /admin/invites/{id|code}`, `GET /admin/waitlist`, `POST /admin/waitlist/invite` `{emails[] | count, expires_in_hours=336}` → `[{email, code, invite_id} | {email, error}]`, `DELETE /admin/waitlist/{email}`.
 - Errors: no/invalid invite or closed sign-up → `POLICY_DENIED`/`INVALID` with `next: ["POST /v1/waitlist {email}"]`; wrong credentials → `UNAUTHORIZED`; 10 failures / 15 min per email → `RATE_LIMITED`. Sessions of non-admin users get `UNAUTHORIZED` on every other route until resources are workspace-scoped.
 - Env: `BOXMES_SIGNUP_MODE`, `BOXMES_SESSION_TTL` (default 720h); mail links use `BOXMES_DASHBOARD_URL` (fallback `BOXMES_PUBLIC_URL`).
+
+## v2.0 additions (2026-11-27) — tenancy: workspace isolation, plans & quotas, roles, members, invites, workspace keys, box locations
+
+Every agent, box, key, secret, template, approval, event and ledger row belongs to one workspace (`workspace_id`; pre-v2.0 data lives in `ws_default`, plan `unlimited`). Member sessions now reach the **whole** API (including `/mcp`, `/a2a`) with their role; the "UNAUTHORIZED until resources are workspace-scoped" limitation of the auth layer is gone. Contract tests: `core/internal/e2e/v200_tenancy_test.go`.
+
+### Callers and scope
+- **Platform** (admin key, session of a `platform_admin` user): sees every workspace. `?workspace=<id>` on any route narrows reads to that workspace, and creates land there (else the session's current workspace, else `ws_default`).
+- **Workspace** (member session `bxs_…`, workspace key `bx_ws_…`): sees only its workspace; `?workspace=` is ignored. Permissions come from the member's role or the key's scopes.
+- **Agent key** (`bx_agent_…`): only its own agent's records inside the agent's workspace (unchanged).
+
+### Roles and permissions
+Permissions: `view`, `boxes:write`, `exec`, `agents:write`, `secrets:read`, `secrets:write`, `secrets:use`, `templates:write`, `billing:read`, `members:write`, `audit:read`, `emergency_stop`, `workspace:write`, `approvals:decide`.
+
+| Role | Permissions |
+|---|---|
+| `owner` | all |
+| `admin` | all except `billing:read` |
+| `developer` | `view`, `boxes:write`, `exec`, `agents:write` (only agents/keys they created), `secrets:read`, `secrets:use`, `templates:write` |
+| `billing` | `view`, `billing:read` |
+| `viewer` | `view`, `secrets:read` |
+| `auditor` | `view`, `secrets:read`, `audit:read` |
+
+Legacy role `member` reads as `developer`. Only owners grant, change or remove the `owner` role; the last owner can be neither demoted nor removed (400 `INVALID`).
+
+### Plans and quotas
+`Quota`: `{plan, max_boxes, max_cpu_per_box, max_ram_mb_per_box, max_ttl_hours, public_url, egress: "restricted"|"open", max_members, max_agents, max_keys, max_secrets, max_boxes_per_minute}` — `0` = unlimited.
+
+| | free | pro | team | unlimited |
+|---|---|---|---|---|
+| `max_boxes` (concurrent, non-sleeping) | 1 | 10 | 50 | 0 |
+| `max_cpu_per_box` | 1 | 8 | 16 | 0 |
+| `max_ram_mb_per_box` | 2048 | 16384 | 32768 | 0 |
+| `max_ttl_hours` | 2 | 24 | 168 | 0 |
+| `public_url` | false | true | true | true |
+| `egress` | restricted | open | open | open |
+| `max_members` (members + pending invites) | 1 | 3 | 0 | 0 |
+| `max_agents` (excl. implicit `operator`) | 3 | 25 | 0 | 0 |
+| `max_keys` (active workspace + agent keys) | 5 | 50 | 0 | 0 |
+| `max_secrets` | 10 | 100 | 0 | 0 |
+| `max_boxes_per_minute` | 5 | 30 | 120 | 0 |
+
+- New workspaces get the instance default plan `BOXMES_DEFAULT_PLAN` (default `free`; an empty `plan` on a workspace also means this default). `ws_default` is `unlimited`.
+- Effective quota = plan quota with the workspace's `quota_overrides` applied (any subset of the limit fields).
+- Checked on box create / fork / clone / restore (cpu, ram, ttl, concurrency, create rate), on wake (takes a concurrency slot again), and when adding agents, keys, secrets and invites. A create without `ttl_seconds` gets the plan's TTL cap.
+- `public_url: false`: new ports default to URL-token access; `PUT /boxes/:id/ports/:port {access:"public"}` → `QUOTA_EXCEEDED`.
+- `egress: restricted`: a box without an egress policy gets the plan allowlist (package registries, git hosts, OS mirrors; `deny_by_default: true`, `source: "plan"`); an explicit allowlist must stay inside it, else `QUOTA_EXCEEDED` with `details.host`.
+- **Error** `QUOTA_EXCEEDED` (HTTP 403): `{"error": {"code": "QUOTA_EXCEEDED", "message", "hint", "details": {"quota": "<limit name>", "limit", "used"?, "plan", "upgrade_url", "host"?}, "next": ["GET /v1/workspaces/current/usage", "GET /v1/plans"], "retry_after_s"?: 60}}` (`retry_after_s` only for `max_boxes_per_minute`; `upgrade_url` = `<BOXMES_DASHBOARD_URL>/settings/billing`). Owning more than 10 workspaces on `POST /workspaces` is also `QUOTA_EXCEEDED`.
+- A `suspended` workspace may only read and use `/auth/*` / workspace routes; other writes → 403 `POLICY_DENIED`.
+
+### Objects
+- `Workspace`: `{id, name, owner_user_id, plan?, quota_overrides?, status?: active|suspended, created_at, created_by?, max_boxes, max_ttl_hours}` (`max_boxes`/`max_ttl_hours` are pre-v2.0 fields, superseded by `quota`).
+- `CurrentWorkspace` = Workspace + `{role, plan, quota: Quota, permissions: [perm], member_count}`.
+- `Me`: `{user: {id, email, name, email_verified, platform_admin, …}, workspace: (Workspace + {role}) | null, workspaces: [Workspace + {role}], role, permissions: [perm], platform_admin}`.
+- `Usage`: `{workspace_id, plan, quota: Quota, used: {boxes (non-sleeping), boxes_total, agents, keys, secrets, members, spent_today_usd, spent_month_usd}}`.
+- `Member`: `{user_id, email, name?, role, email_verified, joined_at}`.
+- `WorkspaceInvite`: `{id, workspace_id, email, role, invited_by, expires_at, accepted_at|null, accepted_by?, created_at, status: pending|accepted|expired}`; create adds `{invite_url, mailed}` (token shown once).
+- `InvitePreview`: `{workspace: {id, name}, email, role, invited_by, expires_at, status, account_exists}`.
+- `ApiKey` adds `{workspace_id?, kind: platform|workspace|agent, expires_at|null, created_by?}`.
+- `Box` adds `workspace_id` and `location: BoxLocation | null` (absent until placed).
+- `BoxLocation`: `{region: eu|us|apac|sandbox|local|other, country? (ISO alpha-2), city?, provider, site: "<provider>-<code>" (e.g. hetzner-fsn), host?}`.
+- `Event` rows of the workspace audit carry `workspace_id`; tenancy event types: `workspace.created`, `workspace.updated`, `member.invited`, `member.invite_revoked`, `member.joined`, `member.role_changed`, `member.removed`, `key.created`.
+
+### Endpoints
+Public (no auth):
+- `GET /plans` → `{items: [{id: free|pro|team|unlimited, quota: Quota}]}`.
+- `GET /workspace-invites/:token` → `InvitePreview`; unknown / malformed token → 404 `NOT_FOUND`.
+- `POST /auth/signup` accepts `workspace_invite: "bxi_…"`: the account joins that workspace with the invited role (no invite code needed, no personal workspace); the email must match the invite.
+
+Session (`bxs_…`):
+- `GET /auth/me` → `Me`.
+- `POST /auth/workspace` `{workspace_id}` → `Me` (switches the session; not a member → 404).
+- `GET /workspaces` → `{items: [Workspace + {role}]}`.
+- `POST /workspaces` `{name}` (1–60 chars) → 201 `CurrentWorkspace` (caller is owner; does not switch the session).
+- `POST /workspace-invites/:token/accept` → `Me` (joins and switches). Other email → 403 `POLICY_DENIED`; used / expired → 400 `INVALID`.
+
+Current workspace (session or workspace key; platform callers act on `?workspace=` or their current workspace):
+- `GET /workspaces/current` → `CurrentWorkspace` (`view` or `billing:read`).
+- `PATCH /workspaces/current` `{name?, plan?, quota_overrides?, status?}` → `CurrentWorkspace`. `workspace:write`; `plan`, `quota_overrides`, `status` are platform-admin only (403 `POLICY_DENIED`). Unknown plan / bad egress / bad status → 400.
+- `GET /workspaces/current/usage` → `Usage` (`view`).
+- `GET /workspaces/current/audit?actor=&type=&box=&agent=&limit=` → `{items: [Event]}` (`audit:read`).
+- `GET /workspaces/current/members` → `{items: [Member]}` (`view` or `billing:read`).
+- `PATCH /workspaces/current/members/:user_id` `{role}` → `Member` (`members:write`; owner rules above; unknown role → 400; not a member → 404).
+- `DELETE /workspaces/current/members/:user_id` → `{ok: true}` (`members:write`, or anyone with their own user_id to leave).
+- `GET /workspaces/current/invites` → `{items: [WorkspaceInvite]}` (`members:write`).
+- `POST /workspaces/current/invites` `{email, role? = developer}` → 201 `WorkspaceInvite + {invite_url, mailed}` (`members:write`; inviting as owner needs an owner; already a member → 400; counts against `max_members`; a new invite for the same email replaces the open one; valid 7 days; link `<BOXMES_DASHBOARD_URL>/invite/<token>`, mailed when SMTP is configured).
+- `DELETE /workspaces/current/invites/:id` → `{ok: true}` (`members:write`; other workspace → 404).
+
+Keys:
+- `POST /keys` `{name?, scopes?, expires_in_days?, expires_at?, agent_id?, workspace_id? (platform only), platform? (platform only)}` → 201 `ApiKey` with `key` once. Without `agent_id` from a workspace caller → workspace key (`kind: "workspace"`, prefix `bx_ws_`). Workspace scopes: `boxes:read` (view), `boxes:write` (view + boxes + templates), `exec`, `secrets:read` (read + use), `secrets:write`, `billing:read`, `admin` (all permissions inside the workspace); default `boxes:read`, `boxes:write`, `exec`. Needs `agents:write`; a key never grants more than its creator holds (403 `POLICY_DENIED`); unknown scope → 400; `expires_at` in the past or `expires_in_days < 0` → 400; counts against `max_keys`. Expired keys → 401 `UNAUTHORIZED` ("expired").
+- `GET /keys` → keys of the caller's scope; `DELETE /keys/:id` (developers: only keys they created).
+
+Boxes:
+- `GET /boxes?region=&location=` (with the existing `status`, `agent`, `provider`, `lifecycle`, `all`): `region` matches `location.region`, `location` matches `location.site` (case-insensitive).
+- `GET /boxes/locations` → `{items: [BoxLocation + {running, sleeping, total, cost_today_usd}] (per site, host omitted, sorted by total desc), regions: [{region, running, sleeping, total, cost_today_usd}], total: {region: "all", running, sleeping, total, cost_today_usd}}` (active boxes; terminated boxes only contribute cost; cost = UTC day).
+
+Platform admin:
+- `GET /admin/workspaces` → `{items: [Workspace + {plan, members, boxes, spent_month_usd}]}`.
+- `PATCH /admin/workspaces/:id` `{name?, plan?, quota_overrides?, status?}` → `CurrentWorkspace` (unknown id → 404).
+
+### Error semantics
+- Records of another workspace → **404 `NOT_FOUND`**, never 403 (boxes, agents, keys, secrets, templates, approvals, invites, switching to a foreign workspace).
+- Session whose role lacks a permission → **403 `POLICY_DENIED`** ("your role … does not allow …"); a user with no workspace → 403 with hint `POST /v1/workspaces`.
+- Workspace / agent key missing a scope → **401 `UNAUTHORIZED`** ("key lacks scope …"); missing, invalid or expired key → 401. `/admin/*` for non-platform callers → 401.
+- Plan limits → **403 `QUOTA_EXCEEDED`** with `details` (above).
+
+### Known gaps
+- `max_boxes_per_minute` is counted in core's memory (reset on restart, per process).
+- Plan egress is enforced when a box is created and on `PUT /boxes/:id/egress`; changing a plan does not re-apply it to running boxes.
+- Agents and boxes cannot be moved between workspaces.
+- Plan prices / billing land in v2.1 (`GET /plans` returns quotas only).
+
+### SDKs
+Python (`boxmes`): `me`, `switch_workspace`, `list_workspaces`, `create_workspace`, `get_workspace`, `rename_workspace`, `workspace_usage`, `workspace_audit`, `plans`, `list_members`, `update_member_role`, `remove_member`, `create_invite`, `list_invites`, `revoke_invite`, `get_invite`, `accept_invite`, `create_key(agent_id=None, name, scopes, expires_in_days=, expires_at=)`, `list_keys`, `revoke_key`, `list_boxes(region=, location=, workspace=)`, `box_locations`, `admin_workspaces`, `admin_update_workspace`; `BoxmesError.details`. TypeScript (`@boxmes/sdk`): same in camelCase; `createKey(agentId, name, scopes, {expires_in_days, expires_at, workspace_id})`; `BoxmesError.details`.

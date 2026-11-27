@@ -657,3 +657,81 @@ Sản phẩm đổi tên lần hai thành **Boxmes**: binary `boxmes-core` (trư
 - SSH: user `boxmes` (`boxmes@<box>`) và host key alias `boxmes-ssh` — chạy lại `box ssh-config --write` và cập nhật `known_hosts` (`~/.boxmes/known_hosts`).
 
 Không đổi: domain `boxs.tech` và repo `huynhlongdai/Boxa`.
+
+## 22. v2.0 tenancy — cô lập workspace, gói & hạn mức, vai trò, thành viên, key workspace, vị trí box
+
+Commit `213c624` hoàn tất phần "còn lại của v2" ở §20: mọi handler đều lọc theo `workspace_id`, nên phiên của thành viên thường gọi được **toàn bộ** API (kể cả `/mcp`, `/a2a`) với quyền theo vai trò — giới hạn tạm thời ở §20 không còn. Test: `internal/e2e/v200_tenancy_test.go` (cô lập, vai trò + lời mời, hạn mức, vị trí, đăng ký tranh chấp).
+
+**Mô hình.**
+
+- Mỗi agent, box, key, secret, template, approval, sự kiện và dòng ledger thuộc đúng một workspace. Dữ liệu trước v2.0 nằm trong `ws_default` (workspace của người vận hành, gói `unlimited`).
+- **Người gọi nền tảng** (admin key, phiên của user `platform_admin`) thấy mọi workspace; `?workspace=<id>` thu hẹp phần đọc, còn bản ghi mới rơi vào workspace đó (không có thì workspace hiện tại của phiên, cuối cùng là `ws_default`).
+- **Người gọi workspace** (phiên của thành viên, key workspace) chỉ thấy workspace của mình; `?workspace=` bị bỏ qua. Quyền theo vai trò (phiên) hoặc scope (key).
+- **Agent key** chỉ thấy bản ghi của agent mình trong workspace của agent đó (như trước v2.0).
+- Một user làm owner tối đa 10 workspace. `POST /v1/workspaces` không đổi workspace hiện tại của phiên; đổi bằng `POST /v1/auth/workspace`.
+
+**Vai trò** (vai trò `member` cũ được đọc là `developer`):
+
+| Quyền | owner | admin | developer | billing | viewer | auditor |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|
+| `view` — xem box, agent, chi phí, sự kiện, approval, template | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `boxes:write` — tạo/xoá/ngủ/đánh thức/snapshot/fork box, port, app | ✓ | ✓ | ✓ | | | |
+| `exec` — exec, job/log, file, terminal, ssh, trình duyệt, desktop | ✓ | ✓ | ✓ | | | |
+| `agents:write` — agent và key (developer: chỉ cái mình tạo) | ✓ | ✓ | ✓ | | | |
+| `secrets:read` (tên) / `secrets:use` (gắn vào box) | ✓ | ✓ | ✓ | | đọc | đọc |
+| `secrets:write` — tạo/xoay/xoá secret | ✓ | ✓ | | | | |
+| `templates:write` | ✓ | ✓ | ✓ | | | |
+| `billing:read` — gói, usage | ✓ | | | ✓ | | |
+| `members:write` — thành viên, lời mời | ✓ | ✓ | | | | |
+| `audit:read` — nhật ký workspace | ✓ | ✓ | | | | ✓ |
+| `emergency_stop`, `workspace:write` (đổi tên), `approvals:decide` | ✓ | ✓ | | | | |
+
+Chỉ owner mới cấp / đổi / gỡ vai trò owner; không hạ cấp hay gỡ được owner cuối cùng. Thành viên tự rời workspace bằng `DELETE …/members/{user_id của mình}`.
+
+**Gói & hạn mức** (`model.Plans`; 0 = không giới hạn):
+
+| Hạn mức | free | pro | team |
+|---|---|---|---|
+| Box chạy đồng thời (`max_boxes`, không tính box đang ngủ) | 1 | 10 | 50 |
+| vCPU / box | 1 | 8 | 16 |
+| RAM / box | 2 GB | 16 GB | 32 GB |
+| TTL tối đa | 2 h | 24 h | 168 h |
+| URL công khai (`public_url`) | không | có | có |
+| Egress | restricted | open | open |
+| Thành viên (tính cả lời mời đang chờ) | 1 | 3 | không giới hạn |
+| Agent (không tính agent ngầm `operator`) | 3 | 25 | không giới hạn |
+| Key đang hiệu lực (key workspace + agent) | 5 | 50 | không giới hạn |
+| Secret | 10 | 100 | không giới hạn |
+| Box tạo mới / phút | 5 | 30 | 120 |
+
+- Gói `unlimited` (không giới hạn gì) dành cho `ws_default`. Workspace mới nhận gói mặc định của instance `BOXMES_DEFAULT_PLAN` (`free` nếu không đặt / sai); workspace có `plan` rỗng cũng theo giá trị này.
+- Chỉ admin nền tảng đổi `plan`, `quota_overrides` (ghi đè từng hạn mức) và `status` (`active` | `suspended`) qua `PATCH /v1/admin/workspaces/{id}`. Workspace `suspended` chỉ còn đọc + endpoint tài khoản (ghi → 403 `POLICY_DENIED`).
+- Kiểm tra lúc tạo / fork / clone / restore box (CPU, RAM, TTL, số box chạy, tốc độ tạo), lúc đánh thức (lại chiếm một slot), lúc thêm agent / key / secret / lời mời. Tạo box không xin TTL thì TTL bị đặt bằng mức trần của gói.
+- `public_url: false`: mọi port mới mặc định truy cập bằng URL token; đặt `access: public` → `QUOTA_EXCEEDED`.
+- `egress: restricted`: box không có chính sách egress được gán allowlist của gói (registry gói, git host, mirror OS — `model.EgressRestrictedAllow`, nguồn `plan`, chặn mặc định); allowlist tự đặt phải nằm trong danh sách đó, không thì `QUOTA_EXCEEDED` với `details.host`.
+- Vượt hạn mức → **403 `QUOTA_EXCEEDED`**, `details: {quota, limit, used?, plan, upgrade_url}` (`upgrade_url` = `<BOXMES_DASHBOARD_URL>/settings/billing`), `next: ["GET /v1/workspaces/current/usage", "GET /v1/plans"]`; vượt tốc độ tạo box có thêm `retry_after_s: 60`.
+
+**Endpoint** (đều dưới `/v1`):
+
+- Không cần xác thực: `GET /plans` (danh sách gói + hạn mức), `GET /workspace-invites/{token}` (xem trước lời mời: workspace, email, vai trò, người mời, hạn, `status`, `account_exists`).
+- Phiên: `GET /auth/me` (thêm `role`, `permissions`, `platform_admin`), `POST /auth/workspace {workspace_id}`, `GET /workspaces`, `POST /workspaces {name}` → 201, `POST /workspace-invites/{token}/accept` (đúng email được mời; workspace đó thành workspace hiện tại). Người chưa có tài khoản đăng ký bằng `POST /auth/signup {…, workspace_invite: "bxi_…"}` (không cần mã mời, không tạo workspace riêng).
+- Workspace hiện tại: `GET|PATCH /workspaces/current` (đổi tên; `plan`/`quota_overrides`/`status` chỉ admin nền tảng), `GET /workspaces/current/usage`, `GET /workspaces/current/audit?actor=&type=&box=&agent=&limit=`, `GET /workspaces/current/members`, `PATCH|DELETE /workspaces/current/members/{user_id}`, `GET|POST /workspaces/current/invites`, `DELETE /workspaces/current/invites/{id}`. Lời mời sống 7 ngày, token `bxi_…` chỉ trả một lần trong `invite_url` (`<dashboard>/invite/<token>`), mời lại cùng email thay link cũ.
+- Key workspace: `POST /keys {name, scopes?, expires_in_days? | expires_at?}` (không có `agent_id`) → key `bx_ws_…`. Scope: `boxes:read`, `boxes:write`, `exec`, `secrets:read`, `secrets:write`, `billing:read`, `admin` (mọi quyền trong workspace); mặc định `boxes:read` + `boxes:write` + `exec`. Key không bao giờ có nhiều quyền hơn người tạo. Key hết hạn → 401.
+- Vị trí box: `Box.location {region, country?, city?, provider, site, host?}` suy từ placement (region `eu | us | apac | sandbox | local | other`, site `<provider>-<mã>`, vd `hetzner-fsn`). `GET /boxes?region=&location=&provider=` lọc theo đó; `GET /boxes/locations` → `{items[] (theo site: running, sleeping, total, cost_today_usd), regions[], total}` cho bản đồ dashboard.
+- Admin nền tảng: `GET /admin/workspaces` (kèm `plan`, `members`, `boxes`, `spent_month_usd`), `PATCH /admin/workspaces/{id}`.
+
+**Ngữ nghĩa lỗi.**
+
+- Bản ghi của workspace khác → **404 `NOT_FOUND`** (không bao giờ 403, để không lộ sự tồn tại); đổi sang workspace mình không là thành viên cũng 404.
+- Phiên có vai trò không đủ quyền → **403 `POLICY_DENIED`** (hint: nhờ owner/admin đổi vai trò); chưa thuộc workspace nào → 403 kèm gợi ý `POST /v1/workspaces`.
+- Key workspace thiếu scope → **401 `UNAUTHORIZED`** (`key lacks scope "…"`); thiếu/sai/hết hạn key → 401. Route `/v1/admin/*` với người gọi không phải nền tảng → 401.
+- Vượt hạn mức gói → 403 `QUOTA_EXCEEDED` (trên).
+
+**Hạn chế đã biết.**
+
+- Bộ đếm "box tạo mới / phút" nằm trong bộ nhớ của tiến trình core: khởi động lại thì về 0, chạy nhiều core thì mỗi core đếm riêng.
+- Egress của gói chỉ được kiểm khi tạo box và khi `PUT /boxes/{id}/egress`; hạ gói xuống `free` (hoặc ghi đè `egress: restricted`) không áp lại cho box đang chạy.
+- Chưa chuyển được agent / box giữa các workspace.
+- Giá gói và thanh toán chưa có (v2.1); `GET /v1/plans` chỉ trả hạn mức.
+
+SDK: Python `me()`, `switch_workspace()`, `list_workspaces()`, `create_workspace()`, `get_workspace()`, `rename_workspace()`, `workspace_usage()`, `workspace_audit()`, `plans()`, `list_members()`, `update_member_role()`, `remove_member()`, `create_invite()`, `list_invites()`, `revoke_invite()`, `get_invite()`, `accept_invite()`, `create_key(…, scopes, expires_in_days=…)`, `list_keys()`, `revoke_key()`, `list_boxes(region=, location=)`, `box_locations()`, `admin_workspaces()`, `admin_update_workspace()`, `BoxmesError.details`; TypeScript cùng bộ, tên camelCase.
