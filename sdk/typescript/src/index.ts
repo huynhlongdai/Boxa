@@ -27,6 +27,8 @@ export interface Box {
   app?: AppSpec; wake_on_request?: boolean; port_access?: Record<string, PortAccess>;
   /** v1.9: readable gateway name (https://<subdomain>.<domain>/) and port labels (<subdomain>-<label>) */
   subdomain?: string; port_labels?: Record<string, string>;
+  /** v2.0: owning workspace and where the box runs (absent until placed) */
+  workspace_id?: string; location?: BoxLocation;
 }
 
 export interface ExecResult {
@@ -70,11 +72,18 @@ export interface BoxmesEvent {
   message: string; cost_usd: number | null; data?: Record<string, unknown>;
 }
 export interface Agent { id: string; name: string; kind: string; budget_day_usd: number; budget_month_usd: number; locale?: string; [k: string]: unknown }
-export interface ApiKey { id: string; agent_id: string | null; name: string; prefix: string; scopes: string[]; key?: string }
+export interface ApiKey {
+  id: string; agent_id: string | null; name: string; prefix: string; scopes: string[]; key?: string;
+  /** v2.0 */
+  workspace_id?: string; kind?: "platform" | "workspace" | "agent"; expires_at?: string | null; created_by?: string;
+  created_at?: string; last_used_at?: string | null; revoked_at?: string | null;
+}
+/** v2.0 workspace key scopes */
+export type KeyScope = "boxes:read" | "boxes:write" | "exec" | "secrets:read" | "secrets:write" | "billing:read" | "admin" | (string & {});
 export interface List<T> { items: T[]; next_cursor: string | null }
 export interface FileRead { path: string; type: "file" | "dir"; content?: string; total_lines?: number; entries?: { name: string; type: string; size: number }[] }
 
-export interface ApiErrorBody { code: string; message: string; hint: string; retry_after_s?: number; docs_url?: string }
+export interface ApiErrorBody { code: string; message: string; hint: string; retry_after_s?: number; docs_url?: string; /** v2.0, e.g. QUOTA_EXCEEDED {quota, limit, used, plan, upgrade_url} */ details?: Record<string, unknown>; next?: string[] }
 
 /** v1.3 declarative needs (POST /recommend, POST /boxes {requirements}). */
 export interface Requirements {
@@ -179,6 +188,8 @@ export class BoxmesError extends Error {
   readonly retryAfterS?: number;
   readonly docsUrl?: string;
   readonly body?: unknown;
+  /** v2.0 machine-readable context, e.g. QUOTA_EXCEEDED `{quota, limit, used, plan, upgrade_url}` ({} when absent) */
+  readonly details: Record<string, unknown>;
   constructor(status: number, e: Partial<ApiErrorBody>, body?: unknown) {
     super(`${e.code ?? status}: ${e.message ?? ""}${e.hint ? ` (hint: ${e.hint})` : ""}`);
     this.name = "BoxmesError";
@@ -189,6 +200,7 @@ export class BoxmesError extends Error {
     this.retryAfterS = e.retry_after_s;
     this.docsUrl = e.docs_url;
     this.body = body;
+    this.details = e.details ?? {};
   }
   get retryable(): boolean { return RETRYABLE.has(this.code); }
 }
@@ -311,9 +323,12 @@ export class Boxmes {
   }
   /** alias of createBox */
   up(input: CreateBoxInput = {}, opts: { idempotencyKey?: string; wait?: boolean } = {}) { return this.createBox(input, opts); }
-  listBoxes(filter: { status?: string; lifecycle?: string; agent?: string; provider?: string; all?: boolean } = {}) {
+  /** v2.0 filters: `region` (eu | us | apac | sandbox | local | other), `location` (site, e.g. hetzner-fsn), `workspace` (platform admin only). */
+  listBoxes(filter: { status?: string; lifecycle?: string; agent?: string; provider?: string; all?: boolean; region?: LocationRegion | (string & {}); location?: string; workspace?: string } = {}) {
     return this.request<List<Box>>("GET", "/boxes", { query: filter });
   }
+  /** v2.0: active boxes and today's cost per location (site) and region. */
+  boxLocations() { return this.request<LocationsView>("GET", "/boxes/locations"); }
   getBox(id: string) { return this.request<Box>("GET", `/boxes/${enc(id)}`); }
   deleteBox(id: string) { return this.request<Box>("DELETE", `/boxes/${enc(id)}`); }
   /** alias of deleteBox */
@@ -467,8 +482,53 @@ export class Boxmes {
   createAgent(input: { name: string; kind?: string; budget_day_usd?: number; budget_month_usd?: number; locale?: string }) {
     return this.request<Agent>("POST", "/agents", { body: input });
   }
-  createKey(agentId: string | null, name = "sdk", scopes?: string[]) {
-    return this.request<ApiKey>("POST", "/keys", { body: { agent_id: agentId, name, scopes } });
+  /**
+   * Create an API key (`key` is returned once). `agentId = null` from a workspace caller makes a v2.0 workspace key
+   * (scopes default to boxes:read + boxes:write + exec). Expiry via `expires_in_days` or `expires_at` (RFC3339, future).
+   */
+  createKey(agentId: string | null, name = "sdk", scopes?: KeyScope[], opts: { expires_in_days?: number; expires_at?: string; workspace_id?: string } = {}) {
+    return this.request<ApiKey>("POST", "/keys", { body: { agent_id: agentId, name, scopes, ...opts } });
+  }
+  listKeys() { return this.request<List<ApiKey>>("GET", "/keys"); }
+  revokeKey(keyId: string) { return this.request<{ ok: boolean }>("DELETE", `/keys/${enc(keyId)}`); }
+
+  // ---- v2.0 tenancy: account, workspaces, members, invites ----
+  // me / switchWorkspace / createWorkspace / acceptInvite need a session token (bxs_…) as apiKey.
+  /** Signed-in user, current workspace, role and permissions. */
+  me() { return this.request<Me>("GET", "/auth/me"); }
+  /** Point the session at another workspace the user belongs to (404 when not a member). */
+  switchWorkspace(workspaceId: string) { return this.request<Me>("POST", "/auth/workspace", { body: { workspace_id: workspaceId } }); }
+  listWorkspaces() { return this.request<List<Workspace>>("GET", "/workspaces"); }
+  /** New workspace owned by the caller (plan = instance default); does not switch the session. */
+  createWorkspace(name: string) { return this.request<Workspace>("POST", "/workspaces", { body: { name } }); }
+  /** Current workspace with role, plan, effective quota, permissions and member_count. */
+  getWorkspace() { return this.request<Workspace>("GET", "/workspaces/current"); }
+  renameWorkspace(name: string) { return this.request<Workspace>("PATCH", "/workspaces/current", { body: { name } }); }
+  workspaceUsage() { return this.request<Usage>("GET", "/workspaces/current/usage"); }
+  /** Workspace audit log (audit:read — owner, admin, auditor). */
+  workspaceAudit(filter: { actor?: string; type?: string; box?: string; agent?: string; limit?: number } = {}) {
+    return this.request<List<BoxmesEvent>>("GET", "/workspaces/current/audit", { query: filter });
+  }
+  /** Built-in plans and quotas (no auth). */
+  plans() { return this.request<List<{ id: Plan; quota: Quota }>>("GET", "/plans"); }
+  listMembers() { return this.request<List<Member>>("GET", "/workspaces/current/members"); }
+  /** Owner role can only be granted / changed by owners; the last owner cannot be demoted. */
+  updateMemberRole(userId: string, role: Role) { return this.request<Member>("PATCH", `/workspaces/current/members/${enc(userId)}`, { body: { role } }); }
+  /** Remove a member (members:write), or leave with your own user id. */
+  removeMember(userId: string) { return this.request<{ ok: boolean }>("DELETE", `/workspaces/current/members/${enc(userId)}`); }
+  /** Invite an email (7 days). `invite_url` is returned once. */
+  createInvite(email: string, role: Role = "developer") { return this.request<WorkspaceInvite>("POST", "/workspaces/current/invites", { body: { email, role } }); }
+  listInvites() { return this.request<List<WorkspaceInvite>>("GET", "/workspaces/current/invites"); }
+  revokeInvite(inviteId: string) { return this.request<{ ok: boolean }>("DELETE", `/workspaces/current/invites/${enc(inviteId)}`); }
+  /** Preview an invite by its bxi_… token (no auth). */
+  getInvite(token: string) { return this.request<InvitePreview>("GET", `/workspace-invites/${enc(token)}`); }
+  /** Join the invited workspace (session of the invited email); it becomes the current workspace. */
+  acceptInvite(token: string) { return this.request<Me>("POST", `/workspace-invites/${enc(token)}/accept`, { body: {} }); }
+  /** Platform admin: every workspace with plan, members, boxes and month spend. */
+  adminWorkspaces() { return this.request<List<Workspace & { members: number; boxes: number; spent_month_usd: number }>>("GET", "/admin/workspaces"); }
+  /** Platform admin: set plan, quota_overrides, status or name. */
+  adminUpdateWorkspace(workspaceId: string, patch: { plan?: Plan | ""; quota_overrides?: Partial<Omit<Quota, "plan">>; status?: "active" | "suspended"; name?: string }) {
+    return this.request<Workspace>("PATCH", `/admin/workspaces/${enc(workspaceId)}`, { body: patch });
   }
 
   // ---- tool bridge ----
@@ -621,3 +681,39 @@ export interface GatewayInfo {
   providers: { provider: string; preview_host: boolean; private_preview: boolean; note: string }[];
   check?: { ok: boolean; status?: number; latency_ms: number; error?: string; checked_at: string };
 }
+
+// ---- v2.0 tenancy ----
+export type Role = "owner" | "admin" | "developer" | "billing" | "viewer" | "auditor";
+export type Plan = "free" | "pro" | "team" | "unlimited";
+/** Effective workspace limits; 0 means unlimited. */
+export interface Quota {
+  plan: string; max_boxes: number; max_cpu_per_box: number; max_ram_mb_per_box: number; max_ttl_hours: number;
+  public_url: boolean; egress: "restricted" | "open"; max_members: number; max_agents: number; max_keys: number;
+  max_secrets: number; max_boxes_per_minute: number;
+}
+export interface Workspace {
+  id: string; name: string; owner_user_id: string; plan?: string; quota_overrides?: Partial<Omit<Quota, "plan">>;
+  status?: "active" | "suspended"; created_at: string; created_by?: string;
+  /** caller's role (GET /workspaces, /workspaces/current) */
+  role?: string;
+  /** GET /workspaces/current */
+  quota?: Quota; permissions?: string[]; member_count?: number;
+}
+export interface Me { user: { id: string; email: string; name?: string; [k: string]: unknown }; workspace: Workspace | null; workspaces: Workspace[]; role: string; permissions: string[]; platform_admin: boolean }
+export interface Usage {
+  workspace_id: string; plan: string; quota: Quota;
+  used: { boxes: number; boxes_total: number; agents: number; keys: number; secrets: number; members: number; spent_today_usd: number; spent_month_usd: number };
+}
+export interface Member { user_id: string; email: string; name?: string; role: string; email_verified: boolean; joined_at: string }
+export interface WorkspaceInvite {
+  id: string; workspace_id: string; email: string; role: string; invited_by: string; expires_at: string;
+  accepted_at: string | null; accepted_by?: string; created_at: string; status: "pending" | "accepted" | "expired";
+  /** create response only */
+  invite_url?: string; mailed?: boolean;
+}
+export interface InvitePreview { workspace: { id: string; name: string }; email: string; role: string; invited_by: string; expires_at: string; status: "pending" | "accepted" | "expired"; account_exists: boolean }
+export type LocationRegion = "eu" | "us" | "apac" | "sandbox" | "local" | "other";
+export interface BoxLocation { region: LocationRegion; country?: string; city?: string; provider: string; site: string; host?: string }
+export interface LocationRow extends BoxLocation { running: number; sleeping: number; total: number; cost_today_usd: number }
+export interface RegionRow { region: string; running: number; sleeping: number; total: number; cost_today_usd: number }
+export interface LocationsView { items: LocationRow[]; regions: RegionRow[]; total: RegionRow }

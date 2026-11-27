@@ -49,6 +49,8 @@ class Box(TypedDict, total=False):
     next: List[str]
     subdomain: str
     port_labels: Dict[str, str]
+    workspace_id: str  # v2.0
+    location: "BoxLocation"  # v2.0, null until placed
 
 
 class ExecResult(TypedDict, total=False):
@@ -192,6 +194,140 @@ class ApiKey(TypedDict, total=False):
     scopes: List[str]
     key: str
     created_at: str
+    # v2.0
+    workspace_id: str
+    kind: Literal["platform", "workspace", "agent"]
+    expires_at: Optional[str]
+    created_by: str
+    last_used_at: Optional[str]
+    revoked_at: Optional[str]
+
+
+# -- v2.0 tenancy ---------------------------------------------------------------
+Role = Literal["owner", "admin", "developer", "billing", "viewer", "auditor"]
+Plan = Literal["free", "pro", "team", "unlimited"]
+
+
+class Quota(TypedDict, total=False):
+    """Effective workspace limits; 0 means unlimited."""
+    plan: str
+    max_boxes: int
+    max_cpu_per_box: float
+    max_ram_mb_per_box: int
+    max_ttl_hours: int
+    public_url: bool
+    egress: Literal["restricted", "open"]
+    max_members: int
+    max_agents: int
+    max_keys: int
+    max_secrets: int
+    max_boxes_per_minute: int
+
+
+class Workspace(TypedDict, total=False):
+    id: str
+    name: str
+    owner_user_id: str
+    plan: str
+    quota_overrides: Dict[str, Any]
+    status: Literal["active", "suspended"]
+    created_at: str
+    created_by: str
+    role: str  # caller's role (GET /workspaces, /workspaces/current)
+    quota: Quota  # /workspaces/current
+    permissions: List[str]
+    member_count: int
+
+
+class Me(TypedDict, total=False):
+    user: Dict[str, Any]
+    workspace: Optional[Workspace]
+    workspaces: List[Workspace]
+    role: str
+    permissions: List[str]
+    platform_admin: bool
+
+
+class UsageCounts(TypedDict, total=False):
+    boxes: int
+    boxes_total: int
+    agents: int
+    keys: int
+    secrets: int
+    members: int
+    spent_today_usd: float
+    spent_month_usd: float
+
+
+class Usage(TypedDict, total=False):
+    workspace_id: str
+    plan: str
+    quota: Quota
+    used: UsageCounts
+
+
+class Member(TypedDict, total=False):
+    user_id: str
+    email: str
+    name: str
+    role: str
+    email_verified: bool
+    joined_at: str
+
+
+class WorkspaceInvite(TypedDict, total=False):
+    id: str
+    workspace_id: str
+    email: str
+    role: str
+    invited_by: str
+    expires_at: str
+    accepted_at: Optional[str]
+    accepted_by: str
+    created_at: str
+    status: Literal["pending", "accepted", "expired"]
+    invite_url: str  # create response only
+    mailed: bool  # create response only
+
+
+class InvitePreview(TypedDict, total=False):
+    workspace: Dict[str, str]
+    email: str
+    role: str
+    invited_by: str
+    expires_at: str
+    status: Literal["pending", "accepted", "expired"]
+    account_exists: bool
+
+
+class BoxLocation(TypedDict, total=False):
+    region: Literal["eu", "us", "apac", "sandbox", "local", "other"]
+    country: str
+    city: str
+    provider: str
+    site: str
+    host: str
+
+
+class LocationRow(BoxLocation, total=False):
+    running: int
+    sleeping: int
+    total: int
+    cost_today_usd: float
+
+
+class RegionRow(TypedDict, total=False):
+    region: str
+    running: int
+    sleeping: int
+    total: int
+    cost_today_usd: float
+
+
+class LocationsView(TypedDict, total=False):
+    items: List[LocationRow]
+    regions: List[RegionRow]
+    total: RegionRow
 
 
 BatchCommand = Union[str, Dict[str, Any]]
@@ -200,4 +336,7 @@ __all__ = [
     "Agent", "AgentKind", "ApiKey", "BatchCommand", "BatchItem", "BatchResult", "Box", "BoxStatus", "Event",
     "ExecResult", "Job", "JobRef", "Lifecycle", "Locale", "Quote", "QuoteOption", "Snapshot", "Snippet", "Spec",
     "Template", "ToolFormat",
+    # v2.0 tenancy
+    "BoxLocation", "InvitePreview", "LocationRow", "LocationsView", "Me", "Member", "Plan", "Quota", "RegionRow", "Role",
+    "Usage", "UsageCounts", "Workspace", "WorkspaceInvite",
 ]

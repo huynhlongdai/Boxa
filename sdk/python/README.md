@@ -43,6 +43,26 @@ admin = Boxmes(admin_key, base_url)
 print(admin.lint_adapter(open("my-sandbox.yaml").read()))   # {ok, error?, info?} — admin key
 ```
 
+### v2.0 — workspaces, roles, quotas, workspace keys, box locations
+
+```python
+me = Boxmes(session_token, base_url)                 # bxs_… session (POST /v1/auth/login) or a workspace key
+print(me.me()["role"], me.get_workspace()["quota"])  # owner | admin | developer | billing | viewer | auditor
+me.switch_workspace("ws_…"); me.create_workspace("Side project"); me.rename_workspace("Team A")
+print(me.workspace_usage()["used"], me.workspace_audit(type="member.invited", limit=50)["items"])
+inv = me.create_invite("dev@example.com", "developer")     # inv["invite_url"] shown once (…/invite/bxi_…)
+Boxmes(None, base_url).get_invite(token)                    # preview, no auth; invitee: accept_invite(token)
+me.list_members(); me.update_member_role(user_id, "viewer"); me.remove_member(user_id)
+me.list_invites(); me.revoke_invite(invite_id)
+key = me.create_key(None, "ci", ["boxes:read", "boxes:write", "exec"], expires_in_days=30)["key"]
+me.list_boxes(region="eu", location="hetzner-fsn"); me.box_locations()
+try:
+    me.create_box("base")
+except BoxmesError as e:
+    if e.code == "QUOTA_EXCEEDED": print(e.details)          # {quota, limit, used, plan, upgrade_url}
+# platform admin: admin_workspaces(), admin_update_workspace(ws_id, plan="pro", quota_overrides={...})
+```
+
 ## Function calling with any LLM
 
 Tool schemas come from the server (`GET /v1/tools`, the same source as the MCP server); tool calls are

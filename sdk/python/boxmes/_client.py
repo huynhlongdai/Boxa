@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Mapping, Optional, 
 
 from .types import (
     Agent, AgentKind, ApiKey, BatchCommand, BatchResult, Box, Event, ExecResult, Job, JobRef, Quote,
-    Snapshot, Snippet, Template,
+    Snapshot, Snippet, Template, InvitePreview, LocationsView, Me, Member, Usage, Workspace, WorkspaceInvite,
 )
 
 try:  # optional dependency
@@ -64,6 +64,12 @@ class BoxmesError(Exception):
     @property
     def retryable(self) -> bool:
         return self.code in RETRYABLE
+
+    @property
+    def details(self) -> Dict[str, Any]:
+        """Machine-readable context (v2.0), e.g. QUOTA_EXCEEDED ``{quota, limit, used, plan, upgrade_url}``."""
+        d = self.body.get("details") if isinstance(self.body, dict) else None
+        return d if isinstance(d, dict) else {}
 
 
 def _error_from(status: int, body: bytes) -> BoxmesError:
@@ -177,9 +183,18 @@ class _Base:
     up = create_box
 
     def list_boxes(self, *, status: Optional[str] = None, lifecycle: Optional[str] = None,
-                   agent: Optional[str] = None, provider: Optional[str] = None, all: Optional[bool] = None) -> Dict[str, List[Box]]:
+                   agent: Optional[str] = None, provider: Optional[str] = None, all: Optional[bool] = None,
+                   region: Optional[str] = None, location: Optional[str] = None,
+                   workspace: Optional[str] = None) -> Dict[str, List[Box]]:
+        """List boxes. v2.0 filters: ``region`` (eu | us | apac | sandbox | local | other),
+        ``location`` (site such as ``hetzner-fsn``), ``workspace`` (platform admin only; ignored for members)."""
         return self._call("GET", "/boxes", params={"status": status, "lifecycle": lifecycle, "agent": agent,
-                                                   "provider": provider, "all": all})
+                                                   "provider": provider, "all": all, "region": region,
+                                                   "location": location, "workspace": workspace})
+
+    def box_locations(self) -> LocationsView:
+        """v2.0: active boxes and today's cost per location (site) and region of the caller's scope."""
+        return self._call("GET", "/boxes/locations")
 
     def get_box(self, box_id: str) -> Box:
         return self._call("GET", f"/boxes/{_q(box_id)}")
@@ -513,8 +528,102 @@ class _Base:
     def create_agent(self, name: str, kind: str = "custom", **fields: Any) -> Agent:
         return self._call("POST", "/agents", {"name": name, "kind": kind, **fields})
 
-    def create_key(self, agent_id: Optional[str], name: str = "sdk", scopes: Optional[List[str]] = None) -> ApiKey:
-        return self._call("POST", "/keys", _clean({"agent_id": agent_id, "name": name, "scopes": scopes}))
+    def create_key(self, agent_id: Optional[str] = None, name: str = "sdk", scopes: Optional[List[str]] = None, *,
+                   expires_in_days: Optional[int] = None, expires_at: Optional[str] = None,
+                   workspace_id: Optional[str] = None) -> ApiKey:
+        """Create an API key (the secret ``key`` is returned once). ``agent_id=None`` from a workspace
+        caller makes a v2.0 workspace key; its ``scopes`` are among boxes:read, boxes:write, exec,
+        secrets:read, secrets:write, billing:read, admin (default boxes:read+boxes:write+exec).
+        Expiry: ``expires_in_days`` or ``expires_at`` (RFC3339, future). ``workspace_id``: platform callers only."""
+        return self._call("POST", "/keys", _clean({"agent_id": agent_id, "name": name, "scopes": scopes,
+                                                   "expires_in_days": expires_in_days, "expires_at": expires_at,
+                                                   "workspace_id": workspace_id}))
+
+    def list_keys(self) -> Dict[str, List[ApiKey]]:
+        return self._call("GET", "/keys")
+
+    def revoke_key(self, key_id: str) -> Dict[str, Any]:
+        return self._call("DELETE", f"/keys/{_q(key_id)}")
+
+    # -- v2.0 tenancy: account, workspaces, members, invites ---------------------
+    # Session endpoints (me, switch_workspace, create_workspace, accept_invite) need a
+    # session token ``bxs_…`` as api_key; workspace routes also accept a workspace key.
+    def me(self) -> Me:
+        """Signed-in user, current workspace, role and permissions."""
+        return self._call("GET", "/auth/me")
+
+    def switch_workspace(self, workspace_id: str) -> Me:
+        """Point the session at another workspace the user belongs to (404 if not a member)."""
+        return self._call("POST", "/auth/workspace", {"workspace_id": workspace_id})
+
+    def list_workspaces(self) -> Dict[str, List[Workspace]]:
+        """Workspaces of the signed-in user, each with ``role``."""
+        return self._call("GET", "/workspaces")
+
+    def create_workspace(self, name: str) -> Workspace:
+        """New workspace owned by the caller (plan = instance default). Does not switch the session."""
+        return self._call("POST", "/workspaces", {"name": name})
+
+    def get_workspace(self) -> Workspace:
+        """Current workspace with ``role``, ``plan``, effective ``quota``, ``permissions``, ``member_count``."""
+        return self._call("GET", "/workspaces/current")
+
+    def rename_workspace(self, name: str) -> Workspace:
+        return self._call("PATCH", "/workspaces/current", {"name": name})
+
+    def workspace_usage(self) -> Usage:
+        """Plan, effective quota and current usage of the workspace."""
+        return self._call("GET", "/workspaces/current/usage")
+
+    def workspace_audit(self, *, actor: Optional[str] = None, type: Optional[str] = None, box: Optional[str] = None,
+                        agent: Optional[str] = None, limit: Optional[int] = None) -> Dict[str, List[Event]]:
+        """Workspace audit log (``audit:read``: owner, admin, auditor)."""
+        return self._call("GET", "/workspaces/current/audit",
+                          params={"actor": actor, "type": type, "box": box, "agent": agent, "limit": limit})
+
+    def plans(self) -> Dict[str, List[Dict[str, Any]]]:
+        """Built-in plans and their quotas (no auth)."""
+        return self._call("GET", "/plans")
+
+    def list_members(self) -> Dict[str, List[Member]]:
+        return self._call("GET", "/workspaces/current/members")
+
+    def update_member_role(self, user_id: str, role: str) -> Member:
+        """Role: owner | admin | developer | billing | viewer | auditor (owner role: owners only)."""
+        return self._call("PATCH", f"/workspaces/current/members/{_q(user_id)}", {"role": role})
+
+    def remove_member(self, user_id: str) -> Dict[str, Any]:
+        """Remove a member (``members:write``), or leave the workspace with your own user id."""
+        return self._call("DELETE", f"/workspaces/current/members/{_q(user_id)}")
+
+    def create_invite(self, email: str, role: str = "developer") -> WorkspaceInvite:
+        """Invite an email into the current workspace (7 days). ``invite_url`` is returned once."""
+        return self._call("POST", "/workspaces/current/invites", {"email": email, "role": role})
+
+    def list_invites(self) -> Dict[str, List[WorkspaceInvite]]:
+        return self._call("GET", "/workspaces/current/invites")
+
+    def revoke_invite(self, invite_id: str) -> Dict[str, Any]:
+        return self._call("DELETE", f"/workspaces/current/invites/{_q(invite_id)}")
+
+    def get_invite(self, token: str) -> InvitePreview:
+        """Preview an invite by its ``bxi_…`` token (no auth needed)."""
+        return self._call("GET", f"/workspace-invites/{_q(token)}")
+
+    def accept_invite(self, token: str) -> Me:
+        """Join the invited workspace (session of the invited email); it becomes the current workspace."""
+        return self._call("POST", f"/workspace-invites/{_q(token)}/accept", {})
+
+    # platform admin
+    def admin_workspaces(self) -> Dict[str, List[Workspace]]:
+        return self._call("GET", "/admin/workspaces")
+
+    def admin_update_workspace(self, workspace_id: str, *, plan: Optional[str] = None,
+                               quota_overrides: Optional[Mapping[str, Any]] = None, status: Optional[str] = None,
+                               name: Optional[str] = None) -> Workspace:
+        """Set plan (free | pro | team | unlimited), quota_overrides, status (active | suspended) or name."""
+        return self._call("PATCH", f"/admin/workspaces/{_q(workspace_id)}",
+                          _clean({"plan": plan, "quota_overrides": quota_overrides, "status": status, "name": name}))
 
     # -- MCP tool bridge -------------------------------------------------------
     def _mcp_body(self, name: str, arguments: Mapping[str, Any]) -> Dict[str, Any]:
@@ -682,7 +791,7 @@ class AsyncBoxmes(_Base):
         async def errors(self) -> Dict[str, Any]: ...
         async def quote(self, template: Optional[str] = None, lifecycle: Optional[str] = None, *, cpu: Optional[float] = None, ram_mb: Optional[int] = None, disk_gb: Optional[int] = None, **extra: Any) -> Quote: ...
         async def create_box(self, template: Optional[str] = "base", lifecycle: Optional[str] = "session", *, cpu: Optional[float] = None, ram_mb: Optional[int] = None, disk_gb: Optional[int] = None, idempotency_key: Optional[str] = None, wait: bool = True, **extra: Any) -> Box: ...
-        async def list_boxes(self, *, status: Optional[str] = None, lifecycle: Optional[str] = None, agent: Optional[str] = None, provider: Optional[str] = None, all: Optional[bool] = None) -> Dict[str, List[Box]]: ...
+        async def list_boxes(self, *, status: Optional[str] = None, lifecycle: Optional[str] = None, agent: Optional[str] = None, provider: Optional[str] = None, all: Optional[bool] = None, region: Optional[str] = None, location: Optional[str] = None, workspace: Optional[str] = None) -> Dict[str, List[Box]]: ...
         async def get_box(self, box_id: str) -> Box: ...
         async def delete_box(self, box_id: str) -> Box: ...
         async def sleep(self, box_id: str) -> Box: ...
@@ -705,10 +814,33 @@ class AsyncBoxmes(_Base):
         async def overview(self) -> Dict[str, Any]: ...
         async def snippet(self, agent_id: str, kind: Optional[str] = None, lang: Optional[str] = None) -> Snippet: ...
         async def create_agent(self, name: str, kind: str = "custom", **fields: Any) -> Agent: ...
-        async def create_key(self, agent_id: Optional[str], name: str = "sdk", scopes: Optional[List[str]] = None) -> ApiKey: ...
+        async def create_key(self, agent_id: Optional[str] = None, name: str = "sdk", scopes: Optional[List[str]] = None, *, expires_in_days: Optional[int] = None, expires_at: Optional[str] = None, workspace_id: Optional[str] = None) -> ApiKey: ...
+        async def list_keys(self) -> Dict[str, List[ApiKey]]: ...
+        async def revoke_key(self, key_id: str) -> Dict[str, Any]: ...
+        async def box_locations(self) -> LocationsView: ...
+        async def me(self) -> Me: ...
+        async def switch_workspace(self, workspace_id: str) -> Me: ...
+        async def list_workspaces(self) -> Dict[str, List[Workspace]]: ...
+        async def create_workspace(self, name: str) -> Workspace: ...
+        async def get_workspace(self) -> Workspace: ...
+        async def rename_workspace(self, name: str) -> Workspace: ...
+        async def workspace_usage(self) -> Usage: ...
+        async def workspace_audit(self, *, actor: Optional[str] = None, type: Optional[str] = None, box: Optional[str] = None, agent: Optional[str] = None, limit: Optional[int] = None) -> Dict[str, List[Event]]: ...
+        async def plans(self) -> Dict[str, List[Dict[str, Any]]]: ...
+        async def list_members(self) -> Dict[str, List[Member]]: ...
+        async def update_member_role(self, user_id: str, role: str) -> Member: ...
+        async def remove_member(self, user_id: str) -> Dict[str, Any]: ...
+        async def create_invite(self, email: str, role: str = "developer") -> WorkspaceInvite: ...
+        async def list_invites(self) -> Dict[str, List[WorkspaceInvite]]: ...
+        async def revoke_invite(self, invite_id: str) -> Dict[str, Any]: ...
+        async def get_invite(self, token: str) -> InvitePreview: ...
+        async def accept_invite(self, token: str) -> Me: ...
+        async def admin_workspaces(self) -> Dict[str, List[Workspace]]: ...
+        async def admin_update_workspace(self, workspace_id: str, *, plan: Optional[str] = None, quota_overrides: Optional[Mapping[str, Any]] = None, status: Optional[str] = None, name: Optional[str] = None) -> Workspace: ...
         up = create_box
         down = delete_box
 
 
 # Typed aliases for readers (methods return these shapes).
-_ = (Agent, AgentKind, ApiKey, BatchResult, Box, Event, ExecResult, JobRef, Quote, Snapshot, Snippet, Template)
+_ = (Agent, AgentKind, ApiKey, BatchResult, Box, Event, ExecResult, JobRef, Quote, Snapshot, Snippet, Template,
+     InvitePreview, LocationsView, Me, Member, Usage, Workspace, WorkspaceInvite)

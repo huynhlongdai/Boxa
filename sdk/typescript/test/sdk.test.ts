@@ -312,3 +312,155 @@ test("v1.11 access: ssh certificates, desktop share links, browser/desktop statu
     await bx.deleteBox(box.id);
   }
 });
+
+// ---- v2.0 tenancy ----
+
+type Rec = { method: string; path: string; query: Record<string, string>; body: unknown; auth?: string };
+function mockFetch(answers: Record<string, [number, unknown]> = {}) {
+  const calls: Rec[] = [];
+  const f = (async (input: string | URL | Request, init?: RequestInit) => {
+    const u = new URL(String(input));
+    const method = init?.method ?? "GET";
+    const h = (init?.headers ?? {}) as Record<string, string>;
+    calls.push({ method, path: u.pathname, query: Object.fromEntries(u.searchParams), body: init?.body ? JSON.parse(String(init.body)) : undefined, auth: h.Authorization });
+    const [st, ans] = answers[`${method} ${u.pathname}`] ?? [200, { ok: true }];
+    return new Response(JSON.stringify(ans), { status: st, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  return { calls, f };
+}
+
+test("v2.0 tenancy routes (mocked fetch)", async () => {
+  const { calls, f } = mockFetch();
+  const bx = new Boxmes({ apiKey: "bxs_session", baseUrl: "http://core.test:9", fetch: f, maxRetries: 0 });
+  await bx.me();
+  await bx.switchWorkspace("ws_b");
+  await bx.listWorkspaces();
+  await bx.createWorkspace("Team B");
+  await bx.getWorkspace();
+  await bx.renameWorkspace("Team B2");
+  await bx.workspaceUsage();
+  await bx.workspaceAudit({ type: "member.invited", limit: 50 });
+  await bx.plans();
+  await bx.listMembers();
+  await bx.updateMemberRole("usr_1", "viewer");
+  await bx.removeMember("usr_1");
+  await bx.createInvite("a@example.com", "auditor");
+  await bx.listInvites();
+  await bx.revokeInvite("wsi_1");
+  await bx.getInvite("bxi_abc");
+  await bx.acceptInvite("bxi_abc");
+  await bx.boxLocations();
+  await bx.adminWorkspaces();
+  await bx.adminUpdateWorkspace("ws_b", { plan: "pro", quota_overrides: { max_boxes: 3 } });
+  assert.deepEqual(calls.map((c) => `${c.method} ${c.path}`), [
+    "GET /v1/auth/me", "POST /v1/auth/workspace", "GET /v1/workspaces", "POST /v1/workspaces", "GET /v1/workspaces/current",
+    "PATCH /v1/workspaces/current", "GET /v1/workspaces/current/usage", "GET /v1/workspaces/current/audit", "GET /v1/plans",
+    "GET /v1/workspaces/current/members", "PATCH /v1/workspaces/current/members/usr_1", "DELETE /v1/workspaces/current/members/usr_1",
+    "POST /v1/workspaces/current/invites", "GET /v1/workspaces/current/invites", "DELETE /v1/workspaces/current/invites/wsi_1",
+    "GET /v1/workspace-invites/bxi_abc", "POST /v1/workspace-invites/bxi_abc/accept", "GET /v1/boxes/locations",
+    "GET /v1/admin/workspaces", "PATCH /v1/admin/workspaces/ws_b",
+  ]);
+  assert.deepEqual(calls[1].body, { workspace_id: "ws_b" });
+  assert.deepEqual(calls[3].body, { name: "Team B" });
+  assert.deepEqual(calls[7].query, { type: "member.invited", limit: "50" });
+  assert.deepEqual(calls[10].body, { role: "viewer" });
+  assert.deepEqual(calls[12].body, { email: "a@example.com", role: "auditor" });
+  assert.deepEqual(calls[19].body, { plan: "pro", quota_overrides: { max_boxes: 3 } });
+  assert.ok(calls.every((c) => c.auth === "Bearer bxs_session"));
+});
+
+test("v2.0 keys with scopes/expiry, box filters, error details (mocked fetch)", async () => {
+  const quota = { error: { code: "QUOTA_EXCEEDED", message: "workspace quota max_boxes exceeded (limit 1, used 1)", hint: "upgrade", details: { quota: "max_boxes", limit: 1, used: 1, plan: "free" } } };
+  const { calls, f } = mockFetch({
+    "POST /v1/boxes": [403, quota],
+    "POST /v1/boxes/box_1/exec": [401, { error: { code: "UNAUTHORIZED", message: 'key lacks scope "exec"' } }],
+    "GET /v1/boxes/box_other": [404, { error: { code: "NOT_FOUND", message: "box not found" } }],
+  });
+  const bx = new Boxmes({ apiKey: "bx_ws_x", baseUrl: "http://core.test:9", fetch: f, maxRetries: 2 });
+  await bx.createKey(null, "ci", ["boxes:read", "exec"], { expires_in_days: 30 });
+  await bx.createKey(null, "until", undefined, { expires_at: "2030-01-01T00:00:00Z" });
+  await bx.listKeys();
+  await bx.revokeKey("key_1");
+  await bx.listBoxes({ region: "eu", location: "hetzner-fsn", provider: "hetzner", all: true });
+  assert.deepEqual(calls[0].body, { agent_id: null, name: "ci", scopes: ["boxes:read", "exec"], expires_in_days: 30 });
+  assert.deepEqual(calls[1].body, { agent_id: null, name: "until", expires_at: "2030-01-01T00:00:00Z" });
+  assert.equal(`${calls[2].method} ${calls[2].path}`, "GET /v1/keys");
+  assert.equal(`${calls[3].method} ${calls[3].path}`, "DELETE /v1/keys/key_1");
+  assert.deepEqual(calls[4].query, { region: "eu", location: "hetzner-fsn", provider: "hetzner", all: "true" });
+  const n = calls.length;
+  await assert.rejects(bx.createBox({ template: "base" }), (e: BoxmesError) => e.status === 403 && e.code === "QUOTA_EXCEEDED" && !e.retryable && e.details.quota === "max_boxes" && e.details.limit === 1);
+  assert.equal(calls.length, n + 1); // not retried
+  await assert.rejects(bx.exec("box_1", "id"), (e: BoxmesError) => e.status === 401 && e.code === "UNAUTHORIZED");
+  await assert.rejects(bx.getBox("box_other"), (e: BoxmesError) => e.code === "NOT_FOUND" && Object.keys(e.details).length === 0);
+});
+
+test("v2.0 tenancy live: workspace, plan quota, scoped key, invite flow, roles, switch", { skip }, async () => {
+  const pub = new Boxmes({ apiKey: "", baseUrl: url });
+  const adm = new Boxmes({ apiKey: admin, baseUrl: url });
+  const tag = String(Date.now());
+  type Auth = { token: string; user: { id: string } };
+  const signup = (body: Record<string, unknown>) => pub.request<Auth>("POST", "/auth/signup", { body: { password: "password123", ...body } });
+  await signup({ email: `root-${tag}@example.com` }).catch(() => undefined); // first account = platform admin
+  const { code } = await adm.request<{ code: string }>("POST", "/admin/invites", { body: { max_uses: 1 } });
+  const a = await signup({ email: `owner-${tag}@example.com`, invite_code: code, workspace: "TS A" });
+  const A = new Boxmes({ apiKey: a.token, baseUrl: url });
+  const me = await A.me();
+  const ws = me.workspace!.id;
+  assert.ok(me.role === "owner" && me.permissions.includes("members:write") && !me.platform_admin);
+  const cur = await A.getWorkspace();
+  assert.ok(cur.plan === "free" && cur.quota!.max_members === 1 && cur.member_count === 1);
+  assert.equal((await A.renameWorkspace("TS A2")).name, "TS A2");
+  const plans = Object.fromEntries((await A.plans()).items.map((p) => [p.id, p.quota]));
+  assert.ok(plans.pro.max_boxes === 10 && plans.team.max_members === 0 && plans.free.egress === "restricted");
+  await assert.rejects(A.request("PATCH", "/workspaces/current", { body: { plan: "team" } }), (e: BoxmesError) => e.status === 403 && e.code === "POLICY_DENIED");
+  await assert.rejects(A.createInvite(`dev-${tag}@example.com`), (e: BoxmesError) => e.code === "QUOTA_EXCEEDED" && e.details.quota === "max_members");
+  assert.equal((await adm.adminUpdateWorkspace(ws, { plan: "pro" })).plan, "pro");
+  assert.ok((await adm.adminWorkspaces()).items.some((w) => w.id === ws));
+
+  const k = await A.createKey(null, "ci", ["boxes:read"], { expires_in_days: 7 });
+  assert.ok(k.key && k.kind === "workspace" && k.expires_at);
+  const ro = new Boxmes({ apiKey: k.key!, baseUrl: url });
+  assert.deepEqual((await ro.listBoxes()).items, []);
+  await assert.rejects(ro.createInvite("x@example.com"), (e: BoxmesError) => e.status === 401 && e.code === "UNAUTHORIZED");
+  await A.revokeKey(k.id);
+  await assert.rejects(A.createKey(null, "old", undefined, { expires_at: "2001-01-01T00:00:00Z" }), (e: BoxmesError) => e.code === "INVALID");
+
+  const inv = await A.createInvite(`dev-${tag}@example.com`, "developer");
+  const tok = inv.invite_url!.split("/").pop()!;
+  assert.ok(tok.startsWith("bxi_") && inv.status === "pending");
+  const pv = await pub.getInvite(tok);
+  assert.ok(pv.workspace.id === ws && pv.role === "developer" && pv.account_exists === false);
+  const d = await signup({ email: `dev-${tag}@example.com`, workspace_invite: tok });
+  const D = new Boxmes({ apiKey: d.token, baseUrl: url });
+  assert.equal((await D.me()).role, "developer");
+  await assert.rejects(D.createInvite("y@example.com"), (e: BoxmesError) => e.status === 403 && e.code === "POLICY_DENIED");
+  assert.equal((await A.updateMemberRole(d.user.id, "auditor")).role, "auditor");
+  const ws2 = await A.createWorkspace("TS side");
+  assert.equal((await A.switchWorkspace(ws2.id)).workspace!.id, ws2.id);
+  assert.equal((await A.switchWorkspace(ws)).workspace!.id, ws);
+  await assert.rejects(D.switchWorkspace(ws2.id), (e: BoxmesError) => e.status === 404);
+  const inv2 = await A.createInvite(`later-${tag}@example.com`, "viewer");
+  await A.revokeInvite(inv2.id);
+  assert.ok((await A.listInvites()).items.every((i) => i.id !== inv2.id));
+  await A.removeMember(d.user.id);
+  assert.deepEqual((await A.listMembers()).items.map((m) => m.user_id), [a.user.id]);
+  const u = await A.workspaceUsage();
+  assert.ok(u.plan === "pro" && u.used.members === 1 && u.quota.max_boxes === 10);
+  const types = new Set((await A.workspaceAudit({ limit: 200 })).items.map((e) => e.type));
+  for (const t of ["member.invited", "member.joined", "member.role_changed", "member.removed"]) assert.ok(types.has(t), t);
+});
+
+test("v2.0 box locations + list filters (live)", { skip }, async () => {
+  const bx = new Boxmes({ apiKey: key, baseUrl: url });
+  const box = await bx.createBox({ template: "base", lifecycle: "session", slug: "sdk-ts-loc" });
+  try {
+    assert.equal(box.location!.region, "local");
+    assert.ok((await bx.listBoxes({ region: "local" })).items.some((b) => b.id === box.id));
+    assert.ok(!(await bx.listBoxes({ region: "eu" })).items.some((b) => b.id === box.id));
+    assert.ok((await bx.listBoxes({ location: box.location!.site })).items.some((b) => b.id === box.id));
+    const loc = await bx.boxLocations();
+    assert.ok(loc.total.total >= 1 && loc.regions.some((r) => r.region === "local"));
+  } finally {
+    await bx.deleteBox(box.id);
+  }
+});

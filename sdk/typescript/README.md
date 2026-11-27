@@ -37,6 +37,23 @@ console.log(rec.pick?.provider, rec.pick?.tier, rec.rejected.map((r) => r.reason
 const lint = await new Boxmes({ apiKey: adminKey }).lintAdapter(yamlText);   // { ok, error?, info? } — admin key
 ```
 
+### v2.0 — workspaces, roles, quotas, workspace keys, box locations
+
+```ts
+const me = new Boxmes({ apiKey: sessionToken });            // bxs_… session or a workspace key
+const { role, permissions } = await me.me();                // owner | admin | developer | billing | viewer | auditor
+await me.switchWorkspace("ws_…"); await me.createWorkspace("Side project"); await me.renameWorkspace("Team A");
+const { quota, used } = await me.workspaceUsage(); await me.workspaceAudit({ type: "member.invited", limit: 50 });
+const inv = await me.createInvite("dev@example.com", "developer");   // inv.invite_url shown once
+await new Boxmes({ apiKey: "" }).getInvite(token); /* invitee: */ await me.acceptInvite(token);
+await me.listMembers(); await me.updateMemberRole(userId, "viewer"); await me.removeMember(userId);
+await me.listInvites(); await me.revokeInvite(inviteId);
+const { key } = await me.createKey(null, "ci", ["boxes:read", "boxes:write", "exec"], { expires_in_days: 30 });
+await me.listBoxes({ region: "eu", location: "hetzner-fsn" }); await me.boxLocations();
+// QUOTA_EXCEEDED → BoxmesError.details = { quota, limit, used, plan, upgrade_url }
+// platform admin: adminWorkspaces(), adminUpdateWorkspace(wsId, { plan: "pro", quota_overrides: { max_boxes: 20 } })
+```
+
 ## Function calling
 
 ```ts
