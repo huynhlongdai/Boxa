@@ -57,6 +57,7 @@ type SSHKey struct {
 	AgentID     string    `json:"agent_id,omitempty"` // "" = admin key owner
 	KeyID       string    `json:"key_id,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
+	WorkspaceID string    `json:"workspace_id,omitempty"` // v2.0
 }
 
 // TerminalSession is a durable PTY in a box (survives WebSocket drops).

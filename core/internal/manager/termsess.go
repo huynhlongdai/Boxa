@@ -401,7 +401,7 @@ func (m *Manager) TerminalAttach(ctx context.Context, p *Principal, b *model.Box
 	if err := p.Require(model.ScopeBoxExec); err != nil {
 		return nil, err
 	}
-	if !p.Admin && b.AgentID != p.AgentID {
+	if !p.Sees(b.WorkspaceID, b.AgentID) {
 		return nil, notFound("box", b.ID)
 	}
 	v := newViewer()

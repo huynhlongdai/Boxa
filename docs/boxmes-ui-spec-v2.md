@@ -124,6 +124,7 @@ Tiến độ "3/5" và phần thưởng "+$2 khi hoàn tất".
 - Cột bảng: Tên (+ URL nếu có) · Agent · Trạng thái · Nơi chạy (provider · vùng · T1/T2/T3) · Vòng đời · Uptime · Chi phí / ngân sách · Hành động nhanh (Ngủ/Đánh thức, Snapshot, Terminal, ⋯).
 - Chọn nhiều → thanh hàng loạt: Ngủ, Snapshot, Xoá.
 - Nút chính "+ Tạo box".
+- **Phân loại theo vị trí:** mỗi box có `location` (vùng EU/US/APAC/Sandbox API · quốc gia · thành phố · provider/host). Chip "Vị trí" có đếm số, kết hợp được với tab trạng thái; "Nhóm theo" Không nhóm / Vị trí / Agent / Trạng thái, nhóm Vị trí hiện mục thu gọn "EU — Đức · Falkenstein (Hetzner FSN) · 3 box · $0.61 hôm nay". Sidebar: Boxes xổ ra EU › Falkenstein, Helsinki; APAC › Singapore, Tokyo; US; Sandbox API (kèm số box), mở `#/boxes?loc=`. Tổng quan có thẻ "Box theo vị trí". API: `GET /v1/boxes?region=&provider=&location=`, `GET /v1/boxes/locations`.
 
 ### 6.2 Tạo box (ngăn kéo phải, 3 bước)
 1. **Nguồn:** Template (lưới thẻ) · box.yaml (editor có kiểm lỗi theo dòng) · Fork từ snapshot.

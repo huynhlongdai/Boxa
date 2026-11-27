@@ -101,6 +101,8 @@ type Box struct {
 	// v1.10: extra in-box ports `box forward` / the TCP stream endpoint may
 	// reach (besides exposed ports and 22).
 	ForwardPorts []int `json:"forward_ports,omitempty"`
+	// v2.0: where the box runs (filled on read from provider/region/host).
+	Location *BoxLocation `json:"location,omitempty"`
 }
 
 // Exposure is how one port of a box is reachable from the internet when the
@@ -165,6 +167,7 @@ type Agent struct {
 	MemoryMB       int        `json:"memory_mb"`
 	CreatedAt      time.Time  `json:"created_at"`
 	Locale         string     `json:"locale,omitempty"` // vi|en|zh|ja; AGENTS.md + snippet language
+	CreatedBy      string     `json:"created_by,omitempty"` // v2.0 actor (user:<id> | admin | key:<id>)
 }
 
 type APIKey struct {
@@ -179,6 +182,30 @@ type APIKey struct {
 	RevokedAt   *time.Time `json:"revoked_at"`
 	Hash        string     `json:"-"`
 	Key         string     `json:"key,omitempty"` // only on create
+	// v2.0 workspace keys: kind platform | workspace | agent ("" on keys made
+	// before v2.0: admin scope without agent = platform, else agent).
+	Kind       string     `json:"kind,omitempty"`
+	ExpiresAt  *time.Time `json:"expires_at"`
+	CreatedBy  string     `json:"created_by,omitempty"`
+	LastUsedIP string     `json:"last_used_ip,omitempty"`
+}
+
+// Key kinds (v2.0).
+const (
+	KeyKindPlatform  = "platform"
+	KeyKindWorkspace = "workspace"
+	KeyKindAgent     = "agent"
+)
+
+// EffectiveKind resolves the kind of keys created before v2.0.
+func (k *APIKey) EffectiveKind() string {
+	if k.Kind != "" {
+		return k.Kind
+	}
+	if k.AgentID == nil && k.HasScope(ScopeAdmin) {
+		return KeyKindPlatform
+	}
+	return KeyKindAgent
 }
 
 func (k *APIKey) HasScope(s string) bool {
@@ -222,7 +249,8 @@ type Event struct {
 	Message string    `json:"message"`
 	CostUSD *float64  `json:"cost_usd"`
 	// Data carries structured details (e.g. box.exec: exit_code, tokens_saved, log_id).
-	Data map[string]any `json:"data,omitempty"`
+	Data        map[string]any `json:"data,omitempty"`
+	WorkspaceID string         `json:"workspace_id,omitempty"` // v2.0 ("" = platform-wide)
 }
 
 type Host struct {
@@ -322,6 +350,8 @@ type LedgerEntry struct {
 	AmountUSD float64   `json:"amount_usd"`
 	Note      string    `json:"note"`
 	Billing   string    `json:"-"`
+	// v2.0
+	WorkspaceID string `json:"workspace_id,omitempty"`
 }
 
 type Template struct {
@@ -331,6 +361,7 @@ type Template struct {
 	Uses        int       `json:"uses"`
 	CreatedAt   time.Time `json:"created_at"`
 	Builtin     bool      `json:"builtin,omitempty"`
+	WorkspaceID string    `json:"workspace_id,omitempty"` // v2.0 ("" = built-in, shared)
 }
 
 type Secret struct {
@@ -402,6 +433,8 @@ type Approval struct {
 	DedupeKey string    `json:"-"`
 	BoxID     string    `json:"box_id,omitempty"`
 	AgentID   string    `json:"agent_id,omitempty"`
+	// v2.0 ("" = platform-wide, e.g. the global monthly budget)
+	WorkspaceID string `json:"workspace_id,omitempty"`
 }
 
 // NotifySettings configures reports/alerts. Secrets (bot token, SMTP

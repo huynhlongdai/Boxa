@@ -44,7 +44,7 @@ func (m *Manager) ledgerTick(ctx context.Context) error {
 			continue
 		}
 		amt := model.Round6(b.CostPerHour * dt.Hours())
-		e := &model.LedgerEntry{ID: secret.ID("led"), TS: now, AgentID: b.AgentID, BoxID: b.ID, Provider: b.Provider, Kind: "compute", AmountUSD: amt, Billing: b.Billing,
+		e := &model.LedgerEntry{ID: secret.ID("led"), TS: now, AgentID: b.AgentID, BoxID: b.ID, Provider: b.Provider, Kind: "compute", AmountUSD: amt, Billing: b.Billing, WorkspaceID: b.WorkspaceID,
 			Note: fmt.Sprintf("%s %.0fs × %s/h (%s)", b.Status, dt.Seconds(), fmtUSD(b.CostPerHour), b.Billing)}
 		if err := m.Store.AddLedger(ctx, e); err != nil {
 			return err
@@ -202,31 +202,37 @@ func (m *Manager) createApproval(ctx context.Context, typ, dedupe, title, detail
 			return a
 		}
 	}
-	a := &model.Approval{ID: secret.ID("apr"), Type: typ, Title: title, Detail: detail, AmountUSD: amount, CreatedAt: time.Now().UTC(), Status: "pending", DedupeKey: dedupe, BoxID: boxID, AgentID: agentID}
+	a := &model.Approval{ID: secret.ID("apr"), Type: typ, Title: title, Detail: detail, AmountUSD: amount, CreatedAt: time.Now().UTC(), Status: "pending", DedupeKey: dedupe, BoxID: boxID, AgentID: agentID,
+		WorkspaceID: m.eventWorkspace(context.Background(), boxID, agentID)}
 	if err := m.Store.PutApproval(ctx, a); err != nil {
 		return nil
 	}
-	m.Emit(ctx, "system", boxID, agentID, "approval.created", title, amount)
-	m.Broker.Publish(events.Msg{Type: "approval.created", Data: a, AgentID: ""})
+	m.EmitWS(ctx, a.WorkspaceID, "system", boxID, agentID, "approval.created", title, amount, nil)
+	m.Broker.Publish(events.Msg{Type: "approval.created", Data: a, AgentID: "", WorkspaceID: a.WorkspaceID})
 	m.notifyApproval(a)
 	return a
 }
 
+// ListApprovals lists the workspace's approvals (agent keys: none of theirs
+// are actionable, so they keep the pre-v2.0 "admin only" answer).
 func (m *Manager) ListApprovals(ctx context.Context, p *Principal, status string) ([]*model.Approval, error) {
-	if err := p.Require(model.ScopeAdmin); err != nil {
+	if !p.Admin {
+		return nil, p.Require(model.ScopeAdmin)
+	}
+	if err := p.Can(PermView); err != nil {
 		return nil, err
 	}
-	return m.Store.ListApprovals(ctx, status)
+	return m.Store.ListApprovalsIn(ctx, p.ScopeWS(), status)
 }
 
 // Decide approves or rejects an approval and applies its effect.
 func (m *Manager) Decide(ctx context.Context, p *Principal, id string, approve bool) (*model.Approval, error) {
-	if err := p.Require(model.ScopeAdmin); err != nil {
-		return nil, err
-	}
 	a, err := m.Store.GetApproval(ctx, id)
-	if err != nil {
+	if err != nil || !p.Admin || !p.InScope(a.WorkspaceID) {
 		return nil, notFound("approval", id)
+	}
+	if err := p.Can(PermApprovals); err != nil {
+		return nil, err
 	}
 	if a.Status != "pending" {
 		return nil, model.E(model.ErrInvalid, "approval already %s", a.Status)
@@ -253,7 +259,7 @@ func (m *Manager) Decide(ctx context.Context, p *Principal, id string, approve b
 	if err := m.Store.PutApproval(ctx, a); err != nil {
 		return nil, err
 	}
-	m.Emit(ctx, p.Actor(), a.BoxID, a.AgentID, "approval."+a.Status, a.Title, a.AmountUSD)
+	m.EmitWS(ctx, a.WorkspaceID, p.Actor(), a.BoxID, a.AgentID, "approval."+a.Status, a.Title, a.AmountUSD, nil)
 	return a, nil
 }
 
@@ -290,10 +296,11 @@ func (m *Manager) Overview(ctx context.Context, p *Principal) (*Overview, error)
 	if !p.Admin {
 		agentFilter = p.AgentID
 	}
+	ws := p.ScopeWS()
 	o := &Overview{Cost7d: []DayCost{}, TopTasks: []TopTask{}}
-	o.SpentToday, _ = m.Store.SumLedger(ctx, store.LedgerFilter{AgentID: agentFilter, From: dayStart(now)})
-	o.SpentMonth, _ = m.Store.SumLedger(ctx, store.LedgerFilter{AgentID: agentFilter, From: monthStart(now)})
-	agents, _ := m.Store.ListAgents(ctx)
+	o.SpentToday, _ = m.Store.SumLedger(ctx, store.LedgerFilter{AgentID: agentFilter, WorkspaceID: ws, From: dayStart(now)})
+	o.SpentMonth, _ = m.Store.SumLedger(ctx, store.LedgerFilter{AgentID: agentFilter, WorkspaceID: ws, From: monthStart(now)})
+	agents, _ := m.listAgentsScoped(ctx, p)
 	names := map[string]string{}
 	for _, a := range agents {
 		names[a.ID] = a.Name
@@ -302,10 +309,10 @@ func (m *Manager) Overview(ctx context.Context, p *Principal) (*Overview, error)
 			o.BudgetMonth += a.BudgetMonthUSD
 		}
 	}
-	if s := m.Settings(ctx); s.BudgetMonthUSD > 0 && agentFilter == "" {
+	if s := m.Settings(ctx); s.BudgetMonthUSD > 0 && agentFilter == "" && ws == "" {
 		o.BudgetMonth = s.BudgetMonthUSD
 	}
-	boxes, _ := m.Store.ListBoxes(ctx, store.BoxFilter{AgentID: agentFilter, IncludeTerminated: true})
+	boxes, _ := m.Store.ListBoxes(ctx, store.BoxFilter{AgentID: agentFilter, WorkspaceID: ws, IncludeTerminated: true})
 	ms := monthStart(now)
 	for _, b := range boxes {
 		switch b.Status {
@@ -335,7 +342,7 @@ func (m *Manager) Overview(ctx context.Context, p *Principal) (*Overview, error)
 			o.SavedVs247USD += math.Max(0, hyp-b.SpentUSD)
 		}
 	}
-	rows, _ := m.Store.SumLedgerByDateAgent(ctx, dayStart(now).AddDate(0, 0, -6))
+	rows, _ := m.Store.SumLedgerByDateAgent(ctx, dayStart(now).AddDate(0, 0, -6), ws)
 	byDate := map[string]map[string]float64{}
 	for _, r := range rows {
 		if agentFilter != "" && r.AgentID != agentFilter {
@@ -358,7 +365,7 @@ func (m *Manager) Overview(ctx context.Context, p *Principal) (*Overview, error)
 		}
 		o.Cost7d = append(o.Cost7d, DayCost{Date: d, ByAgent: ba})
 	}
-	sums, _ := m.Store.SumLedgerBy(ctx, store.LedgerFilter{AgentID: agentFilter, From: dayStart(now).AddDate(0, 0, -6)}, "box_id")
+	sums, _ := m.Store.SumLedgerBy(ctx, store.LedgerFilter{AgentID: agentFilter, WorkspaceID: ws, From: dayStart(now).AddDate(0, 0, -6)}, "box_id")
 	type kv struct {
 		id string
 		v  float64
@@ -376,7 +383,7 @@ func (m *Manager) Overview(ctx context.Context, p *Principal) (*Overview, error)
 		o.TopTasks = append(o.TopTasks, t)
 	}
 	if p.Admin {
-		pend, _ := m.Store.ListApprovals(ctx, "pending")
+		pend, _ := m.Store.ListApprovalsIn(ctx, ws, "pending")
 		o.ApprovalsPending = len(pend)
 	}
 	o.SpentToday, o.SpentMonth = model.Round4(o.SpentToday), model.Round4(o.SpentMonth)
@@ -406,10 +413,14 @@ type CostSummary struct {
 }
 
 func (m *Manager) Costs(ctx context.Context, p *Principal, f store.LedgerFilter) (*CostsResult, error) {
+	if err := p.Can(PermView); err != nil {
+		return nil, err
+	}
+	f.WorkspaceID = p.ScopeWS()
 	if !p.Admin {
 		f.AgentID = p.AgentID
 	} else if f.AgentID != "" {
-		if a, err := m.Store.GetAgentByName(ctx, f.AgentID); err == nil {
+		if a, err := m.findAgent(ctx, p, f.AgentID); err == nil {
 			f.AgentID = a.ID
 		}
 	}
@@ -429,7 +440,7 @@ func (m *Manager) Costs(ctx context.Context, p *Principal, f store.LedgerFilter)
 		r.Summary.ByProvider[k] = model.Round4(v)
 	}
 	ba, _ := m.Store.SumLedgerBy(ctx, sf, "agent_id")
-	agents, _ := m.Store.ListAgents(ctx)
+	agents, _ := m.listAgentsScoped(ctx, p)
 	names := map[string]string{}
 	for _, a := range agents {
 		names[a.ID] = a.Name
@@ -480,8 +491,13 @@ func (m *Manager) Suggestions(ctx context.Context, p *Principal) ([]Suggestion, 
 	if !p.Admin {
 		agentFilter = p.AgentID
 	}
-	// 1. Burst spend vs a monthly host (spec M4 pool-expansion rule).
-	burst7, _ := m.Store.SumLedger(ctx, store.LedgerFilter{Billing: "burst", From: now.AddDate(0, 0, -7)})
+	ws := p.ScopeWS()
+	// 1. Burst spend vs a monthly host (spec M4 pool-expansion rule): an
+	// infrastructure decision, shown to the platform operator only.
+	burst7 := 0.0
+	if p.Platform {
+		burst7, _ = m.Store.SumLedger(ctx, store.LedgerFilter{Billing: "burst", WorkspaceID: ws, From: now.AddDate(0, 0, -7)})
+	}
 	if burst7 > 0 {
 		offers, _ := m.Store.ListOffers(ctx, "")
 		cheapest := 0.0
@@ -498,7 +514,7 @@ func (m *Manager) Suggestions(ctx context.Context, p *Principal) ([]Suggestion, 
 				SavingUSD: model.Round4(math.Max(0, monthlyBurst-cheapest))})
 		}
 	}
-	boxes, _ := m.Store.ListBoxes(ctx, store.BoxFilter{AgentID: agentFilter})
+	boxes, _ := m.Store.ListBoxes(ctx, store.BoxFilter{AgentID: agentFilter, WorkspaceID: ws})
 	for _, b := range boxes {
 		// 2. Long idle thresholds on session boxes.
 		if b.Lifecycle == model.LifecycleSession && b.IdleMinutes > 15 && b.CostPerHour > 0 {
@@ -519,7 +535,7 @@ func (m *Manager) Suggestions(ctx context.Context, p *Principal) ([]Suggestion, 
 	}
 	// 5. Agents with no budget.
 	if p.Admin {
-		agents, _ := m.Store.ListAgents(ctx)
+		agents, _ := m.listAgentsScoped(ctx, p)
 		for _, a := range agents {
 			if a.BudgetDayUSD == 0 && a.BudgetMonthUSD == 0 && a.Name != "operator" {
 				out = append(out, Suggestion{Kind: "set_budget", AgentID: a.ID, Title: "Đặt ngân sách cho " + a.Name, Detail: "Agent chưa có giới hạn ngày/tháng; đặt budget để Boxmes tự dừng khi chạy quá tay."})

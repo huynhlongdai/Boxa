@@ -321,7 +321,7 @@ func (m *Manager) dailyReport(ctx context.Context, now time.Time) (string, strin
 	yesterday, _ := m.Store.SumLedger(ctx, store.LedgerFilter{From: yStart.UTC(), To: todayStart.UTC()})
 	month, _ := m.Store.SumLedger(ctx, store.LedgerFilter{From: mStart.UTC()})
 	byProv, _ := m.Store.SumLedgerBy(ctx, store.LedgerFilter{From: yStart.UTC(), To: todayStart.UTC()}, "provider")
-	sys := &Principal{Key: &model.APIKey{Scopes: []string{model.ScopeAdmin}}, Admin: true}
+	sys := sysPrincipal()
 	o, _ := m.Overview(ctx, sys)
 	var b strings.Builder
 	b.WriteString(i18n.T(loc, "notify.daily_yesterday", yStart.Format("2006-01-02"), yesterday) + "\n")

@@ -166,12 +166,17 @@ func TestTenancyAuth(t *testing.T) {
 		t.Fatalf("duplicate %d", st)
 	}
 
-	// member session: tenancy endpoints yes, operator API no
+	// member session (v2.0): workspace-scoped data API yes, platform operator API no
 	st, me := call(t, u, "GET", "/v1/auth/me", bobTok, nil)
-	if st != 200 || me["workspace"].(map[string]any)["role"] != "owner" || len(me["workspaces"].([]any)) != 1 {
+	if st != 200 || me["workspace"].(map[string]any)["role"] != "owner" || len(me["workspaces"].([]any)) != 1 || me["role"] != "owner" {
 		t.Fatalf("me %d %v", st, me)
 	}
-	for _, p := range []string{"/v1/agents", "/v1/boxes", "/v1/keys", "/v1/admin/users", "/v1/settings"} {
+	for _, p := range []string{"/v1/agents", "/v1/boxes", "/v1/keys"} {
+		if st, l := call(t, u, "GET", p, bobTok, nil); st != 200 || len(l["items"].([]any)) != 0 {
+			t.Fatalf("member %s → %d %v, want 200 and an empty list", p, st, l)
+		}
+	}
+	for _, p := range []string{"/v1/admin/users", "/v1/settings"} {
 		if st, _ := call(t, u, "GET", p, bobTok, nil); st != 401 {
 			t.Fatalf("member %s → %d, want 401", p, st)
 		}

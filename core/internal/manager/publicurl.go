@@ -244,7 +244,7 @@ func (m *Manager) BoxForIngressPath(ctx context.Context, seg string) (*model.Box
 // in-box ingress agent when it has one, otherwise through its host (boxd).
 func (m *Manager) ProxyPort(ctx context.Context, b *model.Box, port int, method, path string, hdr map[string][]string, body []byte) (*proto.HTTPResult, error) {
 	if b.Status == model.StatusSleeping {
-		sys := &Principal{Key: &model.APIKey{Scopes: []string{model.ScopeAdmin}}, Admin: true}
+		sys := sysPrincipal()
 		if _, err := m.Wake(ctx, sys, b.ID); err != nil {
 			return nil, err
 		}

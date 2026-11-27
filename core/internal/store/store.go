@@ -78,17 +78,24 @@ type Store interface {
 	ListLedger(ctx context.Context, f LedgerFilter) ([]*model.LedgerEntry, error)
 	SumLedger(ctx context.Context, f LedgerFilter) (float64, error)
 	SumLedgerBy(ctx context.Context, f LedgerFilter, groupExpr string) (map[string]float64, error)
-	SumLedgerByDateAgent(ctx context.Context, from time.Time) ([]DateAgentSum, error)
+	SumLedgerByDateAgent(ctx context.Context, from time.Time, workspaceID string) ([]DateAgentSum, error)
 
 	PutTemplate(ctx context.Context, t *model.Template) error
 	GetTemplate(ctx context.Context, name string) (*model.Template, error)
 	ListTemplates(ctx context.Context) ([]*model.Template, error)
 	DeleteTemplate(ctx context.Context, name string) error
+	// v2.0: workspace templates shadow the built-in ones of the same name.
+	GetTemplateIn(ctx context.Context, workspaceID, name string) (*model.Template, error)
+	ListTemplatesIn(ctx context.Context, workspaceID string) ([]*model.Template, error)
+	DeleteTemplateIn(ctx context.Context, workspaceID, name string) error
 
 	PutSecret(ctx context.Context, s *model.Secret) error
 	GetSecret(ctx context.Context, name string) (*model.Secret, error)
 	ListSecrets(ctx context.Context) ([]*model.Secret, error)
 	DeleteSecret(ctx context.Context, name string) error
+	// v2.0: secret names are unique per workspace.
+	GetSecretIn(ctx context.Context, workspaceID, name string) (*model.Secret, error)
+	DeleteSecretIn(ctx context.Context, workspaceID, name string) error
 
 	PutSnapshot(ctx context.Context, s *model.Snapshot) error
 	ListSnapshots(ctx context.Context, boxID string) ([]*model.Snapshot, error)
@@ -99,6 +106,8 @@ type Store interface {
 	GetApproval(ctx context.Context, id string) (*model.Approval, error)
 	FindApprovalByDedupe(ctx context.Context, key string) (*model.Approval, error)
 	ListApprovals(ctx context.Context, status string) ([]*model.Approval, error)
+	// ListApprovalsIn lists one workspace's approvals ("" = every workspace).
+	ListApprovalsIn(ctx context.Context, workspaceID, status string) ([]*model.Approval, error)
 
 	GetIdempotent(ctx context.Context, key string) (string, error)
 	PutIdempotent(ctx context.Context, key, boxID string) error
@@ -119,11 +128,13 @@ type BoxFilter struct {
 
 type EventFilter struct {
 	BoxID, AgentID, Actor, Type string
+	WorkspaceID                 string // v2.0: "" = every workspace
 	Limit                       int
 }
 
 type LedgerFilter struct {
 	AgentID, BoxID, Provider, Billing string
+	WorkspaceID                       string // v2.0: "" = every workspace
 	From, To                          time.Time
 	Limit                             int
 }
@@ -272,8 +283,21 @@ func (s *SQL) exec(ctx context.Context, q string, args ...any) error {
 
 // ---- generic document helpers ----
 
+// querier is *sql.DB or *sql.Tx.
+type querier interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
 // putDoc upserts a row: id + extra columns + doc JSON.
 func (s *SQL) putDoc(ctx context.Context, table, id string, createdAt time.Time, cols map[string]any, doc any) error {
+	return s.putDocQ(ctx, s.db, table, id, createdAt, cols, doc)
+}
+
+// putDocQ is putDoc on a transaction (SQLite has one connection: inside a
+// transaction every statement must go through the tx).
+func (s *SQL) putDocQ(ctx context.Context, qr querier, table, id string, createdAt time.Time, cols map[string]any, doc any) error {
 	b, err := json.Marshal(doc)
 	if err != nil {
 		return err
@@ -296,12 +320,17 @@ func (s *SQL) putDoc(ctx context.Context, table, id string, createdAt time.Time,
 	}
 	q := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s) ON CONFLICT(id) DO UPDATE SET %s",
 		table, strings.Join(names, ","), ph, strings.Join(sets, ","))
-	return s.exec(ctx, q, vals...)
+	_, err = qr.ExecContext(ctx, s.rebind(q), vals...)
+	return err
 }
 
 func getDoc[T any](ctx context.Context, s *SQL, table, where string, args ...any) (*T, error) {
+	return getDocQ[T](ctx, s, s.db, table, where, args...)
+}
+
+func getDocQ[T any](ctx context.Context, s *SQL, qr querier, table, where string, args ...any) (*T, error) {
 	var raw string
-	err := s.db.QueryRowContext(ctx, s.rebind("SELECT doc FROM "+table+" WHERE "+where), args...).Scan(&raw)
+	err := qr.QueryRowContext(ctx, s.rebind("SELECT doc FROM "+table+" WHERE "+where), args...).Scan(&raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, model.ErrNoRows
 	}
@@ -667,8 +696,8 @@ func (s *SQL) AddEvent(ctx context.Context, e *model.Event) error {
 		d := string(b)
 		data = &d
 	}
-	return s.exec(ctx, "INSERT INTO events(id, ts, actor, box_id, agent_id, type, message, cost_usd, data) VALUES(?,?,?,?,?,?,?,?,?)",
-		e.ID, FmtTime(e.TS), e.Actor, e.BoxID, e.AgentID, e.Type, e.Message, e.CostUSD, data)
+	return s.exec(ctx, "INSERT INTO events(id, ts, actor, box_id, agent_id, type, message, cost_usd, data, workspace_id) VALUES(?,?,?,?,?,?,?,?,?,?)",
+		e.ID, FmtTime(e.TS), e.Actor, e.BoxID, e.AgentID, e.Type, e.Message, e.CostUSD, data, e.WorkspaceID)
 }
 
 func (s *SQL) ListEvents(ctx context.Context, f EventFilter) ([]*model.Event, error) {
@@ -687,7 +716,10 @@ func (s *SQL) ListEvents(ctx context.Context, f EventFilter) ([]*model.Event, er
 	if f.Type != "" {
 		add("type LIKE ?", f.Type+"%")
 	}
-	q := "SELECT id, ts, actor, box_id, agent_id, type, message, cost_usd, data FROM events"
+	if f.WorkspaceID != "" {
+		add("workspace_id=?", f.WorkspaceID)
+	}
+	q := "SELECT id, ts, actor, box_id, agent_id, type, message, cost_usd, data, workspace_id FROM events"
 	if len(conds) > 0 {
 		q += " WHERE " + strings.Join(conds, " AND ")
 	}
@@ -705,11 +737,12 @@ func (s *SQL) ListEvents(ctx context.Context, f EventFilter) ([]*model.Event, er
 	for rows.Next() {
 		var e model.Event
 		var ts string
-		var box, agent, data sql.NullString
+		var box, agent, data, ws sql.NullString
 		var cost sql.NullFloat64
-		if err := rows.Scan(&e.ID, &ts, &e.Actor, &box, &agent, &e.Type, &e.Message, &cost, &data); err != nil {
+		if err := rows.Scan(&e.ID, &ts, &e.Actor, &box, &agent, &e.Type, &e.Message, &cost, &data, &ws); err != nil {
 			return nil, err
 		}
+		e.WorkspaceID = ws.String
 		if data.Valid && data.String != "" {
 			json.Unmarshal([]byte(data.String), &e.Data)
 		}
@@ -731,8 +764,8 @@ func (s *SQL) ListEvents(ctx context.Context, f EventFilter) ([]*model.Event, er
 // ---- ledger ----
 
 func (s *SQL) AddLedger(ctx context.Context, l *model.LedgerEntry) error {
-	return s.exec(ctx, "INSERT INTO ledger(id, ts, agent_id, box_id, provider, kind, billing, amount_usd, note) VALUES(?,?,?,?,?,?,?,?,?)",
-		l.ID, FmtTime(l.TS), l.AgentID, l.BoxID, l.Provider, l.Kind, l.Billing, l.AmountUSD, l.Note)
+	return s.exec(ctx, "INSERT INTO ledger(id, ts, agent_id, box_id, provider, kind, billing, amount_usd, note, workspace_id) VALUES(?,?,?,?,?,?,?,?,?,?)",
+		l.ID, FmtTime(l.TS), l.AgentID, l.BoxID, l.Provider, l.Kind, l.Billing, l.AmountUSD, l.Note, l.WorkspaceID)
 }
 
 func (s *SQL) ledgerWhere(f LedgerFilter) (string, []any) {
@@ -750,6 +783,9 @@ func (s *SQL) ledgerWhere(f LedgerFilter) (string, []any) {
 	}
 	if f.Billing != "" {
 		add("billing=?", f.Billing)
+	}
+	if f.WorkspaceID != "" {
+		add("workspace_id=?", f.WorkspaceID)
 	}
 	if !f.From.IsZero() {
 		add("ts>=?", FmtTime(f.From))
@@ -769,7 +805,7 @@ func (s *SQL) ListLedger(ctx context.Context, f LedgerFilter) ([]*model.LedgerEn
 	if limit <= 0 {
 		limit = 500
 	}
-	q := fmt.Sprintf("SELECT id, ts, agent_id, box_id, provider, kind, billing, amount_usd, note FROM ledger%s ORDER BY ts DESC LIMIT %d", where, limit)
+	q := fmt.Sprintf("SELECT id, ts, agent_id, box_id, provider, kind, billing, amount_usd, note, workspace_id FROM ledger%s ORDER BY ts DESC LIMIT %d", where, limit)
 	rows, err := s.db.QueryContext(ctx, s.rebind(q), args...)
 	if err != nil {
 		return nil, err
@@ -779,9 +815,11 @@ func (s *SQL) ListLedger(ctx context.Context, f LedgerFilter) ([]*model.LedgerEn
 	for rows.Next() {
 		var l model.LedgerEntry
 		var ts string
-		if err := rows.Scan(&l.ID, &ts, &l.AgentID, &l.BoxID, &l.Provider, &l.Kind, &l.Billing, &l.AmountUSD, &l.Note); err != nil {
+		var ws sql.NullString
+		if err := rows.Scan(&l.ID, &ts, &l.AgentID, &l.BoxID, &l.Provider, &l.Kind, &l.Billing, &l.AmountUSD, &l.Note, &ws); err != nil {
 			return nil, err
 		}
+		l.WorkspaceID = ws.String
 		l.TS, _ = time.Parse(TimeFormat, ts)
 		out = append(out, &l)
 	}
@@ -820,8 +858,12 @@ func (s *SQL) SumLedgerBy(ctx context.Context, f LedgerFilter, col string) (map[
 	return out, rows.Err()
 }
 
-func (s *SQL) SumLedgerByDateAgent(ctx context.Context, from time.Time) ([]DateAgentSum, error) {
-	rows, err := s.db.QueryContext(ctx, s.rebind("SELECT substr(ts,1,10) AS d, agent_id, SUM(amount_usd) FROM ledger WHERE ts>=? GROUP BY substr(ts,1,10), agent_id ORDER BY d"), FmtTime(from))
+func (s *SQL) SumLedgerByDateAgent(ctx context.Context, from time.Time, workspaceID string) ([]DateAgentSum, error) {
+	q, args := "SELECT substr(ts,1,10) AS d, agent_id, SUM(amount_usd) FROM ledger WHERE ts>=?", []any{FmtTime(from)}
+	if workspaceID != "" {
+		q, args = q+" AND workspace_id=?", append(args, workspaceID)
+	}
+	rows, err := s.db.QueryContext(ctx, s.rebind(q+" GROUP BY substr(ts,1,10), agent_id ORDER BY d"), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -840,7 +882,58 @@ func (s *SQL) SumLedgerByDateAgent(ctx context.Context, from time.Time) ([]DateA
 // ---- templates ----
 
 func (s *SQL) PutTemplate(ctx context.Context, t *model.Template) error {
-	return s.putDoc(ctx, "templates", t.Name, t.CreatedAt, nil, t)
+	return s.putDoc(ctx, "templates", ScopedID(t.WorkspaceID, t.Name), t.CreatedAt, map[string]any{"workspace_id": t.WorkspaceID}, t)
+}
+
+// ScopedID is the row id of a per-workspace named record (templates,
+// secrets): the bare name for built-ins and the default workspace (rows
+// written before v2.0 keep their ids), "<workspace>/<name>" otherwise.
+func ScopedID(workspaceID, name string) string {
+	if workspaceID == "" || workspaceID == model.DefaultWorkspaceID {
+		return name
+	}
+	return workspaceID + "/" + name
+}
+
+// GetTemplateIn returns the workspace's template, else the built-in one.
+func (s *SQL) GetTemplateIn(ctx context.Context, workspaceID, name string) (*model.Template, error) {
+	if workspaceID != "" {
+		if t, err := getDoc[model.Template](ctx, s, "templates", "id=? AND workspace_id=?", ScopedID(workspaceID, name), workspaceID); err == nil {
+			return t, nil
+		} else if !errors.Is(err, model.ErrNoRows) {
+			return nil, err
+		}
+	}
+	return getDoc[model.Template](ctx, s, "templates", "id=? AND (workspace_id IS NULL OR workspace_id='')", name)
+}
+
+// ListTemplatesIn lists built-ins plus the workspace's templates ("" = all rows).
+func (s *SQL) ListTemplatesIn(ctx context.Context, workspaceID string) ([]*model.Template, error) {
+	if workspaceID == "" {
+		return s.ListTemplates(ctx)
+	}
+	all, err := listDocs[model.Template](ctx, s, "templates", "workspace_id IS NULL OR workspace_id='' OR workspace_id=?", "id", workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	own := map[string]bool{}
+	for _, t := range all {
+		if t.WorkspaceID == workspaceID {
+			own[t.Name] = true
+		}
+	}
+	out := make([]*model.Template, 0, len(all))
+	for _, t := range all {
+		if t.WorkspaceID != workspaceID && own[t.Name] {
+			continue // shadowed built-in
+		}
+		out = append(out, t)
+	}
+	return out, nil
+}
+
+func (s *SQL) DeleteTemplateIn(ctx context.Context, workspaceID, name string) error {
+	return s.exec(ctx, "DELETE FROM templates WHERE id=? AND workspace_id=?", ScopedID(workspaceID, name), workspaceID)
 }
 func (s *SQL) GetTemplate(ctx context.Context, name string) (*model.Template, error) {
 	return getDoc[model.Template](ctx, s, "templates", "id=?", name)
@@ -855,7 +948,22 @@ func (s *SQL) DeleteTemplate(ctx context.Context, name string) error {
 // ---- secrets ----
 
 func (s *SQL) PutSecret(ctx context.Context, sec *model.Secret) error {
-	return s.putDoc(ctx, "secrets", sec.Name, sec.CreatedAt, map[string]any{"workspace_id": nullStr(sec.WorkspaceID)}, secretDoc{*sec, sec.ValueEnc})
+	return s.putDoc(ctx, "secrets", ScopedID(sec.WorkspaceID, sec.Name), sec.CreatedAt, map[string]any{"workspace_id": nullStr(sec.WorkspaceID)}, secretDoc{*sec, sec.ValueEnc})
+}
+
+// GetSecretIn returns a workspace's secret by name.
+func (s *SQL) GetSecretIn(ctx context.Context, workspaceID, name string) (*model.Secret, error) {
+	d, err := getDoc[secretDoc](ctx, s, "secrets", "id=? AND workspace_id=?", ScopedID(workspaceID, name), workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	sec := d.Secret
+	sec.ValueEnc = d.ValueEnc
+	return &sec, nil
+}
+
+func (s *SQL) DeleteSecretIn(ctx context.Context, workspaceID, name string) error {
+	return s.exec(ctx, "DELETE FROM secrets WHERE id=? AND workspace_id=?", ScopedID(workspaceID, name), workspaceID)
 }
 func (s *SQL) GetSecret(ctx context.Context, name string) (*model.Secret, error) {
 	d, err := getDoc[secretDoc](ctx, s, "secrets", "id=?", name)
@@ -904,7 +1012,7 @@ func (s *SQL) DeleteSnapshot(ctx context.Context, id string) error {
 // ---- approvals ----
 
 func (s *SQL) PutApproval(ctx context.Context, a *model.Approval) error {
-	return s.putDoc(ctx, "approvals", a.ID, a.CreatedAt, map[string]any{"status": a.Status, "dedupe_key": a.DedupeKey}, approvalDoc{*a, a.DedupeKey})
+	return s.putDoc(ctx, "approvals", a.ID, a.CreatedAt, map[string]any{"status": a.Status, "dedupe_key": a.DedupeKey, "workspace_id": a.WorkspaceID}, approvalDoc{*a, a.DedupeKey})
 }
 func unApproval(d *approvalDoc, err error) (*model.Approval, error) {
 	if err != nil {
@@ -921,10 +1029,19 @@ func (s *SQL) FindApprovalByDedupe(ctx context.Context, key string) (*model.Appr
 	return unApproval(getDoc[approvalDoc](ctx, s, "approvals", "dedupe_key=? ORDER BY created_at DESC LIMIT 1", key))
 }
 func (s *SQL) ListApprovals(ctx context.Context, status string) ([]*model.Approval, error) {
-	where, args := "", []any{}
+	return s.ListApprovalsIn(ctx, "", status)
+}
+
+func (s *SQL) ListApprovalsIn(ctx context.Context, workspaceID, status string) ([]*model.Approval, error) {
+	var conds []string
+	var args []any
 	if status != "" {
-		where, args = "status=?", []any{status}
+		conds, args = append(conds, "status=?"), append(args, status)
 	}
+	if workspaceID != "" {
+		conds, args = append(conds, "workspace_id=?"), append(args, workspaceID)
+	}
+	where := strings.Join(conds, " AND ")
 	ds, err := listDocs[approvalDoc](ctx, s, "approvals", where, "created_at DESC", args...)
 	if err != nil {
 		return nil, err

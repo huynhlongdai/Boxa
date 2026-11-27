@@ -457,8 +457,10 @@ func callTool(ctx context.Context, c Caller, name string, a args) (int, []byte, 
 		if a.s("status") != "" {
 			q.Set("status", a.s("status"))
 		}
-		if a.s("lifecycle") != "" {
-			q.Set("lifecycle", a.s("lifecycle"))
+		for _, k := range []string{"lifecycle", "region", "provider", "location"} {
+			if a.s(k) != "" {
+				q.Set(k, a.s(k))
+			}
 		}
 		return c.Do(ctx, "GET", "/boxes?"+q.Encode(), nil)
 	case "box_cost":

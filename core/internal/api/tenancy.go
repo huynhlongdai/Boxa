@@ -23,6 +23,8 @@ func (s *Server) routesTenancyPublic(r chi.Router) {
 	r.Post("/auth/password/forgot", s.forgotPassword)
 	r.Post("/auth/password/reset", s.resetPassword)
 	r.Post("/waitlist", s.joinWaitlist)
+	r.Get("/workspace-invites/{token}", s.previewWorkspaceInvite) // v2.0
+	r.Get("/plans", func(w http.ResponseWriter, r *http.Request) { list(w, s.M.ListPlans()) })
 }
 
 // routesTenancy need a key or session (mounted inside the authMW group).
@@ -34,6 +36,19 @@ func (s *Server) routesTenancy(r chi.Router) {
 	r.Post("/auth/verify-email/resend", s.resendVerify)
 	r.Post("/auth/workspace", s.switchWorkspace)
 	r.Get("/workspaces", s.listMyWorkspaces)
+	// v2.0 workspaces, members, invites
+	r.Post("/workspaces", s.createWorkspace)
+	r.Get("/workspaces/current", s.getCurrentWorkspace)
+	r.Patch("/workspaces/current", s.patchCurrentWorkspace)
+	r.Get("/workspaces/current/usage", s.workspaceUsage)
+	r.Get("/workspaces/current/audit", s.workspaceAudit)
+	r.Get("/workspaces/current/members", s.listMembers)
+	r.Patch("/workspaces/current/members/{user_id}", s.patchMember)
+	r.Delete("/workspaces/current/members/{user_id}", s.removeMember)
+	r.Get("/workspaces/current/invites", s.listWorkspaceInvites)
+	r.Post("/workspaces/current/invites", s.createWorkspaceInvite)
+	r.Delete("/workspaces/current/invites/{id}", s.deleteWorkspaceInvite)
+	r.Post("/workspace-invites/{token}/accept", s.acceptWorkspaceInvite)
 }
 
 func (s *Server) routesTenancyAdmin(r chi.Router) {
@@ -46,24 +61,28 @@ func (s *Server) routesTenancyAdmin(r chi.Router) {
 	r.Get("/waitlist", s.adminWaitlist)
 	r.Post("/waitlist/invite", s.adminWaitlistInvite)
 	r.Delete("/waitlist/{email}", s.adminDeleteWaitlist)
+	r.Get("/workspaces", s.adminWorkspaces)               // v2.0
+	r.Patch("/workspaces/{id}", s.adminPatchWorkspace) // v2.0: plan, quota_overrides, status
 }
 
-// sessionGuard keeps signed-in users who are not platform admins out of the
-// v1 operator API: until boxes/agents/keys are workspace-scoped they may only
-// use the tenancy endpoints.
+// sessionGuard (v2.0): every data route is workspace-scoped in the manager,
+// so members reach the whole API with their role. What stays here: a
+// suspended workspace may only read and use the account endpoints.
 func (s *Server) sessionGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := pr(r)
-		if p != nil && p.UserID != "" && !p.Admin && !tenancyPath(r.URL.Path) {
-			writeErr(w, r, model.EH(model.ErrUnauthorized, "Use /v1/auth and /v1/workspaces, or an API key.", "this endpoint is not available to workspace members yet"))
-			return
+		if p != nil && !p.Platform && p.WorkspaceID != "" && r.Method != http.MethodGet && !tenancyPath(r.URL.Path) {
+			if ws, err := s.M.Store.GetWorkspace(r.Context(), p.WorkspaceID); err == nil && ws.Status == "suspended" {
+				writeErr(w, r, model.EH(model.ErrPolicyDenied, "Contact the operator of this Boxmes instance.", "workspace is suspended"))
+				return
+			}
 		}
 		next.ServeHTTP(w, r)
 	})
 }
 
 func tenancyPath(p string) bool {
-	return strings.HasPrefix(p, "/v1/auth/") || p == "/v1/workspaces"
+	return strings.HasPrefix(p, "/v1/auth/") || strings.HasPrefix(p, "/v1/workspaces") || strings.HasPrefix(p, "/v1/workspace-invites/")
 }
 
 func clientInfo(r *http.Request) manager.ClientInfo {

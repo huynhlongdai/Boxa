@@ -89,7 +89,7 @@ func (m *Manager) ResolveBox(ctx context.Context, p *Principal, ref string) (*mo
 	if d := m.GatewayDomain(ctx); d != "" {
 		ref = strings.TrimSuffix(strings.ToLower(ref), "."+d)
 	}
-	if nb := m.boxByName(ctx, ref); nb != nil && (p.Admin || nb.AgentID == p.AgentID) {
+	if nb := m.boxByName(ctx, ref); nb != nil && p.Sees(nb.WorkspaceID, nb.AgentID) {
 		return m.decorateBox(ctx, nb), nil
 	}
 	return nil, err
@@ -446,16 +446,28 @@ func (m *Manager) RedeemTicket(ctx context.Context, raw, purpose, boxID string, 
 }
 
 // principalForKey rebuilds the principal of an API key id (fails if revoked).
+// v2.0: a session id (tickets issued from the dashboard) rebuilds the
+// session's principal while the session lives.
 func (m *Manager) principalForKey(ctx context.Context, keyID string) (*Principal, error) {
+	if strings.HasPrefix(keyID, "ses_") {
+		se, err := m.Store.GetSession(ctx, keyID, time.Now().UTC())
+		if err != nil {
+			return nil, model.EH(model.ErrUnauthorized, "Sign in again.", "session expired or invalid")
+		}
+		u, err := m.Store.GetUser(ctx, se.UserID)
+		if err != nil {
+			return nil, model.EH(model.ErrUnauthorized, "Sign in again.", "session expired or invalid")
+		}
+		return m.sessionPrincipal(ctx, se, u)
+	}
 	k, err := m.Store.GetKey(ctx, keyID)
 	if err != nil || k.RevokedAt != nil {
 		return nil, model.EH(model.ErrUnauthorized, "This key was revoked; ask the operator for a new key.", "API key revoked")
 	}
-	p := &Principal{Key: k, Admin: k.HasScope(model.ScopeAdmin)}
-	if k.AgentID != nil {
-		p.AgentID = *k.AgentID
+	if k.ExpiresAt != nil && !time.Now().Before(*k.ExpiresAt) {
+		return nil, model.EH(model.ErrUnauthorized, "Create a new key (POST /v1/keys).", "API key expired")
 	}
-	return p, nil
+	return m.principalFromKey(ctx, k)
 }
 
 // BindAccess registers a live connection (bound to ticketID when it came from

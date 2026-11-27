@@ -116,7 +116,7 @@ func (m *Manager) GatewayWake(boxID string) *WakeOp {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 		defer cancel()
-		sys := &Principal{Key: &model.APIKey{Scopes: []string{model.ScopeAdmin}}, Admin: true}
+		sys := sysPrincipal()
 		b, err := m.Store.GetBox(ctx, boxID)
 		if err == nil {
 			m.Emit(ctx, "gateway", b.ID, b.AgentID, "box.wake_request", "request to a sleeping box: waking it", nil)

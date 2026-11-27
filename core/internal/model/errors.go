@@ -19,11 +19,12 @@ const (
 	ErrInvalid        = "INVALID"
 	ErrRateLimited    = "RATE_LIMITED"
 	ErrInternal       = "INTERNAL"
+	// ErrQuotaExceeded (QUOTA_EXCEEDED, v2.0) is declared in quota.go.
 )
 
 // Codes lists every error code with its HTTP status (served by GET /v1/errors).
 var Codes = []string{ErrBudgetExceeded, ErrNoCapacity, ErrProviderFailed, ErrBoxSleeping, ErrTimeout,
-	ErrPolicyDenied, ErrNotFound, ErrUnauthorized, ErrInvalid, ErrRateLimited, ErrInternal}
+	ErrPolicyDenied, ErrNotFound, ErrUnauthorized, ErrInvalid, ErrRateLimited, ErrInternal, ErrQuotaExceeded}
 
 // APIError is the canonical error returned to agents. Message/Hint are English
 // at creation; the gateway localizes them (i18n) from Format/Args at write time.
@@ -34,8 +35,11 @@ type APIError struct {
 	RetryAfterS *int   `json:"retry_after_s,omitempty"`
 	DocsURL     string `json:"docs_url,omitempty"`
 	// Next (v1.3) lists suggested next tool calls that usually resolve the error.
-	Next   []string `json:"next,omitempty"`
-	Status int      `json:"-"`
+	Next []string `json:"next,omitempty"`
+	// Details (v2.0) carries machine-readable context, e.g. QUOTA_EXCEEDED
+	// {quota, limit, used, plan, upgrade_url}.
+	Details map[string]any `json:"details,omitempty"`
+	Status  int            `json:"-"`
 	format string
 	args   []any
 }
@@ -84,7 +88,7 @@ func statusFor(code string) int {
 		return http.StatusConflict
 	case ErrTimeout:
 		return http.StatusGatewayTimeout
-	case ErrPolicyDenied:
+	case ErrPolicyDenied, ErrQuotaExceeded:
 		return http.StatusForbidden
 	case ErrNotFound:
 		return http.StatusNotFound
@@ -110,6 +114,7 @@ var defaultHints = map[string]string{
 	ErrInvalid:        "Fix the request fields described in the message and retry.",
 	ErrRateLimited:    "Slow down and retry after retry_after_s seconds.",
 	ErrInternal:       "Unexpected server error; retry once, then report it to the operator.",
+	ErrQuotaExceeded:  "Your workspace plan does not allow this; free capacity (sleep or delete boxes) or upgrade the plan.",
 }
 
 // E builds an APIError with the default hint for the code.

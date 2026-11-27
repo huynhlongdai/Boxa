@@ -89,7 +89,7 @@ func (m *Manager) Recommend(ctx context.Context, p *Principal, in RecommendInput
 	if tpl == "" {
 		tpl = prof.Template
 	}
-	if _, err := m.Store.GetTemplate(ctx, tpl); err != nil {
+	if _, err := m.templateFor(ctx, agent.WorkspaceID, tpl); err != nil {
 		return nil, model.EH(model.ErrInvalid, "Use one of GET /templates.", "template %q not found", tpl)
 	}
 	lc := in.Lifecycle

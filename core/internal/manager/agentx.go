@@ -256,6 +256,7 @@ func (m *Manager) Quote(ctx context.Context, p *Principal, req boxyaml.Request) 
 	if err != nil {
 		return nil, err
 	}
+	ctx = context.WithValue(ctx, ctxQuote, true)
 	if _, _, err := m.normalizeRequest(ctx, p, &req, agent); err != nil {
 		return nil, err
 	}
@@ -450,7 +451,7 @@ func (m *Manager) snapshotFor(ctx context.Context, p *Principal, b *model.Box, s
 		return nil, nil, notFound("snapshot", snapID)
 	}
 	src, err := m.Store.GetBox(ctx, sn.BoxID)
-	if err != nil || (!p.Admin && src.AgentID != p.AgentID) {
+	if err != nil || !p.Sees(src.WorkspaceID, src.AgentID) || src.WorkspaceID != b.WorkspaceID {
 		return nil, nil, notFound("snapshot", snapID)
 	}
 	return sn, src, nil
@@ -548,6 +549,9 @@ func (m *Manager) Fork(ctx context.Context, p *Principal, id string, in RestoreI
 	if existing, _ := m.Store.ListBoxes(ctx, store.BoxFilter{AgentID: agent.ID}); len(existing) >= q.MaxBoxesPerAgent {
 		return nil, model.EH(model.ErrPolicyDenied, "Terminate unused boxes (box down) first.", "agent already has %d boxes (quota %d)", len(existing), q.MaxBoxesPerAgent)
 	}
+	if err := m.checkBoxQuota(ctx, src.WorkspaceID, BoxQuotaInput{CPU: src.Spec.CPU, RAMMB: src.Spec.RAMMB, New: true}); err != nil {
+		return nil, err
+	}
 	hostID := sn.HostID
 	if hostID == "" {
 		hostID = src.HostID
@@ -572,7 +576,7 @@ func (m *Manager) Fork(ctx context.Context, p *Principal, id string, in RestoreI
 	}
 	now := time.Now().UTC()
 	b := &model.Box{
-		ID: secret.ID("box"), Slug: slug, AgentID: agent.ID, AgentName: agent.Name, Status: model.StatusPlacing,
+		ID: secret.ID("box"), WorkspaceID: src.WorkspaceID, Slug: slug, AgentID: agent.ID, AgentName: agent.Name, Status: model.StatusPlacing,
 		Lifecycle: src.Lifecycle, Template: src.Template, Spec: src.Spec, Region: src.Region, TTLSeconds: src.TTLSeconds,
 		IdleMinutes: src.IdleMinutes, BudgetUSD: src.BudgetUSD, Ports: nonNilInts(src.Ports), Secrets: nonNilStrs(src.Secrets),
 		Setup: src.Setup, CreatedAt: now, LastActiveAt: now, Locale: src.Locale, ForkedFrom: sn.ID,

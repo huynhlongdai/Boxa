@@ -33,7 +33,7 @@ Env: BOXMES_URL (default http://localhost:8080), BOXMES_API_KEY, BOXMES_LANG (vi
          [--ttl 1h] [--idle 5] [--budget 0.5] [--slug name] [--port 8080] [--secret NAME]
          [--setup "cmd"] [-f box.yaml] [--idempotency-key k] [--no-wait]
   box exec <box> [--async] [--timeout 300] [--cwd /work] [--tail 60] [--json] -- <command>
-  box ls [--all]
+  box ls [--all] [--region eu|us|apac|sandbox|local] [--provider P] [--location SITE]
   box read <box> <path> [--from N] [--to M]
   box write <box> <path> [<local-file>|-]      (stdin when no file or "-")
   box grep <box> <pattern> [path]
@@ -416,10 +416,22 @@ func cmdLs(ctx context.Context, c *client.Client, args []string) error {
 	fs := flag.NewFlagSet("ls", flag.ExitOnError)
 	all := fs.Bool("all", false, "include terminated")
 	jsonOut := fs.Bool("json", false, "JSON")
+	region := fs.String("region", "", "eu | us | apac | sandbox | local")
+	prov := fs.String("provider", "", "provider id, e.g. hetzner")
+	loc := fs.String("location", "", "site, e.g. hetzner-fsn")
 	fs.Parse(reorder(fs, args))
-	path := "/boxes"
+	q := url.Values{}
 	if *all {
-		path += "?all=true"
+		q.Set("all", "true")
+	}
+	for k, v := range map[string]string{"region": *region, "provider": *prov, "location": *loc} {
+		if v != "" {
+			q.Set(k, v)
+		}
+	}
+	path := "/boxes"
+	if len(q) > 0 {
+		path += "?" + q.Encode()
 	}
 	var res struct {
 		Items []map[string]any `json:"items"`
@@ -432,9 +444,13 @@ func cmdLs(ctx context.Context, c *client.Client, args []string) error {
 		return nil
 	}
 	tw := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
-	fmt.Fprintln(tw, "ID\tSLUG\tSTATUS\tLIFECYCLE\tAGENT\tPROVIDER\tSPENT\t$/H")
+	fmt.Fprintln(tw, "ID\tSLUG\tSTATUS\tLIFECYCLE\tAGENT\tPROVIDER\tLOCATION\tSPENT\t$/H")
 	for _, b := range res.Items {
-		fmt.Fprintf(tw, "%v\t%v\t%v\t%v\t%v\t%v\t%s\t%s\n", b["id"], b["slug"], b["status"], b["lifecycle"], b["agent_name"], b["provider"], fmtNum(b["spent_usd"]), fmtNum(b["cost_per_hour"]))
+		site := ""
+		if l, ok := b["location"].(map[string]any); ok {
+			site = fmt.Sprintf("%v/%v", l["region"], l["site"])
+		}
+		fmt.Fprintf(tw, "%v\t%v\t%v\t%v\t%v\t%v\t%s\t%s\t%s\n", b["id"], b["slug"], b["status"], b["lifecycle"], b["agent_name"], b["provider"], site, fmtNum(b["spent_usd"]), fmtNum(b["cost_per_hour"]))
 	}
 	return tw.Flush()
 }

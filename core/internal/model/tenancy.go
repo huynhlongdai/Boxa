@@ -6,8 +6,15 @@ import "time"
 // API clients; the store keeps them in indexed columns.
 
 const (
-	RoleOwner  = "owner"
-	RoleMember = "member"
+	// Workspace roles (v2.0, docs/boxmes-ui-spec-v2.md §19). RoleMember is
+	// the pre-v2.0 name of a non-owner member; it is read as developer.
+	RoleOwner     = "owner"
+	RoleAdmin     = "admin"
+	RoleDeveloper = "developer"
+	RoleBilling   = "billing"
+	RoleViewer    = "viewer"
+	RoleAuditor   = "auditor"
+	RoleMember    = "member"
 
 	TokenPurposeVerify = "verify"
 	TokenPurposeReset  = "reset"
@@ -35,6 +42,44 @@ type Workspace struct {
 	MaxBoxes    int       `json:"max_boxes"`
 	MaxTTLHours int       `json:"max_ttl_hours"`
 	CreatedAt   time.Time `json:"created_at"`
+	// v2.0: plan (free|pro|team|unlimited) + per-workspace quota overrides.
+	// Empty plan = the instance default (BOXMES_DEFAULT_PLAN, free).
+	Plan      string          `json:"plan,omitempty"`
+	Overrides *QuotaOverrides `json:"quota_overrides,omitempty"`
+	Status    string          `json:"status,omitempty"` // active (default) | suspended
+	CreatedBy string          `json:"created_by,omitempty"`
+}
+
+// ValidRole reports a workspace role name (owner, admin, developer, billing, viewer, auditor).
+func ValidRole(r string) bool {
+	switch r {
+	case RoleOwner, RoleAdmin, RoleDeveloper, RoleBilling, RoleViewer, RoleAuditor:
+		return true
+	}
+	return false
+}
+
+// NormRole maps the pre-v2.0 "member" role to developer.
+func NormRole(r string) string {
+	if r == RoleMember {
+		return RoleDeveloper
+	}
+	return r
+}
+
+// WorkspaceInvite invites an email into a workspace with a role (token link,
+// 7 days). TokenHash never leaves the store.
+type WorkspaceInvite struct {
+	ID          string     `json:"id"`
+	WorkspaceID string     `json:"workspace_id"`
+	Email       string     `json:"email"`
+	Role        string     `json:"role"`
+	InvitedBy   string     `json:"invited_by"`
+	TokenHash   string     `json:"-"`
+	ExpiresAt   time.Time  `json:"expires_at"`
+	AcceptedAt  *time.Time `json:"accepted_at"`
+	AcceptedBy  string     `json:"accepted_by,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 type Membership struct {

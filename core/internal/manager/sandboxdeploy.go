@@ -235,6 +235,12 @@ func (m *Manager) Expose(ctx context.Context, p *Principal, id string, in Expose
 	}
 	if !found {
 		b.Ports = append(nonNilInts(b.Ports), in.Port)
+		if !m.publicAllowed(ctx, b.WorkspaceID) { // v2.0 plan without public URLs
+			if b.PortAccess == nil {
+				b.PortAccess = map[int]string{}
+			}
+			b.PortAccess[in.Port] = model.AccessToken
+		}
 	}
 	labelChanged := false
 	if in.Label != "" && in.Label != b.PortLabels[in.Port] {
@@ -322,7 +328,7 @@ func (m *Manager) cloneSandbox(ctx context.Context, p *Principal, src *model.Box
 	}
 	sp, _ := m.sandboxProv(srcHost.Provider)
 	now := time.Now().UTC()
-	nb := &model.Box{ID: secret.ID("box"), Slug: slug, AgentID: src.AgentID, AgentName: src.AgentName, Status: model.StatusProvisioning,
+	nb := &model.Box{ID: secret.ID("box"), WorkspaceID: src.WorkspaceID, Slug: slug, AgentID: src.AgentID, AgentName: src.AgentName, Status: model.StatusProvisioning,
 		Lifecycle: src.Lifecycle, Template: src.Template, Spec: src.Spec, Provider: src.Provider, Region: src.Region,
 		TTLSeconds: src.TTLSeconds, IdleMinutes: src.IdleMinutes, BudgetUSD: src.BudgetUSD, CostPerHour: src.CostPerHour, Billing: "sandbox",
 		Ports: nonNilInts(src.Ports), Secrets: nonNilStrs(src.Secrets), CreatedAt: now, LastActiveAt: now, Locale: src.Locale,
@@ -415,7 +421,7 @@ func (m *Manager) forkSandboxSnapshot(ctx context.Context, p *Principal, src *mo
 		return nil, model.EH(model.ErrPolicyDenied, "Terminate unused boxes (box down) first.", "agent already has %d boxes (quota %d)", len(existing), q.MaxBoxesPerAgent)
 	}
 	now := time.Now().UTC()
-	b := &model.Box{ID: secret.ID("box"), Slug: slug, AgentID: agent.ID, AgentName: agent.Name, Status: model.StatusProvisioning,
+	b := &model.Box{ID: secret.ID("box"), WorkspaceID: agent.WorkspaceID, Slug: slug, AgentID: agent.ID, AgentName: agent.Name, Status: model.StatusProvisioning,
 		Lifecycle: src.Lifecycle, Template: src.Template, Spec: src.Spec, Region: src.Region, TTLSeconds: src.TTLSeconds,
 		IdleMinutes: src.IdleMinutes, BudgetUSD: src.BudgetUSD, Ports: nonNilInts(src.Ports), Secrets: nonNilStrs(src.Secrets),
 		Setup: src.Setup, CreatedAt: now, LastActiveAt: now, Locale: src.Locale, ForkedFrom: sn.ID, Billing: "sandbox", Provider: snapHost.Provider}

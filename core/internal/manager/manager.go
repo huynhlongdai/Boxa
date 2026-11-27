@@ -97,6 +97,8 @@ type Config struct {
 	SignupMode string        // BOXMES_SIGNUP_MODE: invite (default) | open | closed
 	SessionTTL time.Duration // BOXMES_SESSION_TTL: dashboard session lifetime (default 720h)
 	Mailer     Mailer        // tests; nil = SMTP from settings.notify
+	// v2.0
+	DefaultPlan string // BOXMES_DEFAULT_PLAN: plan of new workspaces (free | pro | team | unlimited; default free)
 }
 
 func (c *Config) defaults() {
@@ -354,8 +356,32 @@ func (m *Manager) Emit(ctx context.Context, actor, boxID, agentID, typ, msg stri
 }
 
 // EmitData is Emit with structured details (Event.data).
+// The event's workspace is the box's, else the agent's, else the calling
+// workspace principal's ("" = platform-wide, e.g. user.signed_up).
 func (m *Manager) EmitData(ctx context.Context, actor, boxID, agentID, typ, msg string, cost *float64, data map[string]any) {
-	e := &model.Event{ID: secret.ID("evt"), TS: time.Now().UTC(), Actor: actor, Type: typ, Message: msg, CostUSD: cost, Data: data}
+	m.EmitWS(ctx, m.eventWorkspace(ctx, boxID, agentID), actor, boxID, agentID, typ, msg, cost, data)
+}
+
+func (m *Manager) eventWorkspace(ctx context.Context, boxID, agentID string) string {
+	if boxID != "" {
+		if b, err := m.Store.GetBox(ctx, boxID); err == nil && b.WorkspaceID != "" {
+			return b.WorkspaceID
+		}
+	}
+	if agentID != "" {
+		if a, err := m.Store.GetAgent(ctx, agentID); err == nil && a.WorkspaceID != "" {
+			return a.WorkspaceID
+		}
+	}
+	if p := principalFrom(ctx); p != nil && !p.Platform {
+		return p.WorkspaceID
+	}
+	return ""
+}
+
+// EmitWS records an event in an explicit workspace.
+func (m *Manager) EmitWS(ctx context.Context, ws, actor, boxID, agentID, typ, msg string, cost *float64, data map[string]any) {
+	e := &model.Event{ID: secret.ID("evt"), TS: time.Now().UTC(), Actor: actor, Type: typ, Message: msg, CostUSD: cost, Data: data, WorkspaceID: ws}
 	if boxID != "" {
 		e.BoxID = &boxID
 	}
@@ -365,11 +391,11 @@ func (m *Manager) EmitData(ctx context.Context, actor, boxID, agentID, typ, msg 
 	if err := m.Store.AddEvent(ctx, e); err != nil {
 		log.Printf("event: %v", err)
 	}
-	m.Broker.Publish(events.Msg{Type: "event.created", Data: e, AgentID: agentID})
+	m.Broker.Publish(events.Msg{Type: "event.created", Data: e, AgentID: agentID, WorkspaceID: ws})
 }
 
 func (m *Manager) publishBox(b *model.Box) {
-	m.Broker.Publish(events.Msg{Type: "box.updated", Data: b, AgentID: b.AgentID})
+	m.Broker.Publish(events.Msg{Type: "box.updated", Data: b, AgentID: b.AgentID, WorkspaceID: b.WorkspaceID})
 }
 
 // ---- settings / quotas ----

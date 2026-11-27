@@ -62,6 +62,8 @@ func nextForError(code string) []string {
 		return []string{"GET /v1/openapi.json or box_templates() / GET /v1/profiles for valid values"}
 	case model.ErrRateLimited:
 		return []string{"wait retry_after_s, then retry", "box_exec_batch(...)  # fewer round-trips"}
+	case model.ErrQuotaExceeded:
+		return []string{"GET /v1/workspaces/current/usage", "box_list(status=\"running\")  # then box_sleep / box_down unused boxes", "GET /v1/plans"}
 	}
 	return nil
 }

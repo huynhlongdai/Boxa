@@ -135,11 +135,19 @@ func (m *Manager) loadSSHKeys(ctx context.Context) []*model.SSHKey {
 	return list
 }
 
+// sshKeyWS is the workspace of a registered key (pre-v2.0 keys: default).
+func sshKeyWS(k *model.SSHKey) string {
+	if k.WorkspaceID == "" {
+		return model.DefaultWorkspaceID
+	}
+	return k.WorkspaceID
+}
+
 // ListSSHKeys lists the caller's keys (admin: all).
 func (m *Manager) ListSSHKeys(ctx context.Context, p *Principal) []*model.SSHKey {
 	out := []*model.SSHKey{}
 	for _, k := range m.loadSSHKeys(ctx) {
-		if p.Admin || k.AgentID == p.AgentID {
+		if p.Sees(sshKeyWS(k), k.AgentID) {
 			out = append(out, k)
 		}
 	}
@@ -164,6 +172,9 @@ func (m *Manager) AddSSHKey(ctx context.Context, p *Principal, in AddSSHKeyInput
 	}
 	k := &model.SSHKey{ID: secret.ID("sshk"), Name: name, PublicKey: strings.TrimSpace(string(ssh.MarshalAuthorizedKey(pk))),
 		Fingerprint: ssh.FingerprintSHA256(pk), AgentID: p.AgentID, CreatedAt: time.Now().UTC()}
+	if ws, err := p.TargetWS(); err == nil {
+		k.WorkspaceID = ws
+	}
 	if p.Key != nil {
 		k.KeyID = p.Key.ID
 	}
@@ -172,7 +183,7 @@ func (m *Manager) AddSSHKey(ctx context.Context, p *Principal, in AddSSHKeyInput
 	defer lock.Unlock()
 	list := m.loadSSHKeys(ctx)
 	for _, x := range list {
-		if x.Fingerprint == k.Fingerprint && x.AgentID == k.AgentID {
+		if x.Fingerprint == k.Fingerprint && x.AgentID == k.AgentID && sshKeyWS(x) == k.WorkspaceID && x.KeyID == k.KeyID {
 			return x, nil
 		}
 	}
@@ -197,7 +208,7 @@ func (m *Manager) DeleteSSHKey(ctx context.Context, p *Principal, id string) err
 	defer lock.Unlock()
 	list := m.loadSSHKeys(ctx)
 	for i, x := range list {
-		if x.ID == id && (p.Admin || x.AgentID == p.AgentID) {
+		if x.ID == id && p.Sees(sshKeyWS(x), x.AgentID) {
 			list = append(list[:i], list[i+1:]...)
 			return m.Store.PutKV(ctx, sshKeysKV, list)
 		}

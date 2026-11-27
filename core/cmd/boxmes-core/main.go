@@ -125,6 +125,7 @@ func main() {
 	cfg := manager.Config{
 		PublicURL:          os.Getenv("BOXMES_PUBLIC_URL"),
 		SignupMode:         os.Getenv("BOXMES_SIGNUP_MODE"),
+		DefaultPlan:        os.Getenv("BOXMES_DEFAULT_PLAN"),
 		SessionTTL:         envDur("BOXMES_SESSION_TTL", 0),
 		DisableTunnel:      envBool("BOXMES_DISABLE_TUNNEL"),
 		AssumePublicURL:    envBool("BOXMES_INGRESS_ASSUME_PUBLIC"),

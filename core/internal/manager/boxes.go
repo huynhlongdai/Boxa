@@ -74,6 +74,9 @@ func (m *Manager) CreateBox(ctx context.Context, p *Principal, req boxyaml.Reque
 	if err != nil {
 		return nil, false, err
 	}
+	if eg, err = m.planEgress(ctx, agent.WorkspaceID, eg); err != nil {
+		return nil, false, err
+	}
 	idle, ttl := req.IdleMinutes, req.TTLSeconds
 	slug, err := m.uniqueSlug(ctx, req.Slug, baseTemplate)
 	if err != nil {
@@ -81,7 +84,7 @@ func (m *Manager) CreateBox(ctx context.Context, p *Principal, req boxyaml.Reque
 	}
 	now := time.Now().UTC()
 	b := &model.Box{
-		ID: secret.ID("box"), Slug: slug, AgentID: agent.ID, AgentName: agent.Name, Status: model.StatusRequested,
+		ID: secret.ID("box"), WorkspaceID: agent.WorkspaceID, Slug: slug, AgentID: agent.ID, AgentName: agent.Name, Status: model.StatusRequested,
 		Lifecycle: req.Lifecycle, Template: req.Template, Spec: model.Spec{CPU: req.Spec.CPU, RAMMB: req.Spec.RAMMB, DiskGB: req.Spec.DiskGB},
 		Region: req.Region, TTLSeconds: ttl, IdleMinutes: idle, BudgetUSD: req.BudgetUSD,
 		Ports: nonNilInts(req.Ports), Secrets: nonNilStrs(req.Secrets), Setup: req.Setup, CreatedAt: now, LastActiveAt: now,
@@ -107,6 +110,14 @@ func (m *Manager) CreateBox(ctx context.Context, p *Principal, req boxyaml.Reque
 	}
 	if needs != nil {
 		b.Profile = needs.Profile
+	}
+	if !m.publicAllowed(ctx, b.WorkspaceID) { // v2.0: plans without public URLs keep ports behind URL tokens
+		for _, port := range b.Ports {
+			if b.PortAccess == nil {
+				b.PortAccess = map[int]string{}
+			}
+			b.PortAccess[port] = model.AccessToken
+		}
 	}
 	// v1.9 readable gateway name + port labels
 	if b.App != nil && b.App.Label != "" && b.App.Port > 0 {
@@ -177,7 +188,7 @@ func (m *Manager) normalizeRequest(ctx context.Context, p *Principal, reqp *boxy
 		req.Template = "base"
 	}
 	baseTemplate := req.Template
-	tpl, err := m.Store.GetTemplate(ctx, req.Template)
+	tpl, err := m.templateFor(ctx, agent.WorkspaceID, req.Template)
 	if err != nil {
 		return "", nil, model.EH(model.ErrInvalid, "Use one of GET /templates.", "template %q not found", req.Template)
 	}
@@ -244,8 +255,8 @@ func (m *Manager) normalizeRequest(ctx context.Context, p *Principal, reqp *boxy
 			return "", nil, err
 		}
 		for _, name := range req.Secrets {
-			s, err := m.Store.GetSecret(ctx, name)
-			if err != nil {
+			s, err := m.Store.GetSecretIn(ctx, agent.WorkspaceID, name)
+			if err != nil || s.System {
 				return "", nil, model.EH(model.ErrInvalid, "Create it first with POST /secrets.", "secret %q not found", name)
 			}
 			if len(s.Agents) > 0 && !contains(s.Agents, agent.ID) {
@@ -258,6 +269,10 @@ func (m *Manager) normalizeRequest(ctx context.Context, p *Principal, reqp *boxy
 	}
 	if req.TTLSeconds <= 0 && req.Lifecycle == model.LifecycleTask {
 		req.TTLSeconds = settings.Reaper.DefaultTTLSeconds
+	}
+	// v2.0 workspace plan quota (per-box size, TTL cap, concurrency, create rate)
+	if err := m.checkBoxQuota(ctx, agent.WorkspaceID, BoxQuotaInput{CPU: req.Spec.CPU, RAMMB: req.Spec.RAMMB, TTLSeconds: &req.TTLSeconds, Ports: req.Ports, New: !quoteOnly(ctx)}); err != nil {
+		return "", nil, err
 	}
 	*reqp = req
 	return baseTemplate, tpl, nil
@@ -324,7 +339,7 @@ func (m *Manager) provisionWithTemplate(id, baseTemplate string) {
 		if baseTemplate == "" {
 			baseTemplate = b.Template
 			if !boxyaml.IsBuiltin(baseTemplate) {
-				if t, err := m.Store.GetTemplate(ctx, b.Template); err == nil {
+				if t, err := m.templateFor(ctx, b.WorkspaceID, b.Template); err == nil {
 					if def, errs := boxyaml.Parse(t.YAML); errs == nil && boxyaml.IsBuiltin(def.Template) {
 						baseTemplate = def.Template
 					}
@@ -445,7 +460,7 @@ func (m *Manager) provisionWithTemplate(id, baseTemplate string) {
 
 // rentBurstHost creates an hourly host for an offer and waits for its boxd.
 func (m *Manager) rentBurstHost(ctx context.Context, o *model.Offer) (*model.Host, error) {
-	sys := &Principal{Key: &model.APIKey{Scopes: []string{model.ScopeAdmin}}, Admin: true}
+	sys := sysPrincipal()
 	h, err := m.CreateHost(ctx, sys, o.Provider, o.SKU, o.Region, "burst")
 	if err != nil {
 		return nil, err
@@ -535,6 +550,7 @@ func (m *Manager) setStatus(ctx context.Context, b *model.Box, status, actor, ms
 }
 
 func (m *Manager) decorateBox(ctx context.Context, b *model.Box) *model.Box {
+	b.Location = m.boxLocation(ctx, b) // v2.0
 	if b.Ports == nil {
 		b.Ports = []int{}
 	}
@@ -558,17 +574,30 @@ func (m *Manager) GetBox(ctx context.Context, p *Principal, id string) (*model.B
 	if err != nil {
 		return nil, notFound("box", id)
 	}
-	if !p.Admin && b.AgentID != p.AgentID {
+	if !p.Sees(b.WorkspaceID, b.AgentID) {
 		return nil, notFound("box", id)
 	}
 	return m.decorateBox(ctx, b), nil
 }
 
+// BoxListFilter adds the v2.0 location filters to the store filter.
+type BoxListFilter struct {
+	store.BoxFilter
+	Region   string // eu | us | apac | sandbox | local | other
+	Location string // site, e.g. hetzner-fsn
+}
+
 func (m *Manager) ListBoxes(ctx context.Context, p *Principal, f store.BoxFilter) ([]*model.Box, error) {
+	return m.ListBoxesWhere(ctx, p, BoxListFilter{BoxFilter: f})
+}
+
+func (m *Manager) ListBoxesWhere(ctx context.Context, p *Principal, lf BoxListFilter) ([]*model.Box, error) {
+	f := lf.BoxFilter
+	f.WorkspaceID = p.ScopeWS()
 	if !p.Admin {
 		f.AgentID = p.AgentID
 	} else if f.AgentID != "" {
-		if a, err := m.Store.GetAgentByName(ctx, f.AgentID); err == nil {
+		if a, err := m.findAgent(ctx, p, f.AgentID); err == nil {
 			f.AgentID = a.ID
 		}
 	}
@@ -576,10 +605,18 @@ func (m *Manager) ListBoxes(ctx context.Context, p *Principal, f store.BoxFilter
 	if err != nil {
 		return nil, err
 	}
+	out := make([]*model.Box, 0, len(bs))
 	for _, b := range bs {
 		m.decorateBox(ctx, b)
+		if lf.Region != "" && (b.Location == nil || !strings.EqualFold(b.Location.Region, lf.Region)) {
+			continue
+		}
+		if lf.Location != "" && (b.Location == nil || !strings.EqualFold(b.Location.Site, lf.Location)) {
+			continue
+		}
+		out = append(out, b)
 	}
-	return bs, nil
+	return out, nil
 }
 
 func (m *Manager) touch(ctx context.Context, b *model.Box) {
@@ -666,7 +703,7 @@ func sessionWrap(cmd string) string {
 func (m *Manager) secretEnv(ctx context.Context, b *model.Box) (map[string]string, error) {
 	env := map[string]string{}
 	for _, name := range b.Secrets {
-		s, err := m.Store.GetSecret(ctx, name)
+		s, err := m.Store.GetSecretIn(ctx, b.WorkspaceID, name)
 		if err != nil {
 			continue
 		}
@@ -813,8 +850,14 @@ func (m *Manager) GetJob(ctx context.Context, p *Principal, id string) (*model.J
 	if err != nil {
 		return nil, notFound("job", id)
 	}
-	if !p.Admin && j.AgentID != p.AgentID {
+	if !p.SeesAgent(j.AgentID) {
 		return nil, notFound("job", id)
+	}
+	if b, err := m.Store.GetBox(ctx, j.BoxID); err != nil || !p.InScope(b.WorkspaceID) {
+		return nil, notFound("job", id)
+	}
+	if err := p.Can(PermExec); err != nil { // job output is exec output
+		return nil, err
 	}
 	return j, nil
 }
@@ -978,6 +1021,9 @@ func (m *Manager) Observe(ctx context.Context, p *Principal, id string) (*Observ
 // ---- lifecycle verbs ----
 
 func (m *Manager) Sleep(ctx context.Context, p *Principal, id string) (*model.Box, error) {
+	if err := p.canMutateBox(); err != nil {
+		return nil, err
+	}
 	b, err := m.GetBox(ctx, p, id)
 	if err != nil {
 		return nil, err
@@ -1010,6 +1056,9 @@ func (m *Manager) sleepBox(ctx context.Context, b *model.Box, actor, why string)
 }
 
 func (m *Manager) Wake(ctx context.Context, p *Principal, id string) (*model.Box, error) {
+	if err := p.canMutateBox(); err != nil && p.Can(PermExec) != nil { // exec auto-wakes too
+		return nil, err
+	}
 	b, err := m.GetBox(ctx, p, id)
 	if err != nil {
 		return nil, err
@@ -1023,6 +1072,9 @@ func (m *Manager) Wake(ctx context.Context, p *Principal, id string) (*model.Box
 	}
 	if b.Status != model.StatusSleeping {
 		return nil, model.E(model.ErrInvalid, "cannot wake a box in status %s", b.Status)
+	}
+	if err := m.checkWakeQuota(ctx, b); err != nil {
+		return nil, err
 	}
 	agent, err := m.Store.GetAgent(ctx, b.AgentID)
 	if err == nil {
@@ -1136,6 +1188,9 @@ func (m *Manager) ListSnapshots(ctx context.Context, p *Principal, id string) ([
 
 // Terminate deletes the box everywhere.
 func (m *Manager) Terminate(ctx context.Context, p *Principal, id string) (*model.Box, error) {
+	if err := p.canMutateBox(); err != nil {
+		return nil, err
+	}
 	b, err := m.GetBox(ctx, p, id)
 	if err != nil {
 		return nil, err
@@ -1198,7 +1253,10 @@ func (m *Manager) BoxEvents(ctx context.Context, p *Principal, id string) ([]*mo
 }
 
 func (m *Manager) Takeover(ctx context.Context, p *Principal, id string, on bool) (*model.Box, error) {
-	if err := p.Require(model.ScopeAdmin); err != nil {
+	if !p.Admin { // humans only: agent keys cannot take a box over
+		return nil, p.Require(model.ScopeAdmin)
+	}
+	if err := p.Can(PermExec); err != nil {
 		return nil, err
 	}
 	b, err := m.GetBox(ctx, p, id)
@@ -1246,21 +1304,26 @@ func (m *Manager) CloseTerminal(hostID, stream string) {
 }
 
 // EmergencyStop sleeps every running box.
+// v2.0: a workspace owner/admin stops only their workspace's boxes; the
+// platform operator stops every box (or one workspace with ?workspace=).
 func (m *Manager) EmergencyStop(ctx context.Context, p *Principal, confirm string) (int, error) {
-	if err := p.Require(model.ScopeAdmin); err != nil {
+	if !p.Admin {
+		return 0, p.Require(model.ScopeAdmin)
+	}
+	if err := p.Can(PermEmergency); err != nil {
 		return 0, err
 	}
 	if confirm != "DUNG" {
 		return 0, model.EH(model.ErrInvalid, `Send {"confirm":"DUNG"} to confirm.`, "confirmation text mismatch")
 	}
-	boxes, _ := m.Store.ListBoxes(ctx, store.BoxFilter{Status: model.StatusRunning})
+	boxes, _ := m.Store.ListBoxes(ctx, store.BoxFilter{Status: model.StatusRunning, WorkspaceID: p.ScopeWS()})
 	n := 0
 	for _, b := range boxes {
 		if _, err := m.sleepBox(ctx, b, p.Actor(), "emergency stop"); err == nil {
 			n++
 		}
 	}
-	m.Emit(ctx, p.Actor(), "", "", "emergency_stop", fmt.Sprintf("emergency stop: %d boxes put to sleep", n), nil)
+	m.EmitWS(ctx, p.ScopeWS(), p.Actor(), "", "", "emergency_stop", fmt.Sprintf("emergency stop: %d boxes put to sleep", n), nil, nil)
 	loc := m.Settings(ctx).Locale
 	m.notify("emergency_stop", i18n.T(loc, "notify.emergency_title"), i18n.T(loc, "notify.emergency_body", n, p.Actor()))
 	return n, nil

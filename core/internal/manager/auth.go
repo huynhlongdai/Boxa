@@ -14,18 +14,26 @@ import (
 	"boxmes/core/internal/store"
 )
 
-// Principal is the authenticated caller.
+// Principal is the authenticated caller (v2.0 tenancy: see scope.go).
 type Principal struct {
 	Key     *model.APIKey
-	AgentID string // "" for admin keys without agent binding
-	Admin   bool
+	AgentID string // set for agent keys: the caller only sees its own agent's records
+	// Admin: not limited to one agent. True for the platform operator and for
+	// every workspace-wide caller (session members, workspace keys); what
+	// they may do is then decided by Can (role or key scopes).
+	Admin bool
+	// Platform: global operator (admin key, platform admin account). Sees
+	// every workspace unless FilterWS (?workspace=) narrows it.
+	Platform bool
+	FilterWS string
 	// v2 tenancy: set when the caller signed in with a session (bxs_ token).
 	User        *model.User
 	UserID      string
-	WorkspaceID string
-	Role        string // owner|member in WorkspaceID
+	WorkspaceID string // the caller's workspace (session: current, key: owner)
+	Role        string // owner|admin|developer|billing|viewer|auditor in WorkspaceID
 	SessionID   string
 	session     *model.Session
+	perms       map[string]bool // workspace permissions of non-platform callers
 }
 
 func (p *Principal) Actor() string {
@@ -35,21 +43,34 @@ func (p *Principal) Actor() string {
 	if p.UserID != "" {
 		return "user:" + p.UserID
 	}
-	if p.Admin {
+	if p.Platform {
 		return "admin"
+	}
+	if p.AgentID == "" {
+		return "key:" + p.Key.ID
 	}
 	return "agent:" + p.AgentID
 }
 
-// Require checks a scope.
+// Require checks a scope. ScopeAdmin means "platform operator"; the other
+// (legacy agent) scopes map onto workspace permissions (scope.go).
 func (p *Principal) Require(scope string) error {
 	if p == nil || p.Key == nil {
 		return model.E(model.ErrUnauthorized, "missing API key")
 	}
-	if p.Key.HasScope(scope) {
+	if p.Platform {
 		return nil
 	}
-	return model.EH(model.ErrUnauthorized, "Create a key with the '"+scope+"' scope.", "key lacks scope %q", scope)
+	if scope == model.ScopeAdmin {
+		if p.UserID != "" {
+			return model.EH(model.ErrUnauthorized, "Use an admin key or a platform admin account.", "platform admin only")
+		}
+		return model.EH(model.ErrUnauthorized, "Create a key with the '"+scope+"' scope.", "key lacks scope %q", scope)
+	}
+	if perm, ok := legacyScopePerm[scope]; ok {
+		return p.Can(perm)
+	}
+	return p.Can(scope)
 }
 
 // Authenticate resolves a bearer token.
@@ -68,16 +89,27 @@ func (m *Manager) Authenticate(ctx context.Context, token string) (*Principal, e
 		return nil, model.EH(model.ErrUnauthorized, "This key was revoked; ask the operator for a new key.", "API key revoked")
 	}
 	now := time.Now().UTC()
-	if k.LastUsedAt == nil || now.Sub(*k.LastUsedAt) > time.Minute {
+	if k.ExpiresAt != nil && !now.Before(*k.ExpiresAt) {
+		return nil, model.EH(model.ErrUnauthorized, "Create a new key (POST /v1/keys).", "API key expired")
+	}
+	ip := ClientIPFrom(ctx)
+	if k.LastUsedAt == nil || now.Sub(*k.LastUsedAt) > time.Minute || (ip != "" && ip != k.LastUsedIP) {
 		k.LastUsedAt = &now
+		if ip != "" {
+			k.LastUsedIP = ip
+		}
 		m.Store.PutKey(ctx, k)
 	}
-	p := &Principal{Key: k, Admin: k.HasScope(model.ScopeAdmin)}
-	if k.AgentID != nil {
-		p.AgentID = *k.AgentID
+	p, err := m.principalFromKey(ctx, k)
+	if err != nil {
+		return nil, err
 	}
-	if !p.Admin {
-		if err := m.allow(ctx, p.AgentID); err != nil {
+	if !p.Platform {
+		bucket := p.AgentID
+		if bucket == "" {
+			bucket = "key:" + k.ID
+		}
+		if err := m.allow(ctx, bucket); err != nil {
 			return nil, err
 		}
 		m.touchAgent(ctx, p.AgentID)
@@ -181,16 +213,23 @@ type AgentInput struct {
 }
 
 func (m *Manager) CreateAgent(ctx context.Context, p *Principal, in AgentInput) (*model.Agent, error) {
-	if err := p.Require(model.ScopeAdmin); err != nil {
+	if err := p.Can(PermAgents); err != nil {
+		return nil, err
+	}
+	ws, err := p.TargetWS()
+	if err != nil {
 		return nil, err
 	}
 	if in.Name == nil || !nameRe.MatchString(*in.Name) {
 		return nil, model.E(model.ErrInvalid, "name is required (letters, digits, space . _ -)")
 	}
-	if _, err := m.Store.GetAgentByName(ctx, *in.Name); err == nil {
+	if _, err := m.Store.GetAgentInWorkspace(ctx, ws, *in.Name); err == nil {
 		return nil, model.E(model.ErrInvalid, "agent %q already exists", *in.Name)
 	}
-	a := &model.Agent{ID: secret.ID("agt"), Name: *in.Name, Kind: "custom", CreatedAt: time.Now().UTC(), Policy: model.Policy{Providers: []string{}, Regions: []string{}}}
+	if err := m.quotaCount(ctx, ws, "max_agents"); err != nil {
+		return nil, err
+	}
+	a := &model.Agent{ID: secret.ID("agt"), WorkspaceID: ws, Name: *in.Name, Kind: "custom", CreatedAt: time.Now().UTC(), CreatedBy: p.Actor(), Policy: model.Policy{Providers: []string{}, Regions: []string{}}}
 	if err := applyAgentInput(a, in); err != nil {
 		return nil, err
 	}
@@ -263,6 +302,14 @@ func (m *Manager) decorateAgent(ctx context.Context, a *model.Agent) *model.Agen
 	return a
 }
 
+// listAgentsScoped returns the agents visible to p's workspace scope.
+func (m *Manager) listAgentsScoped(ctx context.Context, p *Principal) ([]*model.Agent, error) {
+	if ws := p.ScopeWS(); ws != "" {
+		return m.Store.ListAgentsInWorkspace(ctx, ws)
+	}
+	return m.Store.ListAgents(ctx)
+}
+
 func (m *Manager) ListAgents(ctx context.Context, p *Principal) ([]*model.Agent, error) {
 	if !p.Admin {
 		a, err := m.GetAgent(ctx, p, p.AgentID)
@@ -271,7 +318,7 @@ func (m *Manager) ListAgents(ctx context.Context, p *Principal) ([]*model.Agent,
 		}
 		return []*model.Agent{a}, nil
 	}
-	as, err := m.Store.ListAgents(ctx)
+	as, err := m.listAgentsScoped(ctx, p)
 	if err != nil {
 		return nil, err
 	}
@@ -281,30 +328,54 @@ func (m *Manager) ListAgents(ctx context.Context, p *Principal) ([]*model.Agent,
 	return as, nil
 }
 
-func (m *Manager) GetAgent(ctx context.Context, p *Principal, id string) (*model.Agent, error) {
-	if !p.Admin && id != p.AgentID {
-		return nil, notFound("agent", id)
+// findAgent resolves an agent id or name visible to p (NOT_FOUND otherwise).
+func (m *Manager) findAgent(ctx context.Context, p *Principal, ref string) (*model.Agent, error) {
+	if a, err := m.Store.GetAgent(ctx, ref); err == nil && p.Sees(a.WorkspaceID, a.ID) {
+		return a, nil
 	}
-	a, err := m.Store.GetAgent(ctx, id)
-	if err != nil {
-		if a2, err2 := m.Store.GetAgentByName(ctx, id); err2 == nil {
-			return m.decorateAgent(ctx, a2), nil
+	if ws := p.ScopeWS(); ws != "" {
+		if a, err := m.Store.GetAgentInWorkspace(ctx, ws, ref); err == nil && p.SeesAgent(a.ID) {
+			return a, nil
 		}
-		return nil, notFound("agent", id)
+	} else if p.Platform {
+		// global platform caller: a name is looked up in the target workspace first
+		if tw, err := p.TargetWS(); err == nil {
+			if a, err := m.Store.GetAgentInWorkspace(ctx, tw, ref); err == nil {
+				return a, nil
+			}
+		}
+		if as, err := m.Store.ListAgents(ctx); err == nil {
+			for _, a := range as {
+				if a.Name == ref {
+					return a, nil
+				}
+			}
+		}
+	}
+	return nil, notFound("agent", ref)
+}
+
+func (m *Manager) GetAgent(ctx context.Context, p *Principal, id string) (*model.Agent, error) {
+	a, err := m.findAgent(ctx, p, id)
+	if err != nil {
+		return nil, err
 	}
 	return m.decorateAgent(ctx, a), nil
 }
 
 func (m *Manager) UpdateAgent(ctx context.Context, p *Principal, id string, in AgentInput) (*model.Agent, error) {
-	if err := p.Require(model.ScopeAdmin); err != nil {
+	if err := p.Can(PermAgents); err != nil {
 		return nil, err
 	}
-	a, err := m.Store.GetAgent(ctx, id)
-	if err != nil {
+	a, err := m.findAgent(ctx, p, id)
+	if err != nil || !p.Admin {
 		return nil, notFound("agent", id)
 	}
+	if err := p.CanManage(a.CreatedBy); err != nil {
+		return nil, err
+	}
 	if in.Name != nil && *in.Name != a.Name {
-		if _, err := m.Store.GetAgentByName(ctx, *in.Name); err == nil {
+		if _, err := m.Store.GetAgentInWorkspace(ctx, a.WorkspaceID, *in.Name); err == nil {
 			return nil, model.E(model.ErrInvalid, "agent %q already exists", *in.Name)
 		}
 	}
@@ -320,18 +391,21 @@ func (m *Manager) UpdateAgent(ctx context.Context, p *Principal, id string, in A
 
 // DeleteAgent terminates its boxes and revokes its keys.
 func (m *Manager) DeleteAgent(ctx context.Context, p *Principal, id string) error {
-	if err := p.Require(model.ScopeAdmin); err != nil {
+	if err := p.Can(PermAgents); err != nil {
 		return err
 	}
-	a, err := m.Store.GetAgent(ctx, id)
-	if err != nil {
+	a, err := m.findAgent(ctx, p, id)
+	if err != nil || !p.Admin {
 		return notFound("agent", id)
 	}
-	boxes, _ := m.Store.ListBoxes(ctx, store.BoxFilter{AgentID: id})
+	if err := p.CanManage(a.CreatedBy); err != nil {
+		return err
+	}
+	boxes, _ := m.Store.ListBoxes(ctx, store.BoxFilter{AgentID: a.ID})
 	for _, b := range boxes {
 		m.Terminate(ctx, p, b.ID)
 	}
-	keys, _ := m.Store.ListKeys(ctx, id)
+	keys, _ := m.Store.ListKeys(ctx, a.ID)
 	now := time.Now().UTC()
 	for _, k := range keys {
 		if k.RevokedAt == nil {
@@ -340,55 +414,75 @@ func (m *Manager) DeleteAgent(ctx context.Context, p *Principal, id string) erro
 			m.Store.PutKey(ctx, full)
 		}
 	}
-	if err := m.Store.DeleteAgent(ctx, id); err != nil {
-		return err
-	}
-	m.Emit(ctx, p.Actor(), "", id, "agent.deleted", "agent "+a.Name+" deleted", nil)
-	return nil
+	m.Emit(ctx, p.Actor(), "", a.ID, "agent.deleted", "agent "+a.Name+" deleted", nil)
+	return m.Store.DeleteAgent(ctx, a.ID)
 }
 
-// ensureOperatorAgent is used when an admin creates a box without agent_id.
-func (m *Manager) ensureOperatorAgent(ctx context.Context) (*model.Agent, error) {
-	if a, err := m.Store.GetAgentByName(ctx, "operator"); err == nil {
+// ensureOperatorAgent is used when a workspace-wide caller creates a box
+// without agent_id: one "operator" agent per workspace.
+func (m *Manager) ensureOperatorAgent(ctx context.Context, ws string) (*model.Agent, error) {
+	if a, err := m.Store.GetAgentInWorkspace(ctx, ws, "operator"); err == nil {
 		return a, nil
 	}
-	a := &model.Agent{ID: secret.ID("agt"), Name: "operator", Kind: "custom", CreatedAt: time.Now().UTC(), Policy: model.Policy{Providers: []string{}, Regions: []string{}}}
+	a := &model.Agent{ID: secret.ID("agt"), WorkspaceID: ws, Name: "operator", Kind: "custom", CreatedAt: time.Now().UTC(), Policy: model.Policy{Providers: []string{}, Regions: []string{}}}
 	return a, m.Store.PutAgent(ctx, a)
 }
 
 // ---- keys ----
 
+// KeyInput is POST /v1/keys. Without agent_id the key is a workspace key
+// (v2.0) in the caller's workspace; a platform caller without a workspace
+// (no ?workspace=, no workspace_id) creating an admin key gets a platform key.
 type KeyInput struct {
-	AgentID *string  `json:"agent_id"`
-	Name    string   `json:"name"`
-	Scopes  []string `json:"scopes"`
+	AgentID       *string    `json:"agent_id"`
+	Name          string     `json:"name"`
+	Scopes        []string   `json:"scopes"`
+	ExpiresAt     *time.Time `json:"expires_at"`
+	ExpiresInDays int        `json:"expires_in_days"`
+	WorkspaceID   string     `json:"workspace_id"` // platform callers only
+	Platform      bool       `json:"platform"`     // platform callers only: force a platform key
 }
 
-var validScopes = map[string]bool{model.ScopeAdmin: true, model.ScopeBoxCreate: true, model.ScopeBoxExec: true, model.ScopeBoxFile: true, model.ScopeSnapshot: true, model.ScopeSecretUse: true}
+var validScopes = map[string]bool{model.ScopeAdmin: true, model.ScopeBoxCreate: true, model.ScopeBoxExec: true, model.ScopeBoxFile: true, model.ScopeSnapshot: true, model.ScopeSecretUse: true,
+	KeyScopeBoxesRead: true, KeyScopeBoxesWrite: true, KeyScopeExec: true, KeyScopeSecretsRead: true, KeyScopeSecretsWrite: true, KeyScopeBillingRead: true}
 
 func (m *Manager) CreateKey(ctx context.Context, p *Principal, in KeyInput) (*model.APIKey, error) {
-	if err := p.Require(model.ScopeAdmin); err != nil {
+	if err := p.Can(PermAgents); err != nil {
 		return nil, err
 	}
 	if in.AgentID != nil && *in.AgentID == "" {
 		in.AgentID = nil
 	}
-	if in.AgentID != nil {
-		a, err := m.Store.GetAgent(ctx, *in.AgentID)
-		if err != nil {
-			a, err = m.Store.GetAgentByName(ctx, *in.AgentID)
-			if err != nil {
-				return nil, notFound("agent", *in.AgentID)
-			}
-		}
-		in.AgentID = &a.ID
+	ws, err := p.TargetWS()
+	if err != nil {
+		return nil, err
 	}
+	if in.WorkspaceID != "" && p.Platform {
+		if _, err := m.Store.GetWorkspace(ctx, in.WorkspaceID); err != nil {
+			return nil, notFound("workspace", in.WorkspaceID)
+		}
+		ws = in.WorkspaceID
+	}
+	var agent *model.Agent
+	if in.AgentID != nil {
+		agent, err = m.findAgent(ctx, p, *in.AgentID)
+		if err != nil || !p.Admin {
+			return nil, notFound("agent", *in.AgentID)
+		}
+		in.AgentID = &agent.ID
+		ws = agent.WorkspaceID
+	}
+	// legacy platform key: platform caller, no workspace asked for, admin scope
+	platformKey := p.Platform && agent == nil && (in.Platform || (in.WorkspaceID == "" && p.FilterWS == "" && p.WorkspaceID == "" && (len(in.Scopes) == 0 || (len(in.Scopes) == 1 && in.Scopes[0] == model.ScopeAdmin))))
 	scopes := in.Scopes
 	if len(scopes) == 0 {
-		if in.AgentID == nil {
+		switch {
+		case platformKey:
 			scopes = []string{model.ScopeAdmin}
-		} else {
+		case agent != nil:
 			scopes = append([]string{}, model.AgentScopes...)
+		default:
+			scopes = append([]string{}, DefaultWorkspaceKeyScopes...)
 		}
 	}
 	for _, s := range scopes {
@@ -396,20 +490,47 @@ func (m *Manager) CreateKey(ctx context.Context, p *Principal, in KeyInput) (*mo
 			return nil, model.E(model.ErrInvalid, "unknown scope %q", s)
 		}
 	}
-	if in.AgentID == nil && !contains(scopes, model.ScopeAdmin) {
-		return nil, model.E(model.ErrInvalid, "a key without agent_id must have the admin scope")
+	if !p.Platform { // a key never grants more than its creator holds
+		for perm := range scopesPerms(scopes) {
+			if !p.perms[perm] {
+				return nil, model.EH(model.ErrPolicyDenied, "Ask a workspace owner or admin.", "you cannot create a key with more rights than your own (%s)", perm)
+			}
+		}
+	}
+	if !platformKey {
+		if err := m.quotaCount(ctx, ws, "max_keys"); err != nil {
+			return nil, err
+		}
 	}
 	sort.Strings(scopes)
-	kind := "agent"
-	if contains(scopes, model.ScopeAdmin) {
-		kind = "admin"
+	kind, prefixKind := model.KeyKindWorkspace, "ws"
+	switch {
+	case platformKey:
+		kind, prefixKind, ws = model.KeyKindPlatform, "admin", ""
+	case agent != nil:
+		kind, prefixKind = model.KeyKindAgent, "agent"
 	}
-	key, prefix := secret.NewAPIKey(kind)
+	key, prefix := secret.NewAPIKey(prefixKind)
 	name := strings.TrimSpace(in.Name)
 	if name == "" {
 		name = kind + " key"
 	}
-	k := &model.APIKey{ID: secret.ID("key"), AgentID: in.AgentID, Name: name, Prefix: prefix, Scopes: scopes, CreatedAt: time.Now().UTC(), Hash: secret.Hash(key)}
+	now := time.Now().UTC()
+	k := &model.APIKey{ID: secret.ID("key"), WorkspaceID: ws, AgentID: in.AgentID, Name: clip(name, 80), Prefix: prefix, Scopes: scopes, CreatedAt: now,
+		Hash: secret.Hash(key), Kind: kind, CreatedBy: p.Actor()}
+	switch {
+	case in.ExpiresAt != nil:
+		if !in.ExpiresAt.After(now) {
+			return nil, model.E(model.ErrInvalid, "expires_at must be in the future")
+		}
+		e := in.ExpiresAt.UTC()
+		k.ExpiresAt = &e
+	case in.ExpiresInDays < 0:
+		return nil, model.E(model.ErrInvalid, "expires_in_days must be >= 0")
+	case in.ExpiresInDays > 0:
+		e := now.Add(time.Duration(in.ExpiresInDays) * 24 * time.Hour)
+		k.ExpiresAt = &e
+	}
 	if err := m.Store.PutKey(ctx, k); err != nil {
 		return nil, err
 	}
@@ -417,25 +538,38 @@ func (m *Manager) CreateKey(ctx context.Context, p *Principal, in KeyInput) (*mo
 	if in.AgentID != nil {
 		aid = *in.AgentID
 	}
-	m.Emit(ctx, p.Actor(), "", aid, "key.created", "key "+prefix+"… created", nil)
+	m.EmitWS(ctx, ws, p.Actor(), "", aid, "key.created", "key "+prefix+"… created", nil, map[string]any{"kind": kind, "scopes": scopes})
 	k.Key = key
 	return k, nil
 }
 
 func (m *Manager) ListKeys(ctx context.Context, p *Principal) ([]*model.APIKey, error) {
-	if p.Admin {
-		return m.Store.ListKeys(ctx, "")
+	if !p.Admin {
+		return m.Store.ListKeys(ctx, p.AgentID)
 	}
-	return m.Store.ListKeys(ctx, p.AgentID)
+	if ws := p.ScopeWS(); ws != "" {
+		return m.Store.ListKeysInWorkspace(ctx, ws)
+	}
+	return m.Store.ListKeys(ctx, "")
 }
 
 func (m *Manager) RevokeKey(ctx context.Context, p *Principal, id string) error {
-	if err := p.Require(model.ScopeAdmin); err != nil {
+	if err := p.Can(PermAgents); err != nil {
 		return err
 	}
 	k, err := m.Store.GetKey(ctx, id)
-	if err != nil {
+	if err != nil || !p.Admin {
 		return notFound("key", id)
+	}
+	if k.EffectiveKind() == model.KeyKindPlatform {
+		if !p.Platform {
+			return notFound("key", id)
+		}
+	} else if !p.InScope(k.WorkspaceID) {
+		return notFound("key", id)
+	}
+	if err := p.CanManage(k.CreatedBy); err != nil {
+		return err
 	}
 	if k.ID == p.Key.ID {
 		return model.EH(model.ErrInvalid, "Use another admin key to revoke this one.", "cannot revoke the key used for this request")
@@ -447,7 +581,7 @@ func (m *Manager) RevokeKey(ctx context.Context, p *Principal, id string) error 
 			return err
 		}
 	}
-	m.Emit(ctx, p.Actor(), "", "", "key.revoked", "key "+k.Prefix+"… revoked", nil)
+	m.EmitWS(ctx, k.WorkspaceID, p.Actor(), "", "", "key.revoked", "key "+k.Prefix+"… revoked", nil, nil)
 	return nil
 }
 
@@ -476,14 +610,15 @@ func (m *Manager) agentFor(ctx context.Context, p *Principal, requested string) 
 		if p.AgentID != "" {
 			return m.Store.GetAgent(ctx, p.AgentID)
 		}
-		return m.ensureOperatorAgent(ctx)
+		ws, err := p.TargetWS()
+		if err != nil {
+			return nil, err
+		}
+		return m.ensureOperatorAgent(ctx, ws)
 	}
-	a, err := m.Store.GetAgent(ctx, requested)
+	a, err := m.findAgent(ctx, p, requested)
 	if errors.Is(err, model.ErrNoRows) {
-		a, err = m.Store.GetAgentByName(ctx, requested)
-	}
-	if err != nil {
 		return nil, notFound("agent", requested)
 	}
-	return a, nil
+	return a, err
 }

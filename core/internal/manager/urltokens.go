@@ -205,6 +205,11 @@ func (m *Manager) SetPortAccess(ctx context.Context, p *Principal, id string, po
 	if err != nil {
 		return nil, err
 	}
+	if in.Access == model.AccessPublic {
+		if q, _ := m.WorkspaceQuota(ctx, b.WorkspaceID); !q.PublicURL {
+			return nil, m.limitErr(q, "public_url", false)
+		}
+	}
 	lock := m.boxLock(b.ID)
 	lock.Lock()
 	cur, err := m.Store.GetBox(ctx, b.ID)

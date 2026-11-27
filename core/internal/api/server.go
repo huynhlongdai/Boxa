@@ -87,6 +87,7 @@ func (s *Server) routes() http.Handler {
 
 			r.Post("/boxes", s.createBox)
 			r.Get("/boxes", s.listBoxes)
+			r.Get("/boxes/locations", s.boxLocations)
 			r.Get("/boxes/{id}", s.getBox)
 			r.Delete("/boxes/{id}", s.deleteBox)
 			r.Post("/boxes/{id}/sleep", s.boxVerb("sleep"))
@@ -255,12 +256,17 @@ func bearer(r *http.Request) string {
 
 func (s *Server) authMW(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		p, err := s.M.Authenticate(r.Context(), bearer(r))
+		ctx := manager.WithClientIP(r.Context(), clientInfo(r).IP)
+		p, err := s.M.Authenticate(ctx, bearer(r))
 		if err != nil {
 			writeErr(w, r, err)
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), principalKey, p)))
+		if p.Platform { // v2.0: ?workspace= narrows a platform caller to one workspace
+			p.FilterWS = r.URL.Query().Get("workspace")
+		}
+		ctx = manager.WithPrincipal(ctx, p)
+		next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, principalKey, p)))
 	})
 }
 
@@ -461,7 +467,7 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			if !p.Admin && !m.Public && m.AgentID != p.AgentID {
+			if !m.Public && (!p.InScope(m.WorkspaceID) || (!p.Admin && m.AgentID != p.AgentID)) {
 				continue
 			}
 			b, _ := json.Marshal(m.Data)
@@ -514,7 +520,7 @@ func (s *Server) listBoxes(w http.ResponseWriter, r *http.Request) {
 	if q.Get("all") == "true" || f.Status == model.StatusTerminated || f.Status == model.StatusFailed {
 		f.IncludeTerminated = true
 	}
-	bs, err := s.M.ListBoxes(r.Context(), pr(r), f)
+	bs, err := s.M.ListBoxesWhere(r.Context(), pr(r), manager.BoxListFilter{BoxFilter: f, Region: q.Get("region"), Location: q.Get("location")})
 	if err != nil {
 		writeErr(w, r, err)
 		return
@@ -904,7 +910,7 @@ func (s *Server) offers(w http.ResponseWriter, r *http.Request) {
 // ---- templates ----
 
 func (s *Server) listTemplates(w http.ResponseWriter, r *http.Request) {
-	ts, err := s.M.ListTemplates(r.Context())
+	ts, err := s.M.ListTemplates(r.Context(), pr(r))
 	if err != nil {
 		writeErr(w, r, err)
 		return

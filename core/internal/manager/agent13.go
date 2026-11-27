@@ -56,6 +56,9 @@ func (m *Manager) Clone(ctx context.Context, p *Principal, id string, in CloneIn
 	if existing, _ := m.Store.ListBoxes(ctx, store.BoxFilter{AgentID: agent.ID}); len(existing) >= q.MaxBoxesPerAgent {
 		return nil, model.EH(model.ErrPolicyDenied, "Terminate unused boxes (box down) first.", "agent already has %d boxes (quota %d)", len(existing), q.MaxBoxesPerAgent)
 	}
+	if err := m.checkBoxQuota(ctx, src.WorkspaceID, BoxQuotaInput{CPU: src.Spec.CPU, RAMMB: src.Spec.RAMMB, New: true}); err != nil {
+		return nil, err
+	}
 	slug, err := m.uniqueSlug(ctx, in.Slug, src.Slug+"-clone")
 	if err != nil {
 		return nil, err
@@ -64,7 +67,7 @@ func (m *Manager) Clone(ctx context.Context, p *Principal, id string, in CloneIn
 		return m.cloneSandbox(ctx, p, src, h, agent, slug)
 	}
 	now := time.Now().UTC()
-	nb := &model.Box{ID: secret.ID("box"), Slug: slug, AgentID: src.AgentID, AgentName: src.AgentName, Status: model.StatusProvisioning,
+	nb := &model.Box{ID: secret.ID("box"), WorkspaceID: src.WorkspaceID, Slug: slug, AgentID: src.AgentID, AgentName: src.AgentName, Status: model.StatusProvisioning,
 		Lifecycle: src.Lifecycle, Template: src.Template, Spec: src.Spec, Provider: src.Provider, Region: src.Region, HostID: src.HostID,
 		TTLSeconds: src.TTLSeconds, IdleMinutes: src.IdleMinutes, BudgetUSD: src.BudgetUSD, CostPerHour: src.CostPerHour, Billing: src.Billing,
 		Ports: nonNilInts(src.Ports), Secrets: nonNilStrs(src.Secrets), CreatedAt: now, LastActiveAt: now, Locale: src.Locale, Egress: src.Egress,

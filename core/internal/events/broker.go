@@ -9,6 +9,9 @@ type Msg struct {
 	Data    any
 	AgentID string // empty = visible to admins only (and all for overview)
 	Public  bool   // visible to every subscriber
+	// WorkspaceID (v2.0): only callers of this workspace (and global
+	// platform callers) receive the message; "" = platform-wide.
+	WorkspaceID string
 }
 
 type Broker struct {

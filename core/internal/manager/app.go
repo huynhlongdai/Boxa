@@ -58,6 +58,12 @@ func (m *Manager) SetApp(ctx context.Context, p *Principal, id string, in model.
 		if !found {
 			b.Ports = append(nonNilInts(b.Ports), spec.Port)
 			newPort = true
+			if !m.publicAllowed(ctx, b.WorkspaceID) { // v2.0 plan without public URLs
+				if b.PortAccess == nil {
+					b.PortAccess = map[int]string{}
+				}
+				b.PortAccess[spec.Port] = model.AccessToken
+			}
 		}
 		if spec.Label != "" && spec.Label != b.PortLabels[spec.Port] {
 			before := namesCopy(b)

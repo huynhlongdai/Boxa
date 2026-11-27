@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log"
 	"net/mail"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -186,9 +187,7 @@ func clip(s string, n int) string {
 	return s
 }
 
-// authenticateSession resolves a bxs_ token into a principal. Platform admins
-// get the admin scope (the whole v1 operator API); other users are workspace
-// principals without key scopes until the workspace-scoped API lands.
+// authenticateSession resolves a bxs_ token into a principal (sessionPrincipal).
 func (m *Manager) authenticateSession(ctx context.Context, token string) (*Principal, error) {
 	now := time.Now().UTC()
 	se, err := m.Store.GetSessionByHash(ctx, secret.Hash(token), now)
@@ -199,10 +198,18 @@ func (m *Manager) authenticateSession(ctx context.Context, token string) (*Princ
 	if err != nil {
 		return nil, model.EH(model.ErrUnauthorized, "Sign in again.", "session expired or invalid")
 	}
-	p := &Principal{User: u, UserID: u.ID, SessionID: se.ID, WorkspaceID: se.WorkspaceID, Admin: u.PlatformAdmin, session: se}
+	return m.sessionPrincipal(ctx, se, u)
+}
+
+// sessionPrincipal builds the principal of a live session: platform admins
+// keep global access; every member is workspace-wide with its role's
+// permissions in the session's current workspace.
+func (m *Manager) sessionPrincipal(ctx context.Context, se *model.Session, u *model.User) (*Principal, error) {
+	p := &Principal{User: u, UserID: u.ID, SessionID: se.ID, WorkspaceID: se.WorkspaceID, Admin: true, Platform: u.PlatformAdmin, session: se}
 	if se.WorkspaceID != "" {
 		if mb, err := m.Store.GetMembership(ctx, se.WorkspaceID, u.ID); err == nil {
-			p.Role = mb.Role
+			p.Role = model.NormRole(mb.Role)
+			p.perms = permSet(RolePerms[p.Role])
 		} else {
 			p.WorkspaceID = "" // removed from the workspace since login
 		}
@@ -211,8 +218,8 @@ func (m *Manager) authenticateSession(ctx context.Context, token string) (*Princ
 	if u.PlatformAdmin {
 		scopes = []string{model.ScopeAdmin}
 	}
-	p.Key = &model.APIKey{ID: se.ID, WorkspaceID: p.WorkspaceID, Name: "session " + u.Email, Prefix: SessionPrefix, Scopes: scopes, CreatedAt: se.CreatedAt}
-	if !p.Admin {
+	p.Key = &model.APIKey{ID: se.ID, WorkspaceID: p.WorkspaceID, Name: "session " + u.Email, Prefix: SessionPrefix, Scopes: scopes, CreatedAt: se.CreatedAt, Kind: "session"}
+	if !p.Platform {
 		if err := m.allow(ctx, "user:"+u.ID); err != nil {
 			return nil, err
 		}
@@ -235,8 +242,16 @@ type SignupInput struct {
 	Name       string `json:"name"`
 	InviteCode string `json:"invite_code"`
 	Workspace  string `json:"workspace"` // optional name for the personal workspace
+	// WorkspaceInvite (v2.0) is the token of a workspace invite sent to this
+	// email: the account joins that workspace (no personal workspace, no
+	// invite code needed).
+	WorkspaceInvite string `json:"workspace_invite"`
 }
 
+// Signup creates the account in one transaction (store.Signup): the very
+// first account becomes platform admin + owner of the default workspace
+// (decided atomically, so two concurrent first sign-ups cannot both win);
+// nothing is left behind when any step fails.
 func (m *Manager) Signup(ctx context.Context, in SignupInput, ci ClientInfo) (*AuthResult, error) {
 	email, err := cleanEmail(in.Email)
 	if err != nil {
@@ -246,72 +261,47 @@ func (m *Manager) Signup(ctx context.Context, in SignupInput, ci ClientInfo) (*A
 	if err != nil {
 		return nil, err
 	}
-	if _, err := m.Store.GetUserByEmail(ctx, email); err == nil {
-		return nil, model.EH(model.ErrInvalid, "Sign in instead, or reset the password.", "an account with this email already exists")
-	} else if !errors.Is(err, model.ErrNoRows) {
-		return nil, err
-	}
-	users, err := m.Store.ListUsers(ctx)
-	if err != nil {
-		return nil, err
-	}
-	first := len(users) == 0
 	now := time.Now().UTC()
-	u := &model.User{ID: secret.ID("usr"), Email: email, Name: clip(strings.TrimSpace(in.Name), 80), PasswordHash: ph, PlatformAdmin: first, CreatedAt: now}
+	u := &model.User{ID: secret.ID("usr"), Email: email, Name: clip(strings.TrimSpace(in.Name), 80), PasswordHash: ph, CreatedAt: now}
 	code := strings.ToUpper(strings.TrimSpace(in.InviteCode))
-	if !first {
-		switch m.signupMode() {
-		case SignupClosed:
-			e := model.EH(model.ErrPolicyDenied, "Join the waitlist (POST /v1/waitlist); the operator sends invites.", "sign-up is closed")
-			e.Next = []string{"POST /v1/waitlist {email}"}
-			return nil, e
-		case SignupInvite:
-			if code == "" {
-				e := model.EH(model.ErrPolicyDenied, "Enter an invite code, or join the waitlist (POST /v1/waitlist).", "an invite code is required to sign up")
-				e.Next = []string{"POST /v1/waitlist {email}"}
-				return nil, e
-			}
-		}
+	name := strings.TrimSpace(in.Workspace)
+	if name == "" {
+		name = strings.SplitN(email, "@", 2)[0]
 	}
-	if code != "" && !first {
-		if _, err := m.Store.RedeemInvite(ctx, code, u.ID, now); err != nil {
-			if errors.Is(err, store.ErrInviteUnavailable) {
-				e := model.EH(model.ErrInvalid, "Check the code, or join the waitlist (POST /v1/waitlist).", "invite code is invalid, expired or used up")
-				e.Next = []string{"POST /v1/waitlist {email}"}
-				return nil, e
-			}
-			return nil, err
-		}
+	tx := store.SignupTx{User: u, InviteCode: code, Now: now,
+		RequireInvite: m.signupMode() == SignupInvite, Closed: m.signupMode() == SignupClosed,
+		NewWorkspace: &model.Workspace{ID: secret.ID("ws"), Name: clip(name, 60), Plan: m.defaultPlan(),
+			MaxBoxes: model.DefaultMaxBoxes, MaxTTLHours: model.DefaultMaxTTLHours, CreatedAt: now, CreatedBy: "user:" + u.ID}}
+	if t := strings.TrimSpace(in.WorkspaceInvite); t != "" {
+		tx.WorkspaceInviteHash = secret.Hash(t)
 	}
-	if err := m.Store.PutUser(ctx, u); err != nil {
+	res, err := m.Store.Signup(ctx, tx)
+	switch {
+	case errors.Is(err, store.ErrEmailTaken):
+		return nil, model.EH(model.ErrInvalid, "Sign in instead, or reset the password.", "an account with this email already exists")
+	case errors.Is(err, store.ErrSignupClosed):
+		e := model.EH(model.ErrPolicyDenied, "Join the waitlist (POST /v1/waitlist); the operator sends invites.", "sign-up is closed")
+		e.Next = []string{"POST /v1/waitlist {email}"}
+		return nil, e
+	case errors.Is(err, store.ErrInviteRequired):
+		e := model.EH(model.ErrPolicyDenied, "Enter an invite code, or join the waitlist (POST /v1/waitlist).", "an invite code is required to sign up")
+		e.Next = []string{"POST /v1/waitlist {email}"}
+		return nil, e
+	case errors.Is(err, store.ErrInviteUnavailable):
+		e := model.EH(model.ErrInvalid, "Check the code, or join the waitlist (POST /v1/waitlist).", "invite code is invalid, expired or used up")
+		e.Next = []string{"POST /v1/waitlist {email}"}
+		return nil, e
+	case errors.Is(err, store.ErrWorkspaceInviteUnavailable):
+		return nil, model.EH(model.ErrInvalid, "Ask for a new invite; it must be opened with the invited email address.", "workspace invite is invalid, expired, used or for another email")
+	case err != nil:
 		return nil, err
 	}
-	var ws *model.Workspace
-	if first {
-		// The first user owns the default workspace (all pre-v2 agents, boxes, keys).
-		ws, err = m.Store.GetWorkspace(ctx, model.DefaultWorkspaceID)
-		if err != nil {
-			return nil, err
-		}
-		ws.OwnerUserID = u.ID
-	} else {
-		name := strings.TrimSpace(in.Workspace)
-		if name == "" {
-			name = strings.SplitN(email, "@", 2)[0]
-		}
-		ws = &model.Workspace{ID: secret.ID("ws"), Name: clip(name, 60), OwnerUserID: u.ID,
-			MaxBoxes: model.DefaultMaxBoxes, MaxTTLHours: model.DefaultMaxTTLHours, CreatedAt: now}
-	}
-	if err := m.Store.PutWorkspace(ctx, ws); err != nil {
-		return nil, err
-	}
-	if err := m.Store.PutMembership(ctx, &model.Membership{ID: secret.ID("mem"), WorkspaceID: ws.ID, UserID: u.ID, Role: model.RoleOwner, CreatedAt: now}); err != nil {
-		return nil, err
-	}
-	m.Store.DeleteWaitlist(ctx, email)
 	m.sendVerify(ctx, u)
-	m.EmitData(ctx, "user:"+u.ID, "", "", "user.signed_up", "user "+email+" signed up", nil, map[string]any{"invite": code != "", "platform_admin": first})
-	return m.newSession(ctx, u, ws.ID, ci)
+	m.EmitData(ctx, "user:"+u.ID, "", "", "user.signed_up", "user "+email+" signed up", nil, map[string]any{"invite": res.InviteCodeUsed, "platform_admin": res.First, "workspace_invite": res.WorkspaceInvite != nil})
+	if res.WorkspaceInvite != nil {
+		m.EmitWS(ctx, res.Workspace.ID, "user:"+u.ID, "", "", "member.joined", email+" joined as "+res.Role, nil, map[string]any{"user_id": u.ID, "role": res.Role})
+	}
+	return m.newSession(ctx, u, res.Workspace.ID, ci)
 }
 
 // ---- login / logout ----
@@ -360,8 +350,12 @@ type WorkspaceView struct {
 
 type MeView struct {
 	User       *model.User      `json:"user"`
-	Workspace  *WorkspaceView   `json:"workspace"`
+	Workspace  *WorkspaceView   `json:"workspace"` // current workspace (null when the user has none)
 	Workspaces []*WorkspaceView `json:"workspaces"`
+	// v2.0: what the user may do in the current workspace (platform admin: all).
+	Role          string   `json:"role"`
+	Permissions   []string `json:"permissions"`
+	PlatformAdmin bool     `json:"platform_admin"`
 }
 
 func (m *Manager) userWorkspaces(ctx context.Context, userID string) ([]*WorkspaceView, error) {
@@ -372,7 +366,7 @@ func (m *Manager) userWorkspaces(ctx context.Context, userID string) ([]*Workspa
 	out := []*WorkspaceView{}
 	for _, mb := range ms {
 		if w, err := m.Store.GetWorkspace(ctx, mb.WorkspaceID); err == nil {
-			out = append(out, &WorkspaceView{Workspace: w, Role: mb.Role})
+			out = append(out, &WorkspaceView{Workspace: w, Role: model.NormRole(mb.Role)})
 		}
 	}
 	return out, nil
@@ -386,11 +380,16 @@ func (m *Manager) Me(ctx context.Context, p *Principal) (*MeView, error) {
 	if err != nil {
 		return nil, err
 	}
-	v := &MeView{User: p.User, Workspaces: wss}
+	v := &MeView{User: p.User, Workspaces: wss, PlatformAdmin: p.Platform, Permissions: []string{}}
 	for _, w := range wss {
 		if w.ID == p.WorkspaceID {
 			v.Workspace = w
+			v.Role = w.Role
+			v.Permissions = append(v.Permissions, RolePerms[w.Role]...)
 		}
+	}
+	if p.Platform {
+		v.Permissions = append([]string{}, AllPerms...)
 	}
 	return v, nil
 }
@@ -412,6 +411,10 @@ func (m *Manager) SwitchWorkspace(ctx context.Context, p *Principal, wsID string
 		return nil, err
 	}
 	p.WorkspaceID = wsID
+	if mb, err := m.Store.GetMembership(ctx, wsID, p.UserID); err == nil {
+		p.Role = model.NormRole(mb.Role)
+		p.perms = permSet(RolePerms[p.Role])
+	}
 	return m.Me(ctx, p)
 }
 
@@ -501,11 +504,20 @@ func (m *Manager) consumeToken(ctx context.Context, tok, purpose string) (*model
 }
 
 func (m *Manager) dashboardLink(path, tok string) string {
+	return m.dashboardURL(path, url.Values{"token": {tok}})
+}
+
+// dashboardURL builds a dashboard link (BOXMES_DASHBOARD_URL, else
+// BOXMES_PUBLIC_URL) with an escaped query.
+func (m *Manager) dashboardURL(path string, q url.Values) string {
 	base := strings.TrimRight(m.Cfg.DashboardURL, "/")
 	if base == "" {
 		base = strings.TrimRight(m.Cfg.PublicURL, "/")
 	}
-	return base + path + "?token=" + tok
+	if len(q) == 0 {
+		return base + path
+	}
+	return base + path + "?" + q.Encode()
 }
 
 func (m *Manager) sendVerify(ctx context.Context, u *model.User) {
@@ -655,7 +667,7 @@ func (m *Manager) JoinWaitlist(ctx context.Context, in WaitlistInput) (map[strin
 // ---- platform admin: users, invites, waitlist ----
 
 func requirePlatformAdmin(p *Principal) error {
-	if p == nil || !p.Admin {
+	if p == nil || !p.Platform {
 		return model.EH(model.ErrUnauthorized, "Use an admin key or a platform admin account.", "platform admin only")
 	}
 	return nil
@@ -836,8 +848,7 @@ func (m *Manager) CreateInvite(ctx context.Context, p *Principal, in InviteInput
 }
 
 func (m *Manager) mailInvite(ctx context.Context, to string, c *model.InviteCode) {
-	link := m.dashboardLink("/signup", "")
-	link = strings.TrimSuffix(link, "?token=") + "?invite=" + c.Code
+	link := m.dashboardURL("/signup", url.Values{"invite": {c.Code}})
 	m.sendMail(ctx, to, "Your invite",
 		"You are invited to Boxmes. Sign up with this invite code:\n\n    "+c.Code+"\n\n"+link+"\n")
 }

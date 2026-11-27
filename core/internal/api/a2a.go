@@ -90,6 +90,7 @@ type a2aTaskRec struct {
 	ContextID string          `json:"context_id"`
 	Kind      string          `json:"kind"` // exec | tool
 	AgentID   string          `json:"agent_id"`
+	Workspace string          `json:"workspace_id,omitempty"` // v2.0 (pre-v2.0 tasks: default)
 	BoxID     string          `json:"box_id,omitempty"`
 	JobID     string          `json:"job_id,omitempty"`
 	Tool      string          `json:"tool,omitempty"`
@@ -232,6 +233,7 @@ func (s *Server) a2aStart(r *http.Request, p a2aSendParams) (*a2aTaskRec, *a2aEr
 	}
 	now := time.Now().UTC()
 	rec := &a2aTaskRec{ContextID: ctxID, AgentID: pr(r).AgentID, Message: msg, CreatedAt: now, UpdatedAt: now}
+	rec.Workspace, _ = pr(r).TargetWS()
 	var command, boxID, cwd string
 	timeout := 0
 	if v, ok := meta["box_id"].(string); ok {
@@ -355,7 +357,11 @@ func (s *Server) a2aLoad(r *http.Request, raw json.RawMessage) (*a2aTaskRec, *a2
 	if err := s.M.Store.GetKV(r.Context(), a2aKey(p.ID), &rec); err != nil || rec.ID == "" {
 		return nil, &a2aErr{Code: a2aTaskNotFound, Message: "task not found: " + p.ID}
 	}
-	if !pr(r).Admin && rec.AgentID != pr(r).AgentID {
+	ws := rec.Workspace
+	if ws == "" {
+		ws = model.DefaultWorkspaceID
+	}
+	if !pr(r).Sees(ws, rec.AgentID) {
 		return nil, &a2aErr{Code: a2aTaskNotFound, Message: "task not found: " + p.ID}
 	}
 	return s.a2aRefresh(r.Context(), &rec), nil

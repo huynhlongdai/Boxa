@@ -131,6 +131,9 @@ func (m *Manager) SetEgress(ctx context.Context, p *Principal, id string, in Egr
 	if err != nil {
 		return nil, err
 	}
+	if eff, err = m.planEgress(ctx, b.WorkspaceID, eff); err != nil {
+		return nil, err
+	}
 	lock := m.boxLock(b.ID)
 	lock.Lock()
 	defer lock.Unlock()

@@ -66,6 +66,16 @@ type Tenancy interface {
 	ListSecretsInWorkspace(ctx context.Context, workspaceID string) ([]*model.Secret, error)
 
 	BackfillDefaultWorkspace(ctx context.Context) (int, error)
+
+	// v2.0
+	GetSession(ctx context.Context, id string, now time.Time) (*model.Session, error)
+	PutWorkspaceInvite(ctx context.Context, inv *model.WorkspaceInvite) error
+	GetWorkspaceInvite(ctx context.Context, id string) (*model.WorkspaceInvite, error)
+	GetWorkspaceInviteByHash(ctx context.Context, hash string) (*model.WorkspaceInvite, error)
+	ListWorkspaceInvites(ctx context.Context, workspaceID string) ([]*model.WorkspaceInvite, error)
+	DeleteWorkspaceInvite(ctx context.Context, id string) error
+	AcceptWorkspaceInvite(ctx context.Context, id, userID string, now time.Time) (*model.Membership, error)
+	Signup(ctx context.Context, in SignupTx) (*SignupResult, error)
 }
 
 var _ Tenancy = (*SQL)(nil)
@@ -146,15 +156,15 @@ func (s *SQL) DeleteUser(ctx context.Context, id string) error {
 // ---- workspaces ----
 
 func (s *SQL) PutWorkspace(ctx context.Context, w *model.Workspace) error {
-	if w.MaxBoxes <= 0 {
-		w.MaxBoxes = model.DefaultMaxBoxes
+	return s.putWorkspaceQ(ctx, s.db, w)
+}
+
+func mustJSON(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
 	}
-	if w.MaxTTLHours <= 0 {
-		w.MaxTTLHours = model.DefaultMaxTTLHours
-	}
-	return s.putDoc(ctx, "workspaces", w.ID, w.CreatedAt, map[string]any{
-		"name": w.Name, "owner_user_id": w.OwnerUserID, "max_boxes": w.MaxBoxes, "max_ttl_hours": w.MaxTTLHours,
-	}, w)
+	return string(b)
 }
 func (s *SQL) GetWorkspace(ctx context.Context, id string) (*model.Workspace, error) {
 	return getDoc[model.Workspace](ctx, s, "workspaces", "id=?", id)
@@ -178,7 +188,7 @@ func (s *SQL) PutMembership(ctx context.Context, m *model.Membership) error {
 	if m.ID == "" {
 		m.ID = "mem_" + m.WorkspaceID + "_" + m.UserID
 	}
-	if m.Role != model.RoleOwner && m.Role != model.RoleMember {
+	if !model.ValidRole(m.Role) && m.Role != model.RoleMember {
 		return fmt.Errorf("bad role %q", m.Role)
 	}
 	return s.putDoc(ctx, "memberships", m.ID, m.CreatedAt, map[string]any{
@@ -457,7 +467,7 @@ func (s *SQL) ListSecretsInWorkspace(ctx context.Context, workspaceID string) ([
 // JSON doc). Idempotent; returns the number of rows moved.
 func (s *SQL) BackfillDefaultWorkspace(ctx context.Context) (int, error) {
 	if _, err := s.GetWorkspace(ctx, model.DefaultWorkspaceID); errors.Is(err, model.ErrNoRows) {
-		w := &model.Workspace{ID: model.DefaultWorkspaceID, Name: model.DefaultWorkspaceName,
+		w := &model.Workspace{ID: model.DefaultWorkspaceID, Name: model.DefaultWorkspaceName, Plan: model.PlanUnlimited,
 			MaxBoxes: model.DefaultMaxBoxes, MaxTTLHours: model.DefaultMaxTTLHours, CreatedAt: time.Now().UTC()}
 		if err := s.PutWorkspace(ctx, w); err != nil {
 			return 0, err
@@ -493,6 +503,36 @@ func (s *SQL) BackfillDefaultWorkspace(ctx context.Context) (int, error) {
 				return moved, err
 			}
 			moved++
+		}
+	}
+	// v2.0: copy the workspace column (004 backfilled it) into the JSON doc of
+	// approvals and templates written before the column existed.
+	for _, table := range []string{"approvals", "templates"} {
+		rows, err := s.db.QueryContext(ctx, "SELECT id, workspace_id, doc FROM "+table+" WHERE workspace_id IS NOT NULL AND workspace_id<>'' AND doc NOT LIKE '%\"workspace_id\"%'")
+		if err != nil {
+			return moved, err
+		}
+		type row struct{ id, ws, doc string }
+		var todo []row
+		for rows.Next() {
+			var r row
+			if err := rows.Scan(&r.id, &r.ws, &r.doc); err != nil {
+				rows.Close()
+				return moved, err
+			}
+			todo = append(todo, r)
+		}
+		rows.Close()
+		for _, r := range todo {
+			m := map[string]any{}
+			if err := json.Unmarshal([]byte(r.doc), &m); err != nil {
+				return moved, fmt.Errorf("%s %s: %w", table, r.id, err)
+			}
+			m["workspace_id"] = r.ws
+			b, _ := json.Marshal(m)
+			if err := s.exec(ctx, "UPDATE "+table+" SET doc=? WHERE id=?", string(b), r.id); err != nil {
+				return moved, err
+			}
 		}
 	}
 	return moved, nil
