@@ -10,6 +10,7 @@ import (
 	"boxmes/core/internal/events"
 	"boxmes/core/internal/model"
 	"boxmes/core/internal/proto"
+	"boxmes/core/internal/provhealth"
 	"boxmes/core/internal/provider"
 	"boxmes/core/internal/sandbox"
 	"boxmes/core/internal/secret"
@@ -227,12 +228,8 @@ func (m *Manager) CreateHost(ctx context.Context, p *Principal, provID, sku, reg
 	if !prov.Implemented() {
 		return nil, model.EH(model.ErrProviderFailed, "Use hetzner, vultr, digitalocean, contabo or netcup.", "%s adapter not implemented", provID)
 	}
-	token, err := m.providerToken(ctx, provID)
-	if err != nil {
-		return nil, err
-	}
 	if sp, ok := prov.(sandbox.Provider); ok { // v1.4 T2/T3: one sandbox = one single-box host
-		return m.createSandboxHost(ctx, p, sp, token, sku, region)
+		return m.createSandboxHost(ctx, p, sp, sku, region, "")
 	}
 	if m.Cfg.PublicURL == "" {
 		return nil, model.EH(model.ErrInvalid, "Set BOXMES_PUBLIC_URL to the https URL where boxd can reach core.", "BOXMES_PUBLIC_URL is not configured")
@@ -268,7 +265,18 @@ func (m *Manager) CreateHost(ctx context.Context, p *Principal, provID, sku, reg
 	if err := m.Store.PutHost(ctx, h); err != nil {
 		return nil, err
 	}
-	hd, err := m.guardedCreate(ctx, prov, token, provider.CreateRequest{Name: sandbox.NamePrefix + h.ID[5:], SKU: sku, Region: region, CloudInit: ci, Labels: sandbox.ManagedLabels(h.ID[5:])}, h.PriceMonth)
+	// v2.2: pick the provider account (strategy, caps, runway) and fail
+	// over to the next account on account-level errors; the host remembers
+	// the account that created it.
+	var hd provider.Handle
+	req := provider.CreateRequest{Name: sandbox.NamePrefix + h.ID[5:], SKU: sku, Region: region, CloudInit: ci, Labels: sandbox.ManagedLabels(h.ID[5:])}
+	_, err = m.acrossAccounts(ctx, provID, region, h.PriceHour, "", sku+" "+region, func(a *model.ProviderAccount, tok string) error {
+		h.AccountID = a.ID
+		m.Store.PutHost(ctx, h)
+		var e error
+		hd, e = m.guardedCreate(ctx, prov, a, tok, req, h.PriceMonth)
+		return e
+	})
 	if err != nil {
 		h.Status = "down"
 		m.Store.PutHost(ctx, h)
@@ -277,7 +285,8 @@ func (m *Manager) CreateHost(ctx context.Context, p *Principal, provID, sku, reg
 	}
 	h.ProviderRef, h.IP = hd.Ref, hd.IP
 	m.Store.PutHost(ctx, h)
-	m.Emit(ctx, p.Actor(), "", "", "host.created", fmt.Sprintf("rented %s %s in %s (%s/h), waiting for boxd", provID, sku, region, fmtUSD(h.PriceHour)), nil)
+	m.EmitData(ctx, p.Actor(), "", "", "host.created", fmt.Sprintf("rented %s %s in %s (%s/h, account %s), waiting for boxd", provID, sku, region, fmtUSD(h.PriceHour), h.AccountID), nil,
+		map[string]any{"host_id": h.ID, "provider": provID, "account_id": h.AccountID})
 	return h, nil
 }
 
@@ -364,14 +373,22 @@ func (m *Manager) destroyHost(ctx context.Context, h *model.Host, actor, why str
 	if h.Provider != "local" && h.ProviderRef != "" {
 		prov, ok := m.Providers.Get(h.Provider)
 		if ok {
-			tok, err := m.providerToken(ctx, h.Provider)
+			// v2.2: always the account that created the host, even when it
+			// is disabled, drained or archived since (spec §4.4)
+			tok, acct, err := m.hostToken(ctx, h)
 			if err != nil {
-				return err
-			}
-			if err := prov.Destroy(ctx, tok, h.ProviderRef); err != nil {
+				m.orphanHost(ctx, h, acct, err)
 				m.Emit(ctx, actor, "", "", "host.destroy_failed", fmt.Sprintf("host %s: %v", h.ID, err), nil)
 				return err
 			}
+			if err := prov.Destroy(ctx, tok, h.ProviderRef); err != nil {
+				if provhealth.AccountLevel(provhealth.Classify(err)) {
+					m.orphanHost(ctx, h, acct, err)
+				}
+				m.Emit(ctx, actor, "", "", "host.destroy_failed", fmt.Sprintf("host %s: %v", h.ID, err), nil)
+				return err
+			}
+			m.clearAlert(ctx, "orphan_host|"+h.ID)
 		}
 	}
 	// Persist the deletion before closing the tunnel: HostDisconnected (and a

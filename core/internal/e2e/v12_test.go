@@ -202,7 +202,7 @@ func TestNotifications(t *testing.T) {
 	e := setupWith(t, func(c *manager.Config) { c.TelegramAPI = tg.URL }, 1)
 	var v manager.NotifyView
 	e.must(e.admin, "GET", "/notify", nil, &v)
-	if v.TelegramConfigured || len(v.EventsAvailable) != 6 {
+	if v.TelegramConfigured || len(v.EventsAvailable) != 8 { // v2.2: + infra_alert, infra_digest
 		t.Fatalf("initial notify %+v", v)
 	}
 	if st, _, _ := e.admin.Do(e.ctx, "PUT", "/notify", map[string]any{"events": []string{"nope"}}); st != 400 {

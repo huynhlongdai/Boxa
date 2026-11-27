@@ -1,0 +1,165 @@
+package model
+
+import "time"
+
+// v2.2 (M29 phase A): provider accounts. A provider (adapter, e.g. hetzner)
+// has one or more accounts, each an API credential of one real account /
+// project / team at that provider. Hosts remember the account that created
+// them (Host.AccountID) so every later action uses that account's
+// credential, whatever the provider's default is by then.
+
+// Account statuses.
+const (
+	AccountActive      = "active"
+	AccountCooling     = "cooling"      // transient errors / breaker open
+	AccountRateLimited = "rate_limited" // 429 → cooldown_until
+	AccountQuotaFull   = "quota_full"   // provider account limit reached (learned)
+	AccountLowBalance  = "low_balance"  // runway under the warn threshold (still eligible)
+	AccountOutOfCredit = "out_of_credit"
+	AccountAuthFailed  = "auth_failed"
+	AccountExpiring    = "token_expiring"
+	AccountDisabled    = "disabled"
+	AccountDraining    = "draining" // keeps its hosts, takes no new ones
+	AccountArchived    = "archived"
+)
+
+// Account selection strategies (ProviderPrefs.Strategy).
+const (
+	StrategyPriority   = "priority"
+	StrategyWeighted   = "weighted"
+	StrategyRoundRobin = "round_robin"
+	StrategyLeastUsed  = "least_used"
+	StrategyDrainFirst = "drain_first"
+)
+
+// Strategies lists the valid strategies.
+var Strategies = []string{StrategyPriority, StrategyWeighted, StrategyRoundRobin, StrategyLeastUsed, StrategyDrainFirst}
+
+// DefaultAccountID is the account every legacy single-token provider
+// becomes (PUT /providers/{id}/token keeps writing it).
+func DefaultAccountID(provider string) string { return "pa_" + provider + "_default" }
+
+// AccountLimit is one provider-side account limit (servers, vcpu, …).
+type AccountLimit struct {
+	Limit  float64    `json:"limit"`
+	Used   float64    `json:"used"`             // live usage computed by Boxmes (hosts / vCPU / sandboxes on the account)
+	Source string     `json:"source,omitempty"` // manual | learned | api
+	At     *time.Time `json:"at,omitempty"`
+}
+
+// AccountThresholds override the platform alert thresholds for one account
+// (0 = default: runway 7/2 days, limits & caps 80/95 %, expiry 14/3 days).
+type AccountThresholds struct {
+	RunwayWarnDays     float64 `json:"runway_warn_days,omitempty"`
+	RunwayCriticalDays float64 `json:"runway_critical_days,omitempty"`
+	LimitWarnPct       float64 `json:"limit_warn_pct,omitempty"`
+	LimitCriticalPct   float64 `json:"limit_critical_pct,omitempty"`
+	ExpiryWarnDays     float64 `json:"expiry_warn_days,omitempty"`
+	ExpiryCriticalDays float64 `json:"expiry_critical_days,omitempty"`
+}
+
+// ProviderAccount is one row of provider_accounts. Credentials are never
+// serialized to API responses: only key_fingerprint.
+type ProviderAccount struct {
+	ID               string   `json:"id"`
+	Provider         string   `json:"provider"`
+	Label            string   `json:"label"`
+	ExternalID       string   `json:"external_id,omitempty"` // project / org / team id at the provider (rotation must keep it)
+	OwnerWorkspaceID string   `json:"owner_workspace_id,omitempty"`
+	Tags             []string `json:"tags"`
+	Owner            string   `json:"owner,omitempty"`
+	Notes            string   `json:"notes,omitempty"`
+	ConsoleURL       string   `json:"console_url,omitempty"`
+	IsDefault        bool     `json:"is_default"`
+
+	// credential
+	CredentialRef         string     `json:"credential_ref"`    // provider:<id> (legacy token) | account (encrypted in this row) | env:<VAR>
+	CredentialSource      string     `json:"credential_source"` // api | env
+	KeyFingerprint        string     `json:"key_fingerprint,omitempty"`
+	BillingKeyFingerprint string     `json:"billing_key_fingerprint,omitempty"` // optional read-only billing key
+	Scopes                []string   `json:"scopes"`
+	TokenExpiresAt        *time.Time `json:"token_expires_at,omitempty"`
+	RefreshExpiresAt      *time.Time `json:"refresh_expires_at,omitempty"`
+	RotatedAt             *time.Time `json:"rotated_at,omitempty"`
+	RotateEveryDays       int        `json:"rotate_every_days,omitempty"`
+
+	// scheduling
+	Enabled     bool     `json:"enabled"`
+	Priority    int      `json:"priority"` // 1 = first
+	Weight      int      `json:"weight"`   // weighted strategy (default 1)
+	Regions     []string `json:"regions"`  // allowed regions (empty = every region the provider prefs allow)
+	Pool        string   `json:"pool,omitempty"`
+	Drain       bool     `json:"drain"`        // no new hosts; existing hosts stay
+	AutoDrained bool     `json:"auto_drained"` // drain set by Boxmes (runway < critical); cleared when runway recovers
+
+	// state
+	Status         string     `json:"status"`
+	StatusReason   string     `json:"status_reason,omitempty"`
+	StatusSince    *time.Time `json:"status_since,omitempty"`
+	CooldownUntil  *time.Time `json:"cooldown_until,omitempty"`
+	ErrorStreak    int        `json:"error_streak"`
+	LastErrorClass string     `json:"last_error_class,omitempty"`
+	LastError      string     `json:"last_error,omitempty"`
+	LastOKAt       *time.Time `json:"last_ok_at,omitempty"`
+	LastCheckAt    *time.Time `json:"last_check_at,omitempty"`
+
+	// money: amounts are in Currency (the provider's billing currency);
+	// spend caps too. Stats carries USD conversions.
+	BillingModel    string     `json:"billing_model,omitempty"`  // prepaid | postpaid | contract | free_tier
+	Currency        string     `json:"currency"`                 // USD | EUR | …
+	FXRateUSD       float64    `json:"fx_rate_usd,omitempty"`    // USD per 1 unit of Currency (0 = platform default)
+	Balance         *float64   `json:"balance,omitempty"`        // positive = money left
+	BalanceSource   string     `json:"balance_source,omitempty"` // manual | api | estimated
+	BalanceAt       *time.Time `json:"balance_at,omitempty"`
+	CreditTotal     *float64   `json:"credit_total,omitempty"`
+	CreditRemaining *float64   `json:"credit_remaining,omitempty"`
+	CreditExpiresAt *time.Time `json:"credit_expires_at,omitempty"`
+	PendingCharges  *float64   `json:"pending_charges,omitempty"`
+	MonthToDate     *float64   `json:"month_to_date,omitempty"`
+	SpendCapDay     float64    `json:"spend_cap_day"`   // 0 = no cap (Boxmes ledger spend)
+	SpendCapMonth   float64    `json:"spend_cap_month"` // 0 = no cap
+	MinBalance      float64    `json:"min_balance"`     // below this effective balance: no new hosts
+	LowBalanceWarn  float64    `json:"low_balance_warn"`
+
+	// billing cycle
+	BillingCycle   string     `json:"billing_cycle,omitempty"` // monthly | hourly-prepaid | contract
+	InvoiceDay     int        `json:"invoice_day,omitempty"`
+	NextInvoiceAt  *time.Time `json:"next_invoice_at,omitempty"`
+	TrialEndsAt    *time.Time `json:"trial_ends_at,omitempty"`
+	ContractEndsAt *time.Time `json:"contract_ends_at,omitempty"`
+
+	Limits     map[string]AccountLimit `json:"limits"` // servers | vcpu | ram_gb | concurrent_sandboxes | …
+	Thresholds AccountThresholds       `json:"thresholds"`
+
+	CreatedAt time.Time `json:"created_at"`
+	CreatedBy string    `json:"created_by,omitempty"`
+	UpdatedAt time.Time `json:"updated_at"`
+	UpdatedBy string    `json:"updated_by,omitempty"`
+
+	// Stats is computed on read (never stored).
+	Stats *AccountStats `json:"stats,omitempty"`
+
+	CredentialEnc        string `json:"-"`
+	BillingCredentialEnc string `json:"-"`
+}
+
+// AccountStats are the computed figures of an account (GET responses).
+type AccountStats struct {
+	HostsLive           int      `json:"hosts_live"`
+	BoxesLive           int      `json:"boxes_live"`
+	VCPULive            float64  `json:"vcpu_live"`
+	SpendToday          float64  `json:"spend_today"`     // ledger, in Currency
+	SpendMonth          float64  `json:"spend_month"`     // ledger, in Currency
+	SpendTodayUSD       float64  `json:"spend_today_usd"` // ledger (USD)
+	SpendMonthUSD       float64  `json:"spend_month_usd"`
+	BurnPerHourUSD      float64  `json:"burn_per_hour_usd"`
+	BalanceEffective    *float64 `json:"balance_effective,omitempty"` // balance − ledger spend since balance_at, in Currency
+	BalanceEffectiveUSD *float64 `json:"balance_effective_usd,omitempty"`
+	RunwayHours         *float64 `json:"runway_hours,omitempty"`
+	RunwayDays          *float64 `json:"runway_days,omitempty"`
+	ForecastMonthEnd    float64  `json:"forecast_month_end"` // in Currency
+	Eligible            bool     `json:"eligible"`
+	Ineligible          string   `json:"ineligible,omitempty"` // why the scheduler skips it now
+	Breaker             string   `json:"breaker"`              // closed | open | half_open (account-level)
+	HasCredential       bool     `json:"has_credential"`
+}

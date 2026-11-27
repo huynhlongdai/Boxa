@@ -245,7 +245,7 @@ func (m *Manager) Schedule(ctx context.Context, b *model.Box, agent *model.Agent
 	}
 	connected := func(pid string) bool {
 		mp, err := m.Store.GetProvider(ctx, pid)
-		return err == nil && mp.Connected && mp.TokenEnc != ""
+		return err == nil && m.provConnected(ctx, mp)
 	}
 	// Fallback chain (Hetzner pool → Vultr burst → DO / Contabo / netcup):
 	// among CONNECTED providers the first one in the chain with a fitting

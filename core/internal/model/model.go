@@ -166,7 +166,7 @@ type Agent struct {
 	LastCallAt     *time.Time `json:"last_call_at"`
 	MemoryMB       int        `json:"memory_mb"`
 	CreatedAt      time.Time  `json:"created_at"`
-	Locale         string     `json:"locale,omitempty"` // vi|en|zh|ja; AGENTS.md + snippet language
+	Locale         string     `json:"locale,omitempty"`     // vi|en|zh|ja; AGENTS.md + snippet language
 	CreatedBy      string     `json:"created_by,omitempty"` // v2.0 actor (user:<id> | admin | key:<id>)
 }
 
@@ -285,6 +285,10 @@ type Host struct {
 	// v1.8: the provider refuses public traffic to this sandbox's preview
 	// host; only the Boxmes gateway (which adds the traffic token) reaches it.
 	PrivateTraffic bool `json:"private_traffic,omitempty"`
+	// v2.2: the provider account that created the host; every later call
+	// (status, destroy, preview, fork) uses this account's credential.
+	AccountID      string     `json:"account_id,omitempty"`
+	ContractEndsAt *time.Time `json:"contract_ends_at,omitempty"` // prepaid contract (Contabo / netcup)
 }
 
 type Provider struct {
@@ -306,6 +310,15 @@ type Provider struct {
 	Docs         string `json:"docs,omitempty"`
 	// v1.7: lifecycle capability flags (filled from the registry, not stored).
 	Lifecycle *LifecycleCaps `json:"lifecycle,omitempty"`
+	// v2.2: provider accounts at a glance (filled on read, not stored).
+	AccountsSummary *AccountsSummary `json:"accounts_summary,omitempty"`
+}
+
+// AccountsSummary counts a provider's accounts (GET /providers).
+type AccountsSummary struct {
+	Total    int `json:"total"`
+	Active   int `json:"active"`   // eligible for new hosts now
+	Degraded int `json:"degraded"` // enabled but not eligible (cooling, drained, caps, auth…)
 }
 
 // LifecycleCaps tells clients what sleep / wake / fork really mean on a provider.
@@ -352,6 +365,8 @@ type LedgerEntry struct {
 	Billing   string    `json:"-"`
 	// v2.0
 	WorkspaceID string `json:"workspace_id,omitempty"`
+	// v2.2: provider account of the box's host ("" = unknown / pre-v2.2)
+	AccountID string `json:"account_id,omitempty"`
 }
 
 type Template struct {
@@ -512,7 +527,7 @@ type WakeSettings struct {
 
 func DefaultSettings() Settings {
 	var s Settings
-	s.Notify.Events = []string{"daily_report", "budget", "approval", "emergency_stop", "box_failed", "host_down"}
+	s.Notify.Events = []string{"daily_report", "budget", "approval", "emergency_stop", "box_failed", "host_down", "infra_alert", "infra_digest"}
 	s.Notify.DailyReportHour = 8
 	s.Reaper.IdleMinutes = 5
 	s.Reaper.DefaultTTLSeconds = 3600

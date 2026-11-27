@@ -49,7 +49,7 @@ func (m *Manager) sandboxPreview(ctx context.Context, h *model.Host, port int) s
 	if !ok {
 		return ""
 	}
-	tok, err := m.providerToken(ctx, h.Provider)
+	tok, _, err := m.hostToken(ctx, h)
 	if err != nil {
 		return ""
 	}
@@ -289,11 +289,7 @@ func (m *Manager) newSandboxBoxHost(ctx context.Context, p *Principal, like *mod
 	if !ok {
 		return nil, model.E(model.ErrInvalid, "provider %s is not a sandbox provider", like.Provider)
 	}
-	tok, err := m.providerToken(ctx, like.Provider)
-	if err != nil {
-		return nil, err
-	}
-	return m.createSandboxHost(ctx, p, sp, tok, like.SKU, like.Region)
+	return m.createSandboxHost(ctx, p, sp, like.SKU, like.Region, like.AccountID)
 }
 
 // adoptSandbox registers a sandbox the provider already created (a native
@@ -303,12 +299,12 @@ func (m *Manager) adoptSandbox(ctx context.Context, p *Principal, like *model.Ho
 	if !ok {
 		return nil, model.E(model.ErrInvalid, "provider %s is not a sandbox provider", like.Provider)
 	}
-	tok, err := m.providerToken(ctx, like.Provider)
+	tok, _, err := m.hostToken(ctx, like) // a native fork lives in the source's account
 	if err != nil {
 		return nil, err
 	}
 	now := time.Now().UTC()
-	h := &model.Host{ID: secret.ID("host"), Provider: like.Provider, Region: like.Region, SKU: like.SKU, Status: "ready", Billing: "sandbox",
+	h := &model.Host{ID: secret.ID("host"), Provider: like.Provider, Region: like.Region, SKU: like.SKU, Status: "ready", Billing: "sandbox", AccountID: like.AccountID,
 		CreatedAt: now, Driver: "shim", ProviderRef: ref, Connected: true, LastSeenAt: &now,
 		CPU: like.CPU, RAMMB: like.RAMMB, DiskGB: like.DiskGB, PriceHour: like.PriceHour, PriceMonth: like.PriceMonth}
 	if err := m.Store.PutHost(ctx, h); err != nil {
@@ -354,7 +350,7 @@ func (m *Manager) cloneSandbox(ctx context.Context, p *Principal, src *model.Box
 		if src.Status == model.StatusSleeping {
 			return fail(model.EH(model.ErrInvalid, "Wake the box first (box_sleep wake=true).", "native fork needs a running sandbox"))
 		}
-		tok, err := m.providerToken(ctx, srcHost.Provider)
+		tok, _, err := m.hostToken(ctx, srcHost)
 		if err != nil {
 			return fail(err)
 		}

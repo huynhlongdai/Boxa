@@ -274,7 +274,7 @@ func (m *Manager) Quote(ctx context.Context, p *Principal, req boxyaml.Request) 
 	}
 	connected := func(pid string) bool {
 		mp, err := m.Store.GetProvider(ctx, pid)
-		return err == nil && mp.Connected && mp.TokenEnc != ""
+		return err == nil && m.provConnected(ctx, mp)
 	}
 	var opts []QuoteOption
 	for _, c := range cands {

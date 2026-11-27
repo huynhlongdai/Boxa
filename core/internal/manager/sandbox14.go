@@ -76,7 +76,7 @@ func (m *Manager) attachShim(ctx context.Context, h *model.Host) error {
 	if !ok {
 		return fmt.Errorf("provider %s is not a sandbox provider", h.Provider)
 	}
-	tok, err := m.providerToken(ctx, h.Provider)
+	tok, _, err := m.hostToken(ctx, h) // v2.2: the host's own account
 	if err != nil {
 		return err
 	}
@@ -104,7 +104,9 @@ func (m *Manager) sandboxMode(ctx context.Context, info sandbox.Info) string {
 }
 
 // createSandboxHost creates one sandbox and turns it into a single-box host.
-func (m *Manager) createSandboxHost(ctx context.Context, p *Principal, sp sandbox.Provider, token, sku, region string) (*model.Host, error) {
+// v2.2: the account is picked like for servers (prefer = account to try
+// first, e.g. the source box's account for a clone).
+func (m *Manager) createSandboxHost(ctx context.Context, p *Principal, sp sandbox.Provider, sku, region, prefer string) (*model.Host, error) {
 	info := sp.Info()
 	mode := m.sandboxMode(ctx, info)
 	if mode == "dial" && m.Cfg.PublicURL == "" {
@@ -145,7 +147,15 @@ func (m *Manager) createSandboxHost(ctx context.Context, p *Principal, sp sandbo
 	if err := m.Store.PutHost(ctx, h); err != nil {
 		return nil, err
 	}
-	hd, err := m.guardedCreate(ctx, sp, token, req, h.PriceMonth)
+	var hd provider.Handle
+	var token string
+	_, err := m.acrossAccounts(ctx, info.ID, region, h.PriceHour, prefer, sku+" "+region, func(a *model.ProviderAccount, tok string) error {
+		h.AccountID, token = a.ID, tok
+		m.Store.PutHost(ctx, h)
+		var e error
+		hd, e = m.guardedCreate(ctx, sp, a, tok, req, h.PriceMonth)
+		return e
+	})
 	if err != nil {
 		h.Status = "down"
 		m.Store.PutHost(ctx, h)
@@ -156,6 +166,7 @@ func (m *Manager) createSandboxHost(ctx context.Context, p *Principal, sp sandbo
 	// dialled in (hello sets status/driver/connected) before Create returns
 	// on a fast provider: re-read the record so that update is not lost.
 	if cur, err := m.Store.GetHost(ctx, h.ID); err == nil && cur != nil {
+		cur.AccountID = h.AccountID
 		h = cur
 	}
 	h.ProviderRef = hd.Ref
@@ -272,7 +283,7 @@ func (m *Manager) SandboxProviders(ctx context.Context, p *Principal) ([]Sandbox
 		info := sp.Info()
 		v := SandboxProviderView{Info: info, Mode: m.sandboxMode(ctx, info), Health: m.Health.Stats(info.ID, "").Status, Lifecycle: m.LifecycleFor(info.ID)}
 		if mp, err := m.Store.GetProvider(ctx, info.ID); err == nil {
-			v.Connected = mp.Connected && mp.TokenEnc != ""
+			v.Connected = m.provConnected(ctx, mp)
 		}
 		okH, why := m.Health.Peek(info.ID)
 		pp := m.ProviderPrefs(ctx, info.ID)

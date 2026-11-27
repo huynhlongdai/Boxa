@@ -63,6 +63,7 @@ func (m *Manager) healthTick(ctx context.Context) error {
 		if err := m.probe(ctx, prov, tok); err != nil {
 			errs = append(errs, p.ID()+": "+err.Error())
 		}
+		m.probeAccounts(ctx, prov, tok)
 	}
 	m.saveHealth(ctx)
 	if len(errs) > 0 {
@@ -125,22 +126,72 @@ func (m *Manager) ResetProviderBreaker(ctx context.Context, p *Principal, id str
 }
 
 // guardedCreate wraps provider Create with the breaker, rate-limit
-// awareness, per-provider caps and health recording.
-func (m *Manager) guardedCreate(ctx context.Context, prov provider.Provider, tok string, req provider.CreateRequest, priceMonth float64) (provider.Handle, error) {
+// awareness, per-provider caps and health recording. v2.2: a is the account
+// used (nil = legacy); account-level errors (auth, payment, quota, rate
+// limit) feed the account breaker and only reach the provider breaker when
+// the provider has a single account (spec §2.2: two-level breaker).
+func (m *Manager) guardedCreate(ctx context.Context, prov provider.Provider, a *model.ProviderAccount, tok string, req provider.CreateRequest, priceMonth float64) (provider.Handle, error) {
 	id := prov.ID()
 	if ok, why := m.Health.Allow(id); !ok {
 		return provider.Handle{}, model.EH(model.ErrProviderFailed, "Boxmes fails over to the next provider automatically; check GET /providers/health.", "%s skipped: %s", id, why)
 	}
+	if a != nil {
+		if ok, why := m.Health.Allow(acctKey(a)); !ok {
+			return provider.Handle{}, model.EH(model.ErrProviderFailed, "Boxmes fails over to the next account or provider automatically; check Infra → Accounts.", "%s account %s skipped: %s", id, a.ID, why)
+		}
+	}
 	start := time.Now()
 	h, err := prov.Create(ctx, tok, req)
-	m.Health.Record(id, provhealth.Sample{Kind: provhealth.KindCreate, Region: req.Region, LatencyMS: float64(time.Since(start).Milliseconds())}, err, 0)
+	sample := provhealth.Sample{Kind: provhealth.KindCreate, Region: req.Region, LatencyMS: float64(time.Since(start).Milliseconds())}
+	cls := provhealth.Classify(err)
+	single := a == nil || len(m.listAccounts(ctx, id)) <= 1
+	if err == nil || single || !provhealth.AccountLevel(cls) {
+		m.Health.Record(id, sample, err, 0)
+	}
+	if a != nil {
+		m.Health.Record(acctKey(a), sample, err, 0)
+	}
 	m.saveHealth(ctx)
 	if err != nil {
-		cls := provhealth.Classify(err)
-		m.EmitData(ctx, "system", "", "", "provider.create_failed", fmt.Sprintf("%s %s %s: %v", id, req.SKU, req.Region, err), nil,
-			map[string]any{"provider": id, "region": req.Region, "error_class": cls})
+		data := map[string]any{"provider": id, "region": req.Region, "error_class": cls}
+		if a != nil {
+			data["account_id"] = a.ID
+		}
+		m.EmitData(ctx, "system", "", "", "provider.create_failed", fmt.Sprintf("%s %s %s: %v", id, req.SKU, req.Region, err), nil, data)
 	}
+	m.accountOutcome(ctx, a, err, 0)
 	return h, err
+}
+
+// probeAccounts validates every other usable account of a provider (the
+// primary one was just probed with tok) on the account breaker.
+func (m *Manager) probeAccounts(ctx context.Context, prov provider.Provider, primaryTok string) {
+	now := time.Now().UTC()
+	for _, a := range m.listAccounts(ctx, prov.ID()) {
+		if !a.Enabled || a.Status == model.AccountArchived || (a.CooldownUntil != nil && now.Before(*a.CooldownUntil)) {
+			continue
+		}
+		tok, err := m.credentialFor(ctx, a)
+		if err != nil {
+			continue
+		}
+		var perr error
+		if tok == primaryTok {
+			st := m.Health.Stats(prov.ID(), "")
+			if st.LastErrorAt != nil && (st.LastOKAt == nil || st.LastErrorAt.After(*st.LastOKAt)) && st.LastClass == provhealth.ClassAuth {
+				perr = fmt.Errorf("%s", st.LastError)
+			}
+		} else {
+			c, cancel := context.WithTimeout(ctx, 20*time.Second)
+			start := time.Now()
+			perr = prov.Validate(c, tok)
+			cancel()
+			m.Health.Record(acctKey(a), provhealth.Sample{Kind: provhealth.KindAPI, LatencyMS: float64(time.Since(start).Microseconds()) / 1000}, perr, 0)
+		}
+		if perr == nil || provhealth.AccountLevel(provhealth.Classify(perr)) {
+			m.accountOutcome(ctx, a, perr, 0)
+		}
+	}
 }
 
 // recordProvision records the time from host creation to boxd connecting.
@@ -226,6 +277,12 @@ func (m *Manager) capsAllow(ctx context.Context, id, region string, priceHour, p
 // offerBlocked explains why an offer must not be used now ("" = usable).
 func (m *Manager) offerBlocked(ctx context.Context, o model.Offer) string {
 	if ok, why := m.Health.Peek(o.Provider); !ok {
+		return why
+	}
+	if o.Region != "" && m.capacityBlocked(o.Provider, o.Region) {
+		return "sold out in " + o.Region + " (retry in 10 min)"
+	}
+	if why := m.accountsBlocked(ctx, o.Provider, o.Region); why != "" {
 		return why
 	}
 	if err := m.capsAllow(ctx, o.Provider, o.Region, o.PriceHour, o.PriceMonth); err != nil {

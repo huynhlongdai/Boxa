@@ -34,6 +34,9 @@ func (m *Manager) ListProviders(ctx context.Context) ([]*model.Provider, error) 
 			p.TokenSource = "api"
 		}
 		m.fillProviderMeta(p)
+		if p.ID != "local" {
+			p.AccountsSummary = m.accountsSummary(ctx, p.ID)
+		}
 		lc := m.LifecycleFor(p.ID)
 		p.Lifecycle = &lc
 	}
@@ -41,12 +44,69 @@ func (m *Manager) ListProviders(ctx context.Context) ([]*model.Provider, error) 
 	return ps, nil
 }
 
-func (m *Manager) providerToken(ctx context.Context, id string) (string, error) {
-	p, err := m.Store.GetProvider(ctx, id)
-	if err != nil || p.TokenEnc == "" {
-		return "", model.EH(model.ErrProviderFailed, "Connect the provider first: PUT /providers/"+id+"/token.", "provider %s not connected", id)
+// accountsSummary counts accounts from the last computed stats.
+func (m *Manager) accountsSummary(ctx context.Context, id string) *model.AccountsSummary {
+	s := &model.AccountsSummary{}
+	now := time.Now().UTC()
+	for _, a := range m.listAccounts(ctx, id) {
+		if a.Status == model.AccountArchived {
+			continue
+		}
+		s.Total++
+		m.accts.mu.Lock()
+		st := m.accts.stats[a.ID]
+		m.accts.mu.Unlock()
+		if st == nil {
+			st = &model.AccountStats{HasCredential: m.hasCredential(ctx, a)}
+		}
+		if m.ineligible(a, st, "", 0, now) == "" {
+			s.Active++
+		} else if a.Enabled {
+			s.Degraded++
+		}
 	}
-	return m.Crypt.Open(p.TokenEnc)
+	return s
+}
+
+// syncDefaultAccount mirrors PUT /providers/{id}/token onto the default
+// account (fingerprint, status, audit).
+func (m *Manager) syncDefaultAccount(ctx context.Context, p *Principal, mp *model.Provider, token string) {
+	a := m.ensureDefaultAccount(ctx, mp)
+	if a == nil {
+		return
+	}
+	l := m.acctLock(a.ID)
+	l.Lock()
+	defer l.Unlock()
+	cur, err := m.Store.GetProviderAccount(ctx, a.ID)
+	if err != nil {
+		return
+	}
+	normAccount(cur)
+	now := time.Now().UTC()
+	old, oldFP := cur.Status, cur.KeyFingerprint
+	cur.KeyFingerprint, cur.CredentialSource, cur.UpdatedBy = Fingerprint(token), orStr(mp.TokenSource, "api"), p.Actor()
+	if token == "" {
+		cur.Enabled, cur.Status, cur.StatusReason = false, model.AccountDisabled, "token removed"
+	} else {
+		if oldFP != "" && oldFP != cur.KeyFingerprint {
+			cur.RotatedAt = &now
+		}
+		if !cur.Enabled && cur.StatusReason == "token removed" {
+			cur.Enabled = true
+		}
+		if cur.Status == model.AccountAuthFailed || cur.Status == model.AccountDisabled && cur.Enabled {
+			cur.Status, cur.StatusReason = model.AccountActive, ""
+		}
+		cur.LastOKAt, cur.CooldownUntil, cur.ErrorStreak = &now, nil, 0
+	}
+	m.Health.Reset(acctKey(cur))
+	m.setAccountStatus(ctx, cur, old, now)
+	m.putAccount(ctx, cur)
+	if token != "" && oldFP != cur.KeyFingerprint {
+		m.EmitData(ctx, p.Actor(), "", "", "provider_account.key_rotated", fmt.Sprintf("%s default account: key %s → %s", mp.ID, oldFP, cur.KeyFingerprint), nil,
+			map[string]any{"provider": mp.ID, "account_id": cur.ID, "old_fingerprint": oldFP, "key_fingerprint": cur.KeyFingerprint})
+	}
 }
 
 // SetProviderToken validates the token against the provider API, stores it
@@ -70,6 +130,7 @@ func (m *Manager) SetProviderToken(ctx context.Context, p *Principal, id, token 
 		// empty token = disconnect
 		mp.TokenEnc, mp.Connected, mp.Error, mp.TokenSource = "", id == "local", nil, ""
 		m.Store.PutProvider(ctx, mp)
+		m.syncDefaultAccount(ctx, p, mp, "")
 		m.Emit(ctx, p.Actor(), "", "", "provider.disconnected", id+" token removed", nil)
 		m.fillProviderMeta(mp)
 		return mp, nil
@@ -94,6 +155,7 @@ func (m *Manager) SetProviderToken(ctx context.Context, p *Principal, id, token 
 		return nil, err
 	}
 	m.Health.Reset(id)
+	m.syncDefaultAccount(ctx, p, mp, token)
 	m.Emit(ctx, p.Actor(), "", "", "provider.connected", id+" token validated", nil)
 	go func() {
 		c, cancel := context.WithTimeout(context.Background(), 2*time.Minute)

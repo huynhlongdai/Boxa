@@ -179,7 +179,7 @@ func (m *Manager) previewHeaders(ctx context.Context, h *model.Host) (map[string
 	if !ok {
 		return nil, nil
 	}
-	tok, err := m.providerToken(ctx, h.Provider)
+	tok, _, err := m.hostToken(ctx, h) // v2.2: the host's own account
 	if err != nil {
 		return nil, err
 	}

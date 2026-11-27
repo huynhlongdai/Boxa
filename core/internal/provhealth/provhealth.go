@@ -21,6 +21,7 @@ const (
 	ClassAuth      = "auth"       // 401/403: token wrong or missing scope
 	ClassRateLimit = "rate_limit" // 429 / "too many requests"
 	ClassQuota     = "quota"      // account limit (server count, resource limit)
+	ClassPayment   = "payment"    // v2.2: 402 / out of credit / billing blocked (account-level)
 	ClassCapacity  = "capacity"   // sold out / unavailable in region
 	ClassTimeout   = "timeout"
 	ClassNetwork   = "network" // DNS / connect refused / TLS
@@ -30,7 +31,7 @@ const (
 )
 
 // Classes lists every class in display order.
-var Classes = []string{ClassAuth, ClassRateLimit, ClassQuota, ClassCapacity, ClassTimeout, ClassNetwork, ClassServer, ClassInvalid, ClassUnknown}
+var Classes = []string{ClassAuth, ClassPayment, ClassRateLimit, ClassQuota, ClassCapacity, ClassTimeout, ClassNetwork, ClassServer, ClassInvalid, ClassUnknown}
 
 // Classify maps an adapter error to a class by inspecting its text (adapters
 // format provider HTTP errors as "HTTP <status>: <body>").
@@ -54,6 +55,9 @@ func Classify(err error) string {
 	switch {
 	case has("http 429", "too many requests", "rate limit", "ratelimit", "rate_limit", "throttl"):
 		return ClassRateLimit
+	case has("http 402", "payment required", "insufficient balance", "insufficient_balance", "insufficient funds", "insufficient credit",
+		"out of credit", "credit exhausted", "credits exhausted", "no credits", "billing is blocked", "workspace is blocked", "payment method", "account suspended for non-payment"):
+		return ClassPayment
 	case has("http 401", "http 403", "unauthorized", "rejected the token", "forbidden", "invalid token", "authentication"):
 		return ClassAuth
 	case has("quota", "limit exceeded", "limit reached", "resource_limit", "server_limit", "maximum number of"):
@@ -540,4 +544,16 @@ func trim(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
+}
+
+// AccountLevel reports whether an error class belongs to the provider
+// account (credential, money, account quota, per-token rate limit) rather
+// than to the provider itself: such errors fail over to the next account
+// of the same provider and never trip the provider breaker (v2.2).
+func AccountLevel(class string) bool {
+	switch class {
+	case ClassAuth, ClassPayment, ClassQuota, ClassRateLimit:
+		return true
+	}
+	return false
 }

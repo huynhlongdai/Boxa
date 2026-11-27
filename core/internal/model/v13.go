@@ -60,8 +60,15 @@ type ProviderPrefs struct {
 	DefaultRegion string   `json:"default_region"`
 	// v1.4 (sandbox providers): auto (T2 dial-in when the sandbox can keep a
 	// background process and BOXMES_PUBLIC_URL is set, else T3 shim) | dial | shim.
-	SandboxMode string    `json:"sandbox_mode,omitempty"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	SandboxMode string `json:"sandbox_mode,omitempty"`
+	// v2.2 provider accounts: how an account is picked ("" = priority for
+	// VPS providers, drain_first for sandbox providers), how long a
+	// workspace sticks to the account it used last, and whether a create
+	// that fails on one account is retried on the next (default true).
+	Strategy               string    `json:"strategy,omitempty"`
+	StickyMinutes          int       `json:"sticky_minutes,omitempty"`
+	FailoverAcrossAccounts *bool     `json:"failover_across_accounts,omitempty"`
+	UpdatedAt              time.Time `json:"updated_at"`
 }
 
 // DefaultProviderPrefs: enabled, no caps.

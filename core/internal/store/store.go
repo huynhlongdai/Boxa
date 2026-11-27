@@ -31,6 +31,7 @@ func FmtTime(t time.Time) string { return t.UTC().Format(TimeFormat) }
 // Store is the persistence interface used by the rest of core.
 type Store interface {
 	Tenancy
+	Accounts
 
 	Close() error
 	Dialect() string
@@ -135,6 +136,7 @@ type EventFilter struct {
 type LedgerFilter struct {
 	AgentID, BoxID, Provider, Billing string
 	WorkspaceID                       string // v2.0: "" = every workspace
+	AccountID                         string // v2.2: provider account
 	From, To                          time.Time
 	Limit                             int
 }
@@ -764,8 +766,8 @@ func (s *SQL) ListEvents(ctx context.Context, f EventFilter) ([]*model.Event, er
 // ---- ledger ----
 
 func (s *SQL) AddLedger(ctx context.Context, l *model.LedgerEntry) error {
-	return s.exec(ctx, "INSERT INTO ledger(id, ts, agent_id, box_id, provider, kind, billing, amount_usd, note, workspace_id) VALUES(?,?,?,?,?,?,?,?,?,?)",
-		l.ID, FmtTime(l.TS), l.AgentID, l.BoxID, l.Provider, l.Kind, l.Billing, l.AmountUSD, l.Note, l.WorkspaceID)
+	return s.exec(ctx, "INSERT INTO ledger(id, ts, agent_id, box_id, provider, kind, billing, amount_usd, note, workspace_id, account_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+		l.ID, FmtTime(l.TS), l.AgentID, l.BoxID, l.Provider, l.Kind, l.Billing, l.AmountUSD, l.Note, l.WorkspaceID, l.AccountID)
 }
 
 func (s *SQL) ledgerWhere(f LedgerFilter) (string, []any) {
@@ -787,6 +789,9 @@ func (s *SQL) ledgerWhere(f LedgerFilter) (string, []any) {
 	if f.WorkspaceID != "" {
 		add("workspace_id=?", f.WorkspaceID)
 	}
+	if f.AccountID != "" {
+		add("account_id=?", f.AccountID)
+	}
 	if !f.From.IsZero() {
 		add("ts>=?", FmtTime(f.From))
 	}
@@ -805,7 +810,7 @@ func (s *SQL) ListLedger(ctx context.Context, f LedgerFilter) ([]*model.LedgerEn
 	if limit <= 0 {
 		limit = 500
 	}
-	q := fmt.Sprintf("SELECT id, ts, agent_id, box_id, provider, kind, billing, amount_usd, note, workspace_id FROM ledger%s ORDER BY ts DESC LIMIT %d", where, limit)
+	q := fmt.Sprintf("SELECT id, ts, agent_id, box_id, provider, kind, billing, amount_usd, note, workspace_id, account_id FROM ledger%s ORDER BY ts DESC LIMIT %d", where, limit)
 	rows, err := s.db.QueryContext(ctx, s.rebind(q), args...)
 	if err != nil {
 		return nil, err
@@ -815,11 +820,11 @@ func (s *SQL) ListLedger(ctx context.Context, f LedgerFilter) ([]*model.LedgerEn
 	for rows.Next() {
 		var l model.LedgerEntry
 		var ts string
-		var ws sql.NullString
-		if err := rows.Scan(&l.ID, &ts, &l.AgentID, &l.BoxID, &l.Provider, &l.Kind, &l.Billing, &l.AmountUSD, &l.Note, &ws); err != nil {
+		var ws, acc sql.NullString
+		if err := rows.Scan(&l.ID, &ts, &l.AgentID, &l.BoxID, &l.Provider, &l.Kind, &l.Billing, &l.AmountUSD, &l.Note, &ws, &acc); err != nil {
 			return nil, err
 		}
-		l.WorkspaceID = ws.String
+		l.WorkspaceID, l.AccountID = ws.String, acc.String
 		l.TS, _ = time.Parse(TimeFormat, ts)
 		out = append(out, &l)
 	}
@@ -837,6 +842,8 @@ func (s *SQL) SumLedger(ctx context.Context, f LedgerFilter) (float64, error) {
 func (s *SQL) SumLedgerBy(ctx context.Context, f LedgerFilter, col string) (map[string]float64, error) {
 	switch col {
 	case "agent_id", "box_id", "provider", "billing", "kind":
+	case "account_id":
+		col = "COALESCE(account_id,'')"
 	default:
 		return nil, fmt.Errorf("bad group column %q", col)
 	}

@@ -24,7 +24,9 @@ const (
 )
 
 // NotifyEvents are the event kinds a user can subscribe to.
-var NotifyEvents = []string{"daily_report", "budget", "approval", "emergency_stop", "box_failed", "host_down"}
+// v2.2: infra_alert (critical provider-account alerts, Telegram at once) and
+// infra_digest (daily email of open infra alerts).
+var NotifyEvents = []string{"daily_report", "budget", "approval", "emergency_stop", "box_failed", "host_down", "infra_alert", "infra_digest"}
 
 // Delivery is one notification attempt (kept in memory, newest first).
 type Delivery struct {

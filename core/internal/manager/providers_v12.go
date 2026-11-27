@@ -13,7 +13,10 @@ import (
 // environment variables (HETZNER_TOKEN, VULTR_API_KEY, DIGITALOCEAN_TOKEN,
 // CONTABO_CLIENT_ID/SECRET/API_USER/API_PASSWORD, NETCUP_REFRESH_TOKEN).
 // The token is stored encrypted like a dashboard token and validated in the
-// background; an env token always wins over a stored one.
+// background. v2.2: an unlabeled env token is the provider's default account
+// unless a dashboard token already holds it; then it becomes its own
+// account pa_<provider>_env (env no longer overrides the dashboard).
+// Labeled tokens (<VAR>__<LABEL>) are ConfigureProviderAccountsFromEnv.
 func (m *Manager) ConfigureProvidersFromEnv(ctx context.Context, getenv func(string) string) []string {
 	var ids []string
 	for _, p := range m.Providers.All() {
@@ -26,6 +29,18 @@ func (m *Manager) ConfigureProvidersFromEnv(ctx context.Context, getenv func(str
 		if tok == "" {
 			continue
 		}
+		if mp, err := m.Store.GetProvider(ctx, p.ID()); err == nil && mp.TokenEnc != "" && mp.TokenSource == "api" {
+			if cur, err := m.Crypt.Open(mp.TokenEnc); err == nil && cur != tok {
+				vars := envVarsOf(p)
+				ref := p.ID()
+				if len(vars) > 0 {
+					ref = vars[0]
+				}
+				m.upsertEnvAccount(ctx, p, "pa_"+p.ID()+"_env", "env", ref, tok)
+				ids = append(ids, p.ID())
+				continue
+			}
+		}
 		enc, err := m.Crypt.Seal(tok)
 		if err != nil {
 			continue
@@ -36,6 +51,7 @@ func (m *Manager) ConfigureProvidersFromEnv(ctx context.Context, getenv func(str
 		}
 		mp.TokenEnc, mp.Connected, mp.Error, mp.TokenSource = enc, true, nil, "env"
 		m.Store.PutProvider(ctx, mp)
+		m.syncDefaultAccount(ctx, sysPrincipal(), mp, tok)
 		ids = append(ids, p.ID())
 		go func(id string, prov provider.Provider) {
 			c, cancel := context.WithTimeout(context.Background(), 2*time.Minute)

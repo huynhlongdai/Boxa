@@ -346,7 +346,7 @@ func (m *Manager) offerOptions(ctx context.Context, b *model.Box, agent *model.A
 			return v
 		}
 		mp, err := m.Store.GetProvider(ctx, pid)
-		v := err == nil && mp.Connected && mp.TokenEnc != ""
+		v := err == nil && m.provConnected(ctx, mp)
 		connectedCache[pid] = v
 		return v
 	}
@@ -477,7 +477,7 @@ func (m *Manager) scheduleSmart(ctx context.Context, b *model.Box, agent *model.
 	ranked, _ := selector.Rank(req, prof, opts)
 	connected := func(pid string) bool {
 		mp, err := m.Store.GetProvider(ctx, pid)
-		return err == nil && mp.Connected && mp.TokenEnc != ""
+		return err == nil && m.provConnected(ctx, mp)
 	}
 	for i := range ranked {
 		s := ranked[i]

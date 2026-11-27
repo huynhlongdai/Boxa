@@ -38,13 +38,19 @@ func (m *Manager) ledgerTick(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	acctOf := map[string]string{} // v2.2: host → provider account
+	if hosts, err := m.Store.ListHosts(ctx); err == nil {
+		for _, h := range hosts {
+			acctOf[h.ID] = h.AccountID
+		}
+	}
 	for _, b := range boxes {
 		billable := b.Status == model.StatusRunning || b.Status == model.StatusSnapshotting || (b.Billing == "burst" && b.Status == model.StatusSleeping)
 		if !billable {
 			continue
 		}
 		amt := model.Round6(b.CostPerHour * dt.Hours())
-		e := &model.LedgerEntry{ID: secret.ID("led"), TS: now, AgentID: b.AgentID, BoxID: b.ID, Provider: b.Provider, Kind: "compute", AmountUSD: amt, Billing: b.Billing, WorkspaceID: b.WorkspaceID,
+		e := &model.LedgerEntry{ID: secret.ID("led"), TS: now, AgentID: b.AgentID, BoxID: b.ID, Provider: b.Provider, Kind: "compute", AmountUSD: amt, Billing: b.Billing, WorkspaceID: b.WorkspaceID, AccountID: acctOf[b.HostID],
 			Note: fmt.Sprintf("%s %.0fs × %s/h (%s)", b.Status, dt.Seconds(), fmtUSD(b.CostPerHour), b.Billing)}
 		if err := m.Store.AddLedger(ctx, e); err != nil {
 			return err

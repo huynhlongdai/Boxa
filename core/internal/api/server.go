@@ -175,6 +175,7 @@ func (s *Server) routes() http.Handler {
 				r.Get("/quotas", s.getQuotas)
 				r.Put("/quotas", s.putQuotas)
 				s.routesTenancyAdmin(r)
+				s.routesInfraAdmin(r) // v2.2 provider accounts, strategy, infra alerts
 				r.Post("/price-feed/refresh", s.refreshPrices)
 			})
 		})

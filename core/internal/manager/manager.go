@@ -192,6 +192,7 @@ type Manager struct {
 	gw    gatewayState
 	names nameState   // v1.9 readable gateway names
 	acc   accessState // v1.10 tickets, live sessions, terminals, ssh
+	accts acctState   // v2.2 provider accounts
 }
 
 // SetObjectStoreHTTP overrides the HTTP client used for object storage (tests).
@@ -257,7 +258,8 @@ func (m *Manager) Init(ctx context.Context, envAdminKey string) (string, error) 
 	}
 	m.initV13(ctx)
 	m.initV14(ctx)
-	m.backfillNames(ctx) // v1.9: boxes created before readable names
+	m.migrateAccounts(ctx) // v2.2: legacy tokens → default accounts, hosts → account_id
+	m.backfillNames(ctx)   // v1.9: boxes created before readable names
 	return m.bootstrapAdmin(ctx, envAdminKey)
 }
 
@@ -269,6 +271,7 @@ func (m *Manager) Start(ctx context.Context) {
 	go m.loop(ctx, "notify", time.Minute, m.notifyTick)
 	go m.loop(ctx, "provider_health", m.Cfg.HealthInterval, m.healthTick)
 	go m.loop(ctx, "warm_pool", m.Cfg.WarmInterval, m.warmTick)
+	go m.loop(ctx, "provider_accounts", time.Minute, m.accountsTick) // v2.2
 	if !m.Cfg.DisablePriceFeed {
 		go m.loop(ctx, "price_feed", m.Cfg.PriceFeedInterval, m.refreshPrices)
 	} else {
@@ -325,7 +328,7 @@ func (m *Manager) SysJobs() []SysJob {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var out []SysJob
-	for _, n := range []string{"reaper", "ledger", "price_feed", "notify", "provider_health", "warm_pool"} {
+	for _, n := range []string{"reaper", "ledger", "price_feed", "notify", "provider_health", "warm_pool", "provider_accounts"} {
 		if j, ok := m.sysjobs[n]; ok {
 			out = append(out, *j)
 		}
