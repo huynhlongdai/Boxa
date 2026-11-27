@@ -1,6 +1,6 @@
 # Boxmes — Hạ tầng v2: Tài khoản nhà cung cấp (provider accounts)
 
-> Phiên bản: 0.1 (đề xuất) · Ngày: 2026-11-27 · Phạm vi: khu **Nền tảng → Hạ tầng** (chỉ platform-admin, PA).
+> Phiên bản: 0.2 (đã chốt quyết định 2026-11-27) · Ngày: 2026-11-27 · Phạm vi: khu **Nền tảng → Hạ tầng** (chỉ platform-admin, PA).
 > Liên quan: spec v1.0 §M6, §M5, §M26, §M27 (`docs/boxmes-spec-v1.0.md`), UI v2 §16 (`docs/boxmes-ui-spec-v2.md`).
 > Tài liệu này **chỉ là thiết kế**; chưa có code core tương ứng.
 
@@ -338,18 +338,18 @@ Tương thích: `PUT /providers/{id}/token` = upsert account `default` của pro
 
 ---
 
-## 12. Câu hỏi mở cho anh (owner)
+## 12. Quyết định đã chốt (2026-11-27)
 
-1. **Nhiều tài khoản cùng provider có hợp lệ với ToS không?** Hetzner/Contabo có thể coi nhiều tài khoản cùng chủ là lách hạn mức/lạm dụng. Đề xuất: ưu tiên nhiều **project** (Hetzner) / sub-account (Vultr) / team (DO) trong cùng tài khoản thật cho hạn mức, và chỉ dùng tài khoản thật khác (pháp nhân/thẻ khác) cho dự phòng khi bị khoá — anh xác nhận chính sách?
-2. **Chiến lược mặc định**: `priority` (dồn vào account chính, account phụ để dự phòng) hay `weighted` (rải đều để không account nào chạm hạn mức/abuse)? Em đề xuất `priority` cho VPS, `drain_first` cho sandbox có credit khuyến mãi.
-3. **Tự động khi runway < 2 ngày**: chỉ `drain` (đề xuất) hay cho phép tự nạp tiền (cần lưu thẻ/thao tác ở console — hiện không có API nạp cho đa số provider)?
-4. **Ngưỡng mặc định** ở §6 (7/2 ngày, 80/95%, 14/3 ngày) có ổn không? Kênh: Telegram cho critical, email cho tổng hợp ngày?
-5. **Tiền tệ**: hiển thị quy đổi USD (dùng tỷ giá nào, cập nhật bao lâu) hay giữ EUR riêng cho Hetzner/netcup/Contabo?
-6. **Lưu khoá billing chỉ-đọc riêng** có cần không, hay chấp nhận dùng chung khoá tạo server (đơn giản hơn nhưng quyền rộng hơn)?
-7. **Đặt Pha A vào v2.2** (làm v2.2 dài thêm ~1 tuần) hay tách thành mốc riêng "v2.1.5 Hạ tầng"?
-8. **Provider kế hoạch** nào cần adapter `AccountReader` sớm nhất (Runpod/Linode/Scaleway/OVH/Fly/Modal)?
+Owner duyệt toàn bộ đề xuất trong danh sách câu hỏi mở ngày 2026-11-27:
 
----
+1. **Nhiều tài khoản cùng provider**: ưu tiên nhiều **project** (Hetzner) / **sub-account** (Vultr) / **team** (DO) trong cùng tài khoản thật để tăng hạn mức; tài khoản thật riêng (pháp nhân/thẻ khác) **chỉ dùng làm dự phòng** khi bị khoá.
+2. **Chiến lược mặc định**: `priority` cho VPS (T1); `drain_first` cho provider sandbox có credit khuyến mãi.
+3. **Runway < 2 ngày** → chỉ `drain` (không nhận host mới). **Không bao giờ** tự xoá host đang chạy; không tự nạp tiền.
+4. **Ngưỡng mặc định**: runway 7 ngày (warn) / 2 ngày (critical); hạn mức và trần chi 80% (warn) / 95% (critical); hạn token / credit / hợp đồng 14 ngày (warn) / 3 ngày (critical). Kênh: **Telegram cho critical**, **email tổng hợp hằng ngày** cho phần còn lại.
+5. **Tiền tệ**: quy đổi sang **USD** để tổng hợp, đồng thời **giữ và hiển thị tiền gốc** (EUR cho Hetzner/netcup/Contabo) bên cạnh.
+6. **Khoá billing chỉ-đọc riêng**: hỗ trợ **tuỳ chọn** theo từng account (`billing_credential_ref`); không bắt buộc.
+7. **Pha A vào v2.2** (không tách mốc riêng).
+8. **Provider mới đầu tiên** có `AccountReader` (đọc số dư): **Runpod** — thuộc Pha B, chưa làm ở Pha A.
 
 ## Phụ lục — Biến môi trường mới
 
