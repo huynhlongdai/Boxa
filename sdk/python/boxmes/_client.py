@@ -625,6 +625,61 @@ class _Base:
         return self._call("PATCH", f"/admin/workspaces/{_q(workspace_id)}",
                           _clean({"plan": plan, "quota_overrides": quota_overrides, "status": status, "name": name}))
 
+    # -- v2.2 infra: provider accounts (platform admin) ---------------------
+    def admin_providers(self) -> Dict[str, Any]:
+        """KPI summary + one row per provider (accounts, balance, spend, runway, alerts)."""
+        return self._call("GET", "/admin/providers")
+
+    def admin_provider(self, provider: str) -> Dict[str, Any]:
+        return self._call("GET", f"/admin/providers/{_q(provider)}")
+
+    def list_provider_accounts(self, provider: str, *, archived: bool = False) -> Dict[str, List[Dict[str, Any]]]:
+        return self._call("GET", f"/admin/providers/{_q(provider)}/accounts", params={"archived": "1"} if archived else None)
+
+    def get_provider_account(self, provider: str, account_id: str) -> Dict[str, Any]:
+        return self._call("GET", f"/admin/providers/{_q(provider)}/accounts/{_q(account_id)}")
+
+    def validate_provider_account(self, provider: str, token: str, *, external_id: Optional[str] = None) -> Dict[str, Any]:
+        """Check a key without saving it (ok, error_class, duplicates)."""
+        return self._call("POST", f"/admin/providers/{_q(provider)}/accounts/validate", _clean({"token": token, "external_id": external_id}))
+
+    def create_provider_account(self, provider: str, label: str, token: str, **fields: Any) -> Dict[str, Any]:
+        """Add an account. fields: priority, weight, regions, external_id, currency, balance, spend_cap_day, limits, …"""
+        return self._call("POST", f"/admin/providers/{_q(provider)}/accounts", {"label": label, "token": token, **fields})
+
+    def update_provider_account(self, provider: str, account_id: str, **fields: Any) -> Dict[str, Any]:
+        """Merge-patch: scheduling, manual balance / credit / limits / dates, caps, thresholds."""
+        return self._call("PATCH", f"/admin/providers/{_q(provider)}/accounts/{_q(account_id)}", dict(fields))
+
+    def rotate_provider_account(self, provider: str, account_id: str, token: str, *, external_id: Optional[str] = None) -> Dict[str, Any]:
+        return self._call("POST", f"/admin/providers/{_q(provider)}/accounts/{_q(account_id)}/rotate", _clean({"token": token, "external_id": external_id}))
+
+    def test_provider_account(self, provider: str, account_id: str) -> Dict[str, Any]:
+        return self._call("POST", f"/admin/providers/{_q(provider)}/accounts/{_q(account_id)}/test")
+
+    def set_provider_account_state(self, provider: str, account_id: str, action: str) -> Dict[str, Any]:
+        """action: enable | disable | drain | undrain | reset."""
+        return self._call("POST", f"/admin/providers/{_q(provider)}/accounts/{_q(account_id)}/{_q(action)}")
+
+    def delete_provider_account(self, provider: str, account_id: str, *, force: bool = False, reason: Optional[str] = None, purge: bool = False) -> Any:
+        params = _clean({"force": "1" if force else None, "reason": reason, "purge": "1" if purge else None})
+        return self._call("DELETE", f"/admin/providers/{_q(provider)}/accounts/{_q(account_id)}", params=params or None)
+
+    def provider_strategy(self, provider: str) -> Dict[str, Any]:
+        return self._call("GET", f"/admin/providers/{_q(provider)}/strategy")
+
+    def set_provider_strategy(self, provider: str, strategy: str = "", *, sticky_minutes: int = 0,
+                              failover_across_accounts: Optional[bool] = None) -> Dict[str, Any]:
+        """strategy: priority | weighted | round_robin | least_used | drain_first ("" = default)."""
+        return self._call("PUT", f"/admin/providers/{_q(provider)}/strategy",
+                          _clean({"strategy": strategy, "sticky_minutes": sticky_minutes, "failover_across_accounts": failover_across_accounts}))
+
+    def infra_alerts(self, status: Optional[str] = None) -> Dict[str, List[Dict[str, Any]]]:
+        return self._call("GET", "/admin/infra/alerts", params=_clean({"status": status}) or None)
+
+    def ack_infra_alert(self, alert_id: str) -> Dict[str, Any]:
+        return self._call("POST", f"/admin/infra/alerts/{_q(alert_id)}/ack")
+
     # -- MCP tool bridge -------------------------------------------------------
     def _mcp_body(self, name: str, arguments: Mapping[str, Any]) -> Dict[str, Any]:
         return {"jsonrpc": "2.0", "id": int(time.time() * 1000), "method": "tools/call",
@@ -837,6 +892,21 @@ class AsyncBoxmes(_Base):
         async def accept_invite(self, token: str) -> Me: ...
         async def admin_workspaces(self) -> Dict[str, List[Workspace]]: ...
         async def admin_update_workspace(self, workspace_id: str, *, plan: Optional[str] = None, quota_overrides: Optional[Mapping[str, Any]] = None, status: Optional[str] = None, name: Optional[str] = None) -> Workspace: ...
+        async def admin_providers(self) -> Dict[str, Any]: ...
+        async def admin_provider(self, provider: str) -> Dict[str, Any]: ...
+        async def list_provider_accounts(self, provider: str, *, archived: bool = False) -> Dict[str, List[Dict[str, Any]]]: ...
+        async def get_provider_account(self, provider: str, account_id: str) -> Dict[str, Any]: ...
+        async def validate_provider_account(self, provider: str, token: str, *, external_id: Optional[str] = None) -> Dict[str, Any]: ...
+        async def create_provider_account(self, provider: str, label: str, token: str, **fields: Any) -> Dict[str, Any]: ...
+        async def update_provider_account(self, provider: str, account_id: str, **fields: Any) -> Dict[str, Any]: ...
+        async def rotate_provider_account(self, provider: str, account_id: str, token: str, *, external_id: Optional[str] = None) -> Dict[str, Any]: ...
+        async def test_provider_account(self, provider: str, account_id: str) -> Dict[str, Any]: ...
+        async def set_provider_account_state(self, provider: str, account_id: str, action: str) -> Dict[str, Any]: ...
+        async def delete_provider_account(self, provider: str, account_id: str, *, force: bool = False, reason: Optional[str] = None, purge: bool = False) -> Any: ...
+        async def provider_strategy(self, provider: str) -> Dict[str, Any]: ...
+        async def set_provider_strategy(self, provider: str, strategy: str = "", *, sticky_minutes: int = 0, failover_across_accounts: Optional[bool] = None) -> Dict[str, Any]: ...
+        async def infra_alerts(self, status: Optional[str] = None) -> Dict[str, List[Dict[str, Any]]]: ...
+        async def ack_infra_alert(self, alert_id: str) -> Dict[str, Any]: ...
         up = create_box
         down = delete_box
 

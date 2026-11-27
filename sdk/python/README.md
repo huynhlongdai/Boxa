@@ -61,6 +61,8 @@ try:
 except BoxmesError as e:
     if e.code == "QUOTA_EXCEEDED": print(e.details)          # {quota, limit, used, plan, upgrade_url}
 # platform admin: admin_workspaces(), admin_update_workspace(ws_id, plan="pro", quota_overrides={...})
+# v2.2 provider accounts: admin_providers(), list_provider_accounts("hetzner"), create_provider_account("hetzner", "EU #2", token, priority=2),
+#   update_provider_account(p, a, balance=150), rotate_provider_account(p, a, token, external_id=...), set_provider_strategy("e2b", "drain_first"), infra_alerts()
 ```
 
 ## Function calling with any LLM

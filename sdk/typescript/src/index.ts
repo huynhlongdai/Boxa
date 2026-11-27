@@ -81,6 +81,55 @@ export interface ApiKey {
 /** v2.0 workspace key scopes */
 export type KeyScope = "boxes:read" | "boxes:write" | "exec" | "secrets:read" | "secrets:write" | "billing:read" | "admin" | (string & {});
 export interface List<T> { items: T[]; next_cursor: string | null }
+
+// ---- v2.2 infra: provider accounts ----
+export type AccountStrategy = "priority" | "weighted" | "round_robin" | "least_used" | "drain_first";
+export type AccountStatus = "active" | "cooling" | "rate_limited" | "quota_full" | "low_balance" | "out_of_credit" | "auth_failed" | "token_expiring" | "disabled" | "draining" | "archived";
+export interface AccountLimit { limit: number; used: number; source?: "manual" | "learned" | "api"; at?: string }
+export interface AccountStats {
+  hosts_live: number; boxes_live: number; vcpu_live: number; spend_today: number; spend_month: number; spend_today_usd: number; spend_month_usd: number;
+  burn_per_hour_usd: number; balance_effective?: number; balance_effective_usd?: number; runway_hours?: number; runway_days?: number;
+  forecast_month_end: number; eligible: boolean; ineligible?: string; breaker: "closed" | "open" | "half_open"; has_credential: boolean;
+}
+export interface ProviderAccount {
+  id: string; provider: string; label: string; external_id?: string; owner_workspace_id?: string; tags: string[]; owner?: string; notes?: string; console_url?: string;
+  is_default: boolean; credential_ref: string; credential_source: "api" | "env"; key_fingerprint?: string; billing_key_fingerprint?: string; scopes: string[];
+  token_expires_at?: string; refresh_expires_at?: string; rotated_at?: string; rotate_every_days?: number;
+  enabled: boolean; priority: number; weight: number; regions: string[]; pool?: string; drain: boolean; auto_drained: boolean;
+  status: AccountStatus; status_reason?: string; status_since?: string; cooldown_until?: string; error_streak: number; last_error_class?: string; last_error?: string; last_ok_at?: string; last_check_at?: string;
+  billing_model?: "prepaid" | "postpaid" | "contract" | "free_tier"; currency: string; fx_rate_usd?: number; balance?: number; balance_source?: "manual" | "api" | "estimated"; balance_at?: string;
+  credit_total?: number; credit_remaining?: number; credit_expires_at?: string; pending_charges?: number; month_to_date?: number;
+  spend_cap_day: number; spend_cap_month: number; min_balance: number; low_balance_warn: number;
+  billing_cycle?: string; invoice_day?: number; next_invoice_at?: string; trial_ends_at?: string; contract_ends_at?: string;
+  limits: Record<string, AccountLimit>; thresholds: Partial<Record<"runway_warn_days" | "runway_critical_days" | "limit_warn_pct" | "limit_critical_pct" | "expiry_warn_days" | "expiry_critical_days", number>>;
+  created_at: string; created_by?: string; updated_at: string; updated_by?: string; stats?: AccountStats; warnings?: string[];
+}
+/** POST / PATCH body (merge-patch; dates RFC 3339 or YYYY-MM-DD, "" clears; limits value 0 removes). */
+export interface ProviderAccountInput {
+  label?: string; billing_token?: string; skip_validate?: boolean; external_id?: string; tags?: string[]; owner?: string; notes?: string; console_url?: string; scopes?: string[];
+  enabled?: boolean; priority?: number; weight?: number; regions?: string[]; pool?: string; drain?: boolean;
+  billing_model?: string; currency?: string; fx_rate_usd?: number; balance?: number; clear_balance?: boolean; credit_total?: number; credit_remaining?: number;
+  pending_charges?: number; month_to_date?: number; spend_cap_day?: number; spend_cap_month?: number; min_balance?: number; low_balance_warn?: number;
+  billing_cycle?: string; invoice_day?: number; rotate_every_days?: number;
+  token_expires_at?: string; refresh_expires_at?: string; credit_expires_at?: string; trial_ends_at?: string; contract_ends_at?: string; next_invoice_at?: string;
+  limits?: Record<string, number>; thresholds?: ProviderAccount["thresholds"];
+}
+export interface AccountTestResult { ok: boolean; error?: string; error_class?: string; latency_ms: number; key_fingerprint?: string; duplicates?: string[]; account?: ProviderAccount }
+export interface ProviderStrategy { provider: string; strategy: AccountStrategy | ""; effective_strategy: AccountStrategy; sticky_minutes: number; failover_across_accounts: boolean; strategies: AccountStrategy[] }
+export interface InfraAlert {
+  id: string; type: string; level: "info" | "warn" | "critical"; status: "open" | "acked" | "closed"; provider?: string; account_id?: string; host_id?: string;
+  message: string; data?: { args?: unknown[] }; count: number; opened_at: string; updated_at: string; closed_at?: string; acked_at?: string; acked_by?: string; notified_at?: string; notified_level?: string;
+}
+export interface AdminProviderRow {
+  id: string; name: string; tier: string; group: "vps" | "sandbox"; connected: boolean; implemented: boolean; health: string; strategy: AccountStrategy;
+  accounts_total: number; accounts_healthy: number; accounts_degraded: number; hosts_live: number; boxes_live: number;
+  balance_usd?: number; balance_by_currency?: Record<string, number>; spend_today_usd: number; spend_month_usd: number; forecast_month_usd: number;
+  runway_days?: number; max_limit_pct: number; open_alerts: number;
+}
+export interface InfraSummary {
+  balance_usd: number; balance_by_currency: Record<string, number>; spend_today_usd: number; spend_month_usd: number; forecast_month_usd: number;
+  shortest_runway?: { provider: string; account_id: string; label: string; days: number }; accounts_healthy: number; accounts_degraded: number; accounts_broken: number; open_alerts: number;
+}
 export interface FileRead { path: string; type: "file" | "dir"; content?: string; total_lines?: number; entries?: { name: string; type: string; size: number }[] }
 
 export interface ApiErrorBody { code: string; message: string; hint: string; retry_after_s?: number; docs_url?: string; /** v2.0, e.g. QUOTA_EXCEEDED {quota, limit, used, plan, upgrade_url} */ details?: Record<string, unknown>; next?: string[] }
@@ -530,6 +579,48 @@ export class Boxmes {
   adminUpdateWorkspace(workspaceId: string, patch: { plan?: Plan | ""; quota_overrides?: Partial<Omit<Quota, "plan">>; status?: "active" | "suspended"; name?: string }) {
     return this.request<Workspace>("PATCH", `/admin/workspaces/${enc(workspaceId)}`, { body: patch });
   }
+
+  // ---- v2.2 infra: provider accounts (platform admin) ----
+  /** KPI summary + one row per provider (accounts, balance, spend, runway, alerts). */
+  adminProviders() { return this.request<{ summary: InfraSummary; items: AdminProviderRow[] }>("GET", "/admin/providers"); }
+  adminProvider(provider: string) {
+    return this.request<AdminProviderRow & { prefs: Record<string, unknown>; strategy_config: ProviderStrategy; accounts: ProviderAccount[]; alerts: InfraAlert[] }>("GET", `/admin/providers/${enc(provider)}`);
+  }
+  listProviderAccounts(provider: string, opts: { archived?: boolean } = {}) {
+    return this.request<List<ProviderAccount>>("GET", `/admin/providers/${enc(provider)}/accounts`, { query: opts.archived ? { archived: "1" } : undefined });
+  }
+  getProviderAccount(provider: string, accountId: string) { return this.request<ProviderAccount>("GET", `/admin/providers/${enc(provider)}/accounts/${enc(accountId)}`); }
+  /** Check a key without saving it. */
+  validateProviderAccount(provider: string, token: string, externalId?: string) {
+    return this.request<AccountTestResult>("POST", `/admin/providers/${enc(provider)}/accounts/validate`, { body: { token, external_id: externalId } });
+  }
+  createProviderAccount(provider: string, input: ProviderAccountInput & { label: string; token: string }) {
+    return this.request<ProviderAccount>("POST", `/admin/providers/${enc(provider)}/accounts`, { body: input });
+  }
+  /** Merge-patch: scheduling, manual balance / credit / limits / dates, caps, thresholds. */
+  updateProviderAccount(provider: string, accountId: string, patch: ProviderAccountInput) {
+    return this.request<ProviderAccount>("PATCH", `/admin/providers/${enc(provider)}/accounts/${enc(accountId)}`, { body: patch });
+  }
+  rotateProviderAccount(provider: string, accountId: string, token: string, externalId?: string) {
+    return this.request<ProviderAccount>("POST", `/admin/providers/${enc(provider)}/accounts/${enc(accountId)}/rotate`, { body: { token, external_id: externalId } });
+  }
+  testProviderAccount(provider: string, accountId: string) { return this.request<AccountTestResult>("POST", `/admin/providers/${enc(provider)}/accounts/${enc(accountId)}/test`); }
+  setProviderAccountState(provider: string, accountId: string, action: "enable" | "disable" | "drain" | "undrain" | "reset") {
+    return this.request<ProviderAccount>("POST", `/admin/providers/${enc(provider)}/accounts/${enc(accountId)}/${action}`);
+  }
+  deleteProviderAccount(provider: string, accountId: string, opts: { force?: boolean; reason?: string; purge?: boolean } = {}) {
+    const query: Record<string, string> = {};
+    if (opts.force) query.force = "1";
+    if (opts.reason) query.reason = opts.reason;
+    if (opts.purge) query.purge = "1";
+    return this.request<unknown>("DELETE", `/admin/providers/${enc(provider)}/accounts/${enc(accountId)}`, { query });
+  }
+  providerStrategy(provider: string) { return this.request<ProviderStrategy>("GET", `/admin/providers/${enc(provider)}/strategy`); }
+  setProviderStrategy(provider: string, input: { strategy: AccountStrategy | ""; sticky_minutes?: number; failover_across_accounts?: boolean }) {
+    return this.request<ProviderStrategy>("PUT", `/admin/providers/${enc(provider)}/strategy`, { body: input });
+  }
+  infraAlerts(status?: "open" | "acked" | "closed" | "all") { return this.request<List<InfraAlert>>("GET", "/admin/infra/alerts", { query: status ? { status } : undefined }); }
+  ackInfraAlert(alertId: string) { return this.request<InfraAlert>("POST", `/admin/infra/alerts/${enc(alertId)}/ack`); }
 
   // ---- tool bridge ----
   /** Execute a Boxmes tool by name through the MCP endpoint (same argument mapping as MCP). */

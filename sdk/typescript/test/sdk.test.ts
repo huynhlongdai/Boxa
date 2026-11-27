@@ -464,3 +464,34 @@ test("v2.0 box locations + list filters (live)", { skip }, async () => {
     await bx.deleteBox(box.id);
   }
 });
+
+test("v2.2 provider account routes (mocked fetch)", async () => {
+  const { calls, f } = mockFetch();
+  const bx = new Boxmes({ apiKey: "bx_admin_x", baseUrl: "http://core.test:9", fetch: f, maxRetries: 0 });
+  await bx.adminProviders();
+  await bx.adminProvider("hetzner");
+  await bx.listProviderAccounts("hetzner", { archived: true });
+  await bx.validateProviderAccount("hetzner", "tok", "p2");
+  await bx.createProviderAccount("hetzner", { label: "Hetzner EU #2", token: "tok", priority: 2, currency: "EUR" });
+  await bx.getProviderAccount("hetzner", "pa_1");
+  await bx.updateProviderAccount("hetzner", "pa_1", { balance: 150, limits: { servers: 25 } });
+  await bx.rotateProviderAccount("hetzner", "pa_1", "tok2", "p2");
+  await bx.testProviderAccount("hetzner", "pa_1");
+  await bx.setProviderAccountState("hetzner", "pa_1", "drain");
+  await bx.deleteProviderAccount("hetzner", "pa_1", { force: true, reason: "moved" });
+  await bx.providerStrategy("e2b");
+  await bx.setProviderStrategy("e2b", { strategy: "drain_first", sticky_minutes: 30 });
+  await bx.infraAlerts("all");
+  await bx.ackInfraAlert("low_balance|pa_1");
+  const b = "/v1/admin/providers/hetzner";
+  assert.deepEqual(calls.map((c) => `${c.method} ${c.path}`), [
+    "GET /v1/admin/providers", `GET ${b}`, `GET ${b}/accounts`, `POST ${b}/accounts/validate`, `POST ${b}/accounts`, `GET ${b}/accounts/pa_1`,
+    `PATCH ${b}/accounts/pa_1`, `POST ${b}/accounts/pa_1/rotate`, `POST ${b}/accounts/pa_1/test`, `POST ${b}/accounts/pa_1/drain`, `DELETE ${b}/accounts/pa_1`,
+    "GET /v1/admin/providers/e2b/strategy", "PUT /v1/admin/providers/e2b/strategy", "GET /v1/admin/infra/alerts", "POST /v1/admin/infra/alerts/low_balance%7Cpa_1/ack",
+  ]);
+  assert.deepEqual(calls[2].query, { archived: "1" });
+  assert.deepEqual(calls[4].body, { label: "Hetzner EU #2", token: "tok", priority: 2, currency: "EUR" });
+  assert.deepEqual(calls[7].body, { token: "tok2", external_id: "p2" });
+  assert.deepEqual(calls[10].query, { force: "1", reason: "moved" });
+  assert.deepEqual(calls[13].query, { status: "all" });
+});

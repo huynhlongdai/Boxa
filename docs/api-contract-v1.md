@@ -366,3 +366,6 @@ All routes below are **platform admin only** (`/v1/admin/*`: admin key or `platf
 - Sticky picks, round-robin cursors and the capacity blocklist live in memory.
 - Billing read-only keys are stored (`billing_token`) but not used until phase B.
 - Owner-workspace (BYOC) accounts are phase C.
+
+### SDKs (v2.2)
+Python (`boxmes`): `admin_providers`, `admin_provider`, `list_provider_accounts(provider, archived=)`, `get_provider_account`, `validate_provider_account(provider, token, external_id=)`, `create_provider_account(provider, label, token, **fields)`, `update_provider_account(provider, account_id, **fields)`, `rotate_provider_account(provider, account_id, token, external_id=)`, `test_provider_account`, `set_provider_account_state(provider, account_id, action)`, `delete_provider_account(provider, account_id, force=, reason=, purge=)`, `provider_strategy`, `set_provider_strategy(provider, strategy, sticky_minutes=, failover_across_accounts=)`, `infra_alerts(status)`, `ack_infra_alert(alert_id)`. TypeScript (`@boxmes/sdk`): same in camelCase with types `ProviderAccount`, `ProviderAccountInput`, `AccountStats`, `AccountTestResult`, `ProviderStrategy`, `InfraAlert`, `AdminProviderRow`, `InfraSummary`.

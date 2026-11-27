@@ -52,6 +52,8 @@ const { key } = await me.createKey(null, "ci", ["boxes:read", "boxes:write", "ex
 await me.listBoxes({ region: "eu", location: "hetzner-fsn" }); await me.boxLocations();
 // QUOTA_EXCEEDED → BoxmesError.details = { quota, limit, used, plan, upgrade_url }
 // platform admin: adminWorkspaces(), adminUpdateWorkspace(wsId, { plan: "pro", quota_overrides: { max_boxes: 20 } })
+// v2.2 provider accounts: adminProviders(), listProviderAccounts("hetzner"), createProviderAccount("hetzner", { label, token, priority: 2 }),
+//   updateProviderAccount(p, a, { balance: 150 }), rotateProviderAccount(p, a, token, externalId), setProviderStrategy("e2b", { strategy: "drain_first" }), infraAlerts()
 ```
 
 ## Function calling
