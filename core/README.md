@@ -791,3 +791,34 @@ curl -X PATCH $BOXMES_URL/v1/admin/providers/hetzner/accounts/pa_xxxx -H "Author
 **Hạn chế (pha A).** Chưa đọc số dư/hạn mức qua API provider (pha B, Runpod đầu tiên) — số dư, credit, hạn mức là nhập tay hoặc học từ lỗi; bảng `provider_account_snapshots` đã tạo nhưng chưa ghi; khoá tài khoản không mặc định được mã hoá trong chính dòng `provider_accounts` (cùng master key), tài khoản mặc định vẫn dùng `token_enc` của provider; sticky, round-robin và blocklist capacity nằm trong bộ nhớ; khoá billing chỉ-đọc được lưu nhưng chưa dùng; BYOC là pha C.
 
 SDK (tuỳ chọn, chỉ admin nền tảng): Python `admin_providers()`, `admin_provider()`, `list_provider_accounts()`, `get_provider_account()`, `validate_provider_account()`, `create_provider_account()`, `update_provider_account()`, `rotate_provider_account()`, `test_provider_account()`, `set_provider_account_state()`, `delete_provider_account()`, `provider_strategy()`, `set_provider_strategy()`, `infra_alerts()`, `ack_infra_alert()`; TypeScript cùng bộ, tên camelCase (kèm kiểu `ProviderAccount`, `AccountStats`, `InfraAlert`, `AdminProviderRow`…).
+
+### 23.1 Sandbox nhiều API key (M29-S)
+
+Provider sandbox (E2B, Novita, Daytona, Prized, boxd.sh, Render, adapter YAML) có thêm các quy tắc riêng vì template/snapshot, hạn mức và ví tiền **thuộc về tài khoản** ở provider. Thiết kế: `docs/boxmes-infra-accounts-spec.md` §13. Test: `internal/e2e/v221_sandbox_accounts_test.go`, `internal/sandbox/templates_test.go`.
+
+- **Template theo tài khoản.** Box từ template X chỉ đặt lên tài khoản có X: danh sách `templates` (nhập tay hoặc `POST /v1/admin/providers/{p}/accounts/{a}/templates/sync` — E2B/Novita `GET /templates`, Daytona `GET /snapshots`, dùng khoá của chính tài khoản), trường credential `templates` (E2B/Novita: `{"token":"…","templates":"agent=4x4096"}`), cộng template toàn cục (size dựng sẵn như `base`, template public dạng `team-slug/tên`). Tài khoản trả "template not found" → Boxmes ghi `templates_missing`, sự kiện `provider_account.template_missing`, thử tài khoản kế. Không tài khoản nào có → lỗi `template X is not available in any account (…)`. Catalog gộp template của mọi tài khoản.
+- **Concurrency & tốc độ tạo, đếm sống.** Hạn mức `limits.concurrent_sandboxes`, `create_per_sec`, `create_per_min` (nhập tay, hoặc học từ 429 "maximum number of concurrent…" / Daytona `LIMIT_EXCEEDED`). Đang chạy = sandbox của tài khoản **không** ngủ (sandbox pause không tính, đúng E2B/Daytona) + lượt tạo/fork/resume đang dở. Khoá cùng một E2B project hoặc project cùng Daytona org: đặt cùng `limit_group` để đếm chung (thêm khoá cùng project **không** tăng năng lực). Hết create-rate ở tài khoản cuối → xếp hàng tối đa 6 s; mọi tài khoản đầy → `every account is full (…)`.
+- **429.** "Đầy concurrency" → học hạn mức, `quota_full` 2 phút, sang tài khoản kế; rate limit → cooldown theo `Retry-After` của provider (giờ được đọc từ header).
+- **Box gắn chặt tài khoản.** Exec/file/pause/resume/preview/fork gốc/xoá đều dùng tài khoản của box. Resume khi tài khoản đầy → lỗi rõ `cannot resume this box: …` (sandbox pause chỉ resume được trong tài khoản của nó). Clone: fork gốc nếu tài khoản nguồn còn slot/tiền/không drain, nếu không thì snapshot → sandbox mới ở tài khoản khác (`placement_reason` ghi "native fork skipped: …"). Không có di chuyển sandbox giữa tài khoản — chỉ box mới vào tài khoản mới.
+- **Rotate khoá** (API, env, `PUT /providers/{id}/token`) cập nhật ngay các shim T3 đang chạy.
+- **Ví chung.** Các tài khoản cùng ví (E2B workspace, Daytona org) đặt cùng `billing_group`: một khoá bị 402 → cả nhóm `out_of_credit` (E2B khoá mọi project của workspace khi hết credit); nhập `balance`/`credit_remaining` cho một thành viên → gỡ cho cả nhóm.
+- **Credit khuyến mãi.** Không nhập `balance` thì số dư hiệu dụng = `credit_remaining − chi tiêu ledger từ lúc nhập`; dưới `min_balance` tài khoản không nhận sandbox mới (gợi ý `min_balance` $2–5 cho E2B không có thẻ, để dừng trước khi E2B khoá workspace). Chiến lược mặc định `drain_first` tiêu credit sắp hết hạn trước.
+- **Quyền khoá (Daytona).** Nếu `scopes` của tài khoản được ghi: thiếu `write:sandboxes` → không chọn; thiếu `delete:sandboxes` → cảnh báo (Boxmes không xoá được sandbox).
+
+API mới (chỉ admin nền tảng):
+
+| Method | Path | Việc |
+|---|---|---|
+| GET | `/v1/admin/providers/{p}/sandbox` | Tab Sandbox API: tài khoản + đồng hồ concurrency (`running`, `group_running`, `in_flight`, `concurrent_limit`, `concurrency_pct`, create-rate) + ma trận template (`available` · `missing` · `not_listed` · `unknown`) |
+| POST | `/v1/admin/providers/{p}/accounts/{a}/templates/sync` | Đồng bộ template/snapshot bằng khoá của tài khoản (provider không có API → 400) |
+| PATCH | `/v1/admin/providers/{p}/accounts/{a}` | Thêm `templates`, `clear_templates_missing`, `billing_group`, `limit_group`; `limits` nhận `concurrent_sandboxes`, `create_per_sec`, `create_per_min` |
+
+```bash
+# hai khoá của cùng một E2B project (chung hạn mức) + một project ở workspace khác (dự phòng thật)
+curl -X POST $BOXMES_URL/v1/admin/providers/e2b/accounts -H "Authorization: Bearer $ADMIN" \
+  -d '{"label":"E2B prj-a key 2","token":"e2b_…","external_id":"prj-a","limit_group":"prj-a","billing_group":"ws-1","limits":{"concurrent_sandboxes":20,"create_per_sec":1}}'
+curl -X POST $BOXMES_URL/v1/admin/providers/e2b/accounts/pa_xxxx/templates/sync -H "Authorization: Bearer $ADMIN"
+curl $BOXMES_URL/v1/admin/providers/e2b/sandbox -H "Authorization: Bearer $ADMIN"
+```
+
+**Hạn chế.** Số đếm slot nằm trong bộ nhớ một tiến trình core và chỉ biết sandbox do Boxmes tạo (sandbox tạo ngoài trong cùng project → dựa vào 429 + học hạn mức); chưa đọc usage/limit/scope thật qua API (pha B); chưa build template theo tài khoản; `GET /v1/providers/{id}/servers` vẫn chỉ liệt kê sandbox của khoá chính; snapshot gốc của Daytona chưa được chọn theo box.

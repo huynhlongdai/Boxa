@@ -367,5 +367,33 @@ All routes below are **platform admin only** (`/v1/admin/*`: admin key or `platf
 - Billing read-only keys are stored (`billing_token`) but not used until phase B.
 - Owner-workspace (BYOC) accounts are phase C.
 
+### v2.2 M29-S — sandbox accounts with several API keys (2026-11-27)
+
+Sandbox providers (E2B, Novita, Daytona, Prized, boxd.sh, Render, YAML adapters) add account-scoped templates, live concurrency / create-rate slots and wallet groups on top of the accounts above. Design: `docs/boxmes-infra-accounts-spec.md` §13. Contract tests: `core/internal/e2e/v221_sandbox_accounts_test.go`, `core/internal/sandbox/templates_test.go`.
+
+`ProviderAccount` adds:
+```
+templates: [string]            // templates / snapshots known to exist in this account (manual or synced)
+templates_missing: [string]    // learned: create answered "template not found" with this key
+templates_synced_at?, billing_group?, limit_group?, credit_at?
+limits: { concurrent_sandboxes, create_per_sec, create_per_min, … }
+stats (sandbox providers): { sandboxes_running, group_running, in_flight, creates_last_sec, creates_last_min }
+```
+`AccountInput` adds `templates` (replaces the list), `clear_templates_missing`, `billing_group`, `limit_group` (≤ 64 characters, no spaces, `|` or `/`; `""` clears). Setting `credit_remaining` sets `credit_at = now`; without `balance`, `balance_effective` = `credit_remaining` − ledger since `credit_at` (min_balance / runway rules apply).
+
+Endpoints (`/v1/admin`, platform admin only):
+- `GET /providers/{p}/sandbox` → `SandboxAccountsView {provider, strategy, templates: [string], accounts: [SandboxAccountRow]}`; row: `{id, label, status, eligible, ineligible?, limit_group?, billing_group?, running, group_running, in_flight, concurrent_limit?, concurrent_source?, concurrency_pct?, create_per_sec?, create_per_min?, creates_last_sec, creates_last_min, cooldown_until?, templates: {<template>: available | missing | not_listed | unknown}, templates_synced_at?, scopes, scope_problems?, balance_effective?, credit_expires_at?}`. Non-sandbox provider → 400.
+- `POST /providers/{p}/accounts/{a}/templates/sync` → `TemplateSyncResult {templates, added, removed, account: AccountView}` (E2B / Novita `GET /templates`, Daytona `GET /snapshots` in state active/ready, with the account's own key; clears `templates_missing` entries the provider now lists). Driver without a template API → 400.
+
+Behaviour:
+- Template availability: available = in `templates` ∪ the credential's `templates` field (E2B / Novita `id=CPUxMB`) ∪ global templates (the adapter's built-in sizes, namespaced public `team-slug/name`), minus `templates_missing`. Accounts that do not list the template are skipped (`not_listed`); unknown ones are tried; a "template not found" answer (404/400/422 naming a template / snapshot) is learned (`provider_account.template_missing {template}`) and the create moves to the next account (no breaker, no account error). No account → `PROVIDER_FAILED "<p>: template <t> is not available in any account (…)"`; a box that fails this way keeps it in its error (`NO_CAPACITY "…; last provider error: …"`). The catalog unions the templates of every enabled account. The adapter never swaps a template the key does not list for another one.
+- Slots per account, or per `limit_group`: running = live sandboxes of the group whose boxes are not all sleeping (paused sandboxes do not count), plus creates / forks / resumes in flight; refused when `running + in_flight + 1 > min(concurrent_sandboxes)`. `create_per_sec` / `create_per_min`: starts in the window; the last candidate account queues up to 6 s, otherwise next account; all full → `PROVIDER_FAILED "<p>: every account is full (…)"` with `retry_after_s`.
+- 429 whose body says the concurrency limit is full (E2B "maximum number of concurrent …", Daytona `LIMIT_EXCEEDED`, Novita concurrent instances) → class `quota` (message `"<p> concurrency limit reached (429): …"`): learned `concurrent_sandboxes`, `quota_full` for 2 min (sandbox providers), next account. Other 429 → `rate_limit` with `retry_after_s` from the provider's `Retry-After` header (seconds or HTTP date) → account cooldown.
+- Lifecycle stays on the box's account. Wake of a sleeping sandbox box reserves a slot on its own account; full → `PROVIDER_FAILED "<p> account <label> cannot resume this box: …"`. Clone: native fork only when the source account is eligible and has a slot; otherwise snapshot → new sandbox on an eligible account, `placement_reason` contains `native fork skipped: …`.
+- Key rotation (`/rotate`, env change, `PUT /providers/{id}/token`) updates the live T3 shims of the account at once.
+- `billing_group`: a `payment` error on one account sets every account of the group `out_of_credit` (`status_reason "billing group <g>: <label> is out of credit"`); a PATCH that lifts `out_of_credit` on one member (balance / credit_remaining above min_balance) lifts the group.
+- Scopes (Daytona): when an account records `scopes`, a key without `write:sandboxes` is not picked; missing `delete:sandboxes` and same `external_id` without `limit_group` are returned in `warnings` on create / patch.
+- Known gaps: slots are in memory of one core and only count sandboxes Boxmes created; no usage / limit / scope reading from provider APIs yet; no per-account template build; `GET /providers/{id}/servers` lists the primary key's sandboxes only; Daytona snapshots are not selected per box yet.
+
 ### SDKs (v2.2)
 Python (`boxmes`): `admin_providers`, `admin_provider`, `list_provider_accounts(provider, archived=)`, `get_provider_account`, `validate_provider_account(provider, token, external_id=)`, `create_provider_account(provider, label, token, **fields)`, `update_provider_account(provider, account_id, **fields)`, `rotate_provider_account(provider, account_id, token, external_id=)`, `test_provider_account`, `set_provider_account_state(provider, account_id, action)`, `delete_provider_account(provider, account_id, force=, reason=, purge=)`, `provider_strategy`, `set_provider_strategy(provider, strategy, sticky_minutes=, failover_across_accounts=)`, `infra_alerts(status)`, `ack_infra_alert(alert_id)`. TypeScript (`@boxmes/sdk`): same in camelCase with types `ProviderAccount`, `ProviderAccountInput`, `AccountStats`, `AccountTestResult`, `ProviderStrategy`, `InfraAlert`, `AdminProviderRow`, `InfraSummary`.
