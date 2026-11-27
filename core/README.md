@@ -445,7 +445,7 @@ Mục tiêu: URL app ổn định, đẹp, có TLS trên domain riêng, và toke
 - **API.** `GET /v1/gateway[?check=1]` → `{mode: host|path|relative, domain, domain_source, public_url, url_pattern, internet_facing, reserved, provider_preview, provider_preview_source, private_previews, providers:[{provider, preview_host, private_preview, note}], check?:{ok, status, latency_ms, error?}}`. `PortView.provider_preview`, `Host.private_traffic`, capability `private_preview`; `settings.gateway {domain, provider_preview}` (domain sai / mode sai → 400).
 - **Dashboard.** Cài đặt → thẻ *Gateway domain*: kiểu URL, mẫu URL, URL công khai + trạng thái (tự kiểm tra, độ trễ), domain (khoá khi đặt bằng env), chính sách preview, badge theo provider, danh sách subdomain dành riêng. Tab Port & app hiện "preview private" thay cho cảnh báo khi port `provider_preview=private`. Đủ 4 ngôn ngữ; mock `BOXMES_MOCK=1`.
 
-Kết quả live 2026-10-27 (`scripts/live-domain.sh`, `heroku/node-js-sample` qua app spec, cổng 8000, curl từ ngoài qua DNS-over-HTTPS 1.1.1.1, TLS Let's Encrypt `*.boxs.tech` hợp lệ; tunnel `boxmes-gw` id `5b1d9faa-acb1-4014-bda2-40903ecedb81`):
+Kết quả live 2026-10-27 (`scripts/live-domain.sh`, `heroku/node-js-sample` qua app spec, cổng 8000, curl từ ngoài qua DNS-over-HTTPS 1.1.1.1, TLS Let's Encrypt `*.boxs.tech` hợp lệ; tunnel `boxaz-gw` id `5b1d9faa-acb1-4014-bda2-40903ecedb81`):
 
 | | E2B | Novita (us-phx-1) | Prized |
 |---|---|---|---|
@@ -477,7 +477,7 @@ Mục tiêu: URL app nhớ được, gõ được, không lộ key hay số port
 - **Lưu ý bảo mật.** URL theo tên **đoán được** (khác key HMAC cũ). App riêng tư hãy bật chế độ token (`box url <box> <port> --token`) hoặc để app tự xác thực.
 - **API.** `PortView` thêm `label`, `primary`, `alias_url` (`url`/`gateway_url` theo tên); `PortsResult` thêm `name`, `primary_port`; `Box` thêm `subdomain`, `port_labels`; `GET /v1/gateway` thêm `label_pattern`, `alias_pattern` (`url_pattern` = `https://<name>.<domain>/`). Lỗi mới có bản dịch vi/zh/ja.
 
-Kết quả live 2026-10-27 (`scripts/live-names.sh`, E2B, `heroku/node-js-sample` cổng 8000, curl từ ngoài qua DoH 1.1.1.1, tunnel `boxmes-gw`): box up 0.42 s, app ready 6.2 s; `https://demo-app.boxs.tech/` → 200 lần đầu 290 ms / ấm 143 ms (TLS hợp lệ); alias `https://<key>-8000.boxs.tech/` → 200; port thứ hai `8001` nhãn `files` → `https://demo-app-files.boxs.tech/` → 200; sleep → request → 200 trong 577 ms; box down → 404. 1 sandbox, cuối cùng E2B `[]`.
+Kết quả live 2026-10-27 (`scripts/live-names.sh`, E2B, `heroku/node-js-sample` cổng 8000, curl từ ngoài qua DoH 1.1.1.1, tunnel `boxaz-gw`): box up 0.42 s, app ready 6.2 s; `https://demo-app.boxs.tech/` → 200 lần đầu 290 ms / ấm 143 ms (TLS hợp lệ); alias `https://<key>-8000.boxs.tech/` → 200; port thứ hai `8001` nhãn `files` → `https://demo-app-files.boxs.tech/` → 200; sleep → request → 200 trong 577 ms; box down → 404. 1 sandbox, cuối cùng E2B `[]`.
 
 Test không cần mạng: `e2e/v19_test.go` (tên, nhãn, trùng → hậu tố từ, tên tường minh trùng/dành riêng/sai → 400 + `next`, đổi tên, tên chiếm host nhãn của box khác, giải phóng khi down, alias), `model/names_test.go` (slugify tiếng Việt, luật tên/nhãn); `scripts/e2e.sh` (URL `/x/e2e-app/`, `box url --name`, alias, tên dành riêng); web `scripts/smoke.sh` (mock).
 
@@ -606,7 +606,7 @@ Core (`mgr-gw`) và dashboard (`mgr-web`) chạy trên Render, workspace "Caca's
 | `mgr-gw` (core) | Docker, context `core/`, `core/deploy/render/Dockerfile`, health `/v1/health` | https://mgr-gw.onrender.com · qua tunnel: https://gw.boxs.tech, `https://<box>.boxs.tech` |
 | `mgr-web` (Next.js) | Docker, context `web/`, `web/Dockerfile`, health `/` | https://mgr-web-x2v1.onrender.com |
 
-**Core.** `start.sh` tạo thư mục dữ liệu (`BOXMES_DATA_DIR`), chạy `cloudflared tunnel run` (tự khởi động lại) khi có `TUNNEL_TOKEN`, rồi chạy core bằng user `app` (core không thấy `TUNNEL_TOKEN`). Named tunnel `boxmes-gw` trỏ `gw.boxs.tech` và `*.boxs.tech` về `http://localhost:8091`; TLS wildcard vẫn ở Cloudflare. Chỉ một nơi được chạy connector của tunnel này: khi core chạy trên Render thì gateway trong workspace phải tắt.
+**Core.** `start.sh` tạo thư mục dữ liệu (`BOXMES_DATA_DIR`), chạy `cloudflared tunnel run` (tự khởi động lại) khi có `TUNNEL_TOKEN`, rồi chạy core bằng user `app` (core không thấy `TUNNEL_TOKEN`). Named tunnel `boxaz-gw` trỏ `gw.boxs.tech` và `*.boxs.tech` về `http://localhost:8091`; TLS wildcard vẫn ở Cloudflare. Chỉ một nơi được chạy connector của tunnel này: khi core chạy trên Render thì gateway trong workspace phải tắt.
 
 Biến môi trường chính (giá trị bí mật chỉ đặt trong Render, không commit): `BOXMES_PUBLIC_URL=https://gw.boxs.tech`, `BOXMES_GATEWAY_DOMAIN`, `BOXMES_DATA_DIR=/tmp/data`, `BOXMES_ADMIN_KEY`, `BOXMES_MASTER_KEY`, `BOXMES_DASHBOARD_URL` và `BOXMES_ACCESS_ORIGINS` = URL của `mgr-web` (cho terminal/SSH WebSocket), `TUNNEL_TOKEN`, `KEEPALIVE_S=600`, và key thật của provider (`E2B_API_KEY`, `NOVITA_API_KEY`, `PRIZED_API_KEY`, …).
 

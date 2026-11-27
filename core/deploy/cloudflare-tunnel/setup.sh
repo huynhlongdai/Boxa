@@ -19,7 +19,7 @@
 # CF_API_TOKEN may be empty when a proxy injects the Authorization header.
 set -euo pipefail
 : "${CF_ACCOUNT_ID:?set CF_ACCOUNT_ID}" "${CF_ZONE_ID:?set CF_ZONE_ID}" "${GATEWAY_DOMAIN:?set GATEWAY_DOMAIN (e.g. example.com)}"
-TUNNEL_NAME=${TUNNEL_NAME:-boxmes-gw}
+TUNNEL_NAME=${TUNNEL_NAME:-boxaz-gw}
 PUBLIC_HOST=${PUBLIC_HOST:-gw.$GATEWAY_DOMAIN}
 CORE_URL=${CORE_URL:-http://localhost:8080}
 TOKEN_FILE=${TOKEN_FILE:-$HOME/.config/boxmes/tunnel-token}

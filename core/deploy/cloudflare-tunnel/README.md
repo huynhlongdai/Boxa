@@ -18,7 +18,7 @@ CF_API_TOKEN=… core/deploy/cloudflare-tunnel/setup.sh
 
 Script (idempotent, dò theo tên):
 
-- tạo tunnel `TUNNEL_NAME` (mặc định `boxmes-gw`) kiểu *remotely-managed* (`config_src=cloudflare`: ingress nằm trong API, máy chạy không cần file config);
+- tạo tunnel `TUNNEL_NAME` (mặc định `boxaz-gw`) kiểu *remotely-managed* (`config_src=cloudflare`: ingress nằm trong API, máy chạy không cần file config);
 - đặt ingress: `gw.<domain>` và `*.<domain>` → `CORE_URL`, còn lại `http_status:404`;
 - tạo CNAME proxied `gw.<domain>` và `*.<domain>` → `<tunnel-id>.cfargotunnel.com`. Bản ghi cụ thể (vd. `api.`, `www.`, `mcp.`) luôn được ưu tiên hơn wildcard nên các dịch vụ khác trên zone không bị ảnh hưởng. Script không đụng tunnel/bản ghi khác và từ chối trỏ lại bản ghi đang trỏ nơi khác trừ khi `FORCE=1`;
 - ghi token chạy tunnel vào `TOKEN_FILE` (quyền 600).
