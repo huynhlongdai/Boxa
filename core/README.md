@@ -735,3 +735,57 @@ Chỉ owner mới cấp / đổi / gỡ vai trò owner; không hạ cấp hay g�
 - Giá gói và thanh toán chưa có (v2.1); `GET /v1/plans` chỉ trả hạn mức.
 
 SDK: Python `me()`, `switch_workspace()`, `list_workspaces()`, `create_workspace()`, `get_workspace()`, `rename_workspace()`, `workspace_usage()`, `workspace_audit()`, `plans()`, `list_members()`, `update_member_role()`, `remove_member()`, `create_invite()`, `list_invites()`, `revoke_invite()`, `get_invite()`, `accept_invite()`, `create_key(…, scopes, expires_in_days=…)`, `list_keys()`, `revoke_key()`, `list_boxes(region=, location=)`, `box_locations()`, `admin_workspaces()`, `admin_update_workspace()`, `BoxmesError.details`; TypeScript cùng bộ, tên camelCase.
+
+## 23. v2.2 Hạ tầng — tài khoản nhà cung cấp (M29 pha A)
+
+Mỗi provider (adapter: `hetzner`, `vultr`, `e2b`…) giờ có **nhiều tài khoản**: mỗi tài khoản là một khoá API của một tài khoản / project / team thật ở provider. Host nhớ tài khoản đã tạo ra nó (`host.account_id`), và mọi thao tác sau đó (trạng thái, xoá, URL/headers preview, fork gốc, gắn lại shim) đều dùng **khoá của chính tài khoản đó** — đổi/rotate khoá mặc định không còn làm mất quyền xoá host cũ. Thiết kế: `docs/boxmes-infra-accounts-spec.md` (quyết định đã chốt 2026-11-27). Test: `internal/e2e/v220_accounts_test.go`.
+
+**Tương thích.**
+
+- `PUT /v1/providers/{id}/token` vẫn chạy: nó ghi vào **tài khoản mặc định** `pa_<provider>_default` (token rỗng = tắt tài khoản đó). Lần khởi động đầu tiên: token cũ thành tài khoản mặc định, host đang sống nhận `account_id` mặc định, ledger tháng hiện tại được gắn `account_id` (một lần).
+- Env cũ (`HETZNER_TOKEN`, `E2B_API_KEY`…) vẫn là tài khoản mặc định — nhưng **không còn ghi đè** token nhập từ dashboard (khi đó nó thành tài khoản riêng `pa_<provider>_env`).
+- **Nhiều khoá qua env**: `<BIẾN>__<NHÃN>` (hai gạch dưới), vd `HETZNER_TOKEN__EU2=…`, `E2B_API_KEY__BACKUP=…`; credential nhiều phần dùng cùng nhãn (`CONTABO_CLIENT_ID__B`, `CONTABO_CLIENT_SECRET__B`…), phần tuỳ chọn thiếu thì lấy biến không nhãn. Mỗi nhãn = tài khoản `pa_<provider>_env_<nhãn>`; không rotate được qua API (đổi biến rồi khởi động lại), biến biến mất → tài khoản bị tắt.
+- `GET /v1/providers` thêm `accounts_summary {total, active, degraded}`; host thêm `account_id`; ledger thêm `account_id`. Lớp lỗi mới `payment` (402, hết tiền/credit).
+
+**API (chỉ admin nền tảng, dưới `/v1/admin`).** Khoá chỉ ghi, không bao giờ trả ra; response/sự kiện chỉ có `key_fingerprint`.
+
+| Method | Path | Việc |
+|---|---|---|
+| GET | `/providers` | KPI (tổng số dư USD + theo tiền gốc, chi hôm nay/tháng, dự báo cuối tháng, runway ngắn nhất, số tài khoản khoẻ/suy giảm/hỏng, cảnh báo mở) + một dòng/provider |
+| GET | `/providers/{p}` | Chi tiết provider: prefs, chiến lược, tài khoản kèm số liệu, cảnh báo |
+| GET/PUT | `/providers/{p}/strategy` | `priority` · `weighted` · `round_robin` · `least_used` · `drain_first`, `sticky_minutes`, `failover_across_accounts` |
+| GET | `/providers/{p}/accounts` | Danh sách tài khoản (`?archived=1` gồm cả đã lưu trữ) |
+| POST | `/providers/{p}/accounts/validate` | Kiểm khoá không lưu, báo trùng (`duplicates`) |
+| POST | `/providers/{p}/accounts` | Thêm tài khoản (`label`, `token` bắt buộc) |
+| GET/PATCH | `/providers/{p}/accounts/{a}` | Xem / sửa (merge-patch): ưu tiên, trọng số, vùng, drain, **số dư nhập tay**, credit, hạn token/credit/trial/hợp đồng, hạn mức, trần chi ngày/tháng, ngưỡng cảnh báo, khoá billing chỉ-đọc |
+| POST | `/providers/{p}/accounts/{a}/rotate` | Đổi khoá (phải cùng `external_id`); host giữ tài khoản |
+| POST | `/providers/{p}/accounts/{a}/test` | Kiểm khoá đang lưu ngay |
+| POST | `/providers/{p}/accounts/{a}/enable·disable·drain·undrain·reset` | Đổi trạng thái / reset breaker, cooldown, hạn mức học được |
+| DELETE | `/providers/{p}/accounts/{a}` | Lưu trữ (còn host sống → cần `?force=1&reason=…`; `?purge=1` xoá hẳn khi không host nào tham chiếu) |
+| GET | `/providers/{p}/accounts/{a}/timeline` | Sự kiện audit của tài khoản |
+| GET | `/infra/alerts?status=` · POST `/infra/alerts/{id}/ack` | Cảnh báo hạ tầng |
+
+Ví dụ thêm tài khoản dự phòng và nhập số dư tay:
+
+```bash
+curl -X POST $BOXMES_URL/v1/admin/providers/hetzner/accounts -H "Authorization: Bearer $ADMIN" \
+  -d '{"label":"Hetzner EU #2","token":"…","external_id":"project-2","priority":2,"currency":"EUR","spend_cap_month":200}'
+curl -X PATCH $BOXMES_URL/v1/admin/providers/hetzner/accounts/pa_xxxx -H "Authorization: Bearer $ADMIN" \
+  -d '{"balance":150,"credit_expires_at":"2027-01-31","limits":{"servers":25}}'
+```
+
+**Chọn tài khoản & failover.**
+
+- Lọc đủ điều kiện: bật, không `auth_failed`/`out_of_credit`/lưu trữ/drain, có khoá, hết cooldown, breaker tài khoản đóng, vùng cho phép, chưa chạm hạn mức `servers`/`concurrent_sandboxes`, số dư hiệu dụng − 24 h giá host ≥ `min_balance`, runway ≥ ngưỡng critical, chưa chạm trần chi ngày/tháng (postpaid: cả dự báo cuối tháng). Không tài khoản nào đủ → lỗi `no eligible account (…)` và scheduler sang offer/provider kế.
+- Chiến lược mặc định (quyết định owner): `priority` cho VPS, `drain_first` cho provider sandbox (dùng hết credit khuyến mãi sắp hết hạn trước). Chính sách tài khoản: ưu tiên nhiều **project / sub-account / team** trong cùng tài khoản thật; tài khoản thật khác chỉ làm dự phòng.
+- Failover theo lớp lỗi (tối đa 3 tài khoản / 6 lần thử mỗi yêu cầu): `auth` → `auth_failed`, `payment` → `out_of_credit`, `quota` → học hạn mức + `quota_full` 1 h, `rate_limit` → cooldown theo `Retry-After` (10 s–15 phút), `server/timeout/network` → breaker tài khoản; đều thử tài khoản kế. `capacity` (hết hàng vùng) **không** đổi tài khoản — chặn provider×vùng 10 phút. `invalid` dừng.
+- Breaker hai tầng: khi provider có nhiều tài khoản, lỗi của tài khoản không làm "đỏ" cả provider.
+
+**Tiền, runway, tự động.**
+
+- Số dư hiệu dụng = số dư nhập tay − chi tiêu ledger của tài khoản kể từ lúc nhập. Burn = max(ledger 24 h, tổng giá giờ host đang sống). Runway = (số dư − `min_balance`) / burn. Tiền giữ theo tiền gốc của tài khoản (EUR cho Hetzner/netcup/Contabo), quy USD để tổng hợp (`fx_rate_usd` hoặc `BOXMES_FX_RATES="EUR=1.08"`).
+- Runway < 2 ngày → **tự drain** (không nhận host mới), **không bao giờ tự xoá host đang chạy**, không tự nạp tiền; runway hồi lại (nạp thêm) → tự bỏ drain. Tắt: `BOXMES_ACCOUNT_AUTODRAIN=0`.
+- Cảnh báo (ngưỡng mặc định, ghi đè được theo tài khoản): runway 7/2 ngày, hạn mức & trần chi 80/95 %, hạn token/credit/hợp đồng 14/3 ngày (trial 7/1). Loại: `low_balance`, `out_of_credit`, `auth_failed`, `token_expiring`, `credit_expiring`, `trial_ending`, `contract_ending`, `rotation_due`, `limit_near`, `spend_cap_near`, `failover`, `single_account`, `orphan_host`, `balance_stale`. Mỗi khoá cảnh báo chỉ mở một lần, giữ mức cao nhất, tự đóng khi hết điều kiện. **Critical → Telegram ngay** (sự kiện notify `infra_alert`, nhắc lại tối đa 1 lần/24 h nếu chưa ack); phần còn lại vào **email tổng hợp hằng ngày** (`infra_digest`, lúc `daily_report_hour`). Cài đặt cũ cần bật hai sự kiện này bằng `PUT /v1/notify`.
+- Audit: `provider_account.created/updated/enabled/disabled/drained/undrained/archived/deleted/reset/key_rotated/validated/check_failed/status_changed/failover/balance_updated/limit_learned/alert_opened/alert_closed/alert_acked/orphan_host` — chỉ có fingerprint, không có khoá.
+
+**Hạn chế (pha A).** Chưa đọc số dư/hạn mức qua API provider (pha B, Runpod đầu tiên) — số dư, credit, hạn mức là nhập tay hoặc học từ lỗi; bảng `provider_account_snapshots` đã tạo nhưng chưa ghi; khoá tài khoản không mặc định được mã hoá trong chính dòng `provider_accounts` (cùng master key), tài khoản mặc định vẫn dùng `token_enc` của provider; sticky, round-robin và blocklist capacity nằm trong bộ nhớ; khoá billing chỉ-đọc được lưu nhưng chưa dùng; BYOC là pha C.

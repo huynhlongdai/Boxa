@@ -284,3 +284,85 @@ Platform admin:
 
 ### SDKs
 Python (`boxmes`): `me`, `switch_workspace`, `list_workspaces`, `create_workspace`, `get_workspace`, `rename_workspace`, `workspace_usage`, `workspace_audit`, `plans`, `list_members`, `update_member_role`, `remove_member`, `create_invite`, `list_invites`, `revoke_invite`, `get_invite`, `accept_invite`, `create_key(agent_id=None, name, scopes, expires_in_days=, expires_at=)`, `list_keys`, `revoke_key`, `list_boxes(region=, location=, workspace=)`, `box_locations`, `admin_workspaces`, `admin_update_workspace`; `BoxmesError.details`. TypeScript (`@boxmes/sdk`): same in camelCase; `createKey(agentId, name, scopes, {expires_in_days, expires_at, workspace_id})`; `BoxmesError.details`.
+
+## v2.2 additions (2026-11-27) — infra: provider accounts (M29 phase A)
+
+A provider (adapter: `hetzner`, `vultr`, `e2b`, …) now has one or more **accounts**: each is one API credential of one real account / project / team at that provider. Hosts remember the account that created them and every later call (status, destroy, preview URL/headers, native fork, shim re-attach) uses **that** account's key, whatever the provider's default is by then. Design: `docs/boxmes-infra-accounts-spec.md` (decisions locked 2026-11-27). Contract tests: `core/internal/e2e/v220_accounts_test.go`.
+
+All routes below are **platform admin only** (`/v1/admin/*`: admin key or `platform_admin` session; others → 401). Keys are write-only: no response, event or log carries a credential — only `key_fingerprint` (sha256 prefix + `…` + last 4 characters; keys shorter than 12 characters show no tail).
+
+### Compatibility
+- `PUT /providers/{id}/token` still works: it writes the provider's **default account** `pa_<provider>_default` (`is_default: true`, `credential_ref: "provider:<id>"`). Empty token disables it.
+- Existing tokens become that default account at startup; live hosts get `account_id = pa_<provider>_default`; this month's ledger rows are stamped once.
+- Env: unlabeled variables (`HETZNER_TOKEN`, `E2B_API_KEY`, …) feed the default account as before, except that a token set from the dashboard is no longer overridden (the env key becomes its own account `pa_<provider>_env`). **Labeled** keys `<VAR>__<LABEL>` (two underscores, label `[A-Za-z0-9_-]{1,32}`) each become an account `pa_<provider>_env_<label>`, e.g. `HETZNER_TOKEN__EU2`, `E2B_API_KEY__BACKUP`; multi-part credentials use the same label on every part (`CONTABO_CLIENT_ID__B`, …), a missing optional part falls back to the unlabeled variable. Env accounts can be enabled / disabled / drained / patched but not rotated (400); an env account whose variable disappeared is disabled.
+- `GET /providers` rows add `accounts_summary: {total, active, degraded}`. `Host` adds `account_id`, `contract_ends_at?`. Ledger rows add `account_id`.
+- New error class `payment` (HTTP 402, "insufficient balance", "payment required", "out of credit", …) in `provhealth` (`GET /providers/health` `error_classes`, `ValidateResult.error_class`).
+- Notify events add `infra_alert` (critical infra alerts → Telegram at once) and `infra_digest` (daily email of open infra alerts at `daily_report_hour`); both are in the defaults of new installs — existing installs add them with `PUT /notify`.
+
+### Objects
+`ProviderAccount` (= `AccountView`; money in the account `currency`, `*_usd` are USD conversions):
+```
+{ id, provider, label, external_id?, owner_workspace_id?, tags: [string], owner?, notes?, console_url?, is_default,
+  credential_ref: "provider:<id>" | "account" | "env:<VAR>__<LABEL>", credential_source: "api" | "env",
+  key_fingerprint?, billing_key_fingerprint?, scopes: [string],
+  token_expires_at?, refresh_expires_at?, rotated_at?, rotate_every_days?,
+  enabled, priority (1 = first), weight (>=1), regions: [string] (empty = all), pool?, drain, auto_drained,
+  status: active | cooling | rate_limited | quota_full | low_balance | out_of_credit | auth_failed | token_expiring | disabled | draining | archived,
+  status_reason?, status_since?, cooldown_until?, error_streak, last_error_class?, last_error?, last_ok_at?, last_check_at?,
+  billing_model?: prepaid | postpaid | contract | free_tier, currency: "USD" | "EUR" | …, fx_rate_usd? (USD per unit; 0 = default),
+  balance?, balance_source?: manual | api | estimated, balance_at?, credit_total?, credit_remaining?, credit_expires_at?,
+  pending_charges?, month_to_date?, spend_cap_day (0 = none), spend_cap_month, min_balance, low_balance_warn,
+  billing_cycle?: monthly | hourly-prepaid | contract, invoice_day?, next_invoice_at?, trial_ends_at?, contract_ends_at?,
+  limits: { <name>: {limit, used, source: manual | learned | api, at?} }   // servers, concurrent_sandboxes, vcpu, ram_gb, …
+  thresholds: {runway_warn_days?, runway_critical_days?, limit_warn_pct?, limit_critical_pct?, expiry_warn_days?, expiry_critical_days?},
+  created_at, created_by?, updated_at, updated_by?,
+  stats: { hosts_live, boxes_live, vcpu_live, spend_today, spend_month, spend_today_usd, spend_month_usd, burn_per_hour_usd,
+           balance_effective?, balance_effective_usd?, runway_hours?, runway_days?, forecast_month_end,
+           eligible, ineligible?: "<why the scheduler skips it now>", breaker: closed | open | half_open, has_credential },
+  warnings?: [string] }   // writes only: same external_id / key as another account ("not a real backup")
+```
+- `balance_effective` = `balance` − ledger spend of the account since `balance_at` (converted to the account currency). `burn_per_hour_usd` = max(ledger of the last 24 h / 24, Σ `price_hour` of live hosts on the account). `runway_hours` = (`balance_effective_usd` − `min_balance` in USD) / burn (absent when there is no balance or no burn). `forecast_month_end` = month spend + burn × hours left in the UTC month. "today" / "month" are UTC.
+- FX defaults: USD 1, EUR 1.08, GBP 1.27; override per account (`fx_rate_usd`) or per instance (`BOXMES_FX_RATES="EUR=1.08,GBP=1.27"`).
+
+`InfraAlert`: `{id: "<type>|<subject>" (dedupe key), type, level: info | warn | critical, status: open | acked | closed, provider?, account_id?, host_id?, message (English), data: {args: [...]}, count, opened_at, updated_at, closed_at?, acked_at?, acked_by?, notified_at?, notified_level?}`. Types: `low_balance`, `out_of_credit`, `auth_failed`, `token_expiring`, `credit_expiring`, `trial_ending`, `contract_ending`, `rotation_due`, `limit_near`, `spend_cap_near`, `failover`, `single_account`, `orphan_host`, `balance_stale`. Clients localize from `type` + `data.args` (catalog keys `infra.alert.<type>`).
+
+`StrategyView`: `{provider, strategy ("" = default), effective_strategy, sticky_minutes, failover_across_accounts, strategies: [string]}`.
+
+`AdminProviderRow`: `{id, name, tier, group: vps | sandbox, connected, implemented, health (provider breaker status), strategy, accounts_total, accounts_healthy (eligible now), accounts_degraded, hosts_live, boxes_live, balance_usd?, balance_by_currency?: {EUR: …}, spend_today_usd, spend_month_usd, forecast_month_usd, runway_days? (eligible accounts together), max_limit_pct, open_alerts}`.
+
+`AccountTestResult`: `{ok, error?, error_class?, latency_ms, key_fingerprint?, duplicates?: [account id], account?: AccountView}`.
+
+### Endpoints (`/v1/admin`)
+- `GET /providers` → `{summary: {balance_usd, balance_by_currency, spend_today_usd, spend_month_usd, forecast_month_usd, shortest_runway?: {provider, account_id, label, days}, accounts_healthy, accounts_degraded, accounts_broken, open_alerts}, items: [AdminProviderRow]}` (every provider except `local`).
+- `GET /providers/{p}` → `AdminProviderRow + {prefs: ProviderPrefs, strategy_config: StrategyView, accounts: [AccountView], alerts: [InfraAlert], capabilities?}`.
+- `GET /providers/{p}/strategy` → `StrategyView`. `PUT /providers/{p}/strategy` `{strategy, sticky_minutes (0..1440), failover_across_accounts?}` → `StrategyView`; unknown strategy → 400. Default: `priority` for VPS providers, `drain_first` for sandbox providers.
+- `GET /providers/{p}/accounts?archived=1` → `{items: [AccountView]}` sorted by priority.
+- `POST /providers/{p}/accounts/validate` `{token, external_id?}` → `AccountTestResult` (nothing stored).
+- `POST /providers/{p}/accounts` `AccountInput` (`label` and `token` required; `skip_validate` stores without calling the provider) → 201 `AccountView`. A rejected key → 400 `INVALID`. Without `priority` the account goes after the existing ones.
+- `GET /providers/{p}/accounts/{a}` → `AccountView`.
+- `PATCH /providers/{p}/accounts/{a}` `AccountInput` (merge-patch) → `AccountView`. `AccountInput` fields: `label, billing_token ("" removes), external_id, tags, owner, notes, console_url, scopes, enabled, priority (1..99), weight (1..1000), regions, pool, drain, billing_model, currency, fx_rate_usd, balance (manual: sets balance_source=manual, balance_at=now; clears out_of_credit when above min_balance), clear_balance, credit_total, credit_remaining, pending_charges, month_to_date, spend_cap_day, spend_cap_month, min_balance, low_balance_warn, billing_cycle, invoice_day (0..31), rotate_every_days, token_expires_at, refresh_expires_at, credit_expires_at, trial_ends_at, contract_ends_at, next_invoice_at (RFC 3339 or YYYY-MM-DD; "" clears), limits: {name: value} (0 removes), thresholds`. `token` in a PATCH → 400 (use rotate). An archived account only accepts `{enabled: true}` (restores it).
+- `POST /providers/{p}/accounts/{a}/rotate` `{token, external_id?, skip_validate?}` → `AccountView`. When the account has an `external_id`, the body must carry the same one (a key of another provider account would orphan the hosts) → else 400. Swaps the key atomically, sets `rotated_at`, clears `auth_failed`; for the default account it writes the provider token. `warnings` when `external_id` is unknown.
+- `POST /providers/{p}/accounts/{a}/test` → `AccountTestResult` (probes the stored key; updates status and the account breaker).
+- `POST /providers/{p}/accounts/{a}/enable | disable | drain | undrain | reset` → `AccountView` (`reset`: breaker, cooldown, `auth_failed` / `out_of_credit` / `quota_full` and learned limits).
+- `DELETE /providers/{p}/accounts/{a}?force=1&reason=…&purge=1` → 204. Archives (no new hosts; the key is kept so its hosts can still be deleted). Live hosts → 400 unless `force=1` with a `reason`. `purge=1` hard-deletes an account no host references (else 400).
+- `GET /providers/{p}/accounts/{a}/timeline?limit=` → `{items: [Event]}` (`provider_account.*` events of the account, newest first).
+- `GET /infra/alerts?status=` (`""` = open + acked, `open`, `acked`, `closed`, `all`) → `{items: [InfraAlert]}` (critical first). `POST /infra/alerts/{id}/ack` (`id` URL-encoded) → `InfraAlert`.
+
+### Scheduling, failover, automation
+- Eligibility (in order): enabled, not archived / `auth_failed` / `out_of_credit`, not draining, has a key, cooldown passed, account breaker closed, region allowed, `servers` / `concurrent_sandboxes` limit not reached, `balance_effective − 24 h of the new host ≥ min_balance`, runway ≥ critical threshold, daily / monthly spend cap not exceeded (postpaid: month-end forecast too). Ineligible accounts are listed in the error `<p>: no eligible account (…)` (`PROVIDER_FAILED`) and the scheduler moves on to the next offer / provider.
+- Ranking: `priority` (lowest priority, then fewer hosts), `weighted` (random by weight), `round_robin`, `least_used` (lowest used/limit), `drain_first` (credit expiring first, then the smallest remaining credit/balance); `sticky_minutes` > 0 reuses the account a workspace used last.
+- Failover per create (max 3 accounts / 6 attempts): `auth` → `auth_failed` + next account; `payment` → `out_of_credit` + next; `quota` → learned limit, `quota_full` for 1 h + next; `rate_limit` → cooldown from `retry-after` (10 s..15 min) + next; `server`/`timeout`/`network` → account breaker + next; `capacity` → provider×region blocked for 10 min, no account failover; `invalid` → stop. Each switch emits `provider_account.failover {from, to, class, request}`.
+- Two-level breaker: with several accounts, account-level errors (auth, payment, quota, rate limit) only feed the account breaker; provider-level errors feed both.
+- Runway < critical (default 2 days) → the account is drained automatically (`auto_drained: true`, event `provider_account.drained`); running hosts are **never** deleted; the drain lifts itself when runway recovers. `BOXMES_ACCOUNT_AUTODRAIN=0` disables it.
+- Thresholds (owner decision 2026-11-27, overridable per account): runway 7 / 2 days, limits and spend caps 80 % / 95 %, token / credit / contract expiry 14 / 3 days (trial 7 / 1). One open alert per key; only the highest level crossed; critical alerts go to Telegram at once and repeat at most once per 24 h while not acknowledged (or when they escalate); alerts close themselves when the condition clears; `failover` notices close 15 min after the last failover.
+- Destroy failing because the account key is missing / rejected → critical `orphan_host` alert + `provider_account.orphan_host` event (with `console_url`).
+- Audit events (`Event.data` always has `provider`, `account_id`, never a key): `provider_account.created`, `updated` (`fields`), `enabled`, `disabled`, `drained`, `undrained`, `archived`, `deleted`, `reset`, `key_rotated` (`old_fingerprint`, `key_fingerprint`), `validated`, `check_failed`, `status_changed` (`from`, `to`, `reason`), `failover`, `balance_updated` (`old`, `new`, `source`), `limit_learned`, `alert_opened`, `alert_closed`, `alert_acked`, `orphan_host`; `provider.strategy_updated`.
+
+### Known gaps (phase A)
+- No balance / limit reading from provider APIs yet (`AccountReader`, phase B; Runpod first): balances, credit and limits are manual or learned from errors.
+- `provider_account_snapshots` exists but is not written yet (no balance history chart).
+- Credentials of non-default accounts are sealed in their `provider_accounts` row with the master key (not in the `secrets` table); the default account still uses the provider's `token_enc`.
+- The old provider health snapshot is not copied to the default account's breaker (it starts closed).
+- Sticky picks, round-robin cursors and the capacity blocklist live in memory.
+- Billing read-only keys are stored (`billing_token`) but not used until phase B.
+- Owner-workspace (BYOC) accounts are phase C.
