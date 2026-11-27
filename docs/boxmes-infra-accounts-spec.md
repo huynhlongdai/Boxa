@@ -2,7 +2,7 @@
 
 > Phiên bản: 0.2 (đã chốt quyết định 2026-11-27) · Ngày: 2026-11-27 · Phạm vi: khu **Nền tảng → Hạ tầng** (chỉ platform-admin, PA).
 > Liên quan: spec v1.0 §M6, §M5, §M26, §M27 (`docs/boxmes-spec-v1.0.md`), UI v2 §16 (`docs/boxmes-ui-spec-v2.md`).
-> Tài liệu này **chỉ là thiết kế**; chưa có code core tương ứng.
+> Pha A đã có code core (v2.2, commit `a52961a`…`9857ff1`); §13 **M29-S: Sandbox nhiều API key** bổ sung ngày 2026-11-27 (code: commit `dc1f53d`).
 
 ---
 
@@ -350,6 +350,148 @@ Owner duyệt toàn bộ đề xuất trong danh sách câu hỏi mở ngày 202
 6. **Khoá billing chỉ-đọc riêng**: hỗ trợ **tuỳ chọn** theo từng account (`billing_credential_ref`); không bắt buộc.
 7. **Pha A vào v2.2** (không tách mốc riêng).
 8. **Provider mới đầu tiên** có `AccountReader` (đọc số dư): **Runpod** — thuộc Pha B, chưa làm ở Pha A.
+
+## 13. M29-S: Sandbox nhiều API key (bổ sung 2026-11-27)
+
+> Trạng thái: **đã làm phần chạy offline được** (commit `dc1f53d`, test `core/internal/e2e/v221_sandbox_accounts_test.go`, `core/internal/sandbox/templates_test.go`, `scripts/e2e.sh`). Phần đọc API thật của provider (đồng bộ hạn mức/số dư, build template theo tài khoản) vẫn là thiết kế — xem §13.7.
+
+### 13.0 Vì sao sandbox khác VPS
+
+Pha A coi tài khoản sandbox như tài khoản VPS: chọn tài khoản → tạo → nhớ `host.account_id`. Với sandbox điều đó chưa đủ vì:
+
+1. **Tài nguyên thuộc về tài khoản.** Template / snapshot / volume chỉ tồn tại trong project/team/org đã build nó (E2B project, Novita team, Daytona project). Tạo box từ template X ở tài khoản không có X → 404, không phải lỗi provider.
+2. **Hạn mức tính theo tài khoản và theo nhóm.** Concurrency và tốc độ tạo là của *project* (E2B) hoặc *organization* (Daytona), **dùng chung cho mọi khoá** trong đó — thêm khoá cùng project không thêm năng lực. Sandbox đang pause không tính concurrency.
+3. **Ví tiền dùng chung.** E2B tính tiền ở *workspace*: hết credit mà không có thẻ thì **mọi project** trong workspace bị khoá. Daytona/Novita: credit ở tổ chức/tài khoản.
+4. **Không di chuyển được.** Một sandbox (kể cả bản pause) chỉ resume/fork trong chính tài khoản của nó; muốn sang tài khoản khác phải snapshot tarball → sandbox mới.
+
+### 13.1 Kiểm toán core (commit `9857ff1`, trước M29-S)
+
+| # | Đường dùng credential | Nơi | Trạng thái trước | Sau M29-S |
+|---|---|---|---|---|
+| 1 | Tạo sandbox (native + YAML, shim + dial) | `manager/sandbox14.go createSandboxHost` → `acrossAccounts` | Đúng tài khoản, nhưng **không lọc template**, không giữ chỗ concurrency (đua giữa chọn và tạo), không có create-rate | `acrossSandboxAccounts`: lọc template + scope, giữ slot sống, hàng đợi create-rate |
+| 2 | Chọn size/template trong adapter | `sandbox/adapter.go Create` → `pickSize` | **Lỗi**: SKU (template) không có trong danh sách của khoá → **lặng lẽ đổi sang template khác** (box sai cấu hình, sai tài khoản) | Giữ nguyên SKU; provider trả 404 → học `templates_missing` → thử tài khoản kế |
+| 3 | Catalog / offer | `manager/providers.go refreshLiveOffers` (`providerToken` = khoá chính) | Chỉ thấy template của **khoá chính** | Hợp nhất size/template của mọi tài khoản bật (`unionSandboxOffers`) |
+| 4 | Shim T3 (exec, file, pause/resume, delete) | `sandbox/shim.go` (`Shim.C` gán lúc attach) | Giữ khoá cũ tới khi khởi động lại → rotate rồi thu hồi khoá cũ là shim chết | `Shim.SetCred` + `Hub.VirtualHost`; rotate (API, env, `PUT /providers/{id}/token`) cập nhật shim sống ngay |
+| 5 | Pause/resume (sleep/wake) | shim → `Pauser` | Dùng khoá host (đúng), nhưng **resume không kiểm concurrency** của tài khoản | `sandboxWakeCheck`: tài khoản đầy → lỗi rõ ràng (chỉ resume được trong tài khoản của nó) |
+| 6 | Fork gốc (E2B) | `sandboxdeploy.go cloneSandbox` | Dùng khoá nguồn (đúng) nhưng **bỏ qua** drain / hết credit / concurrency | `reserveFork`: không được → clone bằng snapshot → sandbox mới ở tài khoản đủ điều kiện ("native fork skipped: …") |
+| 7 | Fork/clone qua snapshot | `newSandboxBoxHost` (prefer = tài khoản nguồn) | Đúng (tarball ở gateway, không phụ thuộc tài khoản) | Giữ; giờ đi qua lọc template/slot |
+| 8 | Preview URL / traffic token (gateway) | `sandboxPreview`, `gatewaydomain.go PreviewHeaders` | `hostToken` (đúng) | Không đổi |
+| 9 | Destroy | `hosts.go destroyHost` | `hostToken` (đúng) | Không đổi |
+| 10 | Probe / validate | `provmgr.go healthTick` + `probeAccounts` | Khoá chính + từng tài khoản (đúng) | Không đổi |
+| 11 | `ProviderRegions` / `ProviderServers` (admin) | `providers_v12.go` | **Chỉ khoá chính** → danh sách sandbox ở provider chỉ của 1 tài khoản (tìm sandbox mồ côi bị sót) | **Chưa sửa** (§13.7) |
+| 12 | `gatewayProviders` | `gatewaydomain.go` | Chỉ hỏi "có khoá không" | Không cần sửa |
+| 13 | YAML engine `Cred`/`Token()`, `vars` theo sandbox id | `sandbox/yamlengine.go` | Credential truyền theo từng lệnh (đúng); `vars` khoá theo id sandbox (duy nhất toàn cục) | Thêm `Retry-After` |
+| 14 | Lỗi HTTP của driver | `sandbox.go httpClient.do`, `e2b.go`, `daytona.go`, `yamlengine.go` | **Bỏ `Retry-After`**; 429 "đầy concurrency" bị coi là rate limit (cooldown 30 s rồi thử lại vô ích) | `HTTPError.RetryAfter` → `retry_after_s`; 429 concurrency → lớp `quota` |
+| 15 | Webhook | — | Core không nhận webhook nào của provider sandbox | Không áp dụng |
+| 16 | `live_*.go` (test sống) | `sandbox/live_*_test.go` | Một khoá từ env (`E2B_API_KEY`…) — chấp nhận được cho test sống | Không đổi |
+| 17 | Credit khuyến mãi | `accounts.go computeStats` | `credit_remaining` không được tính là tiền còn lại → không drain trước khi E2B khoá workspace | Số dư hiệu dụng lấy `credit_remaining − ledger từ credit_at` khi không có `balance` |
+| 18 | Lỗi box | `boxes.go provision` | `NO_CAPACITY` che mất lỗi provider (vd. "không tài khoản nào có template") | Thêm `; last provider error: …` |
+
+### 13.2 Nghiên cứu (đọc ngày 2026-11-27)
+
+Ký hiệu nguồn: **[đã mở]** = đã tải trang; **[trích]** = trích đoạn từ kết quả tìm kiếm, chưa mở trang — cần kiểm lại trước khi dựa vào số liệu.
+
+| Provider | Phạm vi khoá | Template / snapshot | Concurrency & tốc độ tạo | Tiền / hết credit | Ghi chú cho Boxmes | Nguồn |
+|---|---|---|---|---|---|---|
+| **E2B** | 1 API key = **1 project**; project nằm trong workspace. Access token (cá nhân) đã ngừng hoạt động từ 01/08/2026 → chỉ dùng API key | Template **thuộc project**, tên `project-slug/name`; publish thành public thì project khác dùng được bằng tên đầy đủ. Create với template không có → 404 `template 'x' not found` | Theo project: Hobby 10 đồng thời (project mới từ 23/11/2026; project cũ giữ 20), Pro 100–1.100; tạo 1/s (Hobby), 5/s (Pro). Rate limit API theo project × endpoint, **chung mọi khoá**. **Sandbox pause không tính concurrency.** 429 + `Retry-After` cho cả rate limit, concurrency và build → phải phân biệt theo message | Credit/hoá đơn ở **workspace**: hết credit, không thẻ → **mọi project bị khoá**; spending limit trên console | Nhiều khoá cùng project = 1 `limit_group`; nhiều project cùng workspace = 1 `billing_group`; dự phòng thật = workspace khác | [đã mở] docs.e2b.dev/billing · [đã mở] docs.e2b.dev/projects · [trích] docs.e2b.dev/workspaces · [trích] docs.e2b.dev/faq/public-templates · [trích] docs.e2b.dev/faq/paused-sandboxes-concurrency · [trích] docs.e2b.dev/faq/build-limits · [trích] docs.e2b.dev/api-reference/sandboxes/create-sandbox · [trích] docs.e2b.dev/migration/access-token-deprecation · [trích] docs.e2b.dev/changelog |
+| **Daytona** | Project API key (scope theo project; riêng `read:limits` đọc hạn mức cả org) và organization API key; khoá có **ngày hết hạn** (`--expires`), **permissions** (`write:sandboxes`, `delete:sandboxes`, `write:snapshots`…; quyền đọc luôn có); không tạo được khoá vượt quyền người tạo | Snapshot **thuộc project** | Org: Starter 100 / Team 5.000 sandbox đồng thời (tính cả pending/booting/stopping/deleting); rate limit 60 s **theo project, chung mọi khoá** ("thêm khoá không tăng limit"). 429 có `code`: `RATE_LIMITED` (+`Retry-After`), `OVERLOADED` (hàng đợi tạo đầy, +`Retry-After`), `LIMIT_EXCEEDED` (chạm hạn mức org, **không** `Retry-After`, có `limit/current/max`) | Credit org; hết số dư → create bị từ chối | Project cùng org = `limit_group` + `billing_group`; khoá thiếu `delete:sandboxes` là rủi ro rò tiền | [đã mở] daytona.com/docs/limits · [trích] daytona.com/docs/api-keys · [trích] daytona.io/docs/en/api-keys · [trích] daytona.com/docs/snapshots · [trích] daytona.com/docs/scale |
+| **Novita** | API key của tài khoản/team; tương thích E2B (`E2B_DOMAIN=sandbox.novita.ai`) | Template/snapshot/secret theo team | Free 5 · Paid 100 · Enterprise 500 đồng thời; hạn mức tổng vCPU/RAM; API quota trả `limit`/`usage` (`concurrentInstances`…) | $100 credit khuyến mãi dùng trước; Paid tự mở khi số dư > 0 | Đọc quota qua API được (pha B) | [đã mở] docs.novita.ai/guides/sandbox-quota-limit · [trích] docs.novita.ai/guides/sandbox-faq-free-tier · [trích] novita.ai/docs/guides/sandbox-e2b-compatible |
+| **Vercel Sandbox** | OIDC token (hết hạn ~12 h, tự quản khi chạy trên Vercel) **hoặc** access token + `teamId` + `projectId`; token scope Full/Team/Project | Snapshot theo project | Hobby 10 · Pro 10.000 đồng thời; giới hạn tốc độ cấp vCPU (Hobby 20–40/phút) | Pro có credit tháng rồi usage | Boxmes chạy ngoài Vercel → dùng access token (scope Project), không dùng OIDC | [trích] vercel.com/docs/sandbox/concepts/authentication · [trích] vercel.com/docs/sandbox/pricing · [trích] vercel.com/docs/accounts/access-tokens |
+| **Modal** (kế hoạch) | Token id/secret theo workspace; service user + RBAC theo environment (Team/Enterprise); token có TTL (`--expires-in`, SDK ≥1.6) | Image/volume theo workspace/environment | Starter 250 · Team 10.000 đồng thời | Ngân sách theo environment | Một workspace nhiều environment ≈ nhiều tài khoản cùng `billing_group` | [trích] modal.com/products/sandboxes · [trích] github.com/modal-labs/modal-client CHANGELOG · [trích] alchemy.run/modal/what-is-modal (nguồn thứ cấp) |
+| **Runloop** | `ak_` (toàn quyền) và `rk_` (giới hạn loại tài nguyên) | Blueprint/snapshot theo tài khoản (trial: 5 blueprint, 10 snapshot) | Trial 3 devbox đồng thời | Credit trial | Spec v1.0 ghi Runloop đã đóng 13/11/2026 — chỉ giữ lịch sử | [trích] docs.runloop.ai/llms-full.txt |
+| **Blaxel** | Khoá cá nhân truy cập **mọi** workspace của user; khoá service account chỉ 1 workspace (`BL_WORKSPACE`) | Theo workspace | Tier theo nạp tiền 30 ngày (10/50/200 sandbox, tính cả standby — theo bên thứ ba) | Ví theo workspace | Nên dùng khoá service account | [trích] docs.blaxel.ai/Security/Access-tokens · [trích] docs.blaxel.ai/Security/Quotas |
+| **Upstash Box** | API key console | — | Chưa xác minh | — | Mặc định nhập tay | [trích] upstash.com/docs/box/overall/quickstart |
+| **LiteLLM** (mẫu) | — | — | `max_parallel_requests` theo deployment: hết slot → **429 ngay**, không hàng đợi; đếm trong tiến trình (không chia sẻ giữa worker); rpm/tpm là trần mềm, không giữ chỗ trước | — | Boxmes: giữ slot *trước* khi gọi (đếm cả in-flight), nhưng cho tạo hàng đợi ngắn theo create-rate | [trích] docs.litellm.ai/docs/routing · [trích] docs.litellm.ai/docs/router/learn/shared_state |
+| **OpenRouter** (mẫu) | — | — | "Thêm tài khoản/khoá **không** tăng rate limit" (quản lý toàn cục) | 402 = hết credit / chạm limit khoá (`limit_source`), 429 = rate limit | Phân biệt "khoá phụ cùng tài khoản" với "dự phòng thật" | [trích] openrouter.ai/docs/api_reference/limits |
+
+Kết luận áp dụng: (1) khoá cùng project **không** là dự phòng năng lực → `limit_group`; (2) project cùng ví **không** là dự phòng tiền → `billing_group`; (3) dự phòng thật = workspace/org/tài khoản khác; (4) phải phân biệt 429 "đầy concurrency" (chờ sandbox kết thúc) với 429 "rate limit" (chờ `Retry-After`); (5) template là điều kiện chọn tài khoản, không phải lỗi provider.
+
+### 13.3 Mô hình dữ liệu (đã làm)
+
+Thêm vào `model.ProviderAccount` (JSON trong `provider_accounts.doc`, không cần migration):
+
+| Trường | Ý nghĩa |
+|---|---|
+| `templates[]` | Template/snapshot biết là có trong tài khoản (nhập tay hoặc `templates/sync`) |
+| `templates_missing[]` | Học được: create trả "template not found" với khoá này |
+| `templates_synced_at` | Lần đồng bộ gần nhất |
+| `limit_group` | Các tài khoản chia hạn mức phía provider (khoá cùng E2B project, project cùng Daytona org): concurrency + create-rate đếm chung, hạn mức = nhỏ nhất trong nhóm |
+| `billing_group` | Các tài khoản cùng một ví (E2B workspace, Daytona org): một khoá 402 → cả nhóm `out_of_credit`; nạp tiền một tài khoản → gỡ cho cả nhóm |
+| `credit_at` | Lúc nhập `credit_remaining` (credit hiệu dụng = credit − ledger từ lúc đó) |
+| `limits.create_per_sec`, `limits.create_per_min` | Tốc độ tạo (E2B 1/s · 5/s; Daytona theo phút) |
+
+`AccountStats` thêm (chỉ provider sandbox): `sandboxes_running` (sandbox đang giữ slot — **không** tính sandbox pause), `group_running`, `in_flight`, `creates_last_sec`, `creates_last_min`.
+
+### 13.4 Thiết kế & hành vi
+
+**a) Tài nguyên theo tài khoản (template/snapshot/volume).**
+
+- Nguồn sự thật về "tài khoản có template X": `templates` (tay/đồng bộ) ∪ trường credential `templates` (E2B/Novita: `id=CPUxMB`) ∪ template toàn cục (size dựng sẵn của adapter như `base`, hoặc tên public có namespace `team-slug/name`). Trừ `templates_missing`.
+- Ma trận khả dụng (`GET /v1/admin/providers/{p}/sandbox`): mỗi ô `available` · `missing` (học từ 404) · `not_listed` (tài khoản có danh sách mà không có X) · `unknown` (không có danh sách — Boxmes thử và học).
+- Chọn tài khoản: chỉ lấy tài khoản `available`/`unknown`. `unknown` trả 404 → ghi `templates_missing`, sự kiện `provider_account.template_missing`, **thử tài khoản kế** (không tính là lỗi tài khoản, không chạm breaker). Không tài khoản nào có → lỗi `"<p>: template X is not available in any account (…)"`, scheduler sang provider kế; lỗi box giữ thông điệp này.
+- Catalog hợp nhất template của mọi tài khoản → agent thấy được template của tài khoản phụ.
+- `POST …/accounts/{a}/templates/sync`: E2B/Novita `GET /templates`, Daytona `GET /snapshots` (chỉ snapshot `active/ready`), bằng **khoá của chính tài khoản**; xoá các mục `missing` mà provider nay liệt kê.
+- **Build/đồng bộ template theo tài khoản (pha sau, chưa làm):** spec template Boxmes (Dockerfile/E2B template build) → `POST …/templates/build {template, accounts:[…]|"all"}` build song song ở từng tài khoản (E2B: tối đa 20 build đồng thời/project, cũng 429), theo dõi trạng thái `building → available`, cảnh báo `template_drift` khi một tài khoản thiếu template mà tài khoản khác có. Phương án rẻ hơn cho E2B: publish template ở một project rồi dùng tên `slug/name` (Boxmes coi là toàn cục). Chính sách đề xuất: `template_policy = only_available` (mặc định) · `auto_build` (build ở tài khoản được chọn rồi mới tạo — chậm hàng phút, chỉ cho box không gấp).
+
+**b) Gắn chặt box → tài khoản suốt vòng đời.**
+
+- Mọi thao tác sau khi tạo (exec/file qua shim, pause/resume, preview headers, fork gốc, snapshot gốc, destroy) dùng `host.account_id`. Không có di chuyển sandbox sang tài khoản khác: provider không hỗ trợ.
+- Resume: phải còn slot ở **tài khoản của box**; đầy → lỗi rõ ràng *"cannot resume this box: concurrent_sandboxes limit … reached"* + gợi ý (cho ngủ box khác, nâng hạn mức, hoặc clone sang tài khoản khác).
+- Fork gốc: chỉ khi tài khoản nguồn đủ điều kiện (bật, không drain, còn tiền, hết cooldown, còn slot, còn create-rate); không thì clone qua snapshot tarball → sandbox mới trên tài khoản đủ điều kiện (ưu tiên tài khoản nguồn).
+- Khôi phục snapshot T3 (tarball ở gateway) đi được sang mọi tài khoản → đây là **cách duy nhất "chuyển" box giữa tài khoản** (clone/fork rồi xoá box cũ). Snapshot gốc của provider (Daytona snapshot, E2B pause) **không** chuyển được.
+- Rotate khoá: phải cùng `external_id` (đã có từ pha A); shim đang sống nhận khoá mới ngay.
+
+**c) Pool concurrency & create-rate (số đếm sống).**
+
+- Slot = (`limit_group` hoặc tài khoản). Đang chạy = host sống của các tài khoản trong nhóm mà box **không** ngủ (pause không tính, đúng E2B/Daytona), trừ các slot đang giữ; cộng `in_flight` (create/fork/resume đang chạy). Điều kiện: `running + in_flight + 1 ≤ min(concurrent_sandboxes)`.
+- Create-rate: dấu thời gian các lần bắt đầu tạo trong 1 s / 60 s so với `create_per_sec` / `create_per_min`. Tài khoản cuối danh sách thì **xếp hàng** tối đa 6 s chờ slot (khác LiteLLM trả 429 ngay — vì tạo sandbox đáng chờ 1 s hơn là fail); còn lại chuyển tài khoản kế. Hết sạch → `"<p>: every account is full (…)"` + `retry_after_s`.
+- Học hạn mức: 429 có message concurrency (E2B "maximum number of concurrent…", Daytona `LIMIT_EXCEEDED`, Novita "concurrent instances") → lớp `quota` → `limits.concurrent_sandboxes = số đang chạy` (`source: learned`), `quota_full` **2 phút** (không phải 1 h như VPS), thử tài khoản kế. 429 rate limit → cooldown theo `Retry-After` (10 s–15 phút).
+- Giới hạn của cách làm: số đếm trong bộ nhớ một tiến trình core (đủ cho 1 core; nhiều core cần Redis/DB — giống LiteLLM); sandbox tạo ngoài Boxmes trong cùng project không được đếm → dựa vào 429 + học hạn mức, và pha B đọc `usage` từ API (Daytona `GET /orgs/{id}/limits`, Novita quota API).
+
+**d) Quyền & hạn khoá.**
+
+- `scopes` của tài khoản (nhập tay; pha B đọc từ Daytona `GET /api-keys/current`): thiếu `write:sandboxes` → không chọn; thiếu `delete:sandboxes` → cảnh báo khi lưu (Boxmes không xoá được sandbox → rò tiền). Thiếu `write:snapshots` → (pha B) tắt snapshot gốc cho tài khoản đó.
+- Hạn khoá (`token_expires_at`, đã có từ pha A): cảnh báo 14/3 ngày, trạng thái `token_expiring`; Daytona trả `expires_at` → đồng bộ ở pha B. E2B access token đã chết → không hỗ trợ.
+
+**e) Credit khuyến mãi & drain_first.**
+
+- `drain_first` là mặc định cho sandbox: credit sắp hết hạn trước, rồi ví ít tiền nhất trước — tiêu hết credit $100 (E2B Hobby/Novita) trước khi mất.
+- Credit hiệu dụng = `credit_remaining − ledger từ credit_at` khi không nhập `balance`. `min_balance` = sàn: dưới sàn tài khoản không nhận sandbox mới; runway < 2 ngày → tự drain (pha A).
+- **Hết credit ở E2B khoá cả workspace** → đặt `min_balance` > 0 (vd. $2–5) cho tài khoản E2B không có thẻ để Boxmes dừng *trước* khi provider khoá; mọi project cùng workspace đặt cùng `billing_group`.
+
+**f) Hành vi khi hết credit.** 402 / "credits exhausted" trên một khoá → tài khoản `out_of_credit` + cảnh báo critical + cả `billing_group` `out_of_credit` (lý do "billing group X: … is out of credit") → scheduler chỉ còn tài khoản ở ví khác. Box đang chạy **không bị xoá** (provider tự khoá; Boxmes báo). Nhập `balance`/`credit_remaining` > `min_balance` trên một thành viên → gỡ cho cả nhóm.
+
+**g) Di chuyển sandbox giữa tài khoản.** Không thể (template/sandbox/pause thuộc tài khoản). Chỉ: tài khoản mới nhận box **mới**; box cũ chạy tới hết vòng đời; muốn chuyển thì clone (snapshot tarball) rồi xoá. Drain tài khoản = cách "rút" dần.
+
+### 13.5 API (đã làm, chỉ admin nền tảng)
+
+| Method | Path | Việc |
+|---|---|---|
+| GET | `/v1/admin/providers/{p}/sandbox` | Tab Sandbox API: mỗi tài khoản — trạng thái, eligible/lý do, `running`, `group_running`, `in_flight`, `concurrent_limit` (+nguồn manual/learned), `concurrency_pct`, `create_per_sec/min`, `creates_last_sec/min`, `cooldown_until`, `templates{t: available|missing|not_listed|unknown}`, `scopes`, `scope_problems`, `balance_effective`, `credit_expires_at`; kèm danh sách template toàn provider |
+| POST | `/v1/admin/providers/{p}/accounts/{a}/templates/sync` | Đọc template/snapshot bằng khoá của tài khoản; trả `{templates, added, removed, account}`; provider không có API → 400 |
+| PATCH | `/v1/admin/providers/{p}/accounts/{a}` | Thêm trường `templates`, `clear_templates_missing`, `billing_group`, `limit_group`; `limits` nhận `concurrent_sandboxes`, `create_per_sec`, `create_per_min` |
+
+Lỗi mới (dịch vi/zh/ja): `"%s concurrency limit reached (429): %s"`, `"%s: template not found in this account (%d): %s"`, `"%s: template %s is not available in any account (%s)"`, `"%s: every account is full (%s)"`, `"%s account %s cannot resume this box: %s"`, `"provider %s cannot list templates"`, `"%s; last provider error: %v"`. Sự kiện mới: `provider_account.template_missing`, `provider_account.templates_synced`.
+
+### 13.6 UI — tab **Sandbox API** (khu Hạ tầng; web/ chưa làm)
+
+- Bộ chọn provider sandbox → bảng tài khoản: nhãn · trạng thái (chip + cooldown đếm ngược) · nhóm (`limit_group`, `billing_group` dạng tag) · **đồng hồ concurrency** (thanh `group_running + in_flight` / `concurrent_limit`, màu 80/95 %, nhãn "learned" khi hạn mức học từ 429) · create-rate (`creates_last_sec`/`create_per_sec`) · credit hiệu dụng + hạn credit · scope thiếu (đỏ).
+- **Ma trận template**: hàng = template, cột = tài khoản, ô = ✓ available / ✗ missing (tooltip "học từ 404 lúc …", nút "Quên") / – not listed / ? unknown; nút "Đồng bộ" theo cột (`templates/sync`); cảnh báo khi một template chỉ có ở 1 tài khoản ("không có dự phòng").
+- Ngăn kéo tài khoản: sửa `templates`, nhóm, hạn mức (`concurrent_sandboxes`, `create_per_sec`, `create_per_min`), `min_balance` (gợi ý $2–5 cho E2B không thẻ), danh sách box đang ở tài khoản (kèm "đang ngủ — không chiếm slot").
+- Cột "Tài khoản" trên trang box sandbox; khi resume bị từ chối hiện lý do và nút "Clone sang tài khoản khác".
+
+### 13.7 Còn thiếu (chưa làm)
+
+1. `ProviderServers`/`List` (admin) vẫn chỉ dùng khoá chính → nên lặp mọi tài khoản và gắn `account_id` để tìm sandbox mồ côi.
+2. Đọc `usage/limit` thật qua API (Daytona `GET /orgs/{id}/limits`, Novita quota API, Daytona `api-keys/current` cho scope + hạn) — pha B; hiện số đếm chỉ biết sandbox do Boxmes tạo.
+3. Build template theo tài khoản / `auto_build` / cảnh báo `template_drift` (§13.4a).
+4. Slot/create-rate lưu trong bộ nhớ một core; nhiều core cần kho chung.
+5. Hạn mức học được không tự hết hạn (chỉ `reset`); nên bỏ "learned" sau ~6 h để dò lại khi provider nâng hạn mức.
+6. Box snapshot gốc của provider (Daytona snapshot, `Snapshotter`) chưa có đường dùng trong core; khi có phải ghi `account_id` của snapshot và chỉ khôi phục trong tài khoản đó.
+7. Lỗi 429 trong lúc exec/file của shim (rate limit API sandbox của E2B theo IP) chưa feed về tài khoản.
+8. Daytona snapshot (template) chưa được chọn theo box — `Spec.Template` vẫn là snapshot mặc định của adapter; ma trận template của Daytona hiện chỉ để xem/đồng bộ.
+9. Volume (E2B/Daytona volumes) chưa được core dùng; khi có: volume thuộc tài khoản → box gắn volume chỉ đặt ở tài khoản có volume (cùng cơ chế template).
+10. UI (web/) chưa làm.
 
 ## Phụ lục — Biến môi trường mới
 
