@@ -50,7 +50,7 @@ Công khai (chưa đăng nhập)
     Admin (Workspace, Người dùng, Mã mời, Danh sách chờ, Lạm dụng, Doanh thu, Hệ thống, Job, Audit hệ thống, Tính năng)
 ```
 
-Sidebar (thứ tự): Tổng quan · Boxes · Agents · Cần anh (badge số) · Templates · Volumes · Secrets · Chi phí · Developers · Cài đặt — vạch ngăn — Hạ tầng · Admin (chỉ PA). Cuối sidebar: thẻ gói ("Pro · 3/10 box") + nút "Mời bạn, nhận $10".
+Sidebar (nhóm, thu gọn được): Tổng quan · Cần anh (badge) — **Vận hành:** Boxes · Agents · Templates — **Tài nguyên:** Volumes · Secrets — **Tiền:** Chi phí · Thanh toán (lối tắt tới Cài đặt → Thanh toán; O/B) — **Tích hợp:** Developers — Cài đặt — **Nền tảng** (chỉ PA): Hạ tầng · Admin. Cuối sidebar: thẻ gói ("Pro · 3/10 box") + nút "Mời bạn, nhận $10". Mobile: tab dưới Tổng quan · Boxes · Cần anh · Chi phí · Thêm (sheet theo cùng nhóm).
 
 ---
 
