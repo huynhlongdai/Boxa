@@ -1616,3 +1616,80 @@ export interface QuotaDetails {
   plan?: string;
   upgrade_url?: string;
 }
+
+// ---------------- v2.2 Hạ tầng: tài khoản nhà cung cấp (M29) + M29-S sandbox nhiều khoá ----------------
+// Bám docs/api-contract-v1.md "v2.2 additions" và "v2.2 M29-S". Chỉ admin nền tảng.
+export const ACCOUNT_STRATEGIES = ["priority", "weighted", "round_robin", "least_used", "drain_first"] as const;
+export type AccountStrategy = (typeof ACCOUNT_STRATEGIES)[number];
+export const ACCOUNT_STATUSES = ["active", "cooling", "rate_limited", "quota_full", "low_balance", "out_of_credit", "auth_failed", "token_expiring", "disabled", "draining", "archived"] as const;
+export type AccountStatus = (typeof ACCOUNT_STATUSES)[number];
+export type AccountStateAction = "enable" | "disable" | "drain" | "undrain" | "reset";
+export interface AccountLimit { limit: number; used: number; source?: "manual" | "learned" | "api"; at?: string }
+export interface AccountStats {
+  hosts_live: number; boxes_live: number; vcpu_live: number;
+  spend_today: number; spend_month: number; spend_today_usd: number; spend_month_usd: number; burn_per_hour_usd: number;
+  balance_effective?: number; balance_effective_usd?: number; runway_hours?: number; runway_days?: number; forecast_month_end: number;
+  eligible: boolean; ineligible?: string; breaker: "closed" | "open" | "half_open"; has_credential: boolean;
+  sandboxes_running?: number; group_running?: number; in_flight?: number; creates_last_sec?: number; creates_last_min?: number;
+}
+export type AccountThresholdKey = "runway_warn_days" | "runway_critical_days" | "limit_warn_pct" | "limit_critical_pct" | "expiry_warn_days" | "expiry_critical_days";
+export interface ProviderAccount {
+  id: string; provider: string; label: string; external_id?: string; owner_workspace_id?: string; tags: string[]; owner?: string; notes?: string; console_url?: string;
+  is_default: boolean; credential_ref: string; credential_source: "api" | "env"; key_fingerprint?: string; billing_key_fingerprint?: string; scopes: string[];
+  token_expires_at?: string; refresh_expires_at?: string; rotated_at?: string; rotate_every_days?: number;
+  enabled: boolean; priority: number; weight: number; regions: string[]; pool?: string; drain: boolean; auto_drained: boolean;
+  status: AccountStatus; status_reason?: string; status_since?: string; cooldown_until?: string; error_streak: number;
+  last_error_class?: string; last_error?: string; last_ok_at?: string; last_check_at?: string;
+  billing_model?: "prepaid" | "postpaid" | "contract" | "free_tier"; currency: string; fx_rate_usd?: number;
+  balance?: number; balance_source?: "manual" | "api" | "estimated"; balance_at?: string;
+  credit_total?: number; credit_remaining?: number; credit_expires_at?: string; credit_at?: string; pending_charges?: number; month_to_date?: number;
+  spend_cap_day: number; spend_cap_month: number; min_balance: number; low_balance_warn: number;
+  billing_cycle?: string; invoice_day?: number; next_invoice_at?: string; trial_ends_at?: string; contract_ends_at?: string;
+  limits: Record<string, AccountLimit>; thresholds: Partial<Record<AccountThresholdKey, number>>;
+  templates?: string[]; templates_missing?: string[]; templates_synced_at?: string; limit_group?: string; billing_group?: string;
+  created_at: string; created_by?: string; updated_at: string; updated_by?: string; stats?: AccountStats; warnings?: string[];
+}
+/** POST / PATCH (merge-patch; ngày RFC 3339 hoặc YYYY-MM-DD, "" xoá; limits giá trị 0 = bỏ). */
+export interface ProviderAccountInput {
+  label?: string; token?: string; billing_token?: string; skip_validate?: boolean; external_id?: string; tags?: string[]; owner?: string; notes?: string; console_url?: string; scopes?: string[];
+  enabled?: boolean; priority?: number; weight?: number; regions?: string[]; pool?: string; drain?: boolean;
+  billing_model?: string; currency?: string; fx_rate_usd?: number; balance?: number; clear_balance?: boolean; credit_total?: number; credit_remaining?: number;
+  pending_charges?: number; month_to_date?: number; spend_cap_day?: number; spend_cap_month?: number; min_balance?: number; low_balance_warn?: number;
+  billing_cycle?: string; invoice_day?: number; rotate_every_days?: number;
+  token_expires_at?: string; refresh_expires_at?: string; credit_expires_at?: string; trial_ends_at?: string; contract_ends_at?: string; next_invoice_at?: string;
+  limits?: Record<string, number>; thresholds?: Partial<Record<AccountThresholdKey, number>>;
+  templates?: string[]; clear_templates_missing?: boolean; limit_group?: string; billing_group?: string;
+}
+export interface AccountTestResult { ok: boolean; error?: string; error_class?: string; latency_ms: number; key_fingerprint?: string; duplicates?: string[]; account?: ProviderAccount }
+export interface ProviderStrategyView { provider: string; strategy: AccountStrategy | ""; effective_strategy: AccountStrategy; sticky_minutes: number; failover_across_accounts: boolean; strategies: AccountStrategy[] }
+export type InfraAlertLevel = "info" | "warn" | "critical";
+export interface InfraAlert {
+  id: string; type: string; level: InfraAlertLevel; status: "open" | "acked" | "closed"; provider?: string; account_id?: string; host_id?: string;
+  message: string; data?: { args?: unknown[] }; count: number; opened_at: string; updated_at: string; closed_at?: string; acked_at?: string; acked_by?: string;
+  notified_at?: string; notified_level?: string;
+}
+export interface AdminProviderRow {
+  id: string; name: string; tier: string; group: "vps" | "sandbox" | string; connected: boolean; implemented: boolean; health: string; strategy: AccountStrategy;
+  accounts_total: number; accounts_healthy: number; accounts_degraded: number; hosts_live: number; boxes_live: number;
+  balance_usd?: number; balance_by_currency?: Record<string, number>; spend_today_usd: number; spend_month_usd: number; forecast_month_usd: number;
+  runway_days?: number; max_limit_pct: number; open_alerts: number;
+}
+export interface InfraSummary {
+  balance_usd: number; balance_by_currency: Record<string, number>; spend_today_usd: number; spend_month_usd: number; forecast_month_usd: number;
+  shortest_runway?: { provider: string; account_id: string; label: string; days: number };
+  accounts_healthy: number; accounts_degraded: number; accounts_broken: number; open_alerts: number;
+}
+export interface AdminProvidersView { summary: InfraSummary; items: AdminProviderRow[] }
+export interface AdminProviderDetail extends AdminProviderRow {
+  prefs: Record<string, unknown>; strategy_config: ProviderStrategyView; accounts: ProviderAccount[]; alerts: InfraAlert[]; capabilities?: Record<string, unknown>;
+}
+export type TemplateAvailability = "available" | "missing" | "not_listed" | "unknown";
+export interface SandboxAccountRow {
+  id: string; label: string; status: AccountStatus; eligible: boolean; ineligible?: string; limit_group?: string; billing_group?: string;
+  running: number; group_running: number; in_flight: number; concurrent_limit?: number; concurrent_source?: "manual" | "learned" | "api"; concurrency_pct?: number;
+  create_per_sec?: number; create_per_min?: number; creates_last_sec: number; creates_last_min: number; cooldown_until?: string;
+  templates: Record<string, TemplateAvailability>; templates_synced_at?: string; scopes: string[]; scope_problems?: string[];
+  balance_effective?: number; credit_expires_at?: string;
+}
+export interface SandboxAccountsView { provider: string; strategy: AccountStrategy; templates: string[]; accounts: SandboxAccountRow[] }
+export interface TemplateSyncResult { templates: string[]; added: string[]; removed: string[]; account: ProviderAccount }

@@ -14,6 +14,7 @@ import { handleV110 } from "./v110";
 import { accessP1, handleV111 } from "./v111";
 import { handleV17, hydrateV17 } from "./v17";
 import { boxLocation, handleV20 } from "./v20";
+import { handleV22 } from "./v22";
 
 type G = typeof globalThis & { __boxmesMock?: MockState };
 
@@ -447,6 +448,10 @@ export function handleMock(method: string, segs: string[], q: URLSearchParams, b
   const today0 = startOfTodayUTC();
   const v20 = handleV20(s, { ok, list, err: (st, code, key, params) => err(st, code, key, params) }, M, segs, q, body, (id) => sum(s.ledger.filter((l) => l.box_id === id && Date.parse(l.ts) >= today0)));
   if (v20) return v20;
+
+  // ---- v2.2: hạ tầng — tài khoản nhà cung cấp (M29) + sandbox nhiều khoá (M29-S) ----
+  const v22 = handleV22(s, { ok, list, err: (st, code, key, params) => err(st, code, key, params) }, M, segs, q, body);
+  if (v22) return v22;
 
   // ---- v1.1: discovery, agent kinds, quote ----
   const disc = discovery(segs, q, apiBase);

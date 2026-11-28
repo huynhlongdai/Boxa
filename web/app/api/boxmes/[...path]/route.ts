@@ -88,6 +88,7 @@ async function handle(req: NextRequest, ctx: Ctx) {
     const apiBase = process.env.NEXT_PUBLIC_BOXMES_API || "http://localhost:8080/v1";
     const r = handleMock(req.method, segs, search, body, apiBase, locale);
     const extra = { "X-Boxmes-Mock": "1", "Content-Language": locale, Vary: "Accept-Language, Cookie", ...r.headers };
+    if (r.status === 204) return new Response(null, { status: 204, headers: extra });
     if (typeof r.body === "string") {
       return new Response(r.body, { status: r.status, headers: { "Content-Type": r.contentType ?? "text/plain; charset=utf-8", ...extra } });
     }

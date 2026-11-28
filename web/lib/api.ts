@@ -90,6 +90,16 @@ import type {
   DesktopShare,
   DesktopState,
   SshCert,
+  AccountStateAction,
+  AccountTestResult,
+  AdminProviderDetail,
+  AdminProvidersView,
+  InfraAlert,
+  ProviderAccount,
+  ProviderAccountInput,
+  ProviderStrategyView,
+  SandboxAccountsView,
+  TemplateSyncResult,
 } from "./types";
 
 export const PROXY_BASE = "/api/boxmes";
@@ -178,7 +188,7 @@ async function request<T>(method: string, path: string, body?: unknown, headers?
     cache: "no-store",
     credentials: "same-origin",
   });
-  if (res.status === 401 && typeof window !== "undefined" && !/^\/(login|signup|invite)/.test(window.location.pathname) && !(await sessionStillValid())) {
+  if (res.status === 401 && typeof window !== "undefined" && !/^\/(login|signup|invite|forgot-password|reset-password|verify-email)/.test(window.location.pathname) && !(await sessionStillValid())) {
     window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
   }
   const text = await res.text();
@@ -301,6 +311,15 @@ export const paths = {
   adminAudit: (f?: { actor?: string; type?: string }) => `/admin/audit${qs(f)}`,
   adminQuotas: "/admin/quotas",
   adminUsers: "/admin/users",
+  // v2.2 hạ tầng: tài khoản nhà cung cấp (M29 + M29-S)
+  adminProviders: "/admin/providers",
+  adminProvider: (p: string) => `/admin/providers/${encodeURIComponent(p)}`,
+  providerAccounts: (p: string, archived?: boolean) => `/admin/providers/${encodeURIComponent(p)}/accounts${archived ? "?archived=1" : ""}`,
+  providerAccount: (p: string, a: string) => `/admin/providers/${encodeURIComponent(p)}/accounts/${encodeURIComponent(a)}`,
+  providerAccountTimeline: (p: string, a: string) => `/admin/providers/${encodeURIComponent(p)}/accounts/${encodeURIComponent(a)}/timeline?limit=50`,
+  providerStrategy: (p: string) => `/admin/providers/${encodeURIComponent(p)}/strategy`,
+  providerSandbox: (p: string) => `/admin/providers/${encodeURIComponent(p)}/sandbox`,
+  infraAlerts: (status?: string) => `/admin/infra/alerts${qs({ status })}`,
   // v1.7
   boxPorts: (id: string) => `/boxes/${id}/ports`,
   // v1.10: truy cập box
@@ -472,6 +491,24 @@ export const api = {
   adminQuotas: () => http.get<Quotas>(paths.adminQuotas),
   saveQuotas: (q: Quotas) => http.put<Quotas>(paths.adminQuotas, q),
   adminUsers: () => http.get<List<AdminUser>>(paths.adminUsers),
+  // v2.2 hạ tầng: tài khoản nhà cung cấp
+  adminProviders: () => http.get<AdminProvidersView>(paths.adminProviders),
+  adminProvider: (p: string) => http.get<AdminProviderDetail>(paths.adminProvider(p)),
+  validateProviderAccount: (p: string, token: string, externalId?: string) =>
+    http.post<AccountTestResult>(`${paths.adminProvider(p)}/accounts/validate`, { token, ...(externalId ? { external_id: externalId } : {}) }),
+  createProviderAccount: (p: string, input: ProviderAccountInput & { label: string; token: string }) => http.post<ProviderAccount>(`${paths.adminProvider(p)}/accounts`, input),
+  updateProviderAccount: (p: string, a: string, patch: ProviderAccountInput) => http.patch<ProviderAccount>(paths.providerAccount(p, a), patch),
+  rotateProviderAccount: (p: string, a: string, token: string, externalId?: string) =>
+    http.post<ProviderAccount>(`${paths.providerAccount(p, a)}/rotate`, { token, ...(externalId ? { external_id: externalId } : {}) }),
+  testProviderAccount: (p: string, a: string) => http.post<AccountTestResult>(`${paths.providerAccount(p, a)}/test`),
+  setProviderAccountState: (p: string, a: string, action: AccountStateAction) => http.post<ProviderAccount>(`${paths.providerAccount(p, a)}/${action}`),
+  deleteProviderAccount: (p: string, a: string, opts: { force?: boolean; reason?: string; purge?: boolean } = {}) =>
+    http.del<unknown>(`${paths.providerAccount(p, a)}${qs({ force: opts.force ? "1" : undefined, reason: opts.reason, purge: opts.purge ? "1" : undefined })}`),
+  setProviderStrategy: (p: string, input: { strategy: string; sticky_minutes?: number; failover_across_accounts?: boolean }) => http.put<ProviderStrategyView>(paths.providerStrategy(p), input),
+  infraAlerts: (status?: string) => http.get<List<InfraAlert>>(paths.infraAlerts(status)),
+  ackInfraAlert: (id: string) => http.post<InfraAlert>(`/admin/infra/alerts/${encodeURIComponent(id)}/ack`),
+  providerSandbox: (p: string) => http.get<SandboxAccountsView>(paths.providerSandbox(p)),
+  syncAccountTemplates: (p: string, a: string) => http.post<TemplateSyncResult>(`${paths.providerAccount(p, a)}/templates/sync`),
 
   // v1.7: ports + gateway URL, URL token, wake_on_request, app supervisor, capabilities
   boxPorts: (id: string) => http.get<PortsResult>(paths.boxPorts(id)),

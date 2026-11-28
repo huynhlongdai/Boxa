@@ -24,8 +24,10 @@ import { CatalogView, ConnectProviderWizard, ProviderHealthView } from "@/compon
 import { SpeedSummary, WarmPoolSettings } from "@/components/boxmes/speed";
 import { MeshView } from "@/components/boxmes/mesh";
 import { ProviderLogo, SandboxProvidersView, TierBadge, VerificationBadge } from "@/components/boxmes/sandbox";
+import { AccountsOverview } from "@/components/boxmes/provider-accounts";
+import { SandboxAccountsSection } from "@/components/boxmes/sandbox-accounts";
 
-const TABS = ["providers", "sandbox", "health", "catalog", "speed", "mesh"] as const;
+const TABS = ["accounts", "providers", "sandbox", "health", "catalog", "speed", "mesh"] as const;
 
 
 const TOKEN_HINT: Record<string, string> = { contabo: "contabo", netcup: "netcup", digitalocean: "digitalocean", hetzner: "hetzner", vultr: "vultr" };
@@ -278,6 +280,7 @@ function SandboxTab() {
   const [open, setOpen] = React.useState(false);
   return (
     <>
+      <SandboxAccountsSection />
       <SandboxProvidersView onConnect={(id) => { setInitial(id); setOpen(true); }} />
       {providers && <ConnectProviderWizard providers={providers.items} open={open} onOpenChange={setOpen} initial={initial} />}
     </>
@@ -288,13 +291,14 @@ function Inner() {
   const t = useTranslations("infra");
   const sp = useSearchParams();
   const router = useRouter();
-  const raw = sp.get("s") ?? "providers";
-  const tab = (TABS as readonly string[]).includes(raw) ? raw : "providers";
+  const raw = sp.get("s") ?? "accounts";
+  const tab = (TABS as readonly string[]).includes(raw) ? raw : "accounts";
   return (
     <>
       <PageHeader title={t("title")} desc={t("desc")} />
-      <Tabs value={tab} onValueChange={(v) => router.replace(v === "providers" ? "/infra" : `/infra?s=${v}`, { scroll: false })}>
+      <Tabs value={tab} onValueChange={(v) => router.replace(v === "accounts" ? "/infra" : `/infra?s=${v}`, { scroll: false })}>
         <TabsList>{TABS.map((v) => <TabsTrigger key={v} value={v}>{t(`tabs.${v}`)}</TabsTrigger>)}</TabsList>
+        <TabsContent value="accounts"><AccountsOverview /></TabsContent>
         <TabsContent value="providers"><ProvidersTab /></TabsContent>
         <TabsContent value="sandbox"><SandboxTab /></TabsContent>
         <TabsContent value="health"><ProviderHealthView /></TabsContent>
