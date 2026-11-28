@@ -680,6 +680,18 @@ class _Base:
     def ack_infra_alert(self, alert_id: str) -> Dict[str, Any]:
         return self._call("POST", f"/admin/infra/alerts/{_q(alert_id)}/ack")
 
+    # -- v2.2 M29-S: sandbox accounts with several API keys (platform admin) --
+    def provider_sandbox_accounts(self, provider: str) -> Dict[str, Any]:
+        """Sandbox API tab: per-account concurrency (running / in flight / limit, create rate),
+        limit_group / billing_group, credit, and the template matrix
+        (templates[t] = available | missing | not_listed | unknown). Sandbox providers only."""
+        return self._call("GET", f"/admin/providers/{_q(provider)}/sandbox")
+
+    def sync_account_templates(self, provider: str, account_id: str) -> Dict[str, Any]:
+        """Read the account's templates / snapshots from the provider with its own key
+        → {templates, added, removed, account}. Providers without a template API → 400."""
+        return self._call("POST", f"/admin/providers/{_q(provider)}/accounts/{_q(account_id)}/templates/sync")
+
     # -- MCP tool bridge -------------------------------------------------------
     def _mcp_body(self, name: str, arguments: Mapping[str, Any]) -> Dict[str, Any]:
         return {"jsonrpc": "2.0", "id": int(time.time() * 1000), "method": "tools/call",
@@ -907,6 +919,8 @@ class AsyncBoxmes(_Base):
         async def set_provider_strategy(self, provider: str, strategy: str = "", *, sticky_minutes: int = 0, failover_across_accounts: Optional[bool] = None) -> Dict[str, Any]: ...
         async def infra_alerts(self, status: Optional[str] = None) -> Dict[str, List[Dict[str, Any]]]: ...
         async def ack_infra_alert(self, alert_id: str) -> Dict[str, Any]: ...
+        async def provider_sandbox_accounts(self, provider: str) -> Dict[str, Any]: ...
+        async def sync_account_templates(self, provider: str, account_id: str) -> Dict[str, Any]: ...
         up = create_box
         down = delete_box
 

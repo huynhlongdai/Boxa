@@ -90,6 +90,8 @@ export interface AccountStats {
   hosts_live: number; boxes_live: number; vcpu_live: number; spend_today: number; spend_month: number; spend_today_usd: number; spend_month_usd: number;
   burn_per_hour_usd: number; balance_effective?: number; balance_effective_usd?: number; runway_hours?: number; runway_days?: number;
   forecast_month_end: number; eligible: boolean; ineligible?: string; breaker: "closed" | "open" | "half_open"; has_credential: boolean;
+  /** M29-S, sandbox providers only */
+  sandboxes_running?: number; group_running?: number; in_flight?: number; creates_last_sec?: number; creates_last_min?: number;
 }
 export interface ProviderAccount {
   id: string; provider: string; label: string; external_id?: string; owner_workspace_id?: string; tags: string[]; owner?: string; notes?: string; console_url?: string;
@@ -103,6 +105,8 @@ export interface ProviderAccount {
   billing_cycle?: string; invoice_day?: number; next_invoice_at?: string; trial_ends_at?: string; contract_ends_at?: string;
   limits: Record<string, AccountLimit>; thresholds: Partial<Record<"runway_warn_days" | "runway_critical_days" | "limit_warn_pct" | "limit_critical_pct" | "expiry_warn_days" | "expiry_critical_days", number>>;
   created_at: string; created_by?: string; updated_at: string; updated_by?: string; stats?: AccountStats; warnings?: string[];
+  /** M29-S (sandbox providers) */
+  templates?: string[]; templates_missing?: string[]; templates_synced_at?: string; limit_group?: string; billing_group?: string; credit_at?: string;
 }
 /** POST / PATCH body (merge-patch; dates RFC 3339 or YYYY-MM-DD, "" clears; limits value 0 removes). */
 export interface ProviderAccountInput {
@@ -113,7 +117,19 @@ export interface ProviderAccountInput {
   billing_cycle?: string; invoice_day?: number; rotate_every_days?: number;
   token_expires_at?: string; refresh_expires_at?: string; credit_expires_at?: string; trial_ends_at?: string; contract_ends_at?: string; next_invoice_at?: string;
   limits?: Record<string, number>; thresholds?: ProviderAccount["thresholds"];
+  /** M29-S: templates replaces the list; groups ≤ 64 chars, "" clears */
+  templates?: string[]; clear_templates_missing?: boolean; limit_group?: string; billing_group?: string;
 }
+export type TemplateAvailability = "available" | "missing" | "not_listed" | "unknown";
+export interface SandboxAccountRow {
+  id: string; label: string; status: AccountStatus; eligible: boolean; ineligible?: string; limit_group?: string; billing_group?: string;
+  running: number; group_running: number; in_flight: number; concurrent_limit?: number; concurrent_source?: "manual" | "learned" | "api"; concurrency_pct?: number;
+  create_per_sec?: number; create_per_min?: number; creates_last_sec: number; creates_last_min: number; cooldown_until?: string;
+  templates: Record<string, TemplateAvailability>; templates_synced_at?: string; scopes: string[]; scope_problems?: string[];
+  balance_effective?: number; credit_expires_at?: string;
+}
+export interface SandboxAccountsView { provider: string; strategy: AccountStrategy; templates: string[]; accounts: SandboxAccountRow[] }
+export interface TemplateSyncResult { templates: string[]; added: string[]; removed: string[]; account: ProviderAccount }
 export interface AccountTestResult { ok: boolean; error?: string; error_class?: string; latency_ms: number; key_fingerprint?: string; duplicates?: string[]; account?: ProviderAccount }
 export interface ProviderStrategy { provider: string; strategy: AccountStrategy | ""; effective_strategy: AccountStrategy; sticky_minutes: number; failover_across_accounts: boolean; strategies: AccountStrategy[] }
 export interface InfraAlert {
@@ -621,6 +637,14 @@ export class Boxmes {
   }
   infraAlerts(status?: "open" | "acked" | "closed" | "all") { return this.request<List<InfraAlert>>("GET", "/admin/infra/alerts", { query: status ? { status } : undefined }); }
   ackInfraAlert(alertId: string) { return this.request<InfraAlert>("POST", `/admin/infra/alerts/${enc(alertId)}/ack`); }
+
+  // ---- v2.2 M29-S: sandbox accounts with several API keys (platform admin) ----
+  /** Sandbox API tab: per-account concurrency gauges, groups, credit and the template matrix. Sandbox providers only. */
+  providerSandboxAccounts(provider: string) { return this.request<SandboxAccountsView>("GET", `/admin/providers/${enc(provider)}/sandbox`); }
+  /** Read the account's templates / snapshots from the provider with its own key (no template API → 400). */
+  syncAccountTemplates(provider: string, accountId: string) {
+    return this.request<TemplateSyncResult>("POST", `/admin/providers/${enc(provider)}/accounts/${enc(accountId)}/templates/sync`);
+  }
 
   // ---- tool bridge ----
   /** Execute a Boxmes tool by name through the MCP endpoint (same argument mapping as MCP). */

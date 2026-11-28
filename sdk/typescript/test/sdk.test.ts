@@ -495,3 +495,15 @@ test("v2.2 provider account routes (mocked fetch)", async () => {
   assert.deepEqual(calls[10].query, { force: "1", reason: "moved" });
   assert.deepEqual(calls[13].query, { status: "all" });
 });
+
+test("v2.2 M29-S sandbox account routes (mocked fetch)", async () => {
+  const { calls, f } = mockFetch();
+  const bx = new Boxmes({ apiKey: "bx_admin_x", baseUrl: "http://core.test:9", fetch: f, maxRetries: 0 });
+  await bx.providerSandboxAccounts("e2b");
+  await bx.syncAccountTemplates("e2b", "pa_1");
+  await bx.updateProviderAccount("e2b", "pa_1", { templates: ["agent"], limit_group: "prj-a", billing_group: "ws-1", limits: { concurrent_sandboxes: 20 } });
+  assert.deepEqual(calls.map((c) => `${c.method} ${c.path}`), [
+    "GET /v1/admin/providers/e2b/sandbox", "POST /v1/admin/providers/e2b/accounts/pa_1/templates/sync", "PATCH /v1/admin/providers/e2b/accounts/pa_1",
+  ]);
+  assert.deepEqual(calls[2].body, { templates: ["agent"], limit_group: "prj-a", billing_group: "ws-1", limits: { concurrent_sandboxes: 20 } });
+});

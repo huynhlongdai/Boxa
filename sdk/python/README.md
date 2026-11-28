@@ -63,6 +63,8 @@ except BoxmesError as e:
 # platform admin: admin_workspaces(), admin_update_workspace(ws_id, plan="pro", quota_overrides={...})
 # v2.2 provider accounts: admin_providers(), list_provider_accounts("hetzner"), create_provider_account("hetzner", "EU #2", token, priority=2),
 #   update_provider_account(p, a, balance=150), rotate_provider_account(p, a, token, external_id=...), set_provider_strategy("e2b", "drain_first"), infra_alerts()
+# v2.2 M29-S sandbox accounts: provider_sandbox_accounts("e2b")  # concurrency gauges + template matrix
+#   sync_account_templates("e2b", "pa_1"); update_provider_account("e2b", "pa_1", limit_group="prj-a", billing_group="ws-1", templates=["agent"])
 ```
 
 ## Function calling with any LLM

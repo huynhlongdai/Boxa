@@ -52,3 +52,18 @@ def test_provider_account_routes_offline(monkeypatch):
     assert rec.calls[10]["query"] == {"force": "1", "reason": "moved"}
     assert rec.calls[12]["body"] == {"strategy": "drain_first", "sticky_minutes": 30}
     assert rec.calls[13]["query"] == {"status": "all"}
+
+
+def test_sandbox_account_routes_offline(monkeypatch):
+    rec = _Recorder()
+    bx = Boxmes("bx_admin_x", "http://core.test:9", max_retries=0)
+    monkeypatch.setattr(bx, "_send", rec)
+    bx.provider_sandbox_accounts("e2b")
+    bx.sync_account_templates("e2b", "pa_1")
+    bx.update_provider_account("e2b", "pa_1", templates=["agent"], limit_group="prj-a", billing_group="ws-1",
+                               clear_templates_missing=True, limits={"concurrent_sandboxes": 20, "create_per_sec": 1})
+    got = [(c["method"], c["path"]) for c in rec.calls]
+    assert got == [("GET", "/v1/admin/providers/e2b/sandbox"), ("POST", "/v1/admin/providers/e2b/accounts/pa_1/templates/sync"),
+                   ("PATCH", "/v1/admin/providers/e2b/accounts/pa_1")]
+    assert rec.calls[1]["body"] is None
+    assert rec.calls[2]["body"]["limit_group"] == "prj-a"
