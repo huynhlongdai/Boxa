@@ -821,4 +821,6 @@ curl -X POST $BOXMES_URL/v1/admin/providers/e2b/accounts/pa_xxxx/templates/sync 
 curl $BOXMES_URL/v1/admin/providers/e2b/sandbox -H "Authorization: Bearer $ADMIN"
 ```
 
+**Dashboard & SDK (2026-11-28).** Web: tab **Tài khoản** của Hạ tầng (`/infra`) và trang `/infra/providers/{p}` (tài khoản, chiến lược, thêm khoá 3 bước, ngăn kéo sửa / rotate / dòng thời gian, xoá có xác nhận, cảnh báo) + tab **Sandbox** cho provider sandbox (slot concurrency, nhóm, credit, ma trận template, nút Đồng bộ) — xem `web/README.md`. SDK: Python `provider_sandbox_accounts(provider)`, `sync_account_templates(provider, account_id)`; TypeScript `providerSandboxAccounts`, `syncAccountTemplates` (kiểu `SandboxAccountsView`, `SandboxAccountRow`, `TemplateSyncResult`).
+
 **Hạn chế.** Số đếm slot nằm trong bộ nhớ một tiến trình core và chỉ biết sandbox do Boxmes tạo (sandbox tạo ngoài trong cùng project → dựa vào 429 + học hạn mức); chưa đọc usage/limit/scope thật qua API (pha B); chưa build template theo tài khoản; `GET /v1/providers/{id}/servers` vẫn chỉ liệt kê sandbox của khoá chính; snapshot gốc của Daytona chưa được chọn theo box.

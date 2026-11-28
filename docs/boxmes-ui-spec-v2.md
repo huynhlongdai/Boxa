@@ -214,6 +214,7 @@ Giữ các tab hiện có: VPS · Sandbox API · Sức khoẻ · Bảng giá · 
 - **Ngăn kéo tài khoản**: Tổng quan (nhập tay khi không có API) · Hạn mức · Tiền (snapshots, ledger, đối soát) · Host/Box · Dòng thời gian · Cảnh báo (ngưỡng riêng).
 - **Luồng thêm/rotate khoá**: hướng dẫn quyền tối thiểu → dán khoá → validate (org/project, scopes, số dư, hạn mức, cảnh báo trùng tài khoản thật) → cấu hình → lưu; rotate bắt buộc cùng `external_id`.
 - Tab cũ: Sức khoẻ thêm lọc/breaker theo account; VPS/Sandbox thêm cột "Tài khoản".
+- **Trạng thái web (2026-11-28)**: đã có tab Tài khoản (mặc định `/infra`), `/infra/providers/[id]` (tài khoản, chiến lược 5 lựa chọn, thêm khoá 3 bước, ngăn kéo Tổng quan/Sửa/Khoá/Dòng thời gian, xoá có xác nhận, cảnh báo), tab Sandbox (M29-S: slot, nhóm, credit, ma trận template + Đồng bộ). Chưa có: biểu đồ số dư/chi, kéo thả ưu tiên, cột "Tài khoản" ở tab cũ, ngưỡng riêng theo tài khoản.
 
 ## 17. Admin nền tảng (M26, M18, M17) — [Sửa]
 | Tab | Nội dung |

@@ -473,7 +473,7 @@ Thêm vào `model.ProviderAccount` (JSON trong `provider_accounts.doc`, không c
 
 Lỗi mới (dịch vi/zh/ja): `"%s concurrency limit reached (429): %s"`, `"%s: template not found in this account (%d): %s"`, `"%s: template %s is not available in any account (%s)"`, `"%s: every account is full (%s)"`, `"%s account %s cannot resume this box: %s"`, `"provider %s cannot list templates"`, `"%s; last provider error: %v"`. Sự kiện mới: `provider_account.template_missing`, `provider_account.templates_synced`.
 
-### 13.6 UI — tab **Sandbox API** (khu Hạ tầng; web/ chưa làm)
+### 13.6 UI — tab **Sandbox API** (khu Hạ tầng; web đã làm 2026-11-28: `/infra/providers/{p}?tab=sandbox` + khối trong tab Sandbox API)
 
 - Bộ chọn provider sandbox → bảng tài khoản: nhãn · trạng thái (chip + cooldown đếm ngược) · nhóm (`limit_group`, `billing_group` dạng tag) · **đồng hồ concurrency** (thanh `group_running + in_flight` / `concurrent_limit`, màu 80/95 %, nhãn "learned" khi hạn mức học từ 429) · create-rate (`creates_last_sec`/`create_per_sec`) · credit hiệu dụng + hạn credit · scope thiếu (đỏ).
 - **Ma trận template**: hàng = template, cột = tài khoản, ô = ✓ available / ✗ missing (tooltip "học từ 404 lúc …", nút "Quên") / – not listed / ? unknown; nút "Đồng bộ" theo cột (`templates/sync`); cảnh báo khi một template chỉ có ở 1 tài khoản ("không có dự phòng").
@@ -491,7 +491,7 @@ Lỗi mới (dịch vi/zh/ja): `"%s concurrency limit reached (429): %s"`, `"%s:
 7. Lỗi 429 trong lúc exec/file của shim (rate limit API sandbox của E2B theo IP) chưa feed về tài khoản.
 8. Daytona snapshot (template) chưa được chọn theo box — `Spec.Template` vẫn là snapshot mặc định của adapter; ma trận template của Daytona hiện chỉ để xem/đồng bộ.
 9. Volume (E2B/Daytona volumes) chưa được core dùng; khi có: volume thuộc tài khoản → box gắn volume chỉ đặt ở tài khoản có volume (cùng cơ chế template).
-10. UI (web/) chưa làm.
+10. ~~UI (web/)~~ — đã làm 2026-11-28 (tab Tài khoản, `/infra/providers/[id]`, tab Sandbox, ma trận template). Còn thiếu ở web: biểu đồ số dư / chi (chưa có snapshots), kéo thả đổi ưu tiên (đang nhập số), cột "Tài khoản" trên trang box / host, nút "Clone sang tài khoản khác" khi resume bị từ chối, ngưỡng cảnh báo riêng theo tài khoản (`thresholds`) chưa có form.
 
 ## Phụ lục — Biến môi trường mới
 
