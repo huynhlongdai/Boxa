@@ -319,6 +319,9 @@ export const paths = {
   providerAccountTimeline: (p: string, a: string) => `/admin/providers/${encodeURIComponent(p)}/accounts/${encodeURIComponent(a)}/timeline?limit=50`,
   providerStrategy: (p: string) => `/admin/providers/${encodeURIComponent(p)}/strategy`,
   providerSandbox: (p: string) => `/admin/providers/${encodeURIComponent(p)}/sandbox`,
+  // v2.3 (M29 pha B): lịch sử số dư
+  accountBalanceHistory: (p: string, a: string, days = 7) => `/admin/providers/${encodeURIComponent(p)}/accounts/${encodeURIComponent(a)}/balance/history?days=${days}`,
+  providerBalanceHistory: (p: string, days = 7) => `/admin/providers/${encodeURIComponent(p)}/balance/history?days=${days}`,
   infraAlerts: (status?: string) => `/admin/infra/alerts${qs({ status })}`,
   // v1.7
   boxPorts: (id: string) => `/boxes/${id}/ports`,

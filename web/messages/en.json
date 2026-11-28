@@ -2290,7 +2290,8 @@
       "balanceApi": "Balance API",
       "limitsApi": "Limits API",
       "templateApi": "Template API",
-      "manualHint": "Enter balance, credit and limits by hand in the account drawer (or let them be learned from errors)."
+      "manualHint": "Enter balance, credit and limits by hand in the account drawer (or let them be learned from errors).",
+      "apiHint": "Balance is read automatically through the API every {min} minutes; runway uses the real balance and the provider-reported spend rate."
     },
     "strategyTitle": "Account selection",
     "strategyLabel": "Strategy",
@@ -2372,7 +2373,8 @@
         "failover": "Account failover",
         "single_account": "Only one usable account",
         "orphan_host": "Orphan host (delete failed)",
-        "balance_stale": "Balance is stale"
+        "balance_stale": "Balance is stale",
+        "balance_read_failed": "Balance read through the API failing"
       }
     },
     "add": {
@@ -2435,7 +2437,9 @@
       "lastError": "Last error",
       "templates": "Templates in this account",
       "consoleUrl": "Provider console link",
-      "notes": "Notes"
+      "notes": "Notes",
+      "providerBurn": "Spend/hour (provider)",
+      "spendLimit": "limit {v}/h"
     },
     "tab": {
       "overview": "Overview",
@@ -2460,7 +2464,8 @@
       "testOk": "Key works ({ms} ms)",
       "testFail": "Key failed: {error}",
       "archived": "Account archived (key kept so its hosts can still be deleted)",
-      "purged": "Account deleted permanently"
+      "purged": "Account deleted permanently",
+      "testOkBalanceFail": "Key works ({ms} ms) but the balance read failed: {error}"
     },
     "delete": {
       "title": "Delete account {label}?",
@@ -2548,7 +2553,41 @@
       "not_listed": "The account lists its templates and this one is not there",
       "unknown": "The account has no list: Boxmes tries and learns"
     },
-    "showArchived": "Include archived"
+    "showArchived": "Include archived",
+    "bal": {
+      "title": "Balance & spend over time",
+      "window": "Time window",
+      "days": "{n}d",
+      "daysN": "~{n} days",
+      "balance": "Balance",
+      "burn": "Burn",
+      "runway": "Runway",
+      "stale": "stale",
+      "staleHint": "The last balance read through the API failed: {error}. Showing the last good reading ({time}).",
+      "stalePoint": "Read failed: {error} — previous balance kept",
+      "staleLine": "Balance reads through the API are failing: {error}. The balance shown is the last good reading ({time}); status and failover are not affected.",
+      "sourceApi": "API (polled)",
+      "source": {
+        "api": "API",
+        "manual": "manual",
+        "estimated": "estimated",
+        "none": "no balance yet"
+      },
+      "emptyApi": "No history yet — Boxmes reads the balance every {min} minutes; the first point appears after the next read.",
+      "emptyManual": "No history yet — enter a balance (or credit) in the Edit tab so Boxmes can estimate and chart it.",
+      "spent": "Spent (by balance)",
+      "topUps": "Top-ups",
+      "runwayTrend": "Runway trend",
+      "polled": "Last read",
+      "trendPerDay": "{n} days/day",
+      "apiNote": "Balance read through the provider API every {min} minutes with the read-only billing key when set, else the main key. A failed read only marks it “stale”.",
+      "runwayTrend7d": "Provider runway (7 days)",
+      "balanceTrend7d": "Provider balance (7 days)",
+      "staleAccounts": "{n} accounts with failed reads",
+      "staleAccountsHint": "These accounts show their last good balance reading",
+      "burnNow": "burn {v}/h",
+      "accountsN": "{n} accounts"
+    }
   },
   "authFlow": {
     "forgotTitle": "Forgot password",

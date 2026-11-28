@@ -2290,7 +2290,8 @@
       "balanceApi": "余额 API",
       "limitsApi": "限额 API",
       "templateApi": "模板 API",
-      "manualHint": "在账户抽屉中手动填写余额、额度与限额（或从错误中学习）。"
+      "manualHint": "在账户抽屉中手动填写余额、额度与限额（或从错误中学习）。",
+      "apiHint": "每 {min} 分钟通过 API 自动读取余额；可用天数基于真实余额和提供商报告的支出速度。"
     },
     "strategyTitle": "账户选择",
     "strategyLabel": "策略",
@@ -2372,7 +2373,8 @@
         "failover": "账户故障切换",
         "single_account": "仅剩一个可用账户",
         "orphan_host": "孤儿主机（删除失败）",
-        "balance_stale": "余额已过时"
+        "balance_stale": "余额已过时",
+        "balance_read_failed": "无法通过 API 读取余额"
       }
     },
     "add": {
@@ -2435,7 +2437,9 @@
       "lastError": "最近错误",
       "templates": "此账户中的模板",
       "consoleUrl": "提供商控制台链接",
-      "notes": "备注"
+      "notes": "备注",
+      "providerBurn": "每小时支出（提供商）",
+      "spendLimit": "上限 {v}/h"
     },
     "tab": {
       "overview": "概览",
@@ -2460,7 +2464,8 @@
       "testOk": "密钥可用（{ms} ms）",
       "testFail": "密钥出错：{error}",
       "archived": "已归档账户（保留密钥以便删除旧主机）",
-      "purged": "已永久删除账户"
+      "purged": "已永久删除账户",
+      "testOkBalanceFail": "密钥可用（{ms} ms），但读取余额失败：{error}"
     },
     "delete": {
       "title": "删除账户 {label}？",
@@ -2548,7 +2553,41 @@
       "not_listed": "账户有模板列表，但没有这一项",
       "unknown": "账户没有列表：Boxmes 会尝试并学习"
     },
-    "showArchived": "包含已归档"
+    "showArchived": "包含已归档",
+    "bal": {
+      "title": "余额与支出趋势",
+      "window": "时间范围",
+      "days": "{n} 天",
+      "daysN": "约 {n} 天",
+      "balance": "余额",
+      "burn": "消耗",
+      "runway": "可用天数",
+      "stale": "过期",
+      "staleHint": "最近一次通过 API 读取余额失败：{error}。显示最近一次成功读数（{time}）。",
+      "stalePoint": "读取失败：{error} — 保留上一次余额",
+      "staleLine": "通过 API 读取余额失败：{error}。当前余额为最近一次成功读数（{time}）；状态与故障转移不受影响。",
+      "sourceApi": "API（自动读取）",
+      "source": {
+        "api": "API",
+        "manual": "手动",
+        "estimated": "估算",
+        "none": "暂无余额"
+      },
+      "emptyApi": "暂无历史 — Boxmes 每 {min} 分钟读取一次余额，下次读取后出现第一个点。",
+      "emptyManual": "暂无历史 — 在“编辑”页填写余额（或额度），Boxmes 才能估算并绘图。",
+      "spent": "已支出（按余额）",
+      "topUps": "充值",
+      "runwayTrend": "可用天数趋势",
+      "polled": "最近读取",
+      "trendPerDay": "{n} 天/天",
+      "apiNote": "每 {min} 分钟通过提供商 API 读取余额：若设置了只读计费密钥则使用它，否则使用主密钥。读取失败只会标记为“过期”。",
+      "runwayTrend7d": "提供商可用天数（7 天）",
+      "balanceTrend7d": "提供商余额（7 天）",
+      "staleAccounts": "{n} 个账户读取失败",
+      "staleAccountsHint": "这些账户显示的是最近一次成功读取的余额",
+      "burnNow": "消耗 {v}/h",
+      "accountsN": "{n} 个账户"
+    }
   },
   "authFlow": {
     "forgotTitle": "忘记密码",

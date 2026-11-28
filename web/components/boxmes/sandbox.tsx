@@ -24,6 +24,7 @@ const T1_LOGO: Record<string, { initials: string; color: string }> = {
   digitalocean: { initials: "DO", color: "#0069ff" },
   contabo: { initials: "CB", color: "#1d4ed8" },
   netcup: { initials: "NC", color: "#056473" },
+  runpod: { initials: "RP", color: "#673ab7" },
   local: { initials: "LO", color: "#475569" },
 };
 

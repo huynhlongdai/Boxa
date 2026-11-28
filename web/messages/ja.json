@@ -2290,7 +2290,8 @@
       "balanceApi": "残高 API",
       "limitsApi": "制限 API",
       "templateApi": "テンプレート API",
-      "manualHint": "残高・クレジット・制限はアカウントのドロワーで手入力します（またはエラーから学習）。"
+      "manualHint": "残高・クレジット・制限はアカウントのドロワーで手入力します（またはエラーから学習）。",
+      "apiHint": "残高は {min} 分ごとに API で自動取得され、残り日数は実際の残高とプロバイダーが報告する支出速度から計算されます。"
     },
     "strategyTitle": "アカウント選択",
     "strategyLabel": "戦略",
@@ -2372,7 +2373,8 @@
         "failover": "アカウントのフェイルオーバー",
         "single_account": "利用可能なアカウントが 1 つのみ",
         "orphan_host": "孤立ホスト（削除失敗）",
-        "balance_stale": "残高が古い"
+        "balance_stale": "残高が古い",
+        "balance_read_failed": "API で残高を取得できません"
       }
     },
     "add": {
@@ -2435,7 +2437,9 @@
       "lastError": "直近のエラー",
       "templates": "このアカウントのテンプレート",
       "consoleUrl": "プロバイダのコンソールへのリンク",
-      "notes": "メモ"
+      "notes": "メモ",
+      "providerBurn": "時間あたり支出（プロバイダー）",
+      "spendLimit": "上限 {v}/h"
     },
     "tab": {
       "overview": "概要",
@@ -2460,7 +2464,8 @@
       "testOk": "キーは動作しています（{ms} ms）",
       "testFail": "キーのエラー：{error}",
       "archived": "アカウントをアーカイブしました（旧ホストを削除できるようキーは保持）",
-      "purged": "アカウントを完全に削除しました"
+      "purged": "アカウントを完全に削除しました",
+      "testOkBalanceFail": "キーは有効（{ms} ms）ですが残高の取得に失敗しました: {error}"
     },
     "delete": {
       "title": "アカウント {label} を削除しますか？",
@@ -2548,7 +2553,41 @@
       "not_listed": "アカウントにテンプレート一覧があり、これは含まれていません",
       "unknown": "アカウントに一覧がありません：Boxmes が試して学習します"
     },
-    "showArchived": "アーカイブ済みを含む"
+    "showArchived": "アーカイブ済みを含む",
+    "bal": {
+      "title": "残高と支出の推移",
+      "window": "期間",
+      "days": "{n} 日",
+      "daysN": "約 {n} 日",
+      "balance": "残高",
+      "burn": "消費",
+      "runway": "残り日数",
+      "stale": "古い",
+      "staleHint": "API による直近の残高取得に失敗しました: {error}。最後に取得できた値（{time}）を表示しています。",
+      "stalePoint": "取得失敗: {error} — 前回の残高を保持",
+      "staleLine": "API による残高取得に失敗しています: {error}。表示中の残高は最後に取得できた値（{time}）です。ステータスとフェイルオーバーには影響しません。",
+      "sourceApi": "API（自動取得）",
+      "source": {
+        "api": "API",
+        "manual": "手入力",
+        "estimated": "推定",
+        "none": "残高なし"
+      },
+      "emptyApi": "履歴はまだありません — Boxmes は {min} 分ごとに残高を取得します。次回取得後に最初の点が表示されます。",
+      "emptyManual": "履歴はまだありません — 「編集」タブで残高（またはクレジット）を入力すると、Boxmes が推定してグラフにします。",
+      "spent": "支出（残高ベース）",
+      "topUps": "チャージ",
+      "runwayTrend": "残り日数の傾向",
+      "polled": "最終取得",
+      "trendPerDay": "{n} 日/日",
+      "apiNote": "{min} 分ごとにプロバイダー API で残高を取得します（読み取り専用の課金キーがあればそれを、なければメインキーを使用）。取得失敗は「古い」と表示されるだけです。",
+      "runwayTrend7d": "プロバイダーの残り日数（7 日）",
+      "balanceTrend7d": "プロバイダーの残高（7 日）",
+      "staleAccounts": "{n} 件のアカウントで取得失敗",
+      "staleAccountsHint": "これらのアカウントは最後に取得できた残高を表示しています",
+      "burnNow": "消費 {v}/h",
+      "accountsN": "{n} アカウント"
+    }
   },
   "authFlow": {
     "forgotTitle": "パスワードをお忘れですか",

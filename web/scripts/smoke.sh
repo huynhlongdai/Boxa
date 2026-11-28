@@ -47,7 +47,7 @@ check_page() {
   ok "[$l] 200 $path"
 }
 
-ROUTES="/ /boxes /boxes/box_7f3a91 /boxes/box_7f3a91?tab=logs /boxes/box_a9d054?tab=ports /boxes/box_5e2b70?tab=ports /boxes/box_a9d054?tab=access /boxes/box_a9d054?tab=terminal /boxes/box_51be07?tab=terminal /recommend /infra?s=health /infra?s=catalog /infra?s=speed /infra?s=mesh /infra?s=sandbox /infra?s=providers /infra/providers/hetzner /infra/providers/e2b?tab=sandbox /infra/adapters /boxes/box_5e2b70 /agents /agents/agt_kecon /costs /infra /templates /secrets /settings /admin /developers /onboarding /login /forgot-password /reset-password?token=t /verify-email?token=t"
+ROUTES="/ /boxes /boxes/box_7f3a91 /boxes/box_7f3a91?tab=logs /boxes/box_a9d054?tab=ports /boxes/box_5e2b70?tab=ports /boxes/box_a9d054?tab=access /boxes/box_a9d054?tab=terminal /boxes/box_51be07?tab=terminal /recommend /infra?s=health /infra?s=catalog /infra?s=speed /infra?s=mesh /infra?s=sandbox /infra?s=providers /infra/providers/hetzner /infra/providers/e2b?tab=sandbox /infra/providers/runpod /infra/adapters /boxes/box_5e2b70 /agents /agents/agt_kecon /costs /infra /templates /secrets /settings /admin /developers /onboarding /login /forgot-password /reset-password?token=t /verify-email?token=t"
 
 echo "== Trang × ngôn ngữ (cookie boxmes_locale)"
 for l in $LOCALES; do
@@ -369,6 +369,17 @@ for l in $LOCALES; do
   node -e 'const m=require("./messages/'$l'.json");const s=["priority","weighted","round_robin","least_used","drain_first"];process.exit(s.every(k=>m.pa.strategy[k]&&m.pa.strategyDesc[k])&&m.pa.sbx.syncAll&&m.pa.add.stepName3&&m.authFlow.resetTitle&&m.login.forgot?0:1)' && ok "[$l] chuỗi pa.* (5 chiến lược) + authFlow.*" || bad "[$l] thiếu chuỗi v2.2"
 done
 grep -rqs "data-template-matrix" .next/static/chunks && grep -rqs "data-add-account-dialog" .next/static/chunks && grep -rqs "data-forgot-password" .next/static/chunks && ok "bundle có UI tài khoản provider + ma trận template + quên mật khẩu" || bad "bundle thiếu UI v2.2"
+
+echo "== v2.3: đọc số dư qua API (Runpod) + lịch sử số dư (M29 pha B)"
+r=$(curl -s "$A/providers/runpod"); grep -q '"balance_api":true' <<<"$r" && grep -q '"balance_source":"api"' <<<"$r" && grep -q '"balance_stale":true' <<<"$r" && ok "GET /admin/providers/runpod (balance_api, api, stale)" || bad "runpod: ${r:0:200}"
+expect "lịch sử số dư tài khoản (7 ngày)" "$(curl -s "$A/providers/runpod/accounts/pa_runpod_default/balance/history?days=7" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log(j.days+"|"+j.balance_api+"|"+(j.points.length>100)+"|"+j.points.every(p=>p.source&&p.burn_per_hour_usd>=0)+"|"+(j.spent>0))})')" "7|true|true|true|true"
+expect "điểm cuối 'cũ' khi đọc lỗi" "$(curl -s "$A/providers/runpod/accounts/pa_5e7a90/balance/history?days=1" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);const l=j.points[j.points.length-1];console.log(j.stale+"|"+l.stale+"|"+(!!l.error))})')" "true|true|true"
+expect "lịch sử cấp provider (bucket 1 h)" "$(curl -s "$A/providers/runpod/balance/history?days=7" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);const l=j.points[j.points.length-1];console.log(j.bucket_s+"|"+j.accounts.length+"|"+l.accounts+"|"+l.stale_accounts)})')" "3600|2|2|1"
+expect "nhập tay cũng có lịch sử (ước tính)" "$(curl -s "$A/providers/vultr/accounts/pa_vultr_default/balance/history?days=1" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log(j.balance_api+"|"+j.source+"|"+(j.points.length>0))})')" "false|manual|true"
+for l in $LOCALES; do
+  node -e 'const m=require("./messages/'$l'.json");process.exit(m.pa.bal.title&&m.pa.bal.stale&&m.pa.bal.staleHint.includes("{error}")&&m.pa.bal.runwayTrend7d&&m.pa.alerts.type.balance_read_failed&&m.pa.caps.apiHint.includes("{min}")?0:1)' && ok "[$l] chuỗi pa.bal.* v2.3" || bad "[$l] thiếu chuỗi v2.3"
+done
+grep -rqs "data-balance-chart" .next/static/chunks && grep -rqs "data-runway-trend" .next/static/chunks && grep -rqs "data-balance-stale" .next/static/chunks && ok "bundle có biểu đồ số dư + xu hướng runway + badge cũ" || bad "bundle thiếu UI v2.3"
 
 echo "== Lỗi được dịch theo ngôn ngữ (code không đổi)"
 declare -A NF=([vi]="Không tìm thấy" [en]="not found" [zh]="未找到" [ja]="見つかりません")

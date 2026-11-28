@@ -2290,7 +2290,8 @@
       "balanceApi": "API số dư",
       "limitsApi": "API hạn mức",
       "templateApi": "API template",
-      "manualHint": "Số dư, credit và hạn mức nhập tay trong ngăn kéo tài khoản (hoặc học từ lỗi)."
+      "manualHint": "Số dư, credit và hạn mức nhập tay trong ngăn kéo tài khoản (hoặc học từ lỗi).",
+      "apiHint": "Số dư đọc tự động qua API mỗi {min} phút; runway tính từ số dư thật và tốc độ chi provider báo."
     },
     "strategyTitle": "Chọn tài khoản",
     "strategyLabel": "Chiến lược",
@@ -2372,7 +2373,8 @@
         "failover": "Đã failover tài khoản",
         "single_account": "Chỉ còn một tài khoản khả dụng",
         "orphan_host": "Host mồ côi (không xoá được)",
-        "balance_stale": "Số dư đã cũ"
+        "balance_stale": "Số dư đã cũ",
+        "balance_read_failed": "Không đọc được số dư qua API"
       }
     },
     "add": {
@@ -2435,7 +2437,9 @@
       "lastError": "Lỗi gần nhất",
       "templates": "Template có trong tài khoản",
       "consoleUrl": "Link console provider",
-      "notes": "Ghi chú"
+      "notes": "Ghi chú",
+      "providerBurn": "Chi/giờ (provider báo)",
+      "spendLimit": "trần {v}/h"
     },
     "tab": {
       "overview": "Tổng quan",
@@ -2460,7 +2464,8 @@
       "testOk": "Khoá hoạt động ({ms} ms)",
       "testFail": "Khoá lỗi: {error}",
       "archived": "Đã lưu trữ tài khoản (giữ khoá để xoá được host cũ)",
-      "purged": "Đã xoá hẳn tài khoản"
+      "purged": "Đã xoá hẳn tài khoản",
+      "testOkBalanceFail": "Khoá hoạt động ({ms} ms) nhưng đọc số dư lỗi: {error}"
     },
     "delete": {
       "title": "Xoá tài khoản {label}?",
@@ -2548,7 +2553,41 @@
       "not_listed": "Tài khoản có danh sách template và không có mục này",
       "unknown": "Tài khoản chưa có danh sách: Boxmes thử và học"
     },
-    "showArchived": "Gồm đã lưu trữ"
+    "showArchived": "Gồm đã lưu trữ",
+    "bal": {
+      "title": "Số dư & chi theo thời gian",
+      "window": "Khoảng thời gian",
+      "days": "{n} ngày",
+      "daysN": "~{n} ngày",
+      "balance": "Số dư",
+      "burn": "Burn",
+      "runway": "Runway",
+      "stale": "cũ",
+      "staleHint": "Lần đọc số dư qua API gần nhất lỗi: {error}. Đang hiện số đọc tốt gần nhất ({time}).",
+      "stalePoint": "Đọc lỗi: {error} — giữ số dư trước đó",
+      "staleLine": "Đọc số dư qua API đang lỗi: {error}. Số dư hiện là số đọc tốt gần nhất ({time}); trạng thái và failover không bị ảnh hưởng.",
+      "sourceApi": "API (tự đọc)",
+      "source": {
+        "api": "API",
+        "manual": "nhập tay",
+        "estimated": "ước tính",
+        "none": "chưa có số dư"
+      },
+      "emptyApi": "Chưa có lịch sử — Boxmes đọc số dư mỗi {min} phút, điểm đầu tiên sẽ có sau lần đọc tới.",
+      "emptyManual": "Chưa có lịch sử — nhập số dư (hoặc credit) trong tab Sửa để Boxmes ước tính và vẽ biểu đồ.",
+      "spent": "Đã chi (theo số dư)",
+      "topUps": "Nạp thêm",
+      "runwayTrend": "Xu hướng runway",
+      "polled": "Đọc lần cuối",
+      "trendPerDay": "{n} ngày/ngày",
+      "apiNote": "Số dư đọc qua API provider mỗi {min} phút bằng khoá billing chỉ-đọc nếu có, không thì khoá chính. Đọc lỗi chỉ đánh dấu “cũ”.",
+      "runwayTrend7d": "Runway cả provider (7 ngày)",
+      "balanceTrend7d": "Số dư cả provider (7 ngày)",
+      "staleAccounts": "{n} tài khoản đọc lỗi",
+      "staleAccountsHint": "Số dư của các tài khoản này là số đọc tốt gần nhất",
+      "burnNow": "burn {v}/h",
+      "accountsN": "{n} tài khoản"
+    }
   },
   "authFlow": {
     "forgotTitle": "Quên mật khẩu",

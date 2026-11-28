@@ -1631,6 +1631,8 @@ export interface AccountStats {
   balance_effective?: number; balance_effective_usd?: number; runway_hours?: number; runway_days?: number; forecast_month_end: number;
   eligible: boolean; ineligible?: string; breaker: "closed" | "open" | "half_open"; has_credential: boolean;
   sandboxes_running?: number; group_running?: number; in_flight?: number; creates_last_sec?: number; creates_last_min?: number;
+  /** v2.3: provider báo số dư qua API (được thăm dò), còn lại nhập tay / ước tính */
+  balance_api?: boolean;
 }
 export type AccountThresholdKey = "runway_warn_days" | "runway_critical_days" | "limit_warn_pct" | "limit_critical_pct" | "expiry_warn_days" | "expiry_critical_days";
 export interface ProviderAccount {
@@ -1648,6 +1650,26 @@ export interface ProviderAccount {
   limits: Record<string, AccountLimit>; thresholds: Partial<Record<AccountThresholdKey, number>>;
   templates?: string[]; templates_missing?: string[]; templates_synced_at?: string; limit_group?: string; billing_group?: string;
   created_at: string; created_by?: string; updated_at: string; updated_by?: string; stats?: AccountStats; warnings?: string[];
+  /** v2.3 (M29 pha B): đọc số dư qua API (Runpod). stale = lần đọc cuối lỗi, giữ số đọc tốt gần nhất. */
+  spend_per_hour?: number; balance_polled_at?: string; balance_stale?: boolean; balance_error?: string; balance_error_at?: string;
+}
+/** v2.3: một snapshot số dư (một lần thăm dò). Tiền theo `currency`, trừ trường *_usd. */
+export interface BalancePoint {
+  account_id: string; provider: string; ts: string; source: "api" | "manual" | "estimated" | "none"; currency: string;
+  balance?: number; balance_effective?: number; balance_usd?: number; spend_per_hour?: number; spend_limit_per_hour?: number;
+  burn_per_hour_usd: number; runway_days?: number; spend_today_usd: number; spend_month_usd: number; stale: boolean; error?: string;
+}
+/** GET /v1/admin/providers/{p}/accounts/{a}/balance/history?days=N */
+export interface BalanceHistory {
+  provider: string; account_id: string; label: string; currency: string; days: number; interval_s: number;
+  source: "api" | "manual" | "estimated" | "none"; balance_api: boolean; stale: boolean; balance_error?: string; balance_at?: string; polled_at?: string;
+  points: BalancePoint[]; runway_trend_per_day?: number; spent?: number; top_ups?: number;
+}
+export interface ProviderBalancePoint { ts: string; balance_usd?: number; burn_per_hour_usd: number; runway_days?: number; spend_today_usd: number; accounts: number; stale_accounts: number }
+/** GET /v1/admin/providers/{p}/balance/history?days=N */
+export interface ProviderBalanceHistory {
+  provider: string; days: number; bucket_s: number; accounts: { id: string; label: string; source: string; stale: boolean }[];
+  points: ProviderBalancePoint[]; runway_trend_per_day?: number;
 }
 /** POST / PATCH (merge-patch; ngày RFC 3339 hoặc YYYY-MM-DD, "" xoá; limits giá trị 0 = bỏ). */
 export interface ProviderAccountInput {
@@ -1660,7 +1682,7 @@ export interface ProviderAccountInput {
   limits?: Record<string, number>; thresholds?: Partial<Record<AccountThresholdKey, number>>;
   templates?: string[]; clear_templates_missing?: boolean; limit_group?: string; billing_group?: string;
 }
-export interface AccountTestResult { ok: boolean; error?: string; error_class?: string; latency_ms: number; key_fingerprint?: string; duplicates?: string[]; account?: ProviderAccount }
+export interface AccountTestResult { ok: boolean; error?: string; error_class?: string; latency_ms: number; key_fingerprint?: string; duplicates?: string[]; account?: ProviderAccount; balance_read?: boolean; balance_error?: string }
 export interface ProviderStrategyView { provider: string; strategy: AccountStrategy | ""; effective_strategy: AccountStrategy; sticky_minutes: number; failover_across_accounts: boolean; strategies: AccountStrategy[] }
 export type InfraAlertLevel = "info" | "warn" | "critical";
 export interface InfraAlert {

@@ -29,6 +29,7 @@ import { Empty, ErrorBox, LoadingRows, SectionTitle } from "@/components/boxmes/
 import { Mono } from "@/components/boxmes/status";
 import { ProviderLogo } from "@/components/boxmes/sandbox";
 import { cn } from "@/lib/utils";
+import { AccountBalanceChart, BalanceStaleBadge, ProviderRunwayTrend } from "@/components/boxmes/balance-chart";
 
 // ---------------- tiền: USD + tiền gốc ----------------
 /** Định dạng tiền theo mã tiền tệ (EUR, GBP…) và locale hiện tại. */
@@ -227,7 +228,7 @@ function ProviderRow({ r }: { r: AdminProviderRow }) {
 
 // ---------------- cảnh báo ----------------
 const ALERT_TONE = { critical: "red", warn: "yellow", info: "blue" } as const;
-const ALERT_TYPES = ["low_balance", "out_of_credit", "auth_failed", "token_expiring", "credit_expiring", "trial_ending", "contract_ending", "rotation_due", "limit_near", "spend_cap_near", "failover", "single_account", "orphan_host", "balance_stale"];
+const ALERT_TYPES = ["low_balance", "out_of_credit", "auth_failed", "token_expiring", "credit_expiring", "trial_ending", "contract_ending", "rotation_due", "limit_near", "spend_cap_near", "failover", "single_account", "orphan_host", "balance_stale", "balance_read_failed"];
 
 export function InfraAlertsList({ provider }: { provider?: string }) {
   const t = useTranslations("pa");
@@ -349,8 +350,10 @@ export function ProviderAccountsPanel({ provider }: { provider: string }) {
               <CapBadge on={!!data.capabilities.limits_api} label={t("caps.limitsApi")} />
               {data.group === "sandbox" && <CapBadge on={!!data.capabilities.template_api} label={t("caps.templateApi")} />}
               {!data.capabilities.balance_api && <span className="ml-1">{t("caps.manualHint")}</span>}
+              {!!data.capabilities.balance_api && <span className="ml-1">{t("caps.apiHint", { min: Math.round(Number(data.capabilities.balance_poll_s ?? 900) / 60) })}</span>}
             </Card>
           )}
+          <ProviderRunwayTrend provider={provider} />
         </div>
         <StrategyEditor provider={provider} cfg={data.strategy_config} sandbox={data.group === "sandbox"} />
       </div>
@@ -426,7 +429,7 @@ function AccountRow({ a, strategy, onOpen }: { a: ProviderAccount; strategy: Acc
       <TD>
         <span className="flex flex-col">
           <Money usd={s?.balance_effective_usd} amount={s?.balance_effective} currency={a.currency} />
-          {a.balance_source && <span className="text-[11px] text-muted-foreground">{t(`balanceSource.${a.balance_source}`)}</span>}
+          {a.balance_source && <span className="flex items-center gap-1 text-[11px] text-muted-foreground">{t(`balanceSource.${a.balance_source}`)}<BalanceStaleBadge a={a} /></span>}
           {a.balance === undefined && a.credit_remaining !== undefined && <span className="text-[11px] text-muted-foreground">{t("creditLabel")}</span>}
         </span>
       </TD>
@@ -613,7 +616,7 @@ export function AccountDrawer({ provider, account, sandbox, onClose }: { provide
                 <TabsTrigger value="key">{t("tab.key")}</TabsTrigger>
                 <TabsTrigger value="timeline">{t("tab.timeline")}</TabsTrigger>
               </TabsList>
-              <TabsContent value="overview"><AccountOverview a={account} /></TabsContent>
+              <TabsContent value="overview"><AccountOverview provider={provider} a={account} /></TabsContent>
               <TabsContent value="edit"><AccountEditForm provider={provider} a={account} sandbox={sandbox} /></TabsContent>
               <TabsContent value="key"><RotateKey provider={provider} a={account} /></TabsContent>
               <TabsContent value="timeline"><AccountTimeline provider={provider} id={account.id} /></TabsContent>
@@ -634,7 +637,8 @@ function AccountActions({ provider, a, onDeleted }: { provider: string; a: Provi
   return (
     <div className="flex flex-wrap gap-2" data-account-actions>
       <Button size="xs" variant="outline" disabled={!!pending || archived} onClick={() => run("test", () => api.testProviderAccount(provider, a.id), {
-        success: (r) => (r.ok ? t("toast.testOk", { ms: r.latency_ms }) : t("toast.testFail", { error: r.error ?? r.error_class ?? "?" })), revalidate: rv,
+        success: (r) => (r.ok ? (r.balance_error ? t("toast.testOkBalanceFail", { ms: r.latency_ms, error: r.balance_error }) : t("toast.testOk", { ms: r.latency_ms })) : t("toast.testFail", { error: r.error ?? r.error_class ?? "?" })),
+        revalidate: [...rv, startsWith(paths.providerAccount(provider, a.id))],
       })}><RefreshCw /> {t("action.test")}</Button>
       {a.enabled ? (
         <Button size="xs" variant="outline" disabled={!!pending || archived} onClick={() => state("disable")}><Pause /> {t("action.disable")}</Button>
@@ -699,7 +703,7 @@ function Row({ k, children }: { k: string; children: React.ReactNode }) {
   return <><dt className="text-muted-foreground">{k}</dt><dd className="min-w-0 break-words">{children}</dd></>;
 }
 
-function AccountOverview({ a }: { a: ProviderAccount }) {
+function AccountOverview({ provider, a }: { provider: string; a: ProviderAccount }) {
   const t = useTranslations("pa");
   const money = useMoney();
   const { relTime, dateTime } = useFmt();
@@ -710,7 +714,9 @@ function AccountOverview({ a }: { a: ProviderAccount }) {
         <Row k={t("f.balance")}>
           <Money usd={s?.balance_effective_usd} amount={s?.balance_effective} currency={a.currency} />
           {a.balance_source && <span className="ml-1 text-xs text-muted-foreground">{t(`balanceSource.${a.balance_source}`)}{a.balance_at ? ` · ${relTime(a.balance_at)}` : ""}</span>}
+          <BalanceStaleBadge a={a} className="ml-1" />
         </Row>
+        {a.spend_per_hour !== undefined && <Row k={t("f.providerBurn")}>{money(a.spend_per_hour, a.currency)}/h{a.limits.spend_per_hour?.source === "api" ? <span className="ml-1 text-xs text-muted-foreground">{t("f.spendLimit", { v: money(a.limits.spend_per_hour.limit, a.currency) })}</span> : null}</Row>}
         {a.credit_remaining !== undefined && <Row k={t("f.creditRemaining")}>{money(a.credit_remaining, a.currency)}{a.credit_total ? ` / ${money(a.credit_total, a.currency)}` : ""}{a.credit_at ? <span className="ml-1 text-xs text-muted-foreground">{relTime(a.credit_at)}</span> : null}</Row>}
         <Row k={t("f.spendToday")}><Money usd={s?.spend_today_usd} amount={s?.spend_today} currency={a.currency} /></Row>
         <Row k={t("f.spendMonth")}><Money usd={s?.spend_month_usd} amount={s?.spend_month} currency={a.currency} /></Row>
@@ -722,6 +728,7 @@ function AccountOverview({ a }: { a: ProviderAccount }) {
         <Row k={t("f.currency")}>{a.currency}{a.fx_rate_usd ? ` · 1 ${a.currency} = ${money(a.fx_rate_usd)}` : ""}</Row>
         <Row k={t("f.billingModel")}>{a.billing_model ?? "—"}</Row>
       </dl>
+      <AccountBalanceChart provider={provider} account={a} />
       <dl className="grid grid-cols-[9.5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 border-t border-border pt-3 text-[13px]">
         <Row k={t("f.priority")}>#{a.priority} · {t("weightN", { n: a.weight })}</Row>
         <Row k={t("f.regions")}>{a.regions.length ? a.regions.join(", ") : t("allRegions")}</Row>

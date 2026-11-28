@@ -1,9 +1,11 @@
 // MOCK MODE v2.2: hạ tầng — tài khoản nhà cung cấp (M29) + sandbox nhiều khoá (M29-S).
+// v2.3 (M29 pha B): Runpod đọc số dư qua API (balance_source=api, spend_per_hour, balance_stale) + lịch sử số dư
+// (GET …/accounts/{a}/balance/history, GET …/providers/{p}/balance/history) sinh tất định từ số dư hiện tại.
 // Bám docs/api-contract-v1.md "v2.2 additions" + "v2.2 M29-S" (core/internal/manager/accounts.go, sandboxaccounts.go).
 // Trạng thái giữ trong bộ nhớ (globalThis). Không bao giờ trả token: chỉ key_fingerprint.
 import type {
-  AccountStats, AccountStatus, AccountStrategy, AdminProviderRow, ErrorCode, InfraAlert, InfraSummary, Provider, ProviderAccount,
-  ProviderStrategyView, SandboxAccountRow, TemplateAvailability,
+  AccountStats, AccountStatus, AccountStrategy, AdminProviderRow, BalanceHistory, BalancePoint, ErrorCode, InfraAlert, InfraSummary, Provider, ProviderAccount,
+  ProviderBalanceHistory, ProviderBalancePoint, ProviderStrategyView, SandboxAccountRow, TemplateAvailability,
 } from "../types";
 import { ACCOUNT_STRATEGIES } from "../types";
 import type { MockState } from "./seed";
@@ -41,6 +43,11 @@ interface T22 {
 const SANDBOX = new Set(["e2b", "daytona", "novita", "prized", "boxd", "render", "vercel", "modal", "blaxel", "upstash-box"]);
 const BUILTIN: Record<string, string[]> = { e2b: ["base"], daytona: ["daytona-small"], novita: ["base"] };
 const TEMPLATE_API = new Set(["e2b", "daytona", "novita"]);
+/** v2.3: provider đọc được số dư qua API (core: provider.BalanceReader). */
+const BALANCE_API = new Set(["runpod"]);
+const POLL_MS = 15 * 60_000;
+/** Runpod chưa có trong seed (không có adapter tạo pod): chỉ hiện trong khu tài khoản. */
+const RUNPOD: Provider = { id: "runpod", name: "Runpod", connected: true, tier: "T1", last_check_at: new Date().toISOString(), error: null, implemented: false, group: "vps", adapter: "api" } as Provider;
 
 function acc(p: Partial<Acc> & Pick<Acc, "id" | "provider" | "label">): Acc {
   return {
@@ -84,6 +91,15 @@ function st(): T22 {
         external_id: "org-1", limit_group: "org-1", billing_group: "org-1", billing_model: "prepaid", credit_remaining: 72, credit_at: ago(2 * DAY), currency: "USD",
         scopes: ["write:sandboxes", "write:snapshots"], limits: { concurrent_sandboxes: { limit: 100, used: 2, source: "manual" }, create_per_min: { limit: 60, used: 0, source: "manual" } },
         _burn: 0.05, _hosts: 2, _spend_today: 1.1, _spend_month: 12.6, _running: 2, _templates_api: ["daytona-small", "agent-py"] }),
+      // v2.3: Runpod — số dư đọc qua GraphQL myself { clientBalance currentSpendPerHr spendLimit }
+      acc({ id: "pa_runpod_default", provider: "runpod", label: "Runpod GPU #1", is_default: true, credential_ref: "provider:runpod", key_fingerprint: "rpa_8d1c…Q7vk",
+        billing_key_fingerprint: "rpa_2f90…mR1x", billing_model: "prepaid", balance: 212.4, balance_source: "api", balance_at: ago(6 * 60_000), balance_polled_at: ago(6 * 60_000),
+        spend_per_hour: 1.86, limits: { spend_per_hour: { limit: 80, used: 1.86, source: "api", at: ago(6 * 60_000) } }, status: "low_balance", status_reason: "runway 4.8 days",
+        created_at: ago(40 * DAY), _burn: 1.86 }),
+      acc({ id: "pa_5e7a90", provider: "runpod", label: "Runpod research", priority: 2, key_fingerprint: "rpa_c41e…0pLd", billing_model: "prepaid",
+        balance: 38.1, balance_source: "api", balance_at: ago(3 * HOUR), balance_polled_at: ago(4 * 60_000), balance_stale: true, balance_error: "Runpod API error: HTTP 503: service unavailable",
+        balance_error_at: ago(3 * HOUR - 15 * 60_000), spend_per_hour: 0.12, limits: { spend_per_hour: { limit: 80, used: 0.12, source: "api", at: ago(3 * HOUR) } },
+        created_at: ago(12 * DAY), _burn: 0.12 }),
     ];
     const al = (id: string, type: string, level: InfraAlert["level"], provider: string, account_id: string, message: string, args: unknown[], openedAgo: number): InfraAlert => ({
       id, type, level, status: "open", provider, account_id, message, data: { args }, count: 1, opened_at: ago(openedAgo), updated_at: ago(openedAgo / 2),
@@ -98,6 +114,9 @@ function st(): T22 {
         al("contract_ending|pa_contabo_default", "contract_ending", "warn", "contabo", "pa_contabo_default", "Contabo EU: contract ends in 12 days", ["Contabo EU", 12], DAY),
         al("single_account|vultr", "single_account", "info", "vultr", "", "vultr has only one usable account", ["vultr"], 3 * DAY),
         al("limit_near|pa_8c2e41|servers", "limit_near", "critical", "hetzner", "pa_8c2e41", "Hetzner EU #2: servers at 90% of the limit", ["Hetzner EU #2", "servers", 90], 3 * HOUR),
+        al("low_balance|pa_runpod_default", "low_balance", "warn", "runpod", "pa_runpod_default", "runpod Runpod GPU #1: about 4.8 days left (balance 212.40 USD)", ["runpod", "Runpod GPU #1", 4.8, 212.4, "USD"], 2 * HOUR),
+        al("balance_read_failed|pa_5e7a90", "balance_read_failed", "info", "runpod", "pa_5e7a90", "runpod Runpod research: balance read through the API failing since 3 hours ago (last reading kept): Runpod API error: HTTP 503: service unavailable",
+          ["runpod", "Runpod research", "3h", "HTTP 503"], 2 * HOUR),
       ],
       timeline: [],
     };
@@ -106,6 +125,8 @@ function st(): T22 {
     ev(t, accounts[5], "provider_account.template_missing", "template browser not found in this account", ago(3 * HOUR));
     ev(t, accounts[5], "provider_account.limit_learned", "concurrent_sandboxes learned = 20 (429)", ago(40 * 60_000));
     ev(t, accounts[1], "provider_account.status_changed", "active → token_expiring", ago(2 * DAY));
+    ev(t, accounts[8], "provider_account.balance_updated", "balance read from the provider API", ago(40 * DAY));
+    ev(t, accounts[9], "provider_account.balance_read_failed", "balance read failed (kept the last reading): Runpod API error: HTTP 503", ago(3 * HOUR - 15 * 60_000));
   }
   return g.__boxmesMock22;
 }
@@ -151,7 +172,7 @@ function stats(t: T22, a: Acc): AccountStats {
     burn_per_hour_usd: a._burn, balance_effective: be, balance_effective_usd: beUsd,
     runway_hours: runwayH === undefined ? undefined : Math.round(runwayH), runway_days: runwayH === undefined ? undefined : Math.round((runwayH / 24) * 10) / 10,
     forecast_month_end: r2(a._spend_month * fx(a) + a._burn * hoursLeft), eligible: !why, ineligible: why,
-    breaker: a.status === "cooling" ? "open" : "closed", has_credential: true,
+    breaker: a.status === "cooling" ? "open" : "closed", has_credential: true, balance_api: BALANCE_API.has(a.provider),
     ...(sbx ? { sandboxes_running: a._running ?? 0, group_running: group, in_flight: 0, creates_last_sec: 0, creates_last_min: a._running ? 1 : 0 } : {}),
   };
 }
@@ -312,6 +333,7 @@ export function handleV22(s: MockState, c: Ctx, M: string, segs: string[], q: UR
   const t = st();
   const [, r1, p, r3, a, r5, r6] = segs;
   const provs = s.providers.filter((x) => x.id !== "local");
+  if (!provs.some((x) => x.id === "runpod")) provs.push(RUNPOD);
   const bad = (what: string) => c.err(400, "INVALID", "v20_invalid", { what });
 
   // ---- cảnh báo ----
@@ -343,7 +365,8 @@ export function handleV22(s: MockState, c: Ctx, M: string, segs: string[], q: UR
     return c.ok({
       ...providerRow(t, prov), prefs: {}, strategy_config: strategyView(t, p), accounts: mine().filter((x) => x.status !== "archived").map((x) => view(t, x)),
       alerts: t.alerts.filter((x) => x.provider === p && x.status !== "closed"),
-      capabilities: { balance_api: false, limits_api: false, template_api: TEMPLATE_API.has(p), billing_model: SANDBOX.has(p) ? "prepaid" : "postpaid" },
+      capabilities: { balance_api: BALANCE_API.has(p), ...(BALANCE_API.has(p) ? { balance_poll_s: POLL_MS / 1000 } : {}), limits_api: false, template_api: TEMPLATE_API.has(p),
+        billing_model: SANDBOX.has(p) || BALANCE_API.has(p) ? "prepaid" : "postpaid" },
     });
   }
   if (r3 === "strategy") {
@@ -356,6 +379,7 @@ export function handleV22(s: MockState, c: Ctx, M: string, segs: string[], q: UR
     }
     return c.ok(strategyView(t, p));
   }
+  if (r3 === "balance" && a === "history" && M === "GET") return c.ok(providerHistory(t, p, days(q)));
   if (r3 === "sandbox" && M === "GET") {
     if (!isSandbox(prov)) return c.err(400, "INVALID", "v20_invalid", { what: `provider ${p} is not a sandbox provider` });
     const accs = mine().filter((x) => x.status !== "archived");
@@ -423,6 +447,7 @@ export function handleV22(s: MockState, c: Ctx, M: string, segs: string[], q: UR
     }
     return null;
   }
+  if (r5 === "balance" && r6 === "history" && M === "GET") return c.ok(accountHistory(acct, days(q)));
   if (r5 === "timeline" && M === "GET") {
     return c.list(t.timeline.filter((x) => x.account_id === acct.id).sort((x, y) => y.ts.localeCompare(x.ts)).slice(0, Number(q.get("limit") || 100)));
   }
@@ -452,10 +477,16 @@ export function handleV22(s: MockState, c: Ctx, M: string, segs: string[], q: UR
   }
   if (r5 === "test") {
     acct.last_check_at = now();
+    const br = BALANCE_API.has(acct.provider);
+    if (br) {
+      acct.balance_polled_at = now();
+      if (!acct.balance_stale) acct.balance_at = now();
+    }
     const okk = acct.status !== "auth_failed";
     if (okk) acct.last_ok_at = now();
     ev(t, acct, okk ? "provider_account.validated" : "provider_account.check_failed", okk ? "key ok" : "401", now(), "user:root");
-    return c.ok({ ok: okk, latency_ms: 140 + Math.round(Math.random() * 160), key_fingerprint: acct.key_fingerprint, account: view(t, acct), ...(okk ? {} : { error: "401 Unauthorized", error_class: "auth" }) });
+    return c.ok({ ok: okk, latency_ms: 140 + Math.round(Math.random() * 160), key_fingerprint: acct.key_fingerprint, account: view(t, acct), ...(okk ? {} : { error: "401 Unauthorized", error_class: "auth" }),
+      ...(br ? { balance_read: true, ...(acct.balance_stale ? { balance_error: acct.balance_error } : {}) } : {}) });
   }
   const states: Record<string, () => void> = {
     enable: () => { acct.enabled = true; },
@@ -475,4 +506,110 @@ export function handleV22(s: MockState, c: Ctx, M: string, segs: string[], q: UR
   recomputeStatus(acct);
   ev(t, acct, `provider_account.${r5 === "enable" ? "enabled" : r5 === "disable" ? "disabled" : r5 === "drain" ? "drained" : r5 === "undrain" ? "undrained" : "reset"}`, r5, now(), "user:root");
   return c.ok(view(t, acct));
+}
+
+// ---------------- v2.3: lịch sử số dư (tất định theo id tài khoản) ----------------
+const days = (q: URLSearchParams) => Math.min(90, Math.max(1, Number(q.get("days")) || 7));
+
+function seedOf(id: string) {
+  let h = 2166136261;
+  for (const ch of id) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+  return h;
+}
+
+/** Chuỗi điểm: tài khoản có API → mỗi 15 phút (≤ 2 ngày) hoặc mỗi giờ; nhập tay/ước tính → mỗi giờ. Đi ngược từ số dư hiện tại. */
+function accountPoints(a: Acc, d: number): BalancePoint[] {
+  const be = balanceEff(a);
+  const rate = fx(a);
+  const api = BALANCE_API.has(a.provider) && a.balance_source === "api";
+  const step = api && d <= 2 ? POLL_MS : HOUR;
+  const start = Math.max(Date.now() - d * DAY, Date.parse(a.created_at));
+  const seed = seedOf(a.id);
+  const topUpAt = Date.now() - ((seed % 5) + 2) * DAY; // một lần nạp tiền trong cửa sổ (nếu đủ dài)
+  const topUp = be !== undefined && (api || a.balance_source === "manual") ? r2(Math.min(50 + (seed % 4) * 25, Math.max(10, be * 0.5))) : 0;
+  const staleFrom = a.balance_stale && a.balance_at ? Date.parse(a.balance_at) : Infinity;
+  const out: BalancePoint[] = [];
+  if (be === undefined && a._burn === 0) return out;
+  const end = Date.now();
+  for (let k = Math.floor((end - start) / step); k >= 0; k--) {
+    const ts = end - k * step;
+    const hAgo = (Date.now() - ts) / HOUR;
+    const wobble = 1 + 0.08 * Math.sin((ts / HOUR + (seed % 24)) / 7.6); // burn dao động nhẹ theo giờ
+    const burnUsd = r2(a._burn * wobble * 1000) / 1000;
+    const stale = ts > staleFrom;
+    const at = stale ? staleFrom : ts;
+    const ahAgo = (end - at) / HOUR;
+    let bal: number | undefined;
+    if (be !== undefined) {
+      bal = be + (a._burn / rate) * ahAgo;
+      if (topUp && at < topUpAt) bal -= topUp; // trước lần nạp số dư thấp hơn
+      bal = r2(Math.max(0, bal));
+    }
+    const usd = bal === undefined ? undefined : r2(bal * rate);
+    const runway = usd !== undefined && burnUsd > 0 ? Math.round((Math.max(0, usd - a.min_balance * rate) / burnUsd / 24) * 100) / 100 : undefined;
+    const dayStart = new Date(ts); dayStart.setUTCHours(0, 0, 0, 0);
+    out.push({
+      account_id: a.id, provider: a.provider, ts: new Date(ts).toISOString(), currency: a.currency,
+      source: bal === undefined ? "none" : (a.balance_source ?? "estimated"),
+      balance: a.balance === undefined ? undefined : bal, balance_effective: bal, balance_usd: usd,
+      spend_per_hour: api ? r2(burnUsd * 100) / 100 : undefined, spend_limit_per_hour: a.limits.spend_per_hour?.source === "api" ? a.limits.spend_per_hour.limit : undefined,
+      burn_per_hour_usd: burnUsd, runway_days: runway,
+      spend_today_usd: r2(a._burn * ((ts - dayStart.getTime()) / HOUR)), spend_month_usd: r2(a._spend_month * rate * Math.max(0, 1 - hAgo / (30 * 24))),
+      stale, ...(stale ? { error: a.balance_error } : {}),
+    });
+  }
+  return out;
+}
+
+function slope(xs: number[], ys: number[]): number | undefined {
+  if (xs.length < 2) return undefined;
+  const n = xs.length;
+  const sx = xs.reduce((p, x) => p + x, 0), sy = ys.reduce((p, y) => p + y, 0);
+  const sxx = xs.reduce((p, x) => p + x * x, 0), sxy = xs.reduce((p, x, i) => p + x * ys[i], 0);
+  const den = n * sxx - sx * sx;
+  return den ? Math.round(((n * sxy - sx * sy) / den) * 100) / 100 : undefined;
+}
+
+function accountHistory(a: Acc, d: number): BalanceHistory {
+  const points = accountPoints(a, d);
+  const rw = points.filter((x) => x.runway_days !== undefined);
+  let drop = 0, rise = 0, prev: number | undefined, n = 0;
+  for (const pt of points) {
+    if (pt.balance === undefined || pt.stale) continue;
+    if (prev !== undefined) { if (pt.balance > prev) rise += pt.balance - prev; else drop += prev - pt.balance; }
+    prev = pt.balance; n++;
+  }
+  return {
+    provider: a.provider, account_id: a.id, label: a.label, currency: a.currency, days: d, interval_s: POLL_MS / 1000,
+    source: a.balance_source ?? "none", balance_api: BALANCE_API.has(a.provider), stale: !!a.balance_stale, balance_error: a.balance_error,
+    balance_at: a.balance_at, polled_at: a.balance_polled_at, points,
+    runway_trend_per_day: slope(rw.map((x) => (Date.parse(x.ts) - Date.parse(rw[0].ts)) / DAY), rw.map((x) => x.runway_days as number)),
+    ...(n >= 2 ? { spent: r2(drop), top_ups: r2(rise) } : {}),
+  };
+}
+
+function providerHistory(t: T22, p: string, d: number): ProviderBalanceHistory {
+  const accs = t.accounts.filter((x) => x.provider === p && x.status !== "archived");
+  const bucket = d > 30 ? 6 * HOUR : d > 7 ? 3 * HOUR : HOUR;
+  const from = Math.floor((Date.now() - d * DAY) / bucket) * bucket;
+  const series = accs.map((a) => accountPoints(a, d));
+  const idx = series.map(() => 0);
+  const last: (BalancePoint | undefined)[] = series.map(() => undefined);
+  const points: ProviderBalancePoint[] = [];
+  const xs: number[] = [], ys: number[] = [];
+  for (let ts = from; ts <= Date.now(); ts += bucket) {
+    series.forEach((sr, i) => { while (idx[i] < sr.length && Date.parse(sr[idx[i]].ts) < ts + bucket) last[i] = sr[idx[i]++]; });
+    const have = last.filter(Boolean) as BalancePoint[];
+    if (!have.length) continue;
+    const withBal = have.filter((x) => x.balance_usd !== undefined);
+    const bal = withBal.length ? r2(withBal.reduce((n, x) => n + Math.max(0, x.balance_usd as number), 0)) : undefined;
+    const burn = r2(have.reduce((n, x) => n + x.burn_per_hour_usd, 0) * 1000) / 1000;
+    const runway = bal !== undefined && burn > 0 ? Math.round((bal / burn / 24) * 100) / 100 : undefined;
+    if (runway !== undefined) { xs.push((ts - from) / DAY); ys.push(runway); }
+    points.push({ ts: new Date(ts).toISOString(), balance_usd: bal, burn_per_hour_usd: burn, runway_days: runway, spend_today_usd: r2(have.reduce((n, x) => n + x.spend_today_usd, 0)), accounts: have.length, stale_accounts: have.filter((x) => x.stale).length });
+  }
+  return {
+    provider: p, days: d, bucket_s: bucket / 1000, accounts: accs.map((a) => ({ id: a.id, label: a.label, source: a.balance_source ?? "none", stale: !!a.balance_stale })).sort((x, y) => x.id.localeCompare(y.id)),
+    points, runway_trend_per_day: slope(xs, ys),
+  };
 }
