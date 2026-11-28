@@ -50,6 +50,7 @@ var EnvTokens = map[string][]string{
 	"digitalocean": {"DIGITALOCEAN_TOKEN"},
 	"contabo":      {"CONTABO_CLIENT_ID", "CONTABO_CLIENT_SECRET", "CONTABO_API_USER", "CONTABO_API_PASSWORD"},
 	"netcup":       {"NETCUP_REFRESH_TOKEN"},
+	"runpod":       {"RUNPOD_API_KEY"}, // v2.3: balance reading only
 }
 
 // TokenFromEnv builds a provider token from env values (getenv injected for tests).

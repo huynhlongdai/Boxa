@@ -134,6 +134,7 @@ func Default(httpc *http.Client) *Registry {
 		NewDigitalOcean(httpc),
 		NewContabo(httpc),
 		NewNetcup(httpc),
+		NewRunpod(httpc), // v2.3: accounts + balance only (no pod adapter yet)
 	)
 }
 

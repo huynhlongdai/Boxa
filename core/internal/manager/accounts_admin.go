@@ -98,6 +98,10 @@ type AccountTestResult struct {
 	KeyFingerprint string       `json:"key_fingerprint,omitempty"`
 	Duplicates     []string     `json:"duplicates,omitempty"` // accounts with the same external_id or key
 	Account        *AccountView `json:"account,omitempty"`
+	// v2.3: POST …/test also reads the balance when the provider reports it
+	// (Runpod); a failed read only marks the balance stale.
+	BalanceRead  bool   `json:"balance_read,omitempty"`
+	BalanceError string `json:"balance_error,omitempty"`
 }
 
 // ValidateAccountInput is POST …/accounts/validate.
@@ -853,6 +857,15 @@ func (m *Manager) TestProviderAccount(ctx context.Context, p *Principal, prov, i
 		m.EmitData(ctx, p.Actor(), "", "", "provider_account.check_failed", fmt.Sprintf("%s %s: %s (%s)", prov, a.Label, res.Error, res.ErrorClass), nil,
 			map[string]any{"provider": prov, "account_id": id, "error_class": res.ErrorClass, "key_fingerprint": a.KeyFingerprint})
 	}
+	if _, ok := m.balanceReader(prov); ok {
+		res.BalanceRead = true
+		if berr := m.PollAccountBalanceNow(ctx, prov, id); berr != nil {
+			res.BalanceError = berr.Error()
+			if ae, ok := berr.(*model.APIError); ok {
+				res.BalanceError = ae.Message
+			}
+		}
+	}
 	a, _ = m.getAccount(ctx, prov, id)
 	if a != nil {
 		res.Account = m.viewAccount(ctx, a, nil)
@@ -1157,6 +1170,13 @@ func (m *Manager) AdminProvider(ctx context.Context, p *Principal, prov string) 
 	}
 	if caps, err := m.Store.GetCapabilities(ctx, prov); err == nil && len(caps) > 0 {
 		d.Caps = caps
+	}
+	if _, ok := m.balanceReader(prov); ok { // v2.3: balance read through the API (Runpod)
+		if d.Caps == nil {
+			d.Caps = map[string]any{}
+		}
+		d.Caps["balance_api"] = true
+		d.Caps["balance_poll_s"] = balancePollInterval().Seconds()
 	}
 	return d, nil
 }

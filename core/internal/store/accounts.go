@@ -4,6 +4,9 @@ package store
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
+	"time"
 
 	"boxmes/core/internal/model"
 )
@@ -17,6 +20,14 @@ type Accounts interface {
 	// SetLedgerAccount stamps account_id on a box's ledger rows written
 	// since from that carry none yet (migration backfill).
 	SetLedgerAccount(ctx context.Context, boxID, accountID string, from string) error
+
+	// v2.3 (M29 phase B): balance history (provider_account_snapshots).
+	PutAccountSnapshot(ctx context.Context, s *model.AccountSnapshot) error
+	// ListAccountSnapshots returns the snapshots of the accounts in
+	// [from, to) oldest first (to zero = now).
+	ListAccountSnapshots(ctx context.Context, accountIDs []string, from, to time.Time) ([]*model.AccountSnapshot, error)
+	// PruneAccountSnapshots deletes snapshots older than before.
+	PruneAccountSnapshots(ctx context.Context, before time.Time) error
 }
 
 // accountDoc keeps the encrypted credentials (json:"-" on the model).
@@ -70,4 +81,50 @@ func (s *SQL) DeleteProviderAccount(ctx context.Context, id string) error {
 
 func (s *SQL) SetLedgerAccount(ctx context.Context, boxID, accountID, from string) error {
 	return s.exec(ctx, "UPDATE ledger SET account_id=? WHERE box_id=? AND ts>=? AND (account_id IS NULL OR account_id='')", accountID, boxID, from)
+}
+
+func (s *SQL) PutAccountSnapshot(ctx context.Context, sn *model.AccountSnapshot) error {
+	b, err := json.Marshal(sn)
+	if err != nil {
+		return err
+	}
+	return s.exec(ctx, "INSERT INTO provider_account_snapshots (account_id, ts, doc) VALUES (?,?,?) ON CONFLICT(account_id, ts) DO UPDATE SET doc=excluded.doc",
+		sn.AccountID, FmtTime(sn.TS), string(b))
+}
+
+func (s *SQL) ListAccountSnapshots(ctx context.Context, ids []string, from, to time.Time) ([]*model.AccountSnapshot, error) {
+	out := []*model.AccountSnapshot{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	if to.IsZero() {
+		to = time.Now().Add(time.Minute)
+	}
+	args := []any{}
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	args = append(args, FmtTime(from), FmtTime(to))
+	q := "SELECT doc FROM provider_account_snapshots WHERE account_id IN (" + strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",") + ") AND ts>=? AND ts<? ORDER BY ts, account_id"
+	rows, err := s.db.QueryContext(ctx, s.rebind(q), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var raw string
+		if err := rows.Scan(&raw); err != nil {
+			return nil, err
+		}
+		var v model.AccountSnapshot
+		if err := json.Unmarshal([]byte(raw), &v); err != nil {
+			continue
+		}
+		out = append(out, &v)
+	}
+	return out, rows.Err()
+}
+
+func (s *SQL) PruneAccountSnapshots(ctx context.Context, before time.Time) error {
+	return s.exec(ctx, "DELETE FROM provider_account_snapshots WHERE ts<?", FmtTime(before))
 }

@@ -33,6 +33,8 @@ func (s *Server) routesInfraAdmin(r chi.Router) {
 	for _, act := range []string{"enable", "disable", "drain", "undrain", "reset"} {
 		r.Post("/providers/{p}/accounts/{a}/"+act, s.accountState(act))
 	}
+	r.Get("/providers/{p}/balance/history", s.providerBalanceHistory)
+	r.Get("/providers/{p}/accounts/{a}/balance/history", s.accountBalanceHistory)
 	r.Get("/providers/{p}/sandbox", s.sandboxAccounts)
 	r.Post("/providers/{p}/accounts/{a}/templates/sync", s.syncTemplates)
 	r.Get("/infra/alerts", s.infraAlerts)
@@ -172,6 +174,19 @@ func (s *Server) accountState(action string) http.HandlerFunc {
 	}
 }
 
+// v2.3 (M29 phase B): balance history (snapshots written at each poll).
+func (s *Server) accountBalanceHistory(w http.ResponseWriter, r *http.Request) {
+	p, a := pa(r)
+	v, err := s.M.AccountBalanceHistory(r.Context(), pr(r), p, a, qint(r, "days"))
+	reply(w, r, 200, v, err)
+}
+
+func (s *Server) providerBalanceHistory(w http.ResponseWriter, r *http.Request) {
+	p, _ := pa(r)
+	v, err := s.M.ProviderBalanceHistoryView(r.Context(), pr(r), p, qint(r, "days"))
+	reply(w, r, 200, v, err)
+}
+
 // M29-S: sandbox accounts (concurrency gauges, template availability).
 func (s *Server) sandboxAccounts(w http.ResponseWriter, r *http.Request) {
 	p, _ := pa(r)
@@ -209,6 +224,7 @@ var (
 	provP  = param{"p", "path", "string", "Provider id (hetzner, vultr, e2b, …)", true}
 	acctP  = param{"a", "path", "string", "Provider account id (pa_…)", true}
 	alertP = param{"id", "path", "string", "Alert id (<type>|<subject>, URL-encoded)", true}
+	daysP  = param{"days", "query", "integer", "Window in days (default 7, max 90)", false}
 )
 
 const acctDesc = "Platform admin only. Tokens are write-only: responses carry key_fingerprint (sha256 prefix + last 4) and never the key. Money fields are in the account currency; stats.*_usd are USD conversions."
@@ -242,6 +258,12 @@ func init() {
 		op{Method: "POST", Path: "/v1/admin/providers/{p}/accounts/{a}/drain", Summary: "Drain: keep hosts, take no new ones", Tag: "admin-infra", Resp: manager.AccountView{}, Params: []param{provP, acctP}},
 		op{Method: "POST", Path: "/v1/admin/providers/{p}/accounts/{a}/undrain", Summary: "Lift a drain", Tag: "admin-infra", Resp: manager.AccountView{}, Params: []param{provP, acctP}},
 		op{Method: "POST", Path: "/v1/admin/providers/{p}/accounts/{a}/reset", Summary: "Reset breaker, cooldown, error status and learned limits", Tag: "admin-infra", Resp: manager.AccountView{}, Params: []param{provP, acctP}},
+		op{Method: "GET", Path: "/v1/admin/providers/{p}/accounts/{a}/balance/history", Summary: "Balance / spend history of an account (one snapshot per poll) with runway trend", Tag: "admin-infra",
+			Resp: manager.BalanceHistory{}, Params: []param{provP, acctP, daysP},
+			Desc: "v2.3 (M29 phase B). Providers with a balance API (Runpod) are polled every BOXMES_ACCOUNT_POLL_BALANCE (15m) with the account's billing key if set, else its key; other accounts get one snapshot per interval from their manual / estimated balance and ledger spend. stale = the last read failed (the last good balance is kept; status, breaker and failover are not touched). points are oldest first."},
+		op{Method: "GET", Path: "/v1/admin/providers/{p}/balance/history", Summary: "Provider-level balance history: accounts' snapshots summed per bucket (USD) with burn, runway and trend", Tag: "admin-infra",
+			Resp: manager.ProviderBalanceHistory{}, Params: []param{provP, daysP},
+			Desc: "Buckets of 1 h (≤ 7 days), 3 h (≤ 30) or 6 h; each account counts with its last point carried forward. Archived accounts are left out."},
 		op{Method: "GET", Path: "/v1/admin/providers/{p}/sandbox", Summary: "Sandbox API tab: accounts with concurrency gauges (running / in flight / limit, create rate) and the template availability matrix", Tag: "admin-infra",
 			Resp: manager.SandboxAccountsView{}, Params: []param{provP},
 			Desc: "Sandbox providers only (M29-S). running counts live sandboxes that hold a concurrency slot (paused ones do not); limits are the tightest over the account's limit_group. templates[t] is available | missing (learned from a \"template not found\" answer) | not_listed (the account lists its templates and t is not one) | unknown (no list: Boxmes tries and learns)."},

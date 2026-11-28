@@ -202,7 +202,9 @@
   "Set the account's templates by hand: PATCH /v1/admin/providers/{p}/accounts/{a} with {\"templates\": [...]}.": "请手动设置账号的模板：PATCH /v1/admin/providers/{p}/accounts/{a}，内容为 {\"templates\": [...]}。",
   "Stop or sleep a sandbox on this account, raise its concurrency, or add another account; Boxmes fails over to the next account.": "请停止或休眠该账号上的一个沙箱、提高其并发数，或添加账号；Boxmes 会切换到下一个账号。",
   "Templates and snapshots belong to one provider account: build or publish it in this account, or list it on the account that has it; Boxmes tries the next account.": "模板和快照属于单个提供商账号：请在此账号中构建或发布，或在拥有它的账号上登记；Boxmes 会尝试下一个账号。",
-  "Use a sandbox provider id (GET /v1/sandbox/providers).": "请使用沙箱提供商的 id（GET /v1/sandbox/providers）。"
+  "Use a sandbox provider id (GET /v1/sandbox/providers).": "请使用沙箱提供商的 id（GET /v1/sandbox/providers）。",
+  "Runpod accounts track balance and runway only; pods are not created by Boxmes yet.": "Runpod 账户目前仅用于跟踪余额和可用天数；Boxmes 尚不创建 pod。",
+  "Create a Runpod API key with read access to GraphQL (Settings → API Keys) and paste it again.": "请创建具有 GraphQL 读取权限的 Runpod API 密钥（Settings → API Keys）并重新粘贴。"
  },
  "msg": {
   "%s bootstrap exit %d: %s": "%s 引导命令退出码 %d：%s",
@@ -499,7 +501,9 @@
   "%s: template not found in this account (%d): %s": "%s：此账号中未找到模板（%d）：%s",
   "provider %s cannot list templates": "提供商 %s 无法列出模板",
   "%s must be up to 64 characters without spaces, | or /": "%s 最多 64 个字符，且不能包含空格、| 或 /",
-  "%s; last provider error: %v": "%s；最近一次提供商错误：%v"
+  "%s; last provider error: %v": "%s；最近一次提供商错误：%v",
+  "Runpod GraphQL error: %s": "Runpod GraphQL 错误：%s",
+  "Runpod rejected the token: %s": "Runpod 拒绝了该密钥：%s"
  },
  "text": {
   "agentsmd.budget_box": "本盒子 $%.2f",
@@ -621,6 +625,7 @@
   "infra.alert.failover": "%s：已从 %s 切换到 %s（%s）",
   "infra.alert.single_account": "%s：只剩一个账户可以接收新主机",
   "infra.alert.orphan_host": "主机 %s（%s）无法用其账户删除：%s —— 请在提供商控制台手动清理",
-  "infra.alert.balance_stale": "%s %s：手动录入的余额自 %s 起未更新"
+  "infra.alert.balance_stale": "%s %s：手动录入的余额自 %s 起未更新",
+  "infra.alert.balance_read_failed": "%s %s：自 %s 起无法通过 API 读取余额（保留最近一次读数）：%s"
  }
 }

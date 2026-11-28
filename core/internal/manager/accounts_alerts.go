@@ -298,6 +298,17 @@ func (m *Manager) evaluateAlerts(ctx context.Context, a *model.ProviderAccount, 
 			m.clearAlert(ctx, key)
 		}
 	}
+	// v2.3: a polled balance whose reads keep failing (> 3 poll intervals
+	// since the last good one) — info only, the account stays usable
+	if a.BalanceStale && (a.BalanceAt == nil || now.Sub(*a.BalanceAt) > 3*balancePollInterval()) {
+		since := "—"
+		if a.BalanceAt != nil {
+			since = a.BalanceAt.UTC().Format("2006-01-02 15:04 UTC")
+		}
+		m.raiseAlert(ctx, alertInput{Key: k("balance_read_failed"), Type: "balance_read_failed", Level: "info", Provider: a.Provider, AccountID: a.ID, Args: []any{a.Provider, a.Label, since, a.BalanceError}})
+	} else {
+		m.clearAlert(ctx, k("balance_read_failed"))
+	}
 	if a.BalanceSource == "manual" && a.BalanceAt != nil && now.Sub(*a.BalanceAt) > 30*24*time.Hour {
 		m.raiseAlert(ctx, alertInput{Key: k("balance_stale"), Type: "balance_stale", Level: "info", Provider: a.Provider, AccountID: a.ID, Args: []any{a.Provider, a.Label, a.BalanceAt.UTC().Format("2006-01-02")}})
 	} else {

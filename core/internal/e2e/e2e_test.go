@@ -405,7 +405,7 @@ func TestTemplatesAndSettings(t *testing.T) {
 	}
 	var ps model.List[model.Provider]
 	e.must(e.admin, "GET", "/providers", nil, &ps)
-	if len(ps.Items) != 6 || ps.Items[0].ID != "local" {
+	if len(ps.Items) != 7 || ps.Items[0].ID != "local" { // v2.3: + runpod (balance only)
 		t.Fatalf("providers: %+v", ps.Items)
 	}
 	var sys map[string]any

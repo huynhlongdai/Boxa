@@ -202,7 +202,9 @@
   "Set the account's templates by hand: PATCH /v1/admin/providers/{p}/accounts/{a} with {\"templates\": [...]}.": "Khai báo template của tài khoản bằng tay: PATCH /v1/admin/providers/{p}/accounts/{a} với {\"templates\": [...]}.",
   "Stop or sleep a sandbox on this account, raise its concurrency, or add another account; Boxmes fails over to the next account.": "Dừng hoặc cho ngủ một sandbox trên tài khoản này, nâng mức đồng thời, hoặc thêm tài khoản; Boxmes chuyển sang tài khoản kế tiếp.",
   "Templates and snapshots belong to one provider account: build or publish it in this account, or list it on the account that has it; Boxmes tries the next account.": "Template và snapshot thuộc về một tài khoản provider: build hoặc publish nó trong tài khoản này, hoặc khai báo nó trên tài khoản đang có nó; Boxmes thử tài khoản kế tiếp.",
-  "Use a sandbox provider id (GET /v1/sandbox/providers).": "Dùng id của một provider sandbox (GET /v1/sandbox/providers)."
+  "Use a sandbox provider id (GET /v1/sandbox/providers).": "Dùng id của một provider sandbox (GET /v1/sandbox/providers).",
+  "Runpod accounts track balance and runway only; pods are not created by Boxmes yet.": "Tài khoản Runpod hiện chỉ dùng để theo dõi số dư và runway; Boxmes chưa tạo pod.",
+  "Create a Runpod API key with read access to GraphQL (Settings → API Keys) and paste it again.": "Tạo API key Runpod có quyền đọc GraphQL (Settings → API Keys) rồi dán lại."
  },
  "msg": {
   "%s bootstrap exit %d: %s": "%s: lệnh khởi động thoát với mã %d: %s",
@@ -499,7 +501,9 @@
   "%s: template not found in this account (%d): %s": "%s: không tìm thấy template trong tài khoản này (%d): %s",
   "provider %s cannot list templates": "provider %s không liệt kê được template",
   "%s must be up to 64 characters without spaces, | or /": "%s tối đa 64 ký tự, không có dấu cách, | hoặc /",
-  "%s; last provider error: %v": "%s; lỗi provider gần nhất: %v"
+  "%s; last provider error: %v": "%s; lỗi provider gần nhất: %v",
+  "Runpod GraphQL error: %s": "Lỗi GraphQL của Runpod: %s",
+  "Runpod rejected the token: %s": "Runpod từ chối khoá: %s"
  },
  "text": {
   "agentsmd.budget_box": "$%.2f cho box này",
@@ -621,6 +625,7 @@
   "infra.alert.failover": "%s: chuyển dự phòng từ %s sang %s (%s)",
   "infra.alert.single_account": "%s: chỉ còn một tài khoản nhận được host mới",
   "infra.alert.orphan_host": "host %s (%s) không xoá được bằng tài khoản của nó: %s — hãy dọn tay trong console của provider",
-  "infra.alert.balance_stale": "%s %s: số dư nhập tay chưa cập nhật từ %s"
+  "infra.alert.balance_stale": "%s %s: số dư nhập tay chưa cập nhật từ %s",
+  "infra.alert.balance_read_failed": "%s %s: không đọc được số dư qua API từ %s (giữ số đọc gần nhất): %s"
  }
 }

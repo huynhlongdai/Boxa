@@ -121,6 +121,7 @@
   "infra.alert.failover": "%s: failover from %s to %s (%s)",
   "infra.alert.single_account": "%s: only one account can take new hosts",
   "infra.alert.orphan_host": "host %s (%s) cannot be deleted with its account: %s — clean it up in the provider console",
-  "infra.alert.balance_stale": "%s %s: manual balance not updated since %s"
+  "infra.alert.balance_stale": "%s %s: manual balance not updated since %s",
+  "infra.alert.balance_read_failed": "%s %s: balance read through the API failing since %s (last reading kept): %s"
  }
 }

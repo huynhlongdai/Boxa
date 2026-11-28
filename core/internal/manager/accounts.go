@@ -55,11 +55,17 @@ type acctState struct {
 	locks   sync.Map                            // account id → *sync.Mutex
 	blocked map[string]time.Time                // capacity blocklist provider|region → until
 	alertMu sync.Mutex
+	// v2.3 balance history
+	snapAt   map[string]time.Time // account id → last snapshot written
+	prunedAt time.Time
 }
 
 func (s *acctState) init() {
 	if s.cache == nil {
 		s.cache, s.stats, s.rr, s.sticky, s.blocked = map[string][]*model.ProviderAccount{}, map[string]*model.AccountStats{}, map[string]int{}, map[string]stickyPick{}, map[string]time.Time{}
+	}
+	if s.snapAt == nil {
+		s.snapAt = map[string]time.Time{}
 	}
 }
 
@@ -84,6 +90,10 @@ func cloneAccount(a *model.ProviderAccount) *model.ProviderAccount {
 	c.Scopes = append([]string{}, a.Scopes...)
 	c.Templates = append([]string{}, a.Templates...)
 	c.TemplatesMissing = append([]string{}, a.TemplatesMissing...)
+	if a.SpendPerHour != nil {
+		v := *a.SpendPerHour
+		c.SpendPerHour = &v
+	}
 	c.Limits = map[string]model.AccountLimit{}
 	for k, v := range a.Limits {
 		c.Limits[k] = v
@@ -445,6 +455,14 @@ func (m *Manager) computeStats(ctx context.Context, a *model.ProviderAccount, ho
 		window = math.Max(age, 1)
 	}
 	st.BurnPerHourUSD = r4(math.Max(last24/window, priceHour))
+	// v2.3: the provider's own burn rate (Runpod currentSpendPerHr) covers
+	// spend Boxmes does not see in its ledger (pods made outside Boxmes)
+	if _, ok := m.balanceReader(a.Provider); ok {
+		st.BalanceAPI = true
+	}
+	if a.BalanceSource == "api" && a.SpendPerHour != nil {
+		st.BurnPerHourUSD = r4(math.Max(st.BurnPerHourUSD, *a.SpendPerHour*fxRate(a)))
+	}
 	st.SpendTodayUSD, st.SpendMonthUSD = r4(st.SpendTodayUSD), r4(st.SpendMonthUSD)
 	st.SpendToday, st.SpendMonth = r4(st.SpendTodayUSD/fx), r4(st.SpendMonthUSD/fx)
 	// money left: the balance, else (M29-S) the promo / prepaid credit left
@@ -1073,6 +1091,7 @@ func (m *Manager) applyAuto(ctx context.Context, a *model.ProviderAccount, st *m
 // alerts with dedupe, orphan hosts, daily infra digest.
 func (m *Manager) accountsTick(ctx context.Context) error {
 	now := time.Now().UTC()
+	polled := m.pollBalances(ctx, now) // v2.3: providers with a BalanceReader (fail-soft)
 	hosts, _ := m.Store.ListHosts(ctx)
 	boxes, _ := m.Store.ListBoxes(ctx, store.BoxFilter{})
 	known := map[string]bool{}
@@ -1089,6 +1108,9 @@ func (m *Manager) accountsTick(ctx context.Context) error {
 			m.applyAuto(ctx, a, st, now)
 			st = m.computeStats(ctx, a, hosts, boxes, now)
 			m.evaluateAlerts(ctx, a, st, now)
+			if m.snapshotDue(a, st, polled[a.ID], now) {
+				m.writeSnapshot(ctx, a, st, now)
+			}
 			if a.Enabled {
 				enabled++
 			}
@@ -1120,6 +1142,7 @@ func (m *Manager) accountsTick(ctx context.Context) error {
 		}
 	}
 	m.infraDigestTick(ctx, now)
+	m.pruneSnapshots(ctx, now)
 	return nil
 }
 

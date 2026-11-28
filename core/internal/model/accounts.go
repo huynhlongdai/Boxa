@@ -116,6 +116,14 @@ type ProviderAccount struct {
 	CreditExpiresAt *time.Time `json:"credit_expires_at,omitempty"`
 	PendingCharges  *float64   `json:"pending_charges,omitempty"`
 	MonthToDate     *float64   `json:"month_to_date,omitempty"`
+	// v2.3 (M29 phase B) balance reading through the provider API
+	// (provider.BalanceReader). A failed read never touches status or the
+	// breaker: it only marks the balance stale.
+	SpendPerHour    *float64   `json:"spend_per_hour,omitempty"`    // provider-reported burn rate (Runpod currentSpendPerHr), in Currency/h
+	BalancePolledAt *time.Time `json:"balance_polled_at,omitempty"` // last read attempt (ok or not)
+	BalanceStale    bool       `json:"balance_stale"`               // the last read failed: balance is the last good one
+	BalanceError    string     `json:"balance_error,omitempty"`
+	BalanceErrorAt  *time.Time `json:"balance_error_at,omitempty"`
 	SpendCapDay     float64    `json:"spend_cap_day"`   // 0 = no cap (Boxmes ledger spend)
 	SpendCapMonth   float64    `json:"spend_cap_month"` // 0 = no cap
 	MinBalance      float64    `json:"min_balance"`     // below this effective balance: no new hosts
@@ -178,6 +186,7 @@ type AccountStats struct {
 	Ineligible          string   `json:"ineligible,omitempty"` // why the scheduler skips it now
 	Breaker             string   `json:"breaker"`              // closed | open | half_open (account-level)
 	HasCredential       bool     `json:"has_credential"`
+	BalanceAPI          bool     `json:"balance_api"` // v2.3: the provider reports the balance (polled), else manual / estimated
 	// M29-S sandbox figures (sandbox providers only)
 	SandboxesRunning int  `json:"sandboxes_running,omitempty"` // live sandboxes of this account that count toward concurrency (paused ones do not)
 	GroupRunning     int  `json:"group_running,omitempty"`     // the same over the account's limit_group
@@ -185,4 +194,26 @@ type AccountStats struct {
 	CreatesLastSec   int  `json:"creates_last_sec,omitempty"`  // creates started in the last second (limit group)
 	CreatesLastMin   int  `json:"creates_last_min,omitempty"`  // creates started in the last minute (limit group)
 	SandboxStats     bool `json:"-"`                           // the sandbox figures above were computed
+}
+
+// AccountSnapshot is one row of provider_account_snapshots (v2.3, M29
+// phase B): the account's money at one poll, for the balance / spend chart
+// and runway trend. Amounts are in Currency unless suffixed _usd.
+type AccountSnapshot struct {
+	AccountID         string    `json:"account_id"`
+	Provider          string    `json:"provider"`
+	TS                time.Time `json:"ts"`
+	Source            string    `json:"source"` // api | manual | estimated | none
+	Currency          string    `json:"currency"`
+	Balance           *float64  `json:"balance,omitempty"`           // as read (api) or entered (manual)
+	BalanceEffective  *float64  `json:"balance_effective,omitempty"` // balance − ledger since it was read
+	BalanceUSD        *float64  `json:"balance_usd,omitempty"`       // effective balance in USD
+	SpendPerHour      *float64  `json:"spend_per_hour,omitempty"`    // provider-reported burn (Currency/h)
+	SpendLimitPerHour *float64  `json:"spend_limit_per_hour,omitempty"`
+	BurnPerHourUSD    float64   `json:"burn_per_hour_usd"` // what runway uses: max(provider rate, ledger 24h, live hosts)
+	RunwayDays        *float64  `json:"runway_days,omitempty"`
+	SpendTodayUSD     float64   `json:"spend_today_usd"`
+	SpendMonthUSD     float64   `json:"spend_month_usd"`
+	Stale             bool      `json:"stale"`           // the read at this point failed (balance carried from the last good one)
+	Error             string    `json:"error,omitempty"` // the read error (never a credential)
 }
