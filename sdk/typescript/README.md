@@ -56,6 +56,8 @@ await me.listBoxes({ region: "eu", location: "hetzner-fsn" }); await me.boxLocat
 //   updateProviderAccount(p, a, { balance: 150 }), rotateProviderAccount(p, a, token, externalId), setProviderStrategy("e2b", { strategy: "drain_first" }), infraAlerts()
 // v2.2 M29-S sandbox accounts: providerSandboxAccounts("e2b") → SandboxAccountsView (concurrency + template matrix),
 //   syncAccountTemplates("e2b", "pa_1") → TemplateSyncResult; updateProviderAccount(p, a, { limit_group, billing_group, templates })
+// v2.3 balance history: accountBalanceHistory("runpod", "pa_1", 7) → BalanceHistory (points, stale, runway trend);
+//   providerBalanceHistory("runpod", 30) → ProviderBalanceHistory (USD buckets across accounts)
 ```
 
 ## Function calling

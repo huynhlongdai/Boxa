@@ -92,6 +92,8 @@ export interface AccountStats {
   forecast_month_end: number; eligible: boolean; ineligible?: string; breaker: "closed" | "open" | "half_open"; has_credential: boolean;
   /** M29-S, sandbox providers only */
   sandboxes_running?: number; group_running?: number; in_flight?: number; creates_last_sec?: number; creates_last_min?: number;
+  /** v2.3: the provider reports the balance (polled), else manual / estimated */
+  balance_api?: boolean;
 }
 export interface ProviderAccount {
   id: string; provider: string; label: string; external_id?: string; owner_workspace_id?: string; tags: string[]; owner?: string; notes?: string; console_url?: string;
@@ -107,6 +109,8 @@ export interface ProviderAccount {
   created_at: string; created_by?: string; updated_at: string; updated_by?: string; stats?: AccountStats; warnings?: string[];
   /** M29-S (sandbox providers) */
   templates?: string[]; templates_missing?: string[]; templates_synced_at?: string; limit_group?: string; billing_group?: string; credit_at?: string;
+  /** v2.3 balance reading (Runpod): provider-reported burn, last read attempt, stale = last read failed (last good balance kept) */
+  spend_per_hour?: number; balance_polled_at?: string; balance_stale?: boolean; balance_error?: string; balance_error_at?: string;
 }
 /** POST / PATCH body (merge-patch; dates RFC 3339 or YYYY-MM-DD, "" clears; limits value 0 removes). */
 export interface ProviderAccountInput {
@@ -130,7 +134,23 @@ export interface SandboxAccountRow {
 }
 export interface SandboxAccountsView { provider: string; strategy: AccountStrategy; templates: string[]; accounts: SandboxAccountRow[] }
 export interface TemplateSyncResult { templates: string[]; added: string[]; removed: string[]; account: ProviderAccount }
-export interface AccountTestResult { ok: boolean; error?: string; error_class?: string; latency_ms: number; key_fingerprint?: string; duplicates?: string[]; account?: ProviderAccount }
+export interface AccountTestResult { ok: boolean; error?: string; error_class?: string; latency_ms: number; key_fingerprint?: string; duplicates?: string[]; account?: ProviderAccount; balance_read?: boolean; balance_error?: string }
+/** v2.3: one balance snapshot (one per poll). Amounts in `currency` unless suffixed _usd. */
+export interface BalancePoint {
+  account_id: string; provider: string; ts: string; source: "api" | "manual" | "estimated" | "none"; currency: string;
+  balance?: number; balance_effective?: number; balance_usd?: number; spend_per_hour?: number; spend_limit_per_hour?: number;
+  burn_per_hour_usd: number; runway_days?: number; spend_today_usd: number; spend_month_usd: number; stale: boolean; error?: string;
+}
+export interface BalanceHistory {
+  provider: string; account_id: string; label: string; currency: string; days: number; interval_s: number;
+  source: "api" | "manual" | "estimated" | "none"; balance_api: boolean; stale: boolean; balance_error?: string; balance_at?: string; polled_at?: string;
+  points: BalancePoint[]; runway_trend_per_day?: number; spent?: number; top_ups?: number;
+}
+export interface ProviderBalancePoint { ts: string; balance_usd?: number; burn_per_hour_usd: number; runway_days?: number; spend_today_usd: number; accounts: number; stale_accounts: number }
+export interface ProviderBalanceHistory {
+  provider: string; days: number; bucket_s: number; accounts: { id: string; label: string; source: string; stale: boolean }[];
+  points: ProviderBalancePoint[]; runway_trend_per_day?: number;
+}
 export interface ProviderStrategy { provider: string; strategy: AccountStrategy | ""; effective_strategy: AccountStrategy; sticky_minutes: number; failover_across_accounts: boolean; strategies: AccountStrategy[] }
 export interface InfraAlert {
   id: string; type: string; level: "info" | "warn" | "critical"; status: "open" | "acked" | "closed"; provider?: string; account_id?: string; host_id?: string;
@@ -644,6 +664,16 @@ export class Boxmes {
   /** Read the account's templates / snapshots from the provider with its own key (no template API → 400). */
   syncAccountTemplates(provider: string, accountId: string) {
     return this.request<TemplateSyncResult>("POST", `/admin/providers/${enc(provider)}/accounts/${enc(accountId)}/templates/sync`);
+  }
+
+  // ---- v2.3 M29 phase B: balance history (platform admin) ----
+  /** Balance / spend snapshots of an account (oldest first) with stale flag and runway trend; days 1..90 (default 7). */
+  accountBalanceHistory(provider: string, accountId: string, days = 7) {
+    return this.request<BalanceHistory>("GET", `/admin/providers/${enc(provider)}/accounts/${enc(accountId)}/balance/history`, { query: { days: String(days) } });
+  }
+  /** Provider aggregate: accounts' last points summed per bucket (USD), burn, runway, stale accounts. */
+  providerBalanceHistory(provider: string, days = 7) {
+    return this.request<ProviderBalanceHistory>("GET", `/admin/providers/${enc(provider)}/balance/history`, { query: { days: String(days) } });
   }
 
   // ---- tool bridge ----

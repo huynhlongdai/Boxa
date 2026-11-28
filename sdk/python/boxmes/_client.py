@@ -692,6 +692,19 @@ class _Base:
         → {templates, added, removed, account}. Providers without a template API → 400."""
         return self._call("POST", f"/admin/providers/{_q(provider)}/accounts/{_q(account_id)}/templates/sync")
 
+    # -- v2.3 M29 phase B: balance history (platform admin) --
+    def account_balance_history(self, provider: str, account_id: str, days: int = 7) -> Dict[str, Any]:
+        """Balance / spend snapshots of an account (one per poll, oldest first) with
+        runway trend: {source, balance_api, stale, balance_error?, points: [{ts, balance,
+        balance_usd, spend_per_hour, burn_per_hour_usd, runway_days, stale, …}], …}. days 1..90."""
+        return self._call("GET", f"/admin/providers/{_q(provider)}/accounts/{_q(account_id)}/balance/history",
+                          params={"days": str(int(days))})
+
+    def provider_balance_history(self, provider: str, days: int = 7) -> Dict[str, Any]:
+        """Provider-level aggregate: accounts' snapshots summed per bucket (USD)
+        → {bucket_s, accounts, points: [{ts, balance_usd, burn_per_hour_usd, runway_days, accounts, stale_accounts}]}."""
+        return self._call("GET", f"/admin/providers/{_q(provider)}/balance/history", params={"days": str(int(days))})
+
     # -- MCP tool bridge -------------------------------------------------------
     def _mcp_body(self, name: str, arguments: Mapping[str, Any]) -> Dict[str, Any]:
         return {"jsonrpc": "2.0", "id": int(time.time() * 1000), "method": "tools/call",
@@ -921,6 +934,8 @@ class AsyncBoxmes(_Base):
         async def ack_infra_alert(self, alert_id: str) -> Dict[str, Any]: ...
         async def provider_sandbox_accounts(self, provider: str) -> Dict[str, Any]: ...
         async def sync_account_templates(self, provider: str, account_id: str) -> Dict[str, Any]: ...
+        async def account_balance_history(self, provider: str, account_id: str, days: int = 7) -> Dict[str, Any]: ...
+        async def provider_balance_history(self, provider: str, days: int = 7) -> Dict[str, Any]: ...
         up = create_box
         down = delete_box
 

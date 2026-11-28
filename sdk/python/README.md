@@ -65,6 +65,8 @@ except BoxmesError as e:
 #   update_provider_account(p, a, balance=150), rotate_provider_account(p, a, token, external_id=...), set_provider_strategy("e2b", "drain_first"), infra_alerts()
 # v2.2 M29-S sandbox accounts: provider_sandbox_accounts("e2b")  # concurrency gauges + template matrix
 #   sync_account_templates("e2b", "pa_1"); update_provider_account("e2b", "pa_1", limit_group="prj-a", billing_group="ws-1", templates=["agent"])
+# v2.3 balance history (Runpod balance read through the API, others manual / estimated):
+#   account_balance_history("runpod", "pa_1", days=7)  # points + stale + runway trend; provider_balance_history("runpod", days=30)
 ```
 
 ## Function calling with any LLM

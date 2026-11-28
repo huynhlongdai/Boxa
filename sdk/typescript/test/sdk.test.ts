@@ -507,3 +507,15 @@ test("v2.2 M29-S sandbox account routes (mocked fetch)", async () => {
   ]);
   assert.deepEqual(calls[2].body, { templates: ["agent"], limit_group: "prj-a", billing_group: "ws-1", limits: { concurrent_sandboxes: 20 } });
 });
+
+test("v2.3 balance history routes (mocked fetch)", async () => {
+  const { calls, f } = mockFetch();
+  const bx = new Boxmes({ apiKey: "bx_admin_x", baseUrl: "http://core.test:9", fetch: f, maxRetries: 0 });
+  await bx.accountBalanceHistory("runpod", "pa_1", 30);
+  await bx.providerBalanceHistory("runpod");
+  assert.deepEqual(calls.map((c) => `${c.method} ${c.path}`), [
+    "GET /v1/admin/providers/runpod/accounts/pa_1/balance/history", "GET /v1/admin/providers/runpod/balance/history",
+  ]);
+  assert.deepEqual(calls[0].query, { days: "30" });
+  assert.deepEqual(calls[1].query, { days: "7" });
+});

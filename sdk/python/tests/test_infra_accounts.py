@@ -67,3 +67,17 @@ def test_sandbox_account_routes_offline(monkeypatch):
                    ("PATCH", "/v1/admin/providers/e2b/accounts/pa_1")]
     assert rec.calls[1]["body"] is None
     assert rec.calls[2]["body"]["limit_group"] == "prj-a"
+
+
+def test_balance_history_routes_offline(monkeypatch):
+    rec = _Recorder()
+    bx = Boxmes("bx_admin_x", "http://core.test:9", max_retries=0)
+    monkeypatch.setattr(bx, "_send", rec)
+    bx.account_balance_history("runpod", "pa_1", days=30)
+    bx.provider_balance_history("runpod")
+    got = [(c["method"], c["path"]) for c in rec.calls]
+    assert got == [("GET", "/v1/admin/providers/runpod/accounts/pa_1/balance/history"),
+                   ("GET", "/v1/admin/providers/runpod/balance/history")]
+    assert rec.calls[0]["query"] == {"days": "30"}
+    assert rec.calls[1]["query"] == {"days": "7"}
+    assert rec.calls[0]["body"] is None
