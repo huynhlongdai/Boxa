@@ -180,6 +180,19 @@ export function handleV20(s: MockState, c: Ctx, M: string, segs: string[], q: UR
     return c.ok(mockMe());
   }
   if (p === "auth/verify-email/resend" && M === "POST") return c.ok({ ok: true }, 202);
+  // quên / đặt lại mật khẩu, xác thực email (công khai). Token "bad"/"expired" mô phỏng link hỏng.
+  if (p === "auth/password/forgot" && M === "POST") return c.ok({ ok: true }, 202);
+  if (p === "auth/password/reset" && M === "POST") {
+    const tok = String(body.token ?? "");
+    if (!tok || /bad|expired/.test(tok)) return c.err(400, "INVALID", "v20_invalid", { what: "token" });
+    if (String(body.password ?? "").length < 8) return c.err(400, "INVALID", "v20_invalid", { what: "password (min 8)" });
+    return c.ok({ ok: true });
+  }
+  if (p === "auth/verify-email" && M === "POST") {
+    const tok = String(body.token ?? "");
+    if (!tok || /bad|expired/.test(tok)) return c.err(400, "INVALID", "v20_invalid", { what: "token" });
+    return c.ok({ ok: true, email: t.users[ME]?.email ?? "root@boxmes.local" });
+  }
   if (r0 === "plans" && M === "GET") return c.list<PlanInfo>(Object.entries(PLANS).map(([id, quota]) => ({ id, quota })));
   if (r0 === "waitlist" && M === "POST") {
     const e = String(body.email ?? "").toLowerCase();

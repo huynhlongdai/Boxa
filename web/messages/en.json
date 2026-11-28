@@ -689,14 +689,18 @@
     "noAccount": "No account yet?",
     "signupLink": "Sign up",
     "useKey": "Sign in with an API key",
-    "useEmail": "Sign in with email"
+    "useEmail": "Sign in with email",
+    "forgot": "Forgot password?"
   },
   "meta": {
     "description": "Personal cloud infrastructure for AI agents",
     "login": "Sign in",
     "onboarding": "First-time setup",
     "signup": "Sign up",
-    "invite": "Workspace invite"
+    "invite": "Workspace invite",
+    "forgotPassword": "Forgot password",
+    "resetPassword": "Reset password",
+    "verifyEmail": "Verify email"
   },
   "nav": {
     "overview": "Overview",
@@ -2545,5 +2549,33 @@
       "unknown": "The account has no list: Boxmes tries and learns"
     },
     "showArchived": "Include archived"
+  },
+  "authFlow": {
+    "forgotTitle": "Forgot password",
+    "forgotSubtitle": "Enter your email and Boxmes sends a reset link",
+    "email": "Email",
+    "sendLink": "Send reset link",
+    "sending": "Sending…",
+    "forgotSent": "If {email} has an account, a reset link is on its way. The link works once and expires.",
+    "backToLogin": "Back to sign in",
+    "failed": "Something went wrong",
+    "resetTitle": "Reset password",
+    "resetSubtitle": "Choose a new password; every existing session is signed out",
+    "newPassword": "New password",
+    "confirmPassword": "Repeat password",
+    "passwordHint": "At least {n} characters, at most 72 bytes.",
+    "mismatch": "The passwords do not match",
+    "tooLong": "The password is longer than 72 bytes",
+    "setPassword": "Set password",
+    "saving": "Saving…",
+    "resetDone": "New password set. Taking you to sign in…",
+    "noToken": "The link has no token or is broken.",
+    "requestNew": "Request a new link",
+    "verifyTitle": "Verify email",
+    "verifying": "Verifying…",
+    "verified": "Your email is verified.",
+    "verifiedEmail": "{email} is verified.",
+    "verifyResendHint": "The link may have expired or been used. Sign in and press \"Resend\" on the email verification banner.",
+    "toDashboard": "Go to the dashboard"
   }
 }

@@ -689,14 +689,18 @@
     "noAccount": "アカウントをお持ちでない場合",
     "signupLink": "登録",
     "useKey": "API キーでログイン",
-    "useEmail": "メールアドレスでログイン"
+    "useEmail": "メールアドレスでログイン",
+    "forgot": "パスワードをお忘れですか？"
   },
   "meta": {
     "description": "AI エージェントのためのパーソナルクラウド基盤",
     "login": "ログイン",
     "onboarding": "初期セットアップ",
     "signup": "登録",
-    "invite": "ワークスペースへの招待"
+    "invite": "ワークスペースへの招待",
+    "forgotPassword": "パスワードをお忘れの方",
+    "resetPassword": "パスワードの再設定",
+    "verifyEmail": "メールアドレスの確認"
   },
   "nav": {
     "overview": "概要",
@@ -2545,5 +2549,33 @@
       "unknown": "アカウントに一覧がありません：Boxmes が試して学習します"
     },
     "showArchived": "アーカイブ済みを含む"
+  },
+  "authFlow": {
+    "forgotTitle": "パスワードをお忘れですか",
+    "forgotSubtitle": "メールアドレスを入力すると、Boxmes が再設定リンクを送ります",
+    "email": "メールアドレス",
+    "sendLink": "再設定リンクを送信",
+    "sending": "送信中…",
+    "forgotSent": "{email} のアカウントがあれば、再設定リンクを送信しました。リンクは 1 回限りで有効期限があります。",
+    "backToLogin": "ログインに戻る",
+    "failed": "処理できませんでした",
+    "resetTitle": "パスワードの再設定",
+    "resetSubtitle": "新しいパスワードを設定します。既存のセッションはすべてログアウトされます",
+    "newPassword": "新しいパスワード",
+    "confirmPassword": "パスワード（確認）",
+    "passwordHint": "{n} 文字以上、72 バイト以内。",
+    "mismatch": "パスワードが一致しません",
+    "tooLong": "パスワードが 72 バイトを超えています",
+    "setPassword": "パスワードを設定",
+    "saving": "保存中…",
+    "resetDone": "新しいパスワードを設定しました。ログイン画面に移動します…",
+    "noToken": "リンクにトークンがないか、壊れています。",
+    "requestNew": "新しいリンクを請求",
+    "verifyTitle": "メールアドレスの確認",
+    "verifying": "確認中…",
+    "verified": "メールアドレスを確認しました。",
+    "verifiedEmail": "{email} を確認しました。",
+    "verifyResendHint": "リンクの期限切れまたは使用済みの可能性があります。ログインしてメール確認バナーの「再送信」を押してください。",
+    "toDashboard": "ダッシュボードへ"
   }
 }

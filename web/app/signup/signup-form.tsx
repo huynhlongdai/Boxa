@@ -91,7 +91,8 @@ export function SignupForm() {
     http.get<AuthConfig>(paths.authConfig).then(setCfg).catch(() => setCfg({ signup_mode: "invite", first_user: false, min_password_len: 8, email_verification: true, email_configured: false }));
   }, []);
 
-  const minLen = Math.max(cfg?.min_password_len ?? 8, 10);
+  // Khớp core (manager/tenancy.go minPasswordLen = 8): web không tự nâng mức tối thiểu.
+  const minLen = cfg?.min_password_len || 8;
   const needCode = cfg?.signup_mode === "invite" && !cfg.first_user && !wsInvite;
   const closed = cfg?.signup_mode === "closed" && !cfg.first_user && !wsInvite;
   const st = strength(password);

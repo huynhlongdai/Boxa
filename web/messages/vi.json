@@ -689,14 +689,18 @@
     "noAccount": "Chưa có tài khoản?",
     "signupLink": "Đăng ký",
     "useKey": "Đăng nhập bằng API key",
-    "useEmail": "Đăng nhập bằng email"
+    "useEmail": "Đăng nhập bằng email",
+    "forgot": "Quên mật khẩu?"
   },
   "meta": {
     "description": "Hạ tầng cloud cá nhân cho AI agent",
     "login": "Đăng nhập",
     "onboarding": "Khởi động lần đầu",
     "signup": "Đăng ký",
-    "invite": "Lời mời workspace"
+    "invite": "Lời mời workspace",
+    "forgotPassword": "Quên mật khẩu",
+    "resetPassword": "Đặt lại mật khẩu",
+    "verifyEmail": "Xác thực email"
   },
   "nav": {
     "overview": "Tổng quan",
@@ -2545,5 +2549,33 @@
       "unknown": "Tài khoản chưa có danh sách: Boxmes thử và học"
     },
     "showArchived": "Gồm đã lưu trữ"
+  },
+  "authFlow": {
+    "forgotTitle": "Quên mật khẩu",
+    "forgotSubtitle": "Nhập email, Boxmes gửi link đặt lại mật khẩu",
+    "email": "Email",
+    "sendLink": "Gửi link đặt lại",
+    "sending": "Đang gửi…",
+    "forgotSent": "Nếu {email} có tài khoản, link đặt lại mật khẩu đã được gửi. Link dùng một lần và có hạn.",
+    "backToLogin": "Quay lại đăng nhập",
+    "failed": "Không thực hiện được",
+    "resetTitle": "Đặt lại mật khẩu",
+    "resetSubtitle": "Đặt mật khẩu mới; mọi phiên đăng nhập cũ sẽ bị đăng xuất",
+    "newPassword": "Mật khẩu mới",
+    "confirmPassword": "Nhập lại mật khẩu",
+    "passwordHint": "Ít nhất {n} ký tự, tối đa 72 byte.",
+    "mismatch": "Hai mật khẩu không khớp",
+    "tooLong": "Mật khẩu dài quá 72 byte",
+    "setPassword": "Đặt mật khẩu",
+    "saving": "Đang lưu…",
+    "resetDone": "Đã đặt mật khẩu mới. Đang chuyển tới trang đăng nhập…",
+    "noToken": "Link thiếu mã (token) hoặc đã hỏng.",
+    "requestNew": "Gửi lại link mới",
+    "verifyTitle": "Xác thực email",
+    "verifying": "Đang xác thực…",
+    "verified": "Email đã được xác thực.",
+    "verifiedEmail": "Đã xác thực {email}.",
+    "verifyResendHint": "Link có thể đã hết hạn hoặc đã dùng. Đăng nhập rồi bấm \"Gửi lại\" ở dải thông báo xác thực email.",
+    "toDashboard": "Vào dashboard"
   }
 }

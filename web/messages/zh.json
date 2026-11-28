@@ -689,14 +689,18 @@
     "noAccount": "还没有账号？",
     "signupLink": "注册",
     "useKey": "使用 API 密钥登录",
-    "useEmail": "使用邮箱登录"
+    "useEmail": "使用邮箱登录",
+    "forgot": "忘记密码？"
   },
   "meta": {
     "description": "面向 AI 智能体的个人云基础设施",
     "login": "登录",
     "onboarding": "首次设置",
     "signup": "注册",
-    "invite": "工作区邀请"
+    "invite": "工作区邀请",
+    "forgotPassword": "忘记密码",
+    "resetPassword": "重置密码",
+    "verifyEmail": "验证邮箱"
   },
   "nav": {
     "overview": "总览",
@@ -2545,5 +2549,33 @@
       "unknown": "账户没有列表：Boxmes 会尝试并学习"
     },
     "showArchived": "包含已归档"
+  },
+  "authFlow": {
+    "forgotTitle": "忘记密码",
+    "forgotSubtitle": "输入邮箱，Boxmes 会发送重置链接",
+    "email": "邮箱",
+    "sendLink": "发送重置链接",
+    "sending": "发送中…",
+    "forgotSent": "如果 {email} 有账户，重置链接已发送。链接仅可使用一次且有有效期。",
+    "backToLogin": "返回登录",
+    "failed": "操作失败",
+    "resetTitle": "重置密码",
+    "resetSubtitle": "设置新密码；所有现有会话将被登出",
+    "newPassword": "新密码",
+    "confirmPassword": "再次输入密码",
+    "passwordHint": "至少 {n} 个字符，最多 72 字节。",
+    "mismatch": "两次输入的密码不一致",
+    "tooLong": "密码超过 72 字节",
+    "setPassword": "设置密码",
+    "saving": "保存中…",
+    "resetDone": "新密码已设置。正在跳转到登录页…",
+    "noToken": "链接缺少令牌或已损坏。",
+    "requestNew": "重新获取链接",
+    "verifyTitle": "验证邮箱",
+    "verifying": "验证中…",
+    "verified": "邮箱已验证。",
+    "verifiedEmail": "{email} 已验证。",
+    "verifyResendHint": "链接可能已过期或已使用。请登录后在邮箱验证横幅中点击“重新发送”。",
+    "toDashboard": "进入控制台"
   }
 }

@@ -66,7 +66,7 @@ export function LoginForm() {
                 <Input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="pl-8" placeholder="you@example.com" />
               </div>
             </Field>
-            <Field label={t("passwordLabel")}>
+            <Field label={t("passwordLabel")} hint={<Link href={`/forgot-password${email.trim() ? `?email=${encodeURIComponent(email.trim())}` : ""}`} className="text-primary hover:underline" data-forgot-link>{t("forgot")}</Link>}>
               <Input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
             </Field>
           </>

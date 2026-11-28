@@ -43,11 +43,11 @@ check_page() {
   code="${body##*__CODE__}"
   if [ "$code" != "200" ]; then bad "[$l] $code $path"; return; fi
   if ! grep -q "<html lang=\"$l\"" <<<"$body"; then bad "[$l] thiếu <html lang=\"$l\"> $path"; return; fi
-  if [[ "$path" != /login && "$path" != /onboarding ]] && ! grep -qF "${NAVWORD[$l]}" <<<"$body"; then bad "[$l] không thấy nhãn '${NAVWORD[$l]}' $path"; return; fi
+  if [[ "$path" != /login && "$path" != /onboarding && "$path" != /forgot-password* && "$path" != /reset-password* && "$path" != /verify-email* ]] && ! grep -qF "${NAVWORD[$l]}" <<<"$body"; then bad "[$l] không thấy nhãn '${NAVWORD[$l]}' $path"; return; fi
   ok "[$l] 200 $path"
 }
 
-ROUTES="/ /boxes /boxes/box_7f3a91 /boxes/box_7f3a91?tab=logs /boxes/box_a9d054?tab=ports /boxes/box_5e2b70?tab=ports /boxes/box_a9d054?tab=access /boxes/box_a9d054?tab=terminal /boxes/box_51be07?tab=terminal /recommend /infra?s=health /infra?s=catalog /infra?s=speed /infra?s=mesh /infra?s=sandbox /infra/adapters /boxes/box_5e2b70 /agents /agents/agt_kecon /costs /infra /templates /secrets /settings /admin /developers /onboarding /login"
+ROUTES="/ /boxes /boxes/box_7f3a91 /boxes/box_7f3a91?tab=logs /boxes/box_a9d054?tab=ports /boxes/box_5e2b70?tab=ports /boxes/box_a9d054?tab=access /boxes/box_a9d054?tab=terminal /boxes/box_51be07?tab=terminal /recommend /infra?s=health /infra?s=catalog /infra?s=speed /infra?s=mesh /infra?s=sandbox /infra?s=providers /infra/providers/hetzner /infra/providers/e2b?tab=sandbox /infra/adapters /boxes/box_5e2b70 /agents /agents/agt_kecon /costs /infra /templates /secrets /settings /admin /developers /onboarding /login /forgot-password /reset-password?token=t /verify-email?token=t"
 
 echo "== Trang × ngôn ngữ (cookie boxmes_locale)"
 for l in $LOCALES; do
@@ -343,6 +343,32 @@ for l in $LOCALES; do
   node -e 'const m=require("./messages/'$l'.json");process.exit(m.boxDetail.tabs.desktop==="'"${DESKWORD[$l]}"'"&&m.boxDetail.tabs.browser==="'"${BRWORD[$l]}"'"&&m.desktop.createShare&&m.desktop.shareState.revoked&&m.desktop.mockNotice&&m.desktop.revokedN.includes("{viewers}")&&m.browser.lang.puppeteer&&m.browser.endpointDesc.includes("{when}")&&m.access.cert&&m.access.sftp&&m.access.certValid.includes("{principals}")?0:1)' && ok "[$l] chuỗi desktop.* / browser.* / access cert+sftp v1.11 đủ" || bad "[$l] thiếu chuỗi v1.11"
 done
 grep -rqs "desktop-connect" .next/static/chunks && grep -rqs "desktop-share-create" .next/static/chunks && grep -rqs "browser-snippets" .next/static/chunks && grep -rqs "connectOverCDP" .next/static/chunks && grep -rqs "access-cert-issue" .next/static/chunks && grep -rqs "access-sftp" .next/static/chunks && ok "bundle có UI Màn hình + share link + Trình duyệt + SSH cert + SFTP v1.11" || bad "bundle thiếu UI v1.11"
+
+echo "== v2.2: tài khoản nhà cung cấp (M29) + sandbox nhiều khoá (M29-S), quên/đặt lại mật khẩu, xác thực email"
+A="$BASE/api/boxmes/admin"
+J='content-type: application/json'
+r=$(curl -s "$A/providers"); grep -q '"summary"' <<<"$r" && grep -q '"balance_by_currency"' <<<"$r" && ok "GET /admin/providers (KPI + USD + tiền gốc)" || bad "admin/providers: ${r:0:200}"
+r=$(curl -s "$A/providers/hetzner"); grep -q '"strategy_config"' <<<"$r" && grep -q '"drain_first"' <<<"$r" && ! grep -q '"token"' <<<"$r" && ok "GET /admin/providers/hetzner (5 chiến lược, không lộ token)" || bad "provider detail: ${r:0:200}"
+r=$(curl -s -X POST -H "$J" "$A/providers/hetzner/accounts/validate" -d '{"token":"hcloud_smoke_0123456789","external_id":"project-1"}'); grep -q '"duplicates"' <<<"$r" && ok "validate báo trùng external_id" || bad "validate: $r"
+r=$(curl -s -X POST -H "$J" "$A/providers/hetzner/accounts" -d '{"label":"Smoke","token":"hcloud_smoke_0123456789","currency":"EUR"}'); id=$(grep -o '"id":"pa_[^"]*"' <<<"$r" | head -1 | cut -d'"' -f4)
+[ -n "$id" ] && ! grep -q 'hcloud_smoke' <<<"$r" && ok "tạo tài khoản $id (chỉ fingerprint)" || bad "create: ${r:0:200}"
+code=$(curl -s -o /dev/null -w '%{http_code}' -X PATCH -H "$J" "$A/providers/hetzner/accounts/$id" -d '{"balance":120,"priority":5,"limits":{"servers":10}}'); [ "$code" = 200 ] && ok "PATCH số dư/ưu tiên/hạn mức" || bad "patch $code"
+code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$A/providers/hetzner/accounts/$id/drain"); [ "$code" = 200 ] && ok "drain" || bad "drain $code"
+code=$(curl -s -o /dev/null -w '%{http_code}' -X PUT -H "$J" "$A/providers/hetzner/strategy" -d '{"strategy":"round_robin","sticky_minutes":15}'); [ "$code" = 200 ] && ok "PUT strategy round_robin" || bad "strategy $code"
+code=$(curl -s -o /dev/null -w '%{http_code}' -X PUT -H "$J" "$A/providers/hetzner/strategy" -d '{"strategy":"nope"}'); [ "$code" = 400 ] && ok "strategy lạ → 400" || bad "strategy lạ $code"
+code=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "$A/providers/hetzner/accounts/$id"); [ "$code" = 204 ] && ok "DELETE (lưu trữ) → 204" || bad "delete $code"
+r=$(curl -s "$A/providers/e2b/sandbox"); grep -q '"concurrent_limit"' <<<"$r" && grep -q '"limit_group"' <<<"$r" && grep -q '"not_listed"\|"missing"' <<<"$r" && ok "GET /providers/e2b/sandbox (slot + nhóm + ma trận template)" || bad "sandbox: ${r:0:200}"
+r=$(curl -s -X POST "$A/providers/e2b/accounts/pa_e2b_default/templates/sync"); grep -q '"added"' <<<"$r" && ok "templates/sync" || bad "sync: ${r:0:200}"
+code=$(curl -s -o /dev/null -w '%{http_code}' "$A/providers/hetzner/sandbox"); [ "$code" = 400 ] && ok "sandbox của provider VPS → 400" || bad "vps sandbox $code"
+r=$(curl -s "$A/infra/alerts?status=all"); grep -q '"level"' <<<"$r" && ok "GET /admin/infra/alerts" || bad "alerts: ${r:0:200}"
+code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$A/infra/alerts/single_account%7Cvultr/ack"); [ "$code" = 200 ] && ok "ack cảnh báo (id URL-encoded)" || bad "ack $code"
+code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "$J" "$BASE/api/boxmes/auth/password/forgot" -d '{"email":"a@b.co"}'); [ "$code" = 202 ] && ok "forgot → 202" || bad "forgot $code"
+code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "$J" "$BASE/api/boxmes/auth/password/reset" -d '{"token":"ok","password":"12345678"}'); [ "$code" = 200 ] && ok "reset (8 ký tự, khớp core) → 200" || bad "reset $code"
+code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "$J" "$BASE/api/boxmes/auth/verify-email" -d '{"token":"bad"}'); [ "$code" = 400 ] && ok "verify-email token hỏng → 400" || bad "verify $code"
+for l in $LOCALES; do
+  node -e 'const m=require("./messages/'$l'.json");const s=["priority","weighted","round_robin","least_used","drain_first"];process.exit(s.every(k=>m.pa.strategy[k]&&m.pa.strategyDesc[k])&&m.pa.sbx.syncAll&&m.pa.add.stepName3&&m.authFlow.resetTitle&&m.login.forgot?0:1)' && ok "[$l] chuỗi pa.* (5 chiến lược) + authFlow.*" || bad "[$l] thiếu chuỗi v2.2"
+done
+grep -rqs "data-template-matrix" .next/static/chunks && grep -rqs "data-add-account-dialog" .next/static/chunks && grep -rqs "data-forgot-password" .next/static/chunks && ok "bundle có UI tài khoản provider + ma trận template + quên mật khẩu" || bad "bundle thiếu UI v2.2"
 
 echo "== Lỗi được dịch theo ngôn ngữ (code không đổi)"
 declare -A NF=([vi]="Không tìm thấy" [en]="not found" [zh]="未找到" [ja]="見つかりません")
