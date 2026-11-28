@@ -824,3 +824,29 @@ curl $BOXMES_URL/v1/admin/providers/e2b/sandbox -H "Authorization: Bearer $ADMIN
 **Dashboard & SDK (2026-11-28).** Web: tab **Tài khoản** của Hạ tầng (`/infra`) và trang `/infra/providers/{p}` (tài khoản, chiến lược, thêm khoá 3 bước, ngăn kéo sửa / rotate / dòng thời gian, xoá có xác nhận, cảnh báo) + tab **Sandbox** cho provider sandbox (slot concurrency, nhóm, credit, ma trận template, nút Đồng bộ) — xem `web/README.md`. SDK: Python `provider_sandbox_accounts(provider)`, `sync_account_templates(provider, account_id)`; TypeScript `providerSandboxAccounts`, `syncAccountTemplates` (kiểu `SandboxAccountsView`, `SandboxAccountRow`, `TemplateSyncResult`).
 
 **Hạn chế.** Số đếm slot nằm trong bộ nhớ một tiến trình core và chỉ biết sandbox do Boxmes tạo (sandbox tạo ngoài trong cùng project → dựa vào 429 + học hạn mức); chưa đọc usage/limit/scope thật qua API (pha B); chưa build template theo tài khoản; `GET /v1/providers/{id}/servers` vẫn chỉ liệt kê sandbox của khoá chính; snapshot gốc của Daytona chưa được chọn theo box.
+
+### 23.2 Đọc số dư thật + lịch sử số dư (M29 pha B, v2.3)
+
+Provider đầu tiên đọc số dư qua API là **Runpod** (quyết định owner 2026-11-27, spec §12.8). Test: `internal/e2e/v230_balance_test.go`, `internal/provider/runpod_test.go`.
+
+- **Provider `runpod`** mới (`implemented: false`): chỉ có tài khoản, kiểm khoá và số dư — **chưa có adapter tạo pod**, scheduler không bao giờ đặt host ở đây. Env `RUNPOD_API_KEY` (và `RUNPOD_API_KEY__<NHÃN>`). `GET /v1/providers` giờ có 7 dòng T1.
+- **Cách đọc**: `POST https://api.runpod.io/graphql`, header `Authorization: Bearer <khoá>`, truy vấn `query { myself { id clientBalance currentSpendPerHr spendLimit } }` (trường theo https://graphql-spec.runpod.io/). `clientBalance` → `balance` (USD, credit trả trước), `currentSpendPerHr` → `spend_per_hour`, `spendLimit` → `limits.spend_per_hour` (hiểu là USD/giờ theo docs billing "mặc định $80/giờ" — **chưa kiểm bằng khoá thật**). Runpod sẽ ngừng GraphQL đầu 2027 và REST v2 chưa có endpoint số dư → cần theo dõi.
+- **Thăm dò**: mỗi `BOXMES_ACCOUNT_POLL_BALANCE` (mặc định `15m`, tối thiểu `1m`) vòng `provider_accounts` đọc mọi tài khoản chưa lưu trữ của provider có reader, dùng **khoá billing chỉ-đọc** (`billing_token`) nếu có, không thì khoá chính (tối đa 4 lượt song song, timeout 20 s). `POST …/accounts/{a}/test` cũng đọc số dư ngay.
+- **Runway từ tiền thật**: burn = max(ledger 24 h, giá host đang sống, `spend_per_hour` provider báo) — tính cả pod tạo ngoài Boxmes. Ngưỡng đã chốt giữ nguyên: runway < 7 ngày → `low_balance` warn, < 2 ngày → critical + **tự drain** (không bao giờ tự xoá host).
+- **Fail-soft**: đọc lỗi chỉ đặt `balance_stale: true`, `balance_error`, `balance_error_at`, giữ số đọc tốt gần nhất; **không** đổi trạng thái, breaker, điều kiện chọn hay failover. Cũ quá 3 chu kỳ → cảnh báo info `balance_read_failed`; đọc lại được thì tự đóng. Sự kiện `provider_account.balance_read_failed` / `balance_updated`. PATCH số dư tay trên tài khoản được thăm dò sẽ bị lần đọc sau ghi đè.
+- **Snapshot**: mỗi lần đọc ghi một dòng `provider_account_snapshots` (tài khoản không có reader: một dòng mỗi chu kỳ từ số dư nhập tay / ước tính + chi ledger, nếu có); giữ `BOXMES_ACCOUNT_SNAPSHOT_DAYS` (90) ngày.
+
+| Method | Path | Việc |
+|---|---|---|
+| GET | `/v1/admin/providers/{p}/accounts/{a}/balance/history?days=N` | Chuỗi snapshot (cũ → mới; mặc định 7, tối đa 90 ngày) + `stale`, `runway_trend_per_day`, `spent`, `top_ups` |
+| GET | `/v1/admin/providers/{p}/balance/history?days=N` | Tổng cấp provider theo bucket 1 h / 3 h / 6 h (USD): số dư, burn, runway, số tài khoản đọc lỗi |
+
+```bash
+curl -X POST $BOXMES_URL/v1/admin/providers/runpod/accounts -H "Authorization: Bearer $ADMIN" \
+  -d '{"label":"Runpod GPU #1","token":"rpa_…","billing_token":"rpa_readonly_…","min_balance":10}'
+curl "$BOXMES_URL/v1/admin/providers/runpod/accounts/pa_xxxx/balance/history?days=7" -H "Authorization: Bearer $ADMIN"
+```
+
+SDK: Python `account_balance_history(provider, account_id, days=7)`, `provider_balance_history(provider, days=7)`; TypeScript `accountBalanceHistory`, `providerBalanceHistory`. Web: biểu đồ số dư & burn trong ngăn kéo tài khoản (Tổng quan), xu hướng runway 7 ngày trên `/infra/providers/{p}`, badge "cũ".
+
+**Hạn chế.** Mới có reader cho Runpod (Vultr, DigitalOcean, Novita, Daytona, Linode vẫn nhập tay; Hetzner/Contabo/netcup không có API số dư); giá trị Runpod mới kiểm theo schema + docs công khai, chưa có khoá thật; mốc thăm dò/snapshot của tài khoản không có reader nằm trong bộ nhớ; chưa đối soát hoá đơn cuối tháng.

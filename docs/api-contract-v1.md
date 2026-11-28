@@ -359,12 +359,12 @@ All routes below are **platform admin only** (`/v1/admin/*`: admin key or `platf
 - Audit events (`Event.data` always has `provider`, `account_id`, never a key): `provider_account.created`, `updated` (`fields`), `enabled`, `disabled`, `drained`, `undrained`, `archived`, `deleted`, `reset`, `key_rotated` (`old_fingerprint`, `key_fingerprint`), `validated`, `check_failed`, `status_changed` (`from`, `to`, `reason`), `failover`, `balance_updated` (`old`, `new`, `source`), `limit_learned`, `alert_opened`, `alert_closed`, `alert_acked`, `orphan_host`; `provider.strategy_updated`.
 
 ### Known gaps (phase A)
-- No balance / limit reading from provider APIs yet (`AccountReader`, phase B; Runpod first): balances, credit and limits are manual or learned from errors.
-- `provider_account_snapshots` exists but is not written yet (no balance history chart).
+- ~~No balance reading from provider APIs~~ — v2.3 reads Runpod balances (see "v2.3 additions"); other providers stay manual / learned.
+- ~~`provider_account_snapshots` not written~~ — v2.3 writes one row per poll and serves the history routes.
 - Credentials of non-default accounts are sealed in their `provider_accounts` row with the master key (not in the `secrets` table); the default account still uses the provider's `token_enc`.
 - The old provider health snapshot is not copied to the default account's breaker (it starts closed).
 - Sticky picks, round-robin cursors and the capacity blocklist live in memory.
-- Billing read-only keys are stored (`billing_token`) but not used until phase B.
+- ~~Billing read-only keys stored but not used~~ — v2.3 uses `billing_token` for balance reads when set.
 - Owner-workspace (BYOC) accounts are phase C.
 
 ### v2.2 M29-S — sandbox accounts with several API keys (2026-11-27)
@@ -398,3 +398,35 @@ Behaviour:
 ### SDKs (v2.2)
 Python (`boxmes`): `admin_providers`, `admin_provider`, `list_provider_accounts(provider, archived=)`, `get_provider_account`, `validate_provider_account(provider, token, external_id=)`, `create_provider_account(provider, label, token, **fields)`, `update_provider_account(provider, account_id, **fields)`, `rotate_provider_account(provider, account_id, token, external_id=)`, `test_provider_account`, `set_provider_account_state(provider, account_id, action)`, `delete_provider_account(provider, account_id, force=, reason=, purge=)`, `provider_strategy`, `set_provider_strategy(provider, strategy, sticky_minutes=, failover_across_accounts=)`, `infra_alerts(status)`, `ack_infra_alert(alert_id)`. TypeScript (`@boxmes/sdk`): same in camelCase with types `ProviderAccount`, `ProviderAccountInput`, `AccountStats`, `AccountTestResult`, `ProviderStrategy`, `InfraAlert`, `AdminProviderRow`, `InfraSummary`.
 M29-S: Python `provider_sandbox_accounts(provider)` (`GET /providers/{p}/sandbox`), `sync_account_templates(provider, account_id)` (`POST /providers/{p}/accounts/{a}/templates/sync`); TypeScript `providerSandboxAccounts`, `syncAccountTemplates` with types `SandboxAccountsView`, `SandboxAccountRow`, `TemplateAvailability`, `TemplateSyncResult` (`ProviderAccount` / `ProviderAccountInput` gain `templates`, `templates_missing`, `limit_group`, `billing_group`, `clear_templates_missing`).
+
+## v2.3 additions (2026-11-28) — infra: real balance reading + balance history (M29 phase B)
+
+First `BalanceReader` (spec §5 `AccountReader`, owner decision §12.8): **Runpod**. Contract tests: `core/internal/e2e/v230_balance_test.go`, `core/internal/provider/runpod_test.go`. All routes are platform-admin only (`/v1/admin`).
+
+### Provider `runpod`
+- New provider id `runpod` (`GET /providers` now lists 7 T1 rows; `implemented: false`): accounts, key validation and balance only — **no pod adapter**, the scheduler never places hosts there. Env: `RUNPOD_API_KEY` (and labeled `RUNPOD_API_KEY__<LABEL>`).
+- Read: `POST https://api.runpod.io/graphql` with `Authorization: Bearer <key>` and `query { myself { id clientBalance currentSpendPerHr spendLimit } }` (fields from https://graphql-spec.runpod.io/: `clientBalance` Float, `currentSpendPerHr` Float, `spendLimit` Int). Mapping: `clientBalance` → `balance` (USD, prepaid credit), `currentSpendPerHr` → `spend_per_hour`, `spendLimit` → `limits.spend_per_hour {limit, used = currentSpendPerHr, source: "api"}` (read as USD/hour per docs.runpod.io billing: "default spend limit of $80 per hour"; **unverified against a live key**), `id` → compared with `external_id` when that is set (a key of another Runpod account → read error).
+- GraphQL `errors` with an auth message, HTTP 401/403, or `myself: null` → `UNAUTHORIZED "Runpod rejected the token: …"` (class `auth`); other GraphQL errors without `clientBalance` → `PROVIDER_FAILED "Runpod GraphQL error: …"`; a partial answer that carries `clientBalance` is accepted. Runpod deprecates GraphQL in early 2027 and REST v2 has no balance endpoint yet (docs.runpod.io/api-reference-v2/migrate-from-v1).
+
+### Polling, runway, alerts
+- Every `BOXMES_ACCOUNT_POLL_BALANCE` (default `15m`, Go duration or minutes, minimum `1m`) the `provider_accounts` loop reads each non-archived account of a provider with a reader, with its **read-only billing key** (`billing_token`) when set, else its main key; at most 4 reads at once, 20 s timeout each. `POST …/accounts/{a}/test` also reads the balance now.
+- A reading sets `balance`, `balance_source: "api"`, `balance_at`, `currency` (USD), `spend_per_hour`, `billing_model: "prepaid"` (when empty). `stats.burn_per_hour_usd` = max(ledger 24 h, live hosts' price, provider-reported `spend_per_hour`) — so runway follows real money even for pods Boxmes did not create. The existing runway alerts (`low_balance` warn < 7 days, critical < 2 days) and the automatic **drain under 2 days** apply; hosts are never deleted.
+- **Fail-soft**: a failed read sets `balance_stale: true`, `balance_error`, `balance_error_at` and keeps the last good balance; it does **not** change `status`, the account breaker, eligibility or failover. Stale for more than 3 poll intervals → `info` alert `balance_read_failed` (args: provider, label, last good reading UTC, error; catalog key `infra.alert.balance_read_failed`), closed by the next good read. Events: `provider_account.balance_read_failed` (on the transition to stale), `provider_account.balance_updated {source: "api", old?, new, billing_key}` (first API reading and recovery). No event carries a key.
+- A manual `PATCH balance` on a polled account is overwritten by the next reading.
+
+### Objects
+`ProviderAccount` adds `spend_per_hour?` (provider-reported, account currency / h), `balance_polled_at?` (last attempt), `balance_stale` (bool), `balance_error?`, `balance_error_at?`; `stats.balance_api` (the provider reports balances). `AccountTestResult` adds `balance_read?`, `balance_error?`. `GET /providers/{p}` `capabilities` gets `balance_api: true` and `balance_poll_s` for providers with a reader.
+
+`BalancePoint` (one `provider_account_snapshots` row, written at each poll; accounts without a reader get one per interval from their manual / estimated balance and ledger spend when they have either): `{account_id, provider, ts, source: api | manual | estimated | none, currency, balance?, balance_effective?, balance_usd?, spend_per_hour?, spend_limit_per_hour?, burn_per_hour_usd, runway_days?, spend_today_usd, spend_month_usd, stale, error?}`. Rows older than `BOXMES_ACCOUNT_SNAPSHOT_DAYS` (default 90) are pruned once a day.
+
+### Endpoints (`/v1/admin`)
+- `GET /providers/{p}/accounts/{a}/balance/history?days=N` (default 7, max 90) → `BalanceHistory {provider, account_id, label, currency, days, interval_s, source, balance_api, stale, balance_error?, balance_at?, polled_at?, points: [BalancePoint] (oldest first), runway_trend_per_day? (least-squares slope of runway_days), spent? (sum of balance drops between non-stale points), top_ups? (sum of rises)}`. Unknown account → 404.
+- `GET /providers/{p}/balance/history?days=N` → `ProviderBalanceHistory {provider, days, bucket_s (3600 ≤ 7 days, 10800 ≤ 30, else 21600), accounts: [{id, label, source, stale}], points: [{ts, balance_usd? (Σ last known effective balance ≥ 0, USD), burn_per_hour_usd, runway_days?, spend_today_usd, accounts, stale_accounts}], runway_trend_per_day?}`; each account counts with its last point carried forward; archived accounts are left out.
+
+### SDKs (v2.3)
+Python: `account_balance_history(provider, account_id, days=7)`, `provider_balance_history(provider, days=7)`. TypeScript: `accountBalanceHistory(provider, accountId, days?)`, `providerBalanceHistory(provider, days?)` with types `BalancePoint`, `BalanceHistory`, `ProviderBalancePoint`, `ProviderBalanceHistory` (`ProviderAccount` gains `spend_per_hour`, `balance_polled_at`, `balance_stale`, `balance_error`, `balance_error_at`; `AccountStats.balance_api`).
+
+### Known gaps (v2.3)
+- Only Runpod has a reader; Vultr (`GET /v2/account` balance), DigitalOcean (`/v2/customers/my/balance`), Novita, Daytona and Linode are documented candidates still on manual balances. Hetzner, Contabo, netcup have no balance API.
+- Runpod values are verified against the public schema and docs only, not a live key: `spendLimit` units, the exact error shape of a revoked key, and whether a "Restricted" key without GraphQL read gets a 401 or an `errors` entry.
+- Last poll / last snapshot times of accounts without a reader live in memory (a restart may write one extra snapshot early). Runpod's `group` is `vps` (no GPU group yet). No month-end reconciliation against provider invoices yet (`cost_mismatch`).

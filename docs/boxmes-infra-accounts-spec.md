@@ -3,6 +3,7 @@
 > Phiên bản: 0.2 (đã chốt quyết định 2026-11-27) · Ngày: 2026-11-27 · Phạm vi: khu **Nền tảng → Hạ tầng** (chỉ platform-admin, PA).
 > Liên quan: spec v1.0 §M6, §M5, §M26, §M27 (`docs/boxmes-spec-v1.0.md`), UI v2 §16 (`docs/boxmes-ui-spec-v2.md`).
 > Pha A đã có code core (v2.2, commit `a52961a`…`9857ff1`); §13 **M29-S: Sandbox nhiều API key** bổ sung ngày 2026-11-27 (code: commit `dc1f53d`).
+> Pha B bắt đầu 2026-11-28 (v2.3): `provider.BalanceReader` + Runpod, snapshots + lịch sử số dư, biểu đồ web — xem `docs/api-contract-v1.md` "v2.3 additions" và `core/README.md` §23.2.
 
 ---
 
@@ -491,7 +492,7 @@ Lỗi mới (dịch vi/zh/ja): `"%s concurrency limit reached (429): %s"`, `"%s:
 7. Lỗi 429 trong lúc exec/file của shim (rate limit API sandbox của E2B theo IP) chưa feed về tài khoản.
 8. Daytona snapshot (template) chưa được chọn theo box — `Spec.Template` vẫn là snapshot mặc định của adapter; ma trận template của Daytona hiện chỉ để xem/đồng bộ.
 9. Volume (E2B/Daytona volumes) chưa được core dùng; khi có: volume thuộc tài khoản → box gắn volume chỉ đặt ở tài khoản có volume (cùng cơ chế template).
-10. ~~UI (web/)~~ — đã làm 2026-11-28 (tab Tài khoản, `/infra/providers/[id]`, tab Sandbox, ma trận template). Còn thiếu ở web: biểu đồ số dư / chi (chưa có snapshots), kéo thả đổi ưu tiên (đang nhập số), cột "Tài khoản" trên trang box / host, nút "Clone sang tài khoản khác" khi resume bị từ chối, ngưỡng cảnh báo riêng theo tài khoản (`thresholds`) chưa có form.
+10. ~~UI (web/)~~ — đã làm 2026-11-28 (tab Tài khoản, `/infra/providers/[id]`, tab Sandbox, ma trận template). Còn thiếu ở web: ~~biểu đồ số dư / chi~~ (đã làm v2.3, 2026-11-28), kéo thả đổi ưu tiên (đang nhập số), cột "Tài khoản" trên trang box / host, nút "Clone sang tài khoản khác" khi resume bị từ chối, ngưỡng cảnh báo riêng theo tài khoản (`thresholds`) chưa có form.
 
 ## Phụ lục — Biến môi trường mới
 
